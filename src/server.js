@@ -34,6 +34,15 @@ async function start() {
 
   registerRoomSocket(io);
 
+  // обработчик ошибок — ОБЯЗАТЕЛЬНО внутри start(), после всех роутов, до listen
+  app.use((err, req, res, next) => {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: `Файл слишком большой (лимит: ${config.upload.maxSizeMb} MB)` });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  });
+
   server.listen(config.port, () => {
     console.log(`[server] listening on port ${config.port} (pid ${process.pid})`);
   });
@@ -42,12 +51,4 @@ async function start() {
 start().catch((err) => {
   console.error('Failed to start server:', err);
   process.exit(1);
-});
-
-app.use((err, req, res, next) => {
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: `Файл слишком большой (лимит: ${config.upload.maxSizeMb} MB)` });
-  }
-  console.error(err);
-  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
