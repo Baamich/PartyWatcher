@@ -58,6 +58,10 @@ router.post('/logout', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-router.get('/me', auth, (req, res) => res.json(req.user));
+router.get('/me', auth, async (req, res) => {
+  const user = await User.findById(req.user.id).select('username role');
+  if (!user) return res.status(401).json({ error: 'Юзер не найден' });
+  res.json({ id: user._id, username: user.username, role: user.role });
+});
 
 module.exports = router;

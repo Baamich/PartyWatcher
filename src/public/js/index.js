@@ -4,7 +4,11 @@ async function checkAuth() {
     document.getElementById('authBox').classList.add('hidden');
     document.getElementById('appBox').classList.remove('hidden');
     document.getElementById('meName').textContent = me.username;
-    searchRooms();
+
+    const adminLink = document.getElementById('adminLink');
+    adminLink.classList.toggle('hidden', me.role !== 'admin');
+
+    loadMyRooms();
   } catch {
     document.getElementById('authBox').classList.remove('hidden');
     document.getElementById('appBox').classList.add('hidden');
@@ -90,14 +94,48 @@ async function createRoom() {
   } catch (err) { alert(err.message); }
 }
 
-async function searchRooms() {
-  const q = document.getElementById('searchInput').value;
+async function joinByCode() {
+  const code = document.getElementById('joinCodeInput').value.trim();
+  if (!code) return;
+  try {
+    await api('/rooms/' + code); // проверяем, что существует
+    location.href = `/room.html?code=${code}`;
+  } catch (err) { alert('Комната не найдена или уже удалена'); }
+}
+
+function roomThumbnail(room) {
+  if (room.video.type === 'youtube') {
+    const idMatch = room.video.url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if (idMatch) return `https://img.youtube.com/vi/${idMatch[1]}/hqdefault.jpg`;
+  }
+  return null; // для direct/upload превью нет — показываем иконку
+}
+
+function timeLeftLabel(room) {
+  if (!room.emptySince) return 'активна';
+  const deadline = new Date(room.emptySince).getTime() + 20 * 60 * 60 * 1000;
+  const msLeft = deadline - Date.now();
+  if (msLeft <= 0) return 'удаляется...';
+  const h = Math.floor(msLeft / 3600000);
+  const m = Math.floor((msLeft % 3600000) / 60000);
+  return `удалится через ${h}ч ${m}м`;
+}
+
+async function loadMyRooms() {
+  const q = document.getElementById('searchInput')?.value || '';
   const rooms = await api('/rooms/search?q=' + encodeURIComponent(q));
   const list = document.getElementById('roomList');
   list.innerHTML = '';
   rooms.forEach((room) => {
+    const thumb = roomThumbnail(room);
     const div = document.createElement('div');
-    div.textContent = `${room.name} (${room.code})`;
+    div.style.cssText = 'display:flex; gap:8px; align-items:center; cursor:pointer;';
+    div.innerHTML = `
+      ${thumb ? `<img src="${thumb}" width="80" />` : `<span style="font-size:32px;">🎬</span>`}
+      <div>
+        <div><b>${room.name}</b> (${room.code})</div>
+        <div style="font-size:12px;color:#888;">${timeLeftLabel(room)}</div>
+      </div>`;
     div.onclick = () => (location.href = `/room.html?code=${room.code}`);
     list.appendChild(div);
   });

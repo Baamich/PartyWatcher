@@ -37,9 +37,13 @@
     <input id="videoUrl" placeholder="Ссылка на видео" />
     <input id="videoFile" type="file" accept="video/*" class="hidden" />
     <button onclick="createRoom()">Создать</button>
+    <a id="adminLink" href="/admin.html" class="hidden"><button>Админ-панель</button></a>
+    <h2>Войти по ключу</h2>
+    <input id="joinCodeInput" placeholder="Ключ комнаты" />
+    <button onclick="joinByCode()">Войти</button>
 
-    <h2>Поиск комнат</h2>
-    <input id="searchInput" placeholder="Название комнаты" oninput="searchRooms()" />
+    <h2>Мои комнаты</h2>
+    <input id="searchInput" placeholder="Фильтр по названию" oninput="loadMyRooms()" />
     <div id="roomList"></div>
   </div>
 

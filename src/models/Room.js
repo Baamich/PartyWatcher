@@ -17,8 +17,9 @@ const roomSchema = new mongoose.Schema(
     },
     isPublic: { type: Boolean, default: true }, // видна ли в поиске
     createdAt: { type: Date, default: Date.now },
+    emptySince: { type: Date, default: null },
   },
-  { versionKey: false }
+  { versionKey: false },
 );
 
 module.exports = mongoose.model('Room', roomSchema);

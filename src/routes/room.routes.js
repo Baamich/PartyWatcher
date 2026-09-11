@@ -30,9 +30,17 @@ router.post('/', auth, async (req, res) => {
   res.status(201).json(room);
 });
 
+router.get('/mine', auth, async (req, res) => {
+  const rooms = await Room.find({ owner: req.user.id }).sort({ createdAt: -1 });
+  res.json(rooms);
+});
+
 router.get('/search', auth, async (req, res) => {
   const q = req.query.q || '';
-  const rooms = await Room.find({ isPublic: true, name: { $regex: q, $options: 'i' } }).limit(50);
+  const rooms = await Room.find({
+    owner: req.user.id,
+    name: { $regex: q, $options: 'i' },
+  }).sort({ createdAt: -1 });
   res.json(rooms);
 });
 
