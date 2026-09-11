@@ -1,4 +1,3 @@
-// public/js/admin.js — заменить runUpdate на поллинг статуса
 async function runUpdate() {
   const log = document.getElementById('log');
   log.textContent = 'Запуск...\n';
@@ -18,12 +17,3 @@ async function runUpdate() {
     }
   }, 1500);
 }
-
-async function loadUsers() {
-  try {
-    const users = await api('/admin/users');
-    document.getElementById('users').innerHTML = users.map((u) => `${u.username} (${u.email}) — ${u.role}`).join('<br>');
-  } catch (err) { document.getElementById('users').textContent = err.message; }
-}
-
-loadUsers();

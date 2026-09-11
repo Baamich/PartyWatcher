@@ -20,7 +20,7 @@ async function start() {
   const app = express();
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: '*' } });
-
+  
   app.use(cors());
   app.use(express.json());
   app.use(cookieParser());
@@ -31,6 +31,8 @@ async function start() {
   app.use('/api/rooms', roomRoutes);
   app.use('/api/videos', videoRoutes);
   app.use('/api/admin', adminRoutes);
+    
+  app.set('io', io);
 
   registerRoomSocket(io);
 

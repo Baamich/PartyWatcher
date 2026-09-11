@@ -5,17 +5,15 @@
   <title>Админка — PartyWatcher</title>
   <style>
     body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
-    button { padding: 10px 16px; }
+    button { padding: 10px 16px; margin: 4px 0; }
     #log { white-space: pre-wrap; background: #111; color: #0f0; padding: 12px; margin-top: 12px; min-height: 100px; }
   </style>
 </head>
 <body>
+  <button onclick="location.href='/index.html'">← Назад</button>
   <h2>Панель администратора</h2>
   <button onclick="runUpdate()">Обновить код с GitHub</button>
   <div id="log"></div>
-
-  <h3>Пользователи</h3>
-  <div id="users"></div>
 
   <script src="/js/api.js"></script>
   <script src="/js/admin.js"></script>

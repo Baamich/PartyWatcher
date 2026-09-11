@@ -108,17 +108,18 @@ function roomThumbnail(room) {
     const idMatch = room.video.url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     if (idMatch) return `https://img.youtube.com/vi/${idMatch[1]}/hqdefault.jpg`;
   }
-  return null; // для direct/upload превью нет — показываем иконку
+  return null;
 }
 
-function timeLeftLabel(room) {
-  if (!room.emptySince) return 'активна';
+function statusLabel(room) {
+  if (room.viewerCount > 0) return `смотрят: ${room.viewerCount}`;
+  if (!room.emptySince) return 'пусто';
   const deadline = new Date(room.emptySince).getTime() + 20 * 60 * 60 * 1000;
   const msLeft = deadline - Date.now();
   if (msLeft <= 0) return 'удаляется...';
   const h = Math.floor(msLeft / 3600000);
   const m = Math.floor((msLeft % 3600000) / 60000);
-  return `удалится через ${h}ч ${m}м`;
+  return `пусто, удалится через ${h}ч ${m}м`;
 }
 
 async function loadMyRooms() {
@@ -129,14 +130,17 @@ async function loadMyRooms() {
   rooms.forEach((room) => {
     const thumb = roomThumbnail(room);
     const div = document.createElement('div');
-    div.style.cssText = 'display:flex; gap:8px; align-items:center; cursor:pointer;';
+    div.style.cssText = 'display:flex; gap:8px; align-items:center; justify-content:space-between;';
     div.innerHTML = `
-      ${thumb ? `<img src="${thumb}" width="80" />` : `<span style="font-size:32px;">🎬</span>`}
-      <div>
-        <div><b>${room.name}</b> (${room.code})</div>
-        <div style="font-size:12px;color:#888;">${timeLeftLabel(room)}</div>
-      </div>`;
-    div.onclick = () => (location.href = `/room.html?code=${room.code}`);
+      <div style="display:flex; gap:8px; align-items:center;">
+        ${thumb ? `<img src="${thumb}" width="80" />` : `<span style="font-size:32px;">🎬</span>`}
+        <div>
+          <div><b>${room.name}</b></div>
+          <div style="font-size:12px;color:#888;">${statusLabel(room)}</div>
+        </div>
+      </div>
+      <button data-code="${room.code}">Войти</button>`;
+    div.querySelector('button').onclick = () => (location.href = `/room.html?code=${room.code}`);
     list.appendChild(div);
   });
 }
