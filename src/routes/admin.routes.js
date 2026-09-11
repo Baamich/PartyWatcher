@@ -6,19 +6,22 @@ const config = require('../config');
 const updateService = require('../services/updateService');
 const User = require('../models/User');
 
-router.post('/update', auth, adminOnly, async (req, res) => {
+// src/routes/admin.routes.js — заменить роут /update и добавить /update/status
+router.post('/update', auth, adminOnly, (req, res) => {
   const providedKey = req.headers['x-update-key'];
   if (config.update.secretKey && providedKey !== config.update.secretKey) {
     return res.status(403).json({ error: 'Неверный update key' });
   }
-
-  try {
-    const result = await updateService.performUpdate();
-    res.json({ status: 'ok', ...result });
-  } catch (err) {
-    console.error('[update] error:', err);
-    res.status(500).json({ status: 'error', message: err.message });
+  if (updateService.getStatus().state === 'running') {
+    return res.status(409).json({ error: 'Обновление уже идёт' });
   }
+
+  updateService.performUpdate(); // не ждём — запускаем в фоне
+  res.status(202).json({ status: 'started' });
+});
+
+router.get('/update/status', auth, adminOnly, (req, res) => {
+  res.json(updateService.getStatus());
 });
 
 router.get('/users', auth, adminOnly, async (req, res) => {

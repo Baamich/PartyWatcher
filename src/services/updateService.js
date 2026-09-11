@@ -1,6 +1,9 @@
+// src/services/updateService.js
 const simpleGit = require('simple-git');
 const { exec } = require('child_process');
 const config = require('../config');
+
+const status = { state: 'idle', log: [], updatedAt: null };
 
 function buildAuthRepoUrl() {
   if (!config.update.repoUrl) throw new Error('GITHUB_REPO_URL не задан');
@@ -12,24 +15,41 @@ function buildAuthRepoUrl() {
   return url.toString();
 }
 
-async function pullLatestCode() {
-  const git = simpleGit(process.cwd());
-  return git.pull(buildAuthRepoUrl(), config.update.branch);
-}
-
-function reloadPm2() {
+function run(cmd) {
   return new Promise((resolve, reject) => {
-    exec('pm2 reload partywatcher', (err, stdout, stderr) => {
-      if (err) return reject(err);
+    exec(cmd, { cwd: process.cwd() }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message));
       resolve(stdout || stderr);
     });
   });
 }
 
 async function performUpdate() {
-  const pullResult = await pullLatestCode();
-  const reloadOutput = await reloadPm2();
-  return { pullResult, reloadOutput };
+  status.state = 'running';
+  status.log = [];
+  status.updatedAt = new Date();
+
+  try {
+    status.log.push('git pull...');
+    const git = simpleGit(process.cwd());
+    const pullResult = await git.pull(buildAuthRepoUrl(), config.update.branch);
+    status.log.push(JSON.stringify(pullResult.summary || pullResult));
+
+    status.log.push('npm install...');
+    status.log.push(await run('npm install --omit=dev'));
+
+    status.log.push('pm2 reload...');
+    status.log.push(await run('pm2 reload partywatcher'));
+
+    status.state = 'done';
+  } catch (err) {
+    status.state = 'error';
+    status.log.push('ОШИБКА: ' + err.message);
+  }
 }
 
-module.exports = { performUpdate };
+function getStatus() {
+  return status;
+}
+
+module.exports = { performUpdate, getStatus };

@@ -5,7 +5,7 @@
   <title>PartyWatcher</title>
   <style>
     body { font-family: sans-serif; max-width: 480px; margin: 40px auto; }
-    input, button { display: block; width: 100%; margin: 6px 0; padding: 8px; }
+    input, button, select { display: block; width: 100%; margin: 6px 0; padding: 8px; }
     .hidden { display: none; }
     #roomList div { padding: 8px; border: 1px solid #ddd; margin: 4px 0; cursor: pointer; }
   </style>
@@ -29,11 +29,13 @@
 
     <h2>Создать комнату</h2>
     <input id="roomName" placeholder="Название комнаты" />
-    <select id="videoType">
+    <select id="videoType" onchange="onVideoTypeChange()">
       <option value="direct">Прямая ссылка (mp4/m3u8)</option>
       <option value="youtube">YouTube</option>
+      <option value="upload">Загрузить файл (до 10GB)</option>
     </select>
     <input id="videoUrl" placeholder="Ссылка на видео" />
+    <input id="videoFile" type="file" accept="video/*" class="hidden" />
     <button onclick="createRoom()">Создать</button>
 
     <h2>Поиск комнат</h2>

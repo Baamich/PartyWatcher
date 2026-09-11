@@ -43,16 +43,47 @@ async function logout() {
   checkAuth();
 }
 
+function onVideoTypeChange() {
+  const type = document.getElementById('videoType').value;
+  const urlInput = document.getElementById('videoUrl');
+  const fileInput = document.getElementById('videoFile');
+
+  if (type === 'upload') {
+    urlInput.classList.add('hidden');
+    fileInput.classList.remove('hidden');
+  } else {
+    urlInput.classList.remove('hidden');
+    fileInput.classList.add('hidden');
+  }
+}
+
 async function createRoom() {
   try {
+    const type = document.getElementById('videoType').value;
+    let url = document.getElementById('videoUrl').value;
+
+    if (type === 'upload') {
+      const fileInput = document.getElementById('videoFile');
+      if (!fileInput.files[0]) return alert('Выбери файл');
+
+      const formData = new FormData();
+      formData.append('video', fileInput.files[0]);
+
+      const res = await fetch('/api/videos/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      url = data.url;
+    }
+
     const room = await api('/rooms', {
       method: 'POST',
       body: JSON.stringify({
         name: document.getElementById('roomName').value,
-        video: {
-          type: document.getElementById('videoType').value,
-          url: document.getElementById('videoUrl').value,
-        },
+        video: { type, url },
       }),
     });
     location.href = `/room.html?code=${room.code}`;

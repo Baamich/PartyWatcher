@@ -1,10 +1,22 @@
+// public/js/admin.js — заменить runUpdate на поллинг статуса
 async function runUpdate() {
   const log = document.getElementById('log');
-  log.textContent = 'Загрузка...\n';
+  log.textContent = 'Запуск...\n';
   try {
-    const result = await api('/admin/update', { method: 'POST' });
-    log.textContent += 'Готово!\n' + JSON.stringify(result, null, 2);
-  } catch (err) { log.textContent += 'Ошибка: ' + err.message; }
+    await api('/admin/update', { method: 'POST' });
+  } catch (err) {
+    log.textContent += 'Ошибка запуска: ' + err.message;
+    return;
+  }
+
+  const poll = setInterval(async () => {
+    const s = await api('/admin/update/status');
+    log.textContent = s.log.join('\n');
+    if (s.state === 'done' || s.state === 'error') {
+      clearInterval(poll);
+      log.textContent += s.state === 'done' ? '\n\n✅ Завершено' : '\n\n❌ Ошибка';
+    }
+  }, 1500);
 }
 
 async function loadUsers() {

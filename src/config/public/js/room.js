@@ -11,7 +11,7 @@ async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/index.html');
 
-  socket = io({ auth: { token: getCookie('token') } });
+  socket = io();
   socket.on('connect', () => socket.emit('room:join', { code }));
 
   socket.on('room:state', ({ video, playback }) => {
