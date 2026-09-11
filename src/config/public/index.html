@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>PartyWatcher</title>
+  <style>
+    body { font-family: sans-serif; max-width: 480px; margin: 40px auto; }
+    input, button { display: block; width: 100%; margin: 6px 0; padding: 8px; }
+    .hidden { display: none; }
+    #roomList div { padding: 8px; border: 1px solid #ddd; margin: 4px 0; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="authBox">
+    <h2>Вход</h2>
+    <input id="loginInput" placeholder="Логин или email" />
+    <input id="passwordInput" type="password" placeholder="Пароль" />
+    <button onclick="login()">Войти</button>
+
+    <h2>Регистрация</h2>
+    <input id="regUsername" placeholder="Username" />
+    <input id="regEmail" placeholder="Email" />
+    <input id="regPassword" type="password" placeholder="Пароль" />
+    <button onclick="register()">Зарегистрироваться</button>
+  </div>
+
+  <div id="appBox" class="hidden">
+    <p>Привет, <b id="meName"></b>! <button onclick="logout()">Выйти</button></p>
+
+    <h2>Создать комнату</h2>
+    <input id="roomName" placeholder="Название комнаты" />
+    <select id="videoType">
+      <option value="direct">Прямая ссылка (mp4/m3u8)</option>
+      <option value="youtube">YouTube</option>
+    </select>
+    <input id="videoUrl" placeholder="Ссылка на видео" />
+    <button onclick="createRoom()">Создать</button>
+
+    <h2>Поиск комнат</h2>
+    <input id="searchInput" placeholder="Название комнаты" oninput="searchRooms()" />
+    <div id="roomList"></div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/index.js"></script>
+</body>
+</html>
