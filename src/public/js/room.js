@@ -19,6 +19,12 @@ function hideOverlay() {
   document.getElementById('overlay').classList.add('hidden');
 }
 
+function updateWaitingOverlayText() {
+  if (started || isOwner) return; // после клика/у хоста этот оверлей больше не трогаем
+  const status = lastState.isPlaying ? 'смотрит' : 'на паузе';
+  setOverlay(`Хост сейчас ${status} — нажми, чтобы присоединиться`, true);
+}
+
 function loadYouTubeAPI() {
   return new Promise((resolve) => {
     if (window.YT && window.YT.Player) return resolve();
@@ -56,9 +62,8 @@ function renderPlayer(video) {
             resolve();
           },
           onStateChange: (e) => {
-            if (suppressEvents) return; // наши же программные seekTo/play/pause не должны запускать обработку заново
-
-            if (!isOwner) return; // у зрителя нет controls, реагировать тут больше не на что
+            if (suppressEvents) return; // гасим события, вызванные нашим же программным seekTo/play/pause
+            if (!isOwner) return; // у зрителя нет controls — реагировать тут больше не на что
 
             if (e.data === YT.PlayerState.PLAYING) emitPlayback(true);
             else if (e.data === YT.PlayerState.PAUSED) emitPlayback(false);
@@ -78,8 +83,8 @@ function renderPlayer(video) {
     videoEl.addEventListener('pause', () => emitPlayback(false));
     videoEl.addEventListener('seeked', () => emitPlayback(!videoEl.paused));
   }
-  // у зрителя нет native controls (не выставлен атрибут controls), ему физически нечем
-  // управлять видео вручную — доп. слушатели тут только создавали цикл, убираем их
+  // у зрителя нет native controls — вручную ему нечем управлять, лишние слушатели тут только создавали цикл
+
   return Promise.resolve();
 }
 
@@ -88,14 +93,23 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
   if (!playerReady) return;
 
   suppressEvents = true;
+
   if (currentVideoType === 'youtube') {
     ytPlayer.seekTo(positionSeconds, true);
     isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+    // у YouTube IFrame API нет надёжного события "сик точно завершён" — таймер с запасом
+    setTimeout(() => (suppressEvents = false), 800);
   } else if (videoEl) {
+    const clearSuppress = () => {
+      videoEl.removeEventListener('seeked', clearSuppress);
+      suppressEvents = false;
+    };
+    videoEl.addEventListener('seeked', clearSuppress);
     videoEl.currentTime = positionSeconds;
     isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
+    // страховка на случай, если seeked не произойдёт (позиция не изменилась)
+    setTimeout(clearSuppress, 1500);
   }
-  setTimeout(() => (suppressEvents = false), 400);
 }
 
 function enforceHostState() {
@@ -122,7 +136,6 @@ function startWatching() {
   hideOverlay();
 
   if (isOwner) {
-    // хост реально запускает воспроизведение, а не просто скрывает оверлей
     if (currentVideoType === 'youtube') {
       ytPlayer.playVideo();
     } else if (videoEl) {
@@ -147,12 +160,18 @@ async function init() {
     isOwner = ownerFlag;
     lastState = playback;
     await renderPlayer(video);
-    setOverlay(isOwner ? 'Готово к просмотру' : 'Ожидание хоста', true);
+
+    if (isOwner) {
+      setOverlay('Готово к просмотру', true);
+    } else {
+      updateWaitingOverlayText();
+    }
   });
 
   socket.on('playback:update', (state) => {
     lastState = state;
     if (started) applyPlaybackState(state);
+    else updateWaitingOverlayText();
   });
 
   socket.on('room:deleted', () => {
