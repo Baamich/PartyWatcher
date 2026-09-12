@@ -1,0 +1,85 @@
+body {
+  max-width: 480px;
+  margin: 40px auto;
+}
+
+input, button, select {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px;
+}
+
+.room-card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  margin: 10px 0;
+  position: relative;
+}
+
+.room-card .delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: auto;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.room-thumb {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  background: #222;
+}
+
+.room-thumb-placeholder {
+  width: 100%;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  background: #222;
+  border-radius: 4px;
+}
+
+.room-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.room-name {
+  font-weight: bold;
+}
+
+.room-occupancy {
+  font-size: 14px;
+  color: #555;
+}
+
+.room-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.room-actions button {
+  width: auto;
+  padding: 8px 24px;
+}
+
+.countdown {
+  font-size: 14px; /* чуть крупнее, как просил */
+  color: #999;
+  margin-top: 6px;
+}

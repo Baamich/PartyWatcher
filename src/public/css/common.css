@@ -1,0 +1,13 @@
+body {
+  font-family: sans-serif;
+  margin: 0;
+}
+
+input, button, select {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none !important; /* !important — чтобы всегда побеждало ID-селекторы вроде #overlay */
+}

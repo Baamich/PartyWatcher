@@ -16,6 +16,7 @@ async function checkAuth() {
     stopAutoRefresh();
   }
 }
+
 async function login() {
   try {
     await api('/auth/login', {
@@ -53,7 +54,6 @@ function onVideoTypeChange() {
   const type = document.getElementById('videoType').value;
   const urlInput = document.getElementById('videoUrl');
   const fileInput = document.getElementById('videoFile');
-
   if (type === 'upload') {
     urlInput.classList.add('hidden');
     fileInput.classList.remove('hidden');
@@ -71,15 +71,9 @@ async function createRoom() {
     if (type === 'upload') {
       const fileInput = document.getElementById('videoFile');
       if (!fileInput.files[0]) return alert('Выбери файл');
-
       const formData = new FormData();
       formData.append('video', fileInput.files[0]);
-
-      const res = await fetch('/api/videos/upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
+      const res = await fetch('/api/videos/upload', { method: 'POST', credentials: 'include', body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       url = data.url;
@@ -87,10 +81,7 @@ async function createRoom() {
 
     const room = await api('/rooms', {
       method: 'POST',
-      body: JSON.stringify({
-        name: document.getElementById('roomName').value,
-        video: { type, url },
-      }),
+      body: JSON.stringify({ name: document.getElementById('roomName').value, video: { type, url } }),
     });
     location.href = `/room.html?code=${room.code}`;
   } catch (err) { alert(err.message); }
@@ -100,9 +91,11 @@ async function joinByCode() {
   const code = document.getElementById('joinCodeInput').value.trim();
   if (!code) return;
   try {
-    await api('/rooms/' + code); // проверяем, что существует
+    await api('/rooms/' + code);
     location.href = `/room.html?code=${code}`;
-  } catch (err) { alert('Комната не найдена или уже удалена'); }
+  } catch {
+    alert('Комната не найдена или уже удалена');
+  }
 }
 
 function roomThumbnail(room) {
@@ -113,31 +106,8 @@ function roomThumbnail(room) {
   return null;
 }
 
-function statusLabel(room) {
-  if (room.viewerCount > 0) return `смотрят: ${room.viewerCount}`;
-  if (!room.emptySince) return 'пусто';
-  const deadline = new Date(room.emptySince).getTime() + 20 * 60 * 60 * 1000;
-  const msLeft = deadline - Date.now();
-  if (msLeft <= 0) return 'удаляется...';
-  const h = Math.floor(msLeft / 3600000);
-  const m = Math.floor((msLeft % 3600000) / 60000);
-  return `пусто, удалится через ${h}ч ${m}м`;
-}
-
-let refreshTimer = null;
-
-function startAutoRefresh() {
-  if (refreshTimer) return;
-  refreshTimer = setInterval(loadMyRooms, 5000);
-}
-
-function stopAutoRefresh() {
-  clearInterval(refreshTimer);
-  refreshTimer = null;
-}
-
 function occupancyLabel(room) {
-  return room.viewerCount > 0 ? `смотрят: ${room.viewerCount}` : 'пусто';
+  return room.viewerCount > 0 ? room.viewerCount : 'пусто';
 }
 
 function deletionLabel(room) {
@@ -151,30 +121,51 @@ function deletionLabel(room) {
   return `удалится через ${h}ч ${m}м`;
 }
 
+async function deleteRoom(code, ev) {
+  ev.stopPropagation();
+  if (!confirm('Удалить комнату?')) return;
+  try {
+    await api('/rooms/' + code, { method: 'DELETE' });
+    loadMyRooms();
+  } catch (err) { alert(err.message); }
+}
+
 async function loadMyRooms() {
   const q = document.getElementById('searchInput')?.value || '';
   const rooms = await api('/rooms/search?q=' + encodeURIComponent(q));
   const list = document.getElementById('roomList');
   list.innerHTML = '';
+
   rooms.forEach((room) => {
     const thumb = roomThumbnail(room);
-    const div = document.createElement('div');
-    div.className = 'room-item';
-    div.innerHTML = `
-      <div class="room-main">
-        ${thumb ? `<img src="${thumb}" width="80" />` : `<span style="font-size:32px;">🎬</span>`}
-        <div>
-          <div><b>${room.name}</b></div>
-          <div style="font-size:12px;color:#888;">${occupancyLabel(room)}</div>
-        </div>
+    const card = document.createElement('div');
+    card.className = 'room-card';
+    card.innerHTML = `
+      <button class="delete-btn" title="Удалить комнату">🗑️</button>
+      ${thumb ? `<img class="room-thumb" src="${thumb}" />` : `<div class="room-thumb-placeholder">🎬</div>`}
+      <div class="room-info">
+        <span class="room-name">${room.name}</span>
+        <span class="room-occupancy">👤 ${occupancyLabel(room)}</span>
       </div>
-      <div class="room-footer">
-        <button data-code="${room.code}">Войти</button>
+      <div class="room-actions">
+        <button class="enter-btn">Войти</button>
         <div class="countdown">${deletionLabel(room)}</div>
       </div>`;
-    div.querySelector('button').onclick = () => (location.href = `/room.html?code=${room.code}`);
-    list.appendChild(div);
+
+    card.querySelector('.enter-btn').onclick = () => (location.href = `/room.html?code=${room.code}`);
+    card.querySelector('.delete-btn').onclick = (ev) => deleteRoom(room.code, ev);
+    list.appendChild(card);
   });
+}
+
+let refreshTimer = null;
+function startAutoRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setInterval(loadMyRooms, 5000);
+}
+function stopAutoRefresh() {
+  clearInterval(refreshTimer);
+  refreshTimer = null;
 }
 
 checkAuth();

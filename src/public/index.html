@@ -3,17 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>PartyWatcher</title>
-  <style>
-    body { font-family: sans-serif; max-width: 480px; margin: 40px auto; }
-    input, button, select { display: block; width: 100%; margin: 6px 0; padding: 8px; }
-    .hidden { display: none; }
-    #roomList div { padding: 8px; border: 1px solid #ddd; margin: 4px 0; cursor: pointer; }
-    .room-item { border: 1px solid #ddd; padding: 10px; margin: 6px 0; }
-    .room-main { display: flex; gap: 8px; align-items: center; }
-    .room-footer { display: flex; flex-direction: column; align-items: center; margin-top: 10px; }
-    .room-footer button { width: auto; padding: 8px 24px; }
-    .countdown { font-size: 11px; color: #999; margin-top: 4px; }
-  </style>
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/css/index.css" />
 </head>
 <body>
   <div id="authBox">
@@ -31,6 +22,7 @@
 
   <div id="appBox" class="hidden">
     <p>Привет, <b id="meName"></b>! <button onclick="logout()">Выйти</button></p>
+    <a id="adminLink" href="/admin.html" class="hidden"><button>Админ-панель</button></a>
 
     <h2>Создать комнату</h2>
     <input id="roomName" placeholder="Название комнаты" />
@@ -42,7 +34,7 @@
     <input id="videoUrl" placeholder="Ссылка на видео" />
     <input id="videoFile" type="file" accept="video/*" class="hidden" />
     <button onclick="createRoom()">Создать</button>
-    <a id="adminLink" href="/admin.html" class="hidden"><button>Админ-панель</button></a>
+
     <h2>Войти по ключу</h2>
     <input id="joinCodeInput" placeholder="Ключ комнаты" />
     <button onclick="joinByCode()">Войти</button>

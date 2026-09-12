@@ -41,6 +41,19 @@ router.get('/search', auth, async (req, res) => {
   res.json(rooms.map((r) => withLiveStatus(r, io)));
 });
 
+router.delete('/:code', auth, async (req, res) => {
+  const room = await Room.findOne({ code: req.params.code });
+  if (!room) return res.status(404).json({ error: 'Не найдено' });
+  if (String(room.owner) !== String(req.user.id)) {
+    return res.status(403).json({ error: 'Не твоя комната' });
+  }
+
+  const io = req.app.get('io');
+  io.to(room.code).emit('room:deleted'); // выкидывает всех, кто сейчас смотрит
+  await room.deleteOne();
+  res.json({ status: 'ok' });
+});
+
 router.get('/:code', auth, async (req, res) => {
   const room = await Room.findOne({ code: req.params.code });
   if (!room) return res.status(404).json({ error: 'Комната не найдена' });
