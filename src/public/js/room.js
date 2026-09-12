@@ -91,7 +91,9 @@ function renderPlayer(video) {
     return loadTwitchAPI().then(() => new Promise((resolve) => {
       twitchPlayer = new Twitch.Player('twitchPlayer', {
         video: videoId,
-        parent: [window.location.hostname], // определяется динамически — не завязано на фиксированный домен
+        width: '100%',
+        height: '100%',
+        parent: [window.location.hostname],
         autoplay: false,
         muted: false,
       });

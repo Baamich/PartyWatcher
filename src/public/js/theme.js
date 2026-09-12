@@ -1,20 +1,27 @@
 (function () {
-  const stored = localStorage.getItem('pw-theme') || 'light';
+  const stored = localStorage.getItem('pw-theme') || 'dark'; // тёмная по умолчанию
   document.documentElement.setAttribute('data-theme', stored);
 })();
 
-function setTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('pw-theme', theme);
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'dark';
 }
 
-function openThemeModal() {
-  const current = document.documentElement.getAttribute('data-theme') || 'light';
-  const radio = document.querySelector(`input[name="themeChoice"][value="${current}"]`);
-  if (radio) radio.checked = true;
-  document.getElementById('themeSettingsModal').classList.remove('hidden');
+function applyThemeIcon() {
+  document.querySelectorAll('.theme-toggle').forEach((btn) => {
+    btn.textContent = currentTheme() === 'dark' ? '🌙' : '☀️';
+  });
+}
+
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('pw-theme', next);
+  applyThemeIcon();
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.add('hidden');
 }
+
+document.addEventListener('DOMContentLoaded', applyThemeIcon);

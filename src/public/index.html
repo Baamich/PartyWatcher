@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/common.css" />
   <link rel="stylesheet" href="/css/index.css" />
@@ -22,13 +23,11 @@
   </div>
 
   <div id="appBox" class="hidden">
-    <div class="top-bar">
-      <span>Привет, <b id="meName"></b>!</span>
-      <div class="top-bar-actions">
-        <button class="icon-btn" onclick="openThemeModal()" title="Тема">🌓</button>
-        <a id="adminLink" href="/admin.html" class="hidden"><button>⚙️ Админ</button></a>
-        <button onclick="logout()">Выйти</button>
-      </div>
+    <div class="corner-menu">
+      <span class="corner-name" id="meName"></span>
+      <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+      <button class="icon-btn" onclick="logout()">Выйти</button>
+      <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn">Админ</button></a>
     </div>
 
     <h2>Создать комнату</h2>
@@ -51,19 +50,6 @@
     <h2>Мои комнаты</h2>
     <input id="searchInput" placeholder="Фильтр по названию" oninput="loadMyRooms()" />
     <div id="roomList"></div>
-  </div>
-
-  <div id="themeSettingsModal" class="modal hidden">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closeModal('themeSettingsModal')">✕</button>
-      <h3>Тема оформления</h3>
-      <label class="theme-option">
-        <input type="radio" name="themeChoice" value="light" onchange="setTheme('light')" /> Светлая
-      </label>
-      <label class="theme-option">
-        <input type="radio" name="themeChoice" value="dark" onchange="setTheme('dark')" /> Тёмная
-      </label>
-    </div>
   </div>
 
   <script src="/js/api.js"></script>

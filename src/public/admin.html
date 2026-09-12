@@ -2,33 +2,21 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/common.css" />
   <link rel="stylesheet" href="/css/admin.css" />
   <title>Админка — PartyWatcher</title>
 </head>
 <body>
-  <div class="top-bar">
-    <button onclick="location.href='/index.html'">← Назад</button>
-    <button class="icon-btn" onclick="openThemeModal()" title="Тема">🌓</button>
+  <div class="corner-menu">
+    <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+    <button class="icon-btn" onclick="location.href='/index.html'">← Назад</button>
   </div>
 
   <h2>Панель администратора</h2>
   <button onclick="runUpdate()">Обновить код с GitHub</button>
   <div id="log"></div>
-
-  <div id="themeSettingsModal" class="modal hidden">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closeModal('themeSettingsModal')">✕</button>
-      <h3>Тема оформления</h3>
-      <label class="theme-option">
-        <input type="radio" name="themeChoice" value="light" onchange="setTheme('light')" /> Светлая
-      </label>
-      <label class="theme-option">
-        <input type="radio" name="themeChoice" value="dark" onchange="setTheme('dark')" /> Тёмная
-      </label>
-    </div>
-  </div>
 
   <script src="/js/api.js"></script>
   <script src="/js/admin.js"></script>
