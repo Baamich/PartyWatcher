@@ -9,6 +9,7 @@ async function checkAuth() {
     adminLink.classList.toggle('hidden', me.role !== 'admin');
 
     loadMyRooms();
+    loadPublicRooms();
     startAutoRefresh();
   } catch {
     document.getElementById('authBox').classList.remove('hidden');
@@ -72,36 +73,64 @@ function onVideoTypeChange() {
   if (!popup.classList.contains('hidden')) updateInfoText();
 }
 
+// ---- приватность комнаты (замок) ----
+
+let privacyPublic = false; // по умолчанию приватная
+
+function updatePrivacyButton() {
+  const btn = document.getElementById('privacyToggle');
+  btn.textContent = privacyPublic ? '🔓' : '🔒';
+  btn.classList.toggle('lock-public', privacyPublic);
+  btn.classList.toggle('lock-private', !privacyPublic);
+}
+
+function togglePrivacy() {
+  privacyPublic = !privacyPublic;
+  updatePrivacyButton();
+}
+
+function showPrivacyInfo() {
+  const popup = document.getElementById('privacyInfoPopup');
+  popup.textContent = privacyPublic
+    ? 'Открытая — комната появится в разделе "Публичные комнаты" на главной у всех пользователей сайта.'
+    : 'Закрытая — комнату никто не увидит в списках. Войти смогут только те, кому ты сам дашь ключ.';
+  popup.classList.remove('hidden');
+}
+
+function hidePrivacyInfo() {
+  document.getElementById('privacyInfoPopup').classList.add('hidden');
+}
+
+function bindPrivacyTooltip() {
+  const btn = document.getElementById('privacyToggle');
+  let pressTimer = null;
+  let longPressTriggered = false;
+
+  btn.addEventListener('mouseenter', showPrivacyInfo);
+  btn.addEventListener('mouseleave', hidePrivacyInfo);
+
+  btn.addEventListener('touchstart', () => {
+    longPressTriggered = false;
+    pressTimer = setTimeout(() => {
+      longPressTriggered = true;
+      showPrivacyInfo();
+    }, 450);
+  });
+
+  btn.addEventListener('touchend', (e) => {
+    clearTimeout(pressTimer);
+    if (longPressTriggered) {
+      e.preventDefault(); // долгое нажатие — только показ инфо, без переключения замка
+      setTimeout(hidePrivacyInfo, 1500);
+    }
+  });
+}
+
+// ---- создание / вход в комнату ----
+
 function extractDriveFileId(url) {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
-}
-
-function parseVkVideo(input) {
-  const trimmed = input.trim();
-
-  // 1) уже готовый embed (вставили весь HTML-код "Поделиться → Код для вставки" или просто ссылку video_ext.php)
-  //    вытаскиваем oid/id/hash напрямую — это самый надёжный вариант
-  const extMatch = trimmed.match(/video_ext\.php\?([^"'\s]+)/);
-  if (extMatch) {
-    const params = new URLSearchParams(extMatch[1]);
-    const oid = params.get('oid');
-    const id = params.get('id');
-    const hash = params.get('hash');
-    if (oid && id) {
-      return `https://vk.com/video_ext.php?oid=${oid}&id=${id}${hash ? `&hash=${hash}` : ''}&hd=2`;
-    }
-  }
-
-  // 2) обычная ссылка на страницу: vk.com / vkvideo.ru / vk.ru / m.vk.com,
-  //    video-OID_ID (паблики/группы, OID отрицательный) или video OID_ID (личная страница), плюс clip-OID_ID
-  const pageMatch = trimmed.match(/(?:vk\.com|vkvideo\.ru|vk\.ru|m\.vk\.com)\/(?:video|clip)(-?\d+)_(\d+)/);
-  if (pageMatch) {
-    const [, oid, id] = pageMatch;
-    return `https://vk.com/video_ext.php?oid=${oid}&id=${id}&hd=2`;
-  }
-
-  return null;
 }
 
 async function createRoom() {
@@ -124,7 +153,11 @@ async function createRoom() {
 
     const room = await api('/rooms', {
       method: 'POST',
-      body: JSON.stringify({ name: document.getElementById('roomName').value, video: { type, url } }),
+      body: JSON.stringify({
+        name: document.getElementById('roomName').value,
+        video: { type, url },
+        isPublic: privacyPublic,
+      }),
     });
     location.href = `/room.html?code=${room.code}`;
   } catch (err) { alert(err.message); }
@@ -140,6 +173,8 @@ async function joinByCode() {
     alert('Комната не найдена или уже удалена');
   }
 }
+
+// ---- отрисовка списков комнат ----
 
 function roomThumbnail(room) {
   if (room.video.type === 'youtube') {
@@ -173,42 +208,61 @@ async function deleteRoom(code, ev) {
   } catch (err) { alert(err.message); }
 }
 
+function renderRoomCard(room, { showDelete }) {
+  const thumb = roomThumbnail(room);
+  const card = document.createElement('div');
+  card.className = 'room-card';
+  card.innerHTML = `
+    ${showDelete ? '<button class="delete-btn" title="Удалить комнату">🗑️</button>' : ''}
+    ${thumb ? `<img class="room-thumb" src="${thumb}" />` : `<div class="room-thumb-placeholder">🎬</div>`}
+    <div class="room-info">
+      <span class="room-name">${room.name}</span>
+      <span class="room-occupancy">👤 ${occupancyLabel(room)}</span>
+    </div>
+    <div class="room-actions">
+      <button class="enter-btn">Войти</button>
+      <div class="countdown">${deletionLabel(room)}</div>
+    </div>`;
+
+  card.querySelector('.enter-btn').onclick = () => (location.href = `/room.html?code=${room.code}`);
+  if (showDelete) {
+    card.querySelector('.delete-btn').onclick = (ev) => deleteRoom(room.code, ev);
+  }
+  return card;
+}
+
 async function loadMyRooms() {
   const q = document.getElementById('searchInput')?.value || '';
   const rooms = await api('/rooms/search?q=' + encodeURIComponent(q));
   const list = document.getElementById('roomList');
   list.innerHTML = '';
+  rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: true })));
+}
 
-  rooms.forEach((room) => {
-    const thumb = roomThumbnail(room);
-    const card = document.createElement('div');
-    card.className = 'room-card';
-    card.innerHTML = `
-      <button class="delete-btn" title="Удалить комнату">🗑️</button>
-      ${thumb ? `<img class="room-thumb" src="${thumb}" />` : `<div class="room-thumb-placeholder">🎬</div>`}
-      <div class="room-info">
-        <span class="room-name">${room.name}</span>
-        <span class="room-occupancy">👤 ${occupancyLabel(room)}</span>
-      </div>
-      <div class="room-actions">
-        <button class="enter-btn">Войти</button>
-        <div class="countdown">${deletionLabel(room)}</div>
-      </div>`;
+async function loadPublicRooms() {
+  const rooms = await api('/rooms/public');
+  const list = document.getElementById('publicRoomList');
+  list.innerHTML = '';
 
-    card.querySelector('.enter-btn').onclick = () => (location.href = `/room.html?code=${room.code}`);
-    card.querySelector('.delete-btn').onclick = (ev) => deleteRoom(room.code, ev);
-    list.appendChild(card);
-  });
+  if (!rooms.length) {
+    list.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Публичных комнат пока нет</p>';
+    return;
+  }
+  rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: false })));
 }
 
 let refreshTimer = null;
 function startAutoRefresh() {
   if (refreshTimer) return;
-  refreshTimer = setInterval(loadMyRooms, 5000);
+  refreshTimer = setInterval(() => {
+    loadMyRooms();
+    loadPublicRooms();
+  }, 5000);
 }
 function stopAutoRefresh() {
   clearInterval(refreshTimer);
   refreshTimer = null;
 }
 
+bindPrivacyTooltip();
 checkAuth();

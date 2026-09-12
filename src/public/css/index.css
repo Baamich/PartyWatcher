@@ -1,7 +1,32 @@
 body {
-  max-width: 480px;
+  margin: 0;
+  padding: 0;
+}
+
+#authBox {
+  max-width: 400px;
+  margin: 60px auto;
+  padding: 0 16px;
+}
+
+.layout {
+  max-width: 1100px;
   margin: 0 auto;
   padding: 20px 16px 60px;
+}
+
+/* десктоп — ИЛИ телефон в альбомной ориентации: два столбца */
+@media (min-width: 900px), (orientation: landscape) {
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+}
+
+.admin-row {
+  margin: 2px 0 10px;
 }
 
 input, select {
@@ -38,6 +63,27 @@ button {
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
+}
+
+.lock-btn {
+  width: 34px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 14px;
+  padding: 0;
+}
+
+.lock-private {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.lock-public {
+  background: #22c55e;
+  border-color: #22c55e;
 }
 
 .info-popup {

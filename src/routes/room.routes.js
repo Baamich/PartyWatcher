@@ -14,7 +14,7 @@ function withLiveStatus(room, io) {
 }
 
 router.post('/', auth, async (req, res) => {
-  const { name, video } = req.body;
+  const { name, video, isPublic } = req.body;
   if (!name || !video?.type || !video?.url) {
     return res.status(400).json({ error: 'Нужно имя комнаты и видео' });
   }
@@ -24,8 +24,19 @@ router.post('/', auth, async (req, res) => {
     code = generateCode();
   } while (await Room.findOne({ code }));
 
-  const room = await Room.create({ name, code, owner: req.user.id, video });
+  const room = await Room.create({ name, code, owner: req.user.id, video, isPublic: !!isPublic });
   res.status(201).json(room);
+});
+
+router.get('/public', auth, async (req, res) => {
+  const io = req.app.get('io');
+  const q = req.query.q || '';
+  const rooms = await Room.find({
+    isPublic: true,
+    owner: { $ne: req.user.id }, // свои же публичные комнаты и так видны в "Моих комнатах"
+    name: { $regex: q, $options: 'i' },
+  }).sort({ createdAt: -1 }).limit(100);
+  res.json(rooms.map((r) => withLiveStatus(r, io)));
 });
 
 router.get('/mine', auth, async (req, res) => {

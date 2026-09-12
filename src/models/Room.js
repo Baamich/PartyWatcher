@@ -10,6 +10,7 @@ const roomSchema = new mongoose.Schema(
       url: { type: String, required: true },
       title: { type: String },
     },
+    isPublic: { type: Boolean, default: false }, // по умолчанию приватная (закрытый замок)
     playback: {
       isPlaying: { type: Boolean, default: false },
       positionSeconds: { type: Number, default: 0 },
