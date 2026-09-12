@@ -51,31 +51,37 @@ async function logout() {
   checkAuth();
 }
 
-// ---- выбор типа видео + инфо-подсказка ----
+// ---- тип видео + приватность — один общий инфо-попап на двоих ----
 
 const infoTexts = {
   youtube_twitch: 'Вставь ссылку на видео с YouTube (youtube.com/watch?v=... или youtu.be/...) или на запись (VOD) с Twitch (twitch.tv/videos/1234567890 — именно запись, не текущий эфир). Тип определится автоматически по ссылке.',
   drive: 'На Google Диске: правой кнопкой по видео → "Открыть доступ" → "Все, у кого есть ссылка" → скопируй ссылку и вставь сюда. Без этого сервер не сможет прочитать файл.',
 };
 
-function updateInfoText() {
+let privacyPublic = false; // по умолчанию приватная
+
+function lockStatusText() {
+  return privacyPublic
+    ? '🔓 Открытая — комната появится в разделе "Публичные комнаты" у всех пользователей.'
+    : '🔒 Закрытая — комнату никто не увидит в списках, войти можно только по ключу.';
+}
+
+function renderInfoPopup() {
   const type = document.getElementById('videoType').value;
-  document.getElementById('infoPopup').textContent = infoTexts[type];
+  document.getElementById('infoPopup').innerHTML = `${infoTexts[type]}<hr>${lockStatusText()}`;
 }
 
 function toggleInfoPopup() {
-  updateInfoText();
-  document.getElementById('infoPopup').classList.toggle('hidden');
+  const popup = document.getElementById('infoPopup');
+  const willShow = popup.classList.contains('hidden');
+  if (willShow) renderInfoPopup();
+  popup.classList.toggle('hidden');
 }
 
 function onVideoTypeChange() {
   const popup = document.getElementById('infoPopup');
-  if (!popup.classList.contains('hidden')) updateInfoText();
+  if (!popup.classList.contains('hidden')) renderInfoPopup();
 }
-
-// ---- приватность комнаты (замок) ----
-
-let privacyPublic = false; // по умолчанию приватная
 
 function updatePrivacyButton() {
   const btn = document.getElementById('privacyToggle');
@@ -87,43 +93,8 @@ function updatePrivacyButton() {
 function togglePrivacy() {
   privacyPublic = !privacyPublic;
   updatePrivacyButton();
-}
-
-function showPrivacyInfo() {
-  const popup = document.getElementById('privacyInfoPopup');
-  popup.textContent = privacyPublic
-    ? 'Открытая — комната появится в разделе "Публичные комнаты" на главной у всех пользователей сайта.'
-    : 'Закрытая — комнату никто не увидит в списках. Войти смогут только те, кому ты сам дашь ключ.';
-  popup.classList.remove('hidden');
-}
-
-function hidePrivacyInfo() {
-  document.getElementById('privacyInfoPopup').classList.add('hidden');
-}
-
-function bindPrivacyTooltip() {
-  const btn = document.getElementById('privacyToggle');
-  let pressTimer = null;
-  let longPressTriggered = false;
-
-  btn.addEventListener('mouseenter', showPrivacyInfo);
-  btn.addEventListener('mouseleave', hidePrivacyInfo);
-
-  btn.addEventListener('touchstart', () => {
-    longPressTriggered = false;
-    pressTimer = setTimeout(() => {
-      longPressTriggered = true;
-      showPrivacyInfo();
-    }, 450);
-  });
-
-  btn.addEventListener('touchend', (e) => {
-    clearTimeout(pressTimer);
-    if (longPressTriggered) {
-      e.preventDefault(); // долгое нажатие — только показ инфо, без переключения замка
-      setTimeout(hidePrivacyInfo, 1500);
-    }
-  });
+  const popup = document.getElementById('infoPopup');
+  if (!popup.classList.contains('hidden')) renderInfoPopup(); // если попап открыт — сразу обновляем текст про замок
 }
 
 // ---- создание / вход в комнату ----
@@ -264,5 +235,4 @@ function stopAutoRefresh() {
   refreshTimer = null;
 }
 
-bindPrivacyTooltip();
 checkAuth();

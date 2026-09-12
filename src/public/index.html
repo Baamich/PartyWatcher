@@ -22,44 +22,45 @@
     <button onclick="register()">Зарегистрироваться</button>
   </div>
 
-  <div id="appBox" class="hidden layout">
-    <div class="col-left">
+  <div id="appBox" class="hidden">
+    <div class="page-header">
       <div class="corner-menu">
         <span class="corner-name" id="meName"></span>
         <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
         <button class="icon-btn" onclick="logout()">Выйти</button>
       </div>
-      <div class="admin-row">
-        <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn">Админ</button></a>
-      </div>
-
-      <h2>Создать комнату</h2>
-      <input id="roomName" placeholder="Название комнаты" />
-      <div class="type-row">
-        <select id="videoType" onchange="onVideoTypeChange()">
-          <option value="youtube_twitch">YouTube / Twitch (запись)</option>
-          <option value="drive">Google Диск</option>
-        </select>
-        <button type="button" class="info-btn" onclick="toggleInfoPopup()">i</button>
-        <button type="button" class="lock-btn lock-private" id="privacyToggle" onclick="togglePrivacy()">🔒</button>
-      </div>
-      <div id="infoPopup" class="info-popup hidden"></div>
-      <div id="privacyInfoPopup" class="info-popup hidden"></div>
-      <input id="videoUrl" placeholder="Ссылка на видео" />
-      <button onclick="createRoom()">Создать</button>
-
-      <h2>Войти по ключу</h2>
-      <input id="joinCodeInput" placeholder="Ключ комнаты" />
-      <button onclick="joinByCode()">Войти</button>
+      <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn">Админ</button></a>
     </div>
 
-    <div class="col-right">
-      <h2>Мои комнаты</h2>
-      <input id="searchInput" placeholder="Фильтр по названию" oninput="loadMyRooms()" />
-      <div id="roomList"></div>
+    <div class="layout">
+      <div class="col-left">
+        <h2>Создать комнату</h2>
+        <input id="roomName" placeholder="Название комнаты" />
+        <div class="type-row">
+          <select id="videoType" onchange="onVideoTypeChange()">
+            <option value="youtube_twitch">YouTube / Twitch (запись)</option>
+            <option value="drive">Google Диск</option>
+          </select>
+          <button type="button" class="info-btn" onclick="toggleInfoPopup()">i</button>
+          <button type="button" class="lock-btn lock-private" id="privacyToggle" onclick="togglePrivacy()">🔒</button>
+        </div>
+        <div id="infoPopup" class="info-popup hidden"></div>
+        <input id="videoUrl" placeholder="Ссылка на видео" />
+        <button onclick="createRoom()">Создать</button>
 
-      <h2>Публичные комнаты</h2>
-      <div id="publicRoomList"></div>
+        <h2>Войти по ключу</h2>
+        <input id="joinCodeInput" placeholder="Ключ комнаты" />
+        <button onclick="joinByCode()">Войти</button>
+      </div>
+
+      <div class="col-right">
+        <h2>Мои комнаты</h2>
+        <input id="searchInput" placeholder="Фильтр по названию" oninput="loadMyRooms()" />
+        <div id="roomList"></div>
+
+        <h2>Публичные комнаты</h2>
+        <div id="publicRoomList"></div>
+      </div>
     </div>
   </div>
 
