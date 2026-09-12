@@ -56,11 +56,10 @@ function renderPlayer(video) {
             resolve();
           },
           onStateChange: (e) => {
-            if (!isOwner) {
-              if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.PAUSED) enforceHostState();
-              return;
-            }
-            if (suppressEvents) return;
+            if (suppressEvents) return; // наши же программные seekTo/play/pause не должны запускать обработку заново
+
+            if (!isOwner) return; // у зрителя нет controls, реагировать тут больше не на что
+
             if (e.data === YT.PlayerState.PLAYING) emitPlayback(true);
             else if (e.data === YT.PlayerState.PAUSED) emitPlayback(false);
           },
@@ -78,10 +77,9 @@ function renderPlayer(video) {
     videoEl.addEventListener('play', () => emitPlayback(true));
     videoEl.addEventListener('pause', () => emitPlayback(false));
     videoEl.addEventListener('seeked', () => emitPlayback(!videoEl.paused));
-  } else {
-    videoEl.addEventListener('play', enforceHostState);
-    videoEl.addEventListener('seeking', enforceHostState);
   }
+  // у зрителя нет native controls (не выставлен атрибут controls), ему физически нечем
+  // управлять видео вручную — доп. слушатели тут только создавали цикл, убираем их
   return Promise.resolve();
 }
 
