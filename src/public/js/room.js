@@ -8,7 +8,6 @@ let videoEl = null;
 let suppressEvents = false;
 let playerReady = false;
 let lastState = { isPlaying: false, positionSeconds: 0 };
-let lastVkTime = 0;
 let started = false;
 
 function setOverlay(text, showStartBtn) {
@@ -45,18 +44,6 @@ function loadTwitchAPI() {
     tag.onload = () => resolve();
     document.body.appendChild(tag);
   });
-}
-
-function vkIframeWindow() {
-  const iframe = document.getElementById('vkPlayer');
-  return iframe ? iframe.contentWindow : null;
-}
-
-function postVkCommand(command, value) {
-  const win = vkIframeWindow();
-  if (!win) return;
-  const msg = value !== undefined ? { command, value } : { command };
-  win.postMessage(JSON.stringify(msg), '*');
 }
 
 function renderPlayer(video) {
@@ -126,25 +113,6 @@ function renderPlayer(video) {
     }));
   }
 
-  if (video.type === 'vk') {
-    container.innerHTML = `<iframe id="vkPlayer" src="${video.url}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
-    playerReady = true;
-
-    window.addEventListener('message', (e) => {
-      let data;
-      try { data = JSON.parse(e.data); } catch { return; }
-
-      if (data.event === 'timeupdate' && typeof data.time === 'number') {
-        lastVkTime = data.time;
-      }
-      if (suppressEvents || !isOwner) return;
-      if (data.event === 'playing' || data.event === 'play') emitPlayback(true);
-      else if (data.event === 'paused' || data.event === 'pause') emitPlayback(false);
-    });
-
-    return Promise.resolve();
-  }
-
   // Google Drive (через наш прокси-стриминг) и оставшиеся варианты — обычный <video>
   const videoSrc = video.type === 'drive' ? `/api/drive/stream/${video.url}` : video.url;
   container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${videoSrc}"></video>`;
@@ -180,10 +148,6 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
     setTimeout(() => (suppressEvents = false), 800);
-  } else if (currentVideoType === 'vk') {
-    postVkCommand(isPlaying ? 'play' : 'pause');
-    postVkCommand('seek', positionSeconds);
-    setTimeout(() => (suppressEvents = false), 800);
   } else if (videoEl) {
     const clearSuppress = () => {
       videoEl.removeEventListener('seeked', clearSuppress);
@@ -206,7 +170,6 @@ function emitPlayback(isPlaying) {
   let positionSeconds = 0;
   if (currentVideoType === 'youtube') positionSeconds = ytPlayer.getCurrentTime();
   else if (currentVideoType === 'twitch') positionSeconds = twitchPlayer.getCurrentTime();
-  else if (currentVideoType === 'vk') positionSeconds = lastVkTime;
   else if (videoEl) positionSeconds = videoEl.currentTime;
 
   socket.emit('playback:update', { code, isPlaying, positionSeconds });
@@ -228,7 +191,6 @@ function startWatching() {
   if (isOwner) {
     if (currentVideoType === 'youtube') ytPlayer.playVideo();
     else if (currentVideoType === 'twitch') twitchPlayer.play();
-    else if (currentVideoType === 'vk') postVkCommand('play');
     else if (videoEl) videoEl.play().catch(() => {});
   } else {
     applyPlaybackState(lastState);

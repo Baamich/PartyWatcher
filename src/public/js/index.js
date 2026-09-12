@@ -55,7 +55,6 @@ async function logout() {
 const infoTexts = {
   youtube_twitch: 'Вставь ссылку на видео с YouTube (youtube.com/watch?v=... или youtu.be/...) или на запись (VOD) с Twitch (twitch.tv/videos/1234567890 — именно запись, не текущий эфир). Тип определится автоматически по ссылке.',
   drive: 'На Google Диске: правой кнопкой по видео → "Открыть доступ" → "Все, у кого есть ссылка" → скопируй ссылку и вставь сюда. Без этого сервер не сможет прочитать файл.',
-  vk: 'Вставь ссылку на видео VK — подходят vk.com, vkvideo.ru, vk.ru, m.vk.com (форматы video-123456_789012 или clip-123456_789012). Если не заработает — на странице видео жми "Поделиться → Код для вставки" и вставь сюда весь HTML-код целиком, так надёжнее (там есть нужный hash). У VK нет официального API для управления плеером — синхронизация может не сработать.',
 };
 
 function updateInfoText() {
@@ -121,13 +120,6 @@ async function createRoom() {
       if (!fileId) return alert('Не удалось распознать ссылку на файл Google Диска');
       type = 'drive';
       url = fileId;
-    } else if (selection === 'vk') {
-      const embedUrl = parseVkVideo(rawUrl);
-      if (!embedUrl) {
-        return alert('Не удалось распознать ссылку VK. Поддерживаются vk.com / vkvideo.ru / vk.ru — либо вставь целиком HTML-код из "Поделиться → Код для вставки".');
-      }
-      type = 'vk';
-      url = embedUrl;
     }
 
     const room = await api('/rooms', {
