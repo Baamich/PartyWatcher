@@ -20,7 +20,7 @@ function hideOverlay() {
 }
 
 function updateWaitingOverlayText() {
-  if (started || isOwner) return; // после клика/у хоста этот оверлей больше не трогаем
+  if (started || isOwner) return;
   const status = lastState.isPlaying ? 'смотрит' : 'на паузе';
   setOverlay(`Хост сейчас ${status} — нажми, чтобы присоединиться`, true);
 }
@@ -62,8 +62,8 @@ function renderPlayer(video) {
             resolve();
           },
           onStateChange: (e) => {
-            if (suppressEvents) return; // гасим события, вызванные нашим же программным seekTo/play/pause
-            if (!isOwner) return; // у зрителя нет controls — реагировать тут больше не на что
+            if (suppressEvents) return;
+            if (!isOwner) return; // у зрителя нет controls, никакие нажатия не должны отправлять апдейты
 
             if (e.data === YT.PlayerState.PLAYING) emitPlayback(true);
             else if (e.data === YT.PlayerState.PAUSED) emitPlayback(false);
@@ -82,8 +82,14 @@ function renderPlayer(video) {
     videoEl.addEventListener('play', () => emitPlayback(true));
     videoEl.addEventListener('pause', () => emitPlayback(false));
     videoEl.addEventListener('seeked', () => emitPlayback(!videoEl.paused));
+  } else {
+    // страховка: если зритель как-то умудрился запустить/перемотать видео сам
+    // (правый клик → "Воспроизвести", фокус+пробел и т.п.) — тут же откатываем к хосту
+    videoEl.addEventListener('play', () => { if (!suppressEvents) enforceHostState(); });
+    videoEl.addEventListener('seeking', () => { if (!suppressEvents) enforceHostState(); });
+    videoEl.oncontextmenu = () => false;
+    videoEl.disablePictureInPicture = true;
   }
-  // у зрителя нет native controls — вручную ему нечем управлять, лишние слушатели тут только создавали цикл
 
   return Promise.resolve();
 }
@@ -97,7 +103,6 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
   if (currentVideoType === 'youtube') {
     ytPlayer.seekTo(positionSeconds, true);
     isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
-    // у YouTube IFrame API нет надёжного события "сик точно завершён" — таймер с запасом
     setTimeout(() => (suppressEvents = false), 800);
   } else if (videoEl) {
     const clearSuppress = () => {
@@ -107,7 +112,6 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
     videoEl.addEventListener('seeked', clearSuppress);
     videoEl.currentTime = positionSeconds;
     isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
-    // страховка на случай, если seeked не произойдёт (позиция не изменилась)
     setTimeout(clearSuppress, 1500);
   }
 }
@@ -142,9 +146,32 @@ function startWatching() {
       videoEl.play().catch(() => {});
     }
   } else {
-    applyPlaybackState(lastState);
+    applyPlaybackState(lastState); // подхватываем текущее состояние хоста, не запускаем "с нуля"
   }
 }
+
+function toggleFullscreen() {
+  const wrap = document.getElementById('playerWrap');
+  if (!document.fullscreenElement) {
+    wrap.requestFullscreen?.();
+  } else {
+    document.exitFullscreen?.();
+  }
+}
+
+function onFullscreenChange() {
+  const inFullscreen = !!document.fullscreenElement;
+  document.getElementById('fsChatToggleBtn').classList.toggle('hidden', !inFullscreen);
+  if (!inFullscreen) {
+    document.getElementById('fsChatPanel').classList.add('hidden');
+  }
+}
+
+function toggleFsChat() {
+  document.getElementById('fsChatPanel').classList.toggle('hidden');
+}
+
+document.addEventListener('fullscreenchange', onFullscreenChange);
 
 async function init() {
   const me = await api('/auth/me').catch(() => null);
@@ -194,20 +221,43 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-function sendMessage(e) {
+function sendMessage(e, fromFullscreen) {
   e.preventDefault();
-  const input = document.getElementById('chatInput');
+  const input = document.getElementById(fromFullscreen ? 'fsChatInput' : 'chatInput');
   if (!input.value.trim()) return false;
   socket.emit('chat:message', { code, text: input.value });
   input.value = '';
   return false;
 }
 
-function addMessage({ username, text }) {
+function appendMessageTo(containerId, username, text) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
   const div = document.createElement('div');
   div.textContent = `${username}: ${text}`;
-  document.getElementById('messages').appendChild(div);
-  document.getElementById('messages').scrollTop = 1e9;
+  container.appendChild(div);
+  container.scrollTop = 1e9;
+}
+
+let fsNoticeTimer = null;
+
+function showFsNotice(username, text) {
+  if (!document.fullscreenElement) return; // баннер нужен только в полноэкранном режиме
+  const notice = document.getElementById('fsNotice');
+  notice.textContent = `${username}: ${text}`;
+  notice.classList.remove('hidden', 'fade-out');
+
+  clearTimeout(fsNoticeTimer);
+  fsNoticeTimer = setTimeout(() => {
+    notice.classList.add('fade-out');
+    setTimeout(() => notice.classList.add('hidden'), 500);
+  }, 5000);
+}
+
+function addMessage({ username, text }) {
+  appendMessageTo('messages', username, text);
+  appendMessageTo('fsMessages', username, text);
+  showFsNotice(username, text);
 }
 
 init();

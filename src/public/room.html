@@ -9,11 +9,26 @@
 <body>
   <div id="playerWrap">
     <div id="player"></div>
+
     <div id="overlay">
       <span id="overlayText">Загрузка комнаты...</span>
       <button id="startBtn" class="hidden" onclick="startWatching()">▶ Начать просмотр</button>
     </div>
+
+    <button id="fullscreenBtn" title="Полноэкранный режим" onclick="toggleFullscreen()">⛶</button>
+    <button id="fsChatToggleBtn" class="hidden" onclick="toggleFsChat()">💬</button>
+
+    <div id="fsChatPanel" class="hidden">
+      <div id="fsMessages"></div>
+      <form id="fsChatForm" onsubmit="return sendMessage(event, true)">
+        <input id="fsChatInput" placeholder="Сообщение..." />
+        <button type="submit">➤</button>
+      </form>
+    </div>
+
+    <div id="fsNotice" class="hidden"></div>
   </div>
+
   <div id="chat">
     <div id="roomHeader">
       <button onclick="location.href='/index.html'">← Назад</button>
