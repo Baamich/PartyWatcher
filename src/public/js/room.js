@@ -9,6 +9,7 @@ let suppressEvents = false;
 let playerReady = false;
 let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
+let heartbeatTimer = null;
 
 function setOverlay(text, showStartBtn) {
   document.getElementById('overlayText').textContent = text;
@@ -115,7 +116,6 @@ function renderPlayer(video) {
     }));
   }
 
-  // Google Drive (через наш прокси-стриминг) и оставшиеся варианты — обычный <video>
   const videoSrc = video.type === 'drive' ? `/api/drive/stream/${video.url}` : video.url;
   container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${videoSrc}"></video>`;
   videoEl = document.getElementById('videoEl');
@@ -166,6 +166,13 @@ function enforceHostState() {
   applyPlaybackState(lastState);
 }
 
+function getOwnerIsPlayingNow() {
+  if (currentVideoType === 'youtube') return ytPlayer?.getPlayerState() === YT.PlayerState.PLAYING;
+  if (currentVideoType === 'twitch') return !twitchPlayer?.isPaused();
+  if (videoEl) return !videoEl.paused;
+  return false;
+}
+
 function emitPlayback(isPlaying) {
   if (suppressEvents || !isOwner) return;
 
@@ -177,8 +184,24 @@ function emitPlayback(isPlaying) {
   socket.emit('playback:update', { code, isPlaying, positionSeconds });
 }
 
+// хост раз в 3 секунды сам себя "перепроверяет" — самоисправление на случай
+// потерянного события play/pause (нестабильное соединение через бесплатный туннель)
+function startHeartbeat() {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(() => {
+    if (!isOwner || !started || !playerReady) return;
+    emitPlayback(getOwnerIsPlayingNow());
+  }, 3000);
+}
+
 function resync() {
-  socket.emit('room:resync', { code });
+  if (isOwner) {
+    // хост форсит своё реальное текущее состояние всем зрителям немедленно
+    emitPlayback(getOwnerIsPlayingNow());
+  } else {
+    // зритель просто подтягивает последнее известное состояние хоста себе
+    socket.emit('room:resync', { code });
+  }
 }
 
 function copyRoomLink() {
@@ -194,6 +217,7 @@ function startWatching() {
     if (currentVideoType === 'youtube') ytPlayer.playVideo();
     else if (currentVideoType === 'twitch') twitchPlayer.play();
     else if (videoEl) videoEl.play().catch(() => {});
+    startHeartbeat();
   } else {
     applyPlaybackState(lastState);
   }
@@ -220,6 +244,10 @@ document.addEventListener('fullscreenchange', onFullscreenChange);
 function openSettings() {
   socket.emit('room:participants', { code });
   document.getElementById('settingsModal').classList.remove('hidden');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
 }
 
 function openBannedList() {
