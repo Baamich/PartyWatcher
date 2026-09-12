@@ -50,33 +50,54 @@ async function logout() {
   checkAuth();
 }
 
-function onVideoTypeChange() {
+// ---- выбор типа видео + инфо-подсказка ----
+
+const infoTexts = {
+  youtube_twitch: 'Вставь ссылку на видео с YouTube (youtube.com/watch?v=... или youtu.be/...) или на запись (VOD) с Twitch (twitch.tv/videos/1234567890 — именно запись, не текущий эфир). Тип определится автоматически по ссылке.',
+  drive: 'На Google Диске: правой кнопкой по видео → "Открыть доступ" → "Все, у кого есть ссылка" → скопируй ссылку и вставь сюда. Без этого сервер не сможет прочитать файл.',
+  vk: 'Вставь ссылку на видео VK (vk.com/video-123456_789012). У VK нет официального API для управления плеером — мы попробуем синхронизировать, но гарантии, что сработает как с YouTube, нет.',
+};
+
+function updateInfoText() {
   const type = document.getElementById('videoType').value;
-  const urlInput = document.getElementById('videoUrl');
-  const fileInput = document.getElementById('videoFile');
-  if (type === 'upload') {
-    urlInput.classList.add('hidden');
-    fileInput.classList.remove('hidden');
-  } else {
-    urlInput.classList.remove('hidden');
-    fileInput.classList.add('hidden');
-  }
+  document.getElementById('infoPopup').textContent = infoTexts[type];
+}
+
+function toggleInfoPopup() {
+  updateInfoText();
+  document.getElementById('infoPopup').classList.toggle('hidden');
+}
+
+function onVideoTypeChange() {
+  const popup = document.getElementById('infoPopup');
+  if (!popup.classList.contains('hidden')) updateInfoText();
+}
+
+function extractDriveFileId(url) {
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
 }
 
 async function createRoom() {
   try {
-    const type = document.getElementById('videoType').value;
-    let url = document.getElementById('videoUrl').value;
+    const selection = document.getElementById('videoType').value;
+    const rawUrl = document.getElementById('videoUrl').value.trim();
+    let type, url;
 
-    if (type === 'upload') {
-      const fileInput = document.getElementById('videoFile');
-      if (!fileInput.files[0]) return alert('Выбери файл');
-      const formData = new FormData();
-      formData.append('video', fileInput.files[0]);
-      const res = await fetch('/api/videos/upload', { method: 'POST', credentials: 'include', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      url = data.url;
+    if (selection === 'youtube_twitch') {
+      if (/youtube\.com|youtu\.be/.test(rawUrl)) type = 'youtube';
+      else if (/twitch\.tv/.test(rawUrl)) type = 'twitch';
+      else return alert('Не могу определить YouTube это или Twitch — проверь ссылку');
+      url = rawUrl;
+    } else if (selection === 'drive') {
+      const fileId = extractDriveFileId(rawUrl);
+      if (!fileId) return alert('Не удалось распознать ссылку на файл Google Диска');
+      type = 'drive';
+      url = fileId;
+    } else if (selection === 'vk') {
+      if (!/vk\.com\/video/.test(rawUrl)) return alert('Похоже, это не ссылка на видео VK');
+      type = 'vk';
+      url = rawUrl;
     }
 
     const room = await api('/rooms', {

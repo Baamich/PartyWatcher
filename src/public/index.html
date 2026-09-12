@@ -26,13 +26,16 @@
 
     <h2>Создать комнату</h2>
     <input id="roomName" placeholder="Название комнаты" />
-    <select id="videoType" onchange="onVideoTypeChange()">
-      <option value="direct">Прямая ссылка (mp4/m3u8)</option>
-      <option value="youtube">YouTube</option>
-      <option value="upload">Загрузить файл (до 10GB)</option>
-    </select>
+    <div class="type-row">
+      <select id="videoType" onchange="onVideoTypeChange()">
+        <option value="youtube_twitch">YouTube / Twitch (запись)</option>
+        <option value="drive">Google Диск</option>
+        <option value="vk">VK Видео</option>
+      </select>
+      <button type="button" class="info-btn" onclick="toggleInfoPopup()">i</button>
+    </div>
+    <div id="infoPopup" class="info-popup hidden"></div>
     <input id="videoUrl" placeholder="Ссылка на видео" />
-    <input id="videoFile" type="file" accept="video/*" class="hidden" />
     <button onclick="createRoom()">Создать</button>
 
     <h2>Войти по ключу</h2>

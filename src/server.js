@@ -13,6 +13,7 @@ const authRoutes = require('./routes/auth.routes');
 const roomRoutes = require('./routes/room.routes');
 const videoRoutes = require('./routes/video.routes');
 const adminRoutes = require('./routes/admin.routes');
+const driveRoutes = require('./routes/drive.routes');
 
 async function start() {
   await connectDB();
@@ -31,6 +32,7 @@ async function start() {
   app.use('/api/rooms', roomRoutes);
   app.use('/api/videos', videoRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/drive', driveRoutes);
     
   app.set('io', io);
 

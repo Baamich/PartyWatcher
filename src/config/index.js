@@ -32,4 +32,8 @@ module.exports = {
     accessToken: process.env.GITHUB_TOKEN, // тот же токен, что и для gist
     secretKey: process.env.UPDATE_SECRET_KEY,
     },
+
+   drive: {
+    apiKey: process.env.GOOGLE_DRIVE_API_KEY,
+  },
 };

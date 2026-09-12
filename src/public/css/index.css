@@ -83,3 +83,36 @@ input, button, select {
   color: #999;
   margin-top: 6px;
 }
+
+.type-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.type-row select {
+  flex: 1;
+}
+
+.info-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #666;
+  background: #fff;
+  font-style: italic;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.info-popup {
+  font-size: 13px;
+  color: #333;
+  background: #f7f7f7;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: -2px 0 6px 0;
+}

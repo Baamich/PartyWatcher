@@ -3,10 +3,12 @@ let socket;
 let isOwner = false;
 let currentVideoType = null;
 let ytPlayer = null;
+let twitchPlayer = null;
 let videoEl = null;
 let suppressEvents = false;
 let playerReady = false;
 let lastState = { isPlaying: false, positionSeconds: 0 };
+let lastVkTime = 0;
 let started = false;
 
 function setOverlay(text, showStartBtn) {
@@ -33,6 +35,28 @@ function loadYouTubeAPI() {
     document.body.appendChild(tag);
     window.onYouTubeIframeAPIReady = () => resolve();
   });
+}
+
+function loadTwitchAPI() {
+  return new Promise((resolve) => {
+    if (window.Twitch && window.Twitch.Player) return resolve();
+    const tag = document.createElement('script');
+    tag.src = 'https://embed.twitch.tv/embed/v1.js';
+    tag.onload = () => resolve();
+    document.body.appendChild(tag);
+  });
+}
+
+function vkIframeWindow() {
+  const iframe = document.getElementById('vkPlayer');
+  return iframe ? iframe.contentWindow : null;
+}
+
+function postVkCommand(command, value) {
+  const win = vkIframeWindow();
+  if (!win) return;
+  const msg = value !== undefined ? { command, value } : { command };
+  win.postMessage(JSON.stringify(msg), '*');
 }
 
 function renderPlayer(video) {
@@ -64,7 +88,6 @@ function renderPlayer(video) {
           onStateChange: (e) => {
             if (suppressEvents) return;
             if (!isOwner) return;
-
             if (e.data === YT.PlayerState.PLAYING) emitPlayback(true);
             else if (e.data === YT.PlayerState.PAUSED) emitPlayback(false);
           },
@@ -73,7 +96,58 @@ function renderPlayer(video) {
     }));
   }
 
-  container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${video.url}"></video>`;
+  if (video.type === 'twitch') {
+    const idMatch = video.url.match(/twitch\.tv\/videos\/(\d+)/);
+    const videoId = idMatch ? idMatch[1] : '';
+    container.innerHTML = '<div id="twitchPlayer"></div>';
+
+    return loadTwitchAPI().then(() => new Promise((resolve) => {
+      twitchPlayer = new Twitch.Player('twitchPlayer', {
+        video: videoId,
+        parent: [window.location.hostname], // определяется динамически — не завязано на фиксированный домен
+        autoplay: false,
+        muted: false,
+      });
+
+      twitchPlayer.addEventListener(Twitch.Player.READY, () => {
+        playerReady = true;
+        twitchPlayer.setVolume(0.3);
+        resolve();
+      });
+
+      twitchPlayer.addEventListener(Twitch.Player.PLAY, () => {
+        if (suppressEvents || !isOwner) return;
+        emitPlayback(true);
+      });
+      twitchPlayer.addEventListener(Twitch.Player.PAUSE, () => {
+        if (suppressEvents || !isOwner) return;
+        emitPlayback(false);
+      });
+    }));
+  }
+
+  if (video.type === 'vk') {
+    container.innerHTML = `<iframe id="vkPlayer" src="${video.url}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
+    playerReady = true;
+
+    window.addEventListener('message', (e) => {
+      let data;
+      try { data = JSON.parse(e.data); } catch { return; }
+
+      if (data.event === 'timeupdate' && typeof data.time === 'number') {
+        lastVkTime = data.time;
+      }
+      if (suppressEvents || !isOwner) return;
+      if (data.event === 'playing' || data.event === 'play') emitPlayback(true);
+      else if (data.event === 'paused' || data.event === 'pause') emitPlayback(false);
+    });
+
+    return Promise.resolve();
+  }
+
+  // Google Drive (через наш прокси-стриминг) и оставшиеся варианты — обычный <video>
+  const videoSrc = video.type === 'drive' ? `/api/drive/stream/${video.url}` : video.url;
+  container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${videoSrc}"></video>`;
   videoEl = document.getElementById('videoEl');
   videoEl.volume = 0.3;
   playerReady = true;
@@ -102,6 +176,14 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
     ytPlayer.seekTo(positionSeconds, true);
     isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
     setTimeout(() => (suppressEvents = false), 800);
+  } else if (currentVideoType === 'twitch') {
+    twitchPlayer.seek(positionSeconds);
+    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+    setTimeout(() => (suppressEvents = false), 800);
+  } else if (currentVideoType === 'vk') {
+    postVkCommand(isPlaying ? 'play' : 'pause');
+    postVkCommand('seek', positionSeconds);
+    setTimeout(() => (suppressEvents = false), 800);
   } else if (videoEl) {
     const clearSuppress = () => {
       videoEl.removeEventListener('seeked', clearSuppress);
@@ -120,7 +202,13 @@ function enforceHostState() {
 
 function emitPlayback(isPlaying) {
   if (suppressEvents || !isOwner) return;
-  const positionSeconds = currentVideoType === 'youtube' ? ytPlayer.getCurrentTime() : videoEl.currentTime;
+
+  let positionSeconds = 0;
+  if (currentVideoType === 'youtube') positionSeconds = ytPlayer.getCurrentTime();
+  else if (currentVideoType === 'twitch') positionSeconds = twitchPlayer.getCurrentTime();
+  else if (currentVideoType === 'vk') positionSeconds = lastVkTime;
+  else if (videoEl) positionSeconds = videoEl.currentTime;
+
   socket.emit('playback:update', { code, isPlaying, positionSeconds });
 }
 
@@ -138,11 +226,10 @@ function startWatching() {
   hideOverlay();
 
   if (isOwner) {
-    if (currentVideoType === 'youtube') {
-      ytPlayer.playVideo();
-    } else if (videoEl) {
-      videoEl.play().catch(() => {});
-    }
+    if (currentVideoType === 'youtube') ytPlayer.playVideo();
+    else if (currentVideoType === 'twitch') twitchPlayer.play();
+    else if (currentVideoType === 'vk') postVkCommand('play');
+    else if (videoEl) videoEl.play().catch(() => {});
   } else {
     applyPlaybackState(lastState);
   }
@@ -150,11 +237,8 @@ function startWatching() {
 
 function toggleFullscreen() {
   const wrap = document.getElementById('playerWrap');
-  if (!document.fullscreenElement) {
-    wrap.requestFullscreen?.();
-  } else {
-    document.exitFullscreen?.();
-  }
+  if (!document.fullscreenElement) wrap.requestFullscreen?.();
+  else document.exitFullscreen?.();
 }
 
 function onFullscreenChange() {
@@ -278,9 +362,12 @@ async function init() {
 document.addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || !isOwner || !started) return;
   e.preventDefault();
+
   if (currentVideoType === 'youtube') {
     const state = ytPlayer.getPlayerState();
     state === YT.PlayerState.PLAYING ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+  } else if (currentVideoType === 'twitch') {
+    twitchPlayer.isPaused() ? twitchPlayer.play() : twitchPlayer.pause();
   } else if (videoEl) {
     videoEl.paused ? videoEl.play() : videoEl.pause();
   }

@@ -6,7 +6,7 @@ const roomSchema = new mongoose.Schema(
     code: { type: String, required: true, unique: true },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     video: {
-      type: { type: String, enum: ['direct', 'youtube', 'upload'], required: true },
+      type: { type: String, enum: ['youtube', 'twitch', 'vk', 'drive'], required: true },
       url: { type: String, required: true },
       title: { type: String },
     },

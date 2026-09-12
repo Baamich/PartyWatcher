@@ -10,12 +10,19 @@ async function updateRoomActivity(io, code) {
 function getParticipants(io, code) {
   const roomSet = io.sockets.adapter.rooms.get(code);
   if (!roomSet) return [];
-  return [...roomSet]
-    .map((socketId) => {
-      const s = io.sockets.sockets.get(socketId);
-      return s ? { username: s.user.username, isOwner: !!s.data.isOwner, socketId } : null;
-    })
-    .filter(Boolean);
+
+  // группируем по username — если у одного человека несколько вкладок/сокетов,
+  // в списке он должен быть один раз, а не дублироваться
+  const byUsername = new Map();
+  for (const socketId of roomSet) {
+    const s = io.sockets.sockets.get(socketId);
+    if (!s) continue;
+    const entry = byUsername.get(s.user.username) || { username: s.user.username, isOwner: false, socketIds: [] };
+    entry.isOwner = entry.isOwner || !!s.data.isOwner;
+    entry.socketIds.push(socketId);
+    byUsername.set(s.user.username, entry);
+  }
+  return [...byUsername.values()];
 }
 
 function broadcastParticipants(io, code) {
@@ -69,16 +76,17 @@ function registerRoomSocket(io) {
       const target = getParticipants(io, code).find((p) => p.username === targetUsername && !p.isOwner);
       if (!target) return;
 
-      const targetSocket = io.sockets.sockets.get(target.socketId);
-      const targetUserId = targetSocket?.user?.id;
+      let targetUserId = null;
+      for (const socketId of target.socketIds) {
+        const targetSocket = io.sockets.sockets.get(socketId);
+        if (!targetSocket) continue;
+        targetUserId = targetSocket.user.id;
+        targetSocket.emit('room:kicked');
+        targetSocket.disconnect(true); // кикает ВСЕ его вкладки/сессии разом
+      }
 
       if (targetUserId) {
         await Room.findOneAndUpdate({ code }, { $addToSet: { bannedUsers: targetUserId } });
-      }
-
-      if (targetSocket) {
-        targetSocket.emit('room:kicked');
-        targetSocket.disconnect(true);
       }
 
       broadcastParticipants(io, code);
