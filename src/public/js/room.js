@@ -220,10 +220,6 @@ function openSettings() {
   document.getElementById('settingsModal').classList.remove('hidden');
 }
 
-function closeModal(id) {
-  document.getElementById(id).classList.add('hidden');
-}
-
 function openBannedList() {
   socket.emit('room:banned-list', { code });
   document.getElementById('bannedModal').classList.remove('hidden');

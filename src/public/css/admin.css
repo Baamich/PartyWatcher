@@ -1,6 +1,18 @@
 body {
   max-width: 600px;
   margin: 40px auto;
+  padding: 0 16px;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.top-bar button {
+  width: auto;
 }
 
 button {
@@ -10,9 +22,12 @@ button {
 
 #log {
   white-space: pre-wrap;
-  background: #111;
-  color: #0f0;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--border);
   padding: 12px;
   margin-top: 12px;
   min-height: 100px;
+  border-radius: var(--radius);
+  font-family: monospace;
 }
