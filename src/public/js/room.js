@@ -123,9 +123,19 @@ function copyRoomLink() {
 function startWatching() {
   started = true;
   hideOverlay();
-  applyPlaybackState(lastState);
-}
 
+  if (isOwner) {
+    // хост жмёт "начать" — запускаем реальное воспроизведение с текущей позиции
+    if (currentVideoType === 'youtube') {
+      ytPlayer.playVideo();
+    } else if (videoEl) {
+      videoEl.play().catch(() => {});
+    }
+  } else {
+    // зритель просто получает то, что сейчас происходит у хоста
+    applyPlaybackState(lastState);
+  }
+}
 async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/index.html');

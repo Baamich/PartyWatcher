@@ -9,12 +9,13 @@ async function checkAuth() {
     adminLink.classList.toggle('hidden', me.role !== 'admin');
 
     loadMyRooms();
+    startAutoRefresh();
   } catch {
     document.getElementById('authBox').classList.remove('hidden');
     document.getElementById('appBox').classList.add('hidden');
+    stopAutoRefresh();
   }
 }
-
 async function login() {
   try {
     await api('/auth/login', {
@@ -44,6 +45,7 @@ async function register() {
 
 async function logout() {
   await api('/auth/logout', { method: 'POST' });
+  stopAutoRefresh();
   checkAuth();
 }
 
@@ -122,6 +124,33 @@ function statusLabel(room) {
   return `пусто, удалится через ${h}ч ${m}м`;
 }
 
+let refreshTimer = null;
+
+function startAutoRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setInterval(loadMyRooms, 5000);
+}
+
+function stopAutoRefresh() {
+  clearInterval(refreshTimer);
+  refreshTimer = null;
+}
+
+function occupancyLabel(room) {
+  return room.viewerCount > 0 ? `смотрят: ${room.viewerCount}` : 'пусто';
+}
+
+function deletionLabel(room) {
+  if (room.viewerCount > 0) return 'не удалится, пока кто-то смотрит';
+  if (!room.emptySince) return '';
+  const deadline = new Date(room.emptySince).getTime() + 20 * 60 * 60 * 1000;
+  const msLeft = deadline - Date.now();
+  if (msLeft <= 0) return 'удаляется...';
+  const h = Math.floor(msLeft / 3600000);
+  const m = Math.floor((msLeft % 3600000) / 60000);
+  return `удалится через ${h}ч ${m}м`;
+}
+
 async function loadMyRooms() {
   const q = document.getElementById('searchInput')?.value || '';
   const rooms = await api('/rooms/search?q=' + encodeURIComponent(q));
@@ -130,16 +159,19 @@ async function loadMyRooms() {
   rooms.forEach((room) => {
     const thumb = roomThumbnail(room);
     const div = document.createElement('div');
-    div.style.cssText = 'display:flex; gap:8px; align-items:center; justify-content:space-between;';
+    div.className = 'room-item';
     div.innerHTML = `
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div class="room-main">
         ${thumb ? `<img src="${thumb}" width="80" />` : `<span style="font-size:32px;">🎬</span>`}
         <div>
           <div><b>${room.name}</b></div>
-          <div style="font-size:12px;color:#888;">${statusLabel(room)}</div>
+          <div style="font-size:12px;color:#888;">${occupancyLabel(room)}</div>
         </div>
       </div>
-      <button data-code="${room.code}">Войти</button>`;
+      <div class="room-footer">
+        <button data-code="${room.code}">Войти</button>
+        <div class="countdown">${deletionLabel(room)}</div>
+      </div>`;
     div.querySelector('button').onclick = () => (location.href = `/room.html?code=${room.code}`);
     list.appendChild(div);
   });
