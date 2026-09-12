@@ -55,7 +55,7 @@ async function logout() {
 const infoTexts = {
   youtube_twitch: 'Вставь ссылку на видео с YouTube (youtube.com/watch?v=... или youtu.be/...) или на запись (VOD) с Twitch (twitch.tv/videos/1234567890 — именно запись, не текущий эфир). Тип определится автоматически по ссылке.',
   drive: 'На Google Диске: правой кнопкой по видео → "Открыть доступ" → "Все, у кого есть ссылка" → скопируй ссылку и вставь сюда. Без этого сервер не сможет прочитать файл.',
-  vk: 'Вставь ссылку на видео VK (vk.com/video-123456_789012). У VK нет официального API для управления плеером — мы попробуем синхронизировать, но гарантии, что сработает как с YouTube, нет.',
+  vk: 'Вставь ссылку на видео VK — подходят vk.com, vkvideo.ru, vk.ru, m.vk.com (форматы video-123456_789012 или clip-123456_789012). Если не заработает — на странице видео жми "Поделиться → Код для вставки" и вставь сюда весь HTML-код целиком, так надёжнее (там есть нужный hash). У VK нет официального API для управления плеером — синхронизация может не сработать.',
 };
 
 function updateInfoText() {
@@ -78,6 +78,33 @@ function extractDriveFileId(url) {
   return match ? match[1] : null;
 }
 
+function parseVkVideo(input) {
+  const trimmed = input.trim();
+
+  // 1) уже готовый embed (вставили весь HTML-код "Поделиться → Код для вставки" или просто ссылку video_ext.php)
+  //    вытаскиваем oid/id/hash напрямую — это самый надёжный вариант
+  const extMatch = trimmed.match(/video_ext\.php\?([^"'\s]+)/);
+  if (extMatch) {
+    const params = new URLSearchParams(extMatch[1]);
+    const oid = params.get('oid');
+    const id = params.get('id');
+    const hash = params.get('hash');
+    if (oid && id) {
+      return `https://vk.com/video_ext.php?oid=${oid}&id=${id}${hash ? `&hash=${hash}` : ''}&hd=2`;
+    }
+  }
+
+  // 2) обычная ссылка на страницу: vk.com / vkvideo.ru / vk.ru / m.vk.com,
+  //    video-OID_ID (паблики/группы, OID отрицательный) или video OID_ID (личная страница), плюс clip-OID_ID
+  const pageMatch = trimmed.match(/(?:vk\.com|vkvideo\.ru|vk\.ru|m\.vk\.com)\/(?:video|clip)(-?\d+)_(\d+)/);
+  if (pageMatch) {
+    const [, oid, id] = pageMatch;
+    return `https://vk.com/video_ext.php?oid=${oid}&id=${id}&hd=2`;
+  }
+
+  return null;
+}
+
 async function createRoom() {
   try {
     const selection = document.getElementById('videoType').value;
@@ -95,9 +122,12 @@ async function createRoom() {
       type = 'drive';
       url = fileId;
     } else if (selection === 'vk') {
-      if (!/vk\.com\/video/.test(rawUrl)) return alert('Похоже, это не ссылка на видео VK');
+      const embedUrl = parseVkVideo(rawUrl);
+      if (!embedUrl) {
+        return alert('Не удалось распознать ссылку VK. Поддерживаются vk.com / vkvideo.ru / vk.ru — либо вставь целиком HTML-код из "Поделиться → Код для вставки".');
+      }
       type = 'vk';
-      url = rawUrl;
+      url = embedUrl;
     }
 
     const room = await api('/rooms', {
