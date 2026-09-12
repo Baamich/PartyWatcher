@@ -33,7 +33,7 @@
     <div id="roomHeader">
       <button onclick="location.href='/index.html'">← Назад</button>
       <span>Ключ: <b id="roomCodeValue"></b></span>
-      <button onclick="copyRoomLink()">📋 Поделиться</button>
+      <button onclick="openSettings()">⚙️ <span id="participantCount">0</span></button>
     </div>
     <button onclick="resync()">🔄 Синхронизировать</button>
     <div id="messages"></div>
@@ -41,6 +41,24 @@
       <input id="chatInput" placeholder="Сообщение..." />
       <button type="submit">➤</button>
     </form>
+  </div>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal('settingsModal')">✕</button>
+      <h3>Участники комнаты</h3>
+      <div id="participantsList"></div>
+      <button onclick="copyRoomLink()">📋 Скопировать ссылку</button>
+      <button id="bannedListBtn" class="hidden" onclick="openBannedList()">Заблокированные</button>
+    </div>
+  </div>
+
+  <div id="bannedModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal('bannedModal')">✕</button>
+      <h3>Заблокированные пользователи</h3>
+      <div id="bannedList"></div>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

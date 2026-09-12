@@ -63,7 +63,7 @@ function renderPlayer(video) {
           },
           onStateChange: (e) => {
             if (suppressEvents) return;
-            if (!isOwner) return; // у зрителя нет controls, никакие нажатия не должны отправлять апдейты
+            if (!isOwner) return;
 
             if (e.data === YT.PlayerState.PLAYING) emitPlayback(true);
             else if (e.data === YT.PlayerState.PAUSED) emitPlayback(false);
@@ -83,8 +83,6 @@ function renderPlayer(video) {
     videoEl.addEventListener('pause', () => emitPlayback(false));
     videoEl.addEventListener('seeked', () => emitPlayback(!videoEl.paused));
   } else {
-    // страховка: если зритель как-то умудрился запустить/перемотать видео сам
-    // (правый клик → "Воспроизвести", фокус+пробел и т.п.) — тут же откатываем к хосту
     videoEl.addEventListener('play', () => { if (!suppressEvents) enforceHostState(); });
     videoEl.addEventListener('seeking', () => { if (!suppressEvents) enforceHostState(); });
     videoEl.oncontextmenu = () => false;
@@ -146,7 +144,7 @@ function startWatching() {
       videoEl.play().catch(() => {});
     }
   } else {
-    applyPlaybackState(lastState); // подхватываем текущее состояние хоста, не запускаем "с нуля"
+    applyPlaybackState(lastState);
   }
 }
 
@@ -162,9 +160,7 @@ function toggleFullscreen() {
 function onFullscreenChange() {
   const inFullscreen = !!document.fullscreenElement;
   document.getElementById('fsChatToggleBtn').classList.toggle('hidden', !inFullscreen);
-  if (!inFullscreen) {
-    document.getElementById('fsChatPanel').classList.add('hidden');
-  }
+  if (!inFullscreen) document.getElementById('fsChatPanel').classList.add('hidden');
 }
 
 function toggleFsChat() {
@@ -172,6 +168,63 @@ function toggleFsChat() {
 }
 
 document.addEventListener('fullscreenchange', onFullscreenChange);
+
+function openSettings() {
+  socket.emit('room:participants', { code });
+  document.getElementById('settingsModal').classList.remove('hidden');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function openBannedList() {
+  socket.emit('room:banned-list', { code });
+  document.getElementById('bannedModal').classList.remove('hidden');
+}
+
+function renderParticipants(list) {
+  document.getElementById('participantCount').textContent = list.length;
+  const container = document.getElementById('participantsList');
+  container.innerHTML = '';
+
+  list.forEach((p) => {
+    const row = document.createElement('div');
+    row.className = 'participant-row';
+    row.innerHTML = `
+      <span>${p.username}${p.isOwner ? ' (Хост)' : ''}</span>
+      ${isOwner && !p.isOwner ? '<button class="kick-btn">Кикнуть</button>' : ''}`;
+
+    if (isOwner && !p.isOwner) {
+      row.querySelector('.kick-btn').onclick = () => {
+        if (confirm(`Кикнуть и заблокировать ${p.username} в этой комнате?`)) {
+          socket.emit('room:kick', { code, targetUsername: p.username });
+        }
+      };
+    }
+    container.appendChild(row);
+  });
+
+  document.getElementById('bannedListBtn').classList.toggle('hidden', !isOwner);
+}
+
+function renderBannedList(list) {
+  const container = document.getElementById('bannedList');
+  container.innerHTML = '';
+
+  if (!list.length) {
+    container.textContent = 'Список пуст';
+    return;
+  }
+
+  list.forEach((u) => {
+    const row = document.createElement('div');
+    row.className = 'participant-row';
+    row.innerHTML = `<span>${u.username}</span><button class="unban-btn">Разблокировать</button>`;
+    row.querySelector('.unban-btn').onclick = () => socket.emit('room:unban', { code, userId: u.id });
+    container.appendChild(row);
+  });
+}
 
 async function init() {
   const me = await api('/auth/me').catch(() => null);
@@ -187,18 +240,30 @@ async function init() {
     isOwner = ownerFlag;
     lastState = playback;
     await renderPlayer(video);
-
-    if (isOwner) {
-      setOverlay('Готово к просмотру', true);
-    } else {
-      updateWaitingOverlayText();
-    }
+    isOwner ? setOverlay('Готово к просмотру', true) : updateWaitingOverlayText();
   });
 
   socket.on('playback:update', (state) => {
     lastState = state;
     if (started) applyPlaybackState(state);
     else updateWaitingOverlayText();
+  });
+
+  socket.on('room:user-joined', ({ username }) => {
+    addMessage({ username: 'Система', text: `${username} присоединился к просмотру` });
+  });
+
+  socket.on('room:participants', renderParticipants);
+  socket.on('room:banned-list', renderBannedList);
+
+  socket.on('room:kicked', () => {
+    alert('Вас кикнули из этой комнаты — доступ заблокирован');
+    location.href = '/index.html';
+  });
+
+  socket.on('room:banned', () => {
+    alert('Вы заблокированы в этой комнате');
+    location.href = '/index.html';
   });
 
   socket.on('room:deleted', () => {
@@ -242,7 +307,7 @@ function appendMessageTo(containerId, username, text) {
 let fsNoticeTimer = null;
 
 function showFsNotice(username, text) {
-  if (!document.fullscreenElement) return; // баннер нужен только в полноэкранном режиме
+  if (!document.fullscreenElement) return;
   const notice = document.getElementById('fsNotice');
   notice.textContent = `${username}: ${text}`;
   notice.classList.remove('hidden', 'fade-out');
