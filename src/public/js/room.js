@@ -10,8 +10,9 @@ let playerReady = false;
 let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
 let heartbeatTimer = null;
+let resumeBlocked = false; // ждём явного клика зрителя, если браузер заблокировал авто-возобновление
 
-const DRIFT_THRESHOLD_SECONDS = 1.5; // меньше этого — считаем "и так синхронно", не дёргаем плеер
+const DRIFT_THRESHOLD_SECONDS = 1.5;
 
 function setOverlay(text, showStartBtn) {
   document.getElementById('overlayText').textContent = text;
@@ -152,8 +153,8 @@ function getIsPlayingNow() {
   return false;
 }
 
-// ЖЁСТКАЯ коррекция — реально двигает плеер. Используем только когда точно нужно
-// (явное действие хоста, кнопка "Синхронизировать", первый старт) — не на каждый heartbeat подряд
+// Жёсткая коррекция для случаев, где гарантированно есть недавний жест пользователя
+// (свой клик на native controls, кнопка "Синхронизировать" и т.п.) — без проверки автовоспроизведения
 function applyPlaybackState({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
   if (!playerReady) return;
@@ -180,20 +181,43 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
   }
 }
 
-// МЯГКАЯ проверка — вызывается на КАЖДОЕ входящее playback:update (включая heartbeat).
-// Трогает плеер, только если реально разъехались — иначе оставляет как есть,
-// чтобы не дёргать кадр каждые 2-3 секунды без необходимости
-function softSync({ isPlaying, positionSeconds }) {
+// Возобновление БЕЗ гарантированного жеста (реакция на сообщение от хоста по сокету) —
+// пробуем, и если браузер заблокировал автовоспроизведение — показываем "нажми, чтобы продолжить"
+// вместо того чтобы молча повторять попытку на каждый heartbeat
+function attemptResume(isPlaying, positionSeconds) {
   lastState = { isPlaying, positionSeconds };
   if (!playerReady) return;
 
-  const playingNow = getIsPlayingNow();
-  const drift = Math.abs(getCurrentPosition() - positionSeconds);
+  suppressEvents = true;
 
-  if (playingNow !== isPlaying || drift > DRIFT_THRESHOLD_SECONDS) {
-    applyPlaybackState({ isPlaying, positionSeconds });
+  if (currentVideoType === 'youtube') {
+    ytPlayer.seekTo(positionSeconds, true);
+    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+  } else if (currentVideoType === 'twitch') {
+    twitchPlayer.seek(positionSeconds);
+    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (videoEl) {
+    videoEl.currentTime = positionSeconds;
+    if (isPlaying) {
+      const p = videoEl.play();
+      if (p && p.catch) p.catch(() => {}); // сам факт неудачи проверим ниже единообразно для всех типов
+    } else {
+      videoEl.pause();
+    }
   }
-  // иначе — уже синхронно, ничего не трогаем
+
+  setTimeout(() => {
+    suppressEvents = false;
+    if (isPlaying && !getIsPlayingNow()) {
+      showResumeOverlay(); // браузер не дал воспроизвести без клика — просим клик
+    }
+  }, 700);
+}
+
+function showResumeOverlay() {
+  if (resumeBlocked) return;
+  resumeBlocked = true;
+  setOverlay('Хост продолжил просмотр — нажми, чтобы продолжить тоже', true);
 }
 
 function enforceHostState() {
@@ -205,8 +229,6 @@ function emitPlayback(isPlaying) {
   socket.emit('playback:update', { code, isPlaying, positionSeconds: getCurrentPosition() });
 }
 
-// хост раз в 3 секунды сам себя "перепроверяет" — самоисправление на случай
-// потерянного события play/pause; получатели (зрители) сами решат, надо ли им что-то менять (softSync)
 function startHeartbeat() {
   if (heartbeatTimer) return;
   heartbeatTimer = setInterval(() => {
@@ -215,12 +237,24 @@ function startHeartbeat() {
   }, 3000);
 }
 
+// Мягкая проверка на каждое входящее обновление — трогает плеер, только если реально разъехались,
+// и не спамит попытки, если уже ждём клика зрителя (resumeBlocked)
+function softSync({ isPlaying, positionSeconds }) {
+  lastState = { isPlaying, positionSeconds };
+  if (!playerReady || resumeBlocked) return;
+
+  const playingNow = getIsPlayingNow();
+  const drift = Math.abs(getCurrentPosition() - positionSeconds);
+
+  if (playingNow !== isPlaying || drift > DRIFT_THRESHOLD_SECONDS) {
+    attemptResume(isPlaying, positionSeconds);
+  }
+}
+
 function resync() {
   if (isOwner) {
-    // хост форсит своё реальное текущее состояние всем зрителям немедленно (жёстко, целенаправленно)
     emitPlayback(getIsPlayingNow());
   } else {
-    // зритель запрашивает у сервера последнее известное состояние хоста и жёстко подстраивается под него
     socket.emit('room:resync', { code });
   }
 }
@@ -232,6 +266,7 @@ function copyRoomLink() {
 
 function startWatching() {
   started = true;
+  resumeBlocked = false;
   hideOverlay();
 
   if (isOwner) {
@@ -240,7 +275,8 @@ function startWatching() {
     else if (videoEl) videoEl.play().catch(() => {});
     startHeartbeat();
   } else {
-    applyPlaybackState(lastState); // первый заход — жёстко, дальше уже softSync
+    // это настоящий клик пользователя — гарантированно можно применять жёстко
+    applyPlaybackState(lastState);
   }
 }
 
@@ -371,8 +407,15 @@ async function init() {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.code !== 'Space' || !isOwner || !started) return;
+  if (e.code !== 'Space') return;
   e.preventDefault();
+
+  if (resumeBlocked) {
+    startWatching(); // пробел тоже считается кликом — снимает блокировку автовоспроизведения
+    return;
+  }
+
+  if (!isOwner || !started) return;
 
   if (currentVideoType === 'youtube') {
     const state = ytPlayer.getPlayerState();
