@@ -3,7 +3,23 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const puppeteer = require('puppeteer-core');
 
+let puppeteer = null;
+try {
+  puppeteer = require('puppeteer-core');
+} catch (e) {
+  console.warn('[player-capture] puppeteer-core не установлен');
+}
+
 router.post('/extract', auth, async (req, res) => {
+    if (!puppeteer) {
+        return res.json({
+        success: false,
+        error: 'puppeteer-core не установлен',
+        streams: [],
+        playerIframes: [],
+        meta: null,
+        });
+    }
   const { url } = req.body;
 
   if (!url || !url.startsWith('http')) {
