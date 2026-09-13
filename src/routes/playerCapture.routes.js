@@ -28,19 +28,35 @@ router.post('/extract', auth, async (req, res) => {
   let browser = null;
 
   try {
+        // прокси Webshare — вынесено в переменные окружения, см. .env
+    const PROXY_SERVER = process.env.PROXY_SERVER;   // например "31.58.9.4:6077"
+    const PROXY_USER = process.env.PROXY_USER;        // "ksiyitlp"
+    const PROXY_PASS = process.env.PROXY_PASS;        // "oiv7evgr7rk3"
+
+    const launchArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--single-process',
+    ];
+
+    if (PROXY_SERVER) {
+      launchArgs.push(`--proxy-server=${PROXY_SERVER}`);
+    }
+
     browser = await puppeteer.launch({
       headless: 'new',
       executablePath: '/usr/bin/chromium-browser', // ← системный Chromium для ARM
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-      ],
+      args: launchArgs,
     });
 
     const page = await browser.newPage();
+
+    if (PROXY_SERVER && PROXY_USER && PROXY_PASS) {
+      await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
+    }
+    
     const foundStreams = [];
     const foundIframes = [];
 
