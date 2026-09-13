@@ -265,7 +265,10 @@ function resync() {
   if (isOwner) {
     emitPlayback(getIsPlayingNow());
   } else {
-    socket.emit('room:resync', { code });
+    // применяем сразу локально, синхронно внутри клика — это и есть тот самый
+    // "пользовательский жест", который требует Twitch для запуска play() программно
+    attemptResume(lastState.isPlaying, lastState.positionSeconds);
+    socket.emit('room:resync', { code }); // заодно подтягиваем самое свежее состояние с сервера
   }
 }
 
