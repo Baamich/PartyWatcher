@@ -10,9 +10,8 @@ let playerReady = false;
 let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
 let heartbeatTimer = null;
-let resumeBlocked = false; // ждём явного клика зрителя, если браузер заблокировал авто-возобновление
 
-const DRIFT_THRESHOLD_SECONDS = 1.5;
+const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 
 function setOverlay(text, showStartBtn) {
   document.getElementById('overlayText').textContent = text;
@@ -153,8 +152,19 @@ function getIsPlayingNow() {
   return false;
 }
 
-// Жёсткая коррекция для случаев, где гарантированно есть недавний жест пользователя
-// (свой клик на native controls, кнопка "Синхронизировать" и т.п.) — без проверки автовоспроизведения
+function doPlayPause(isPlaying) {
+  // без мьюта — на Twitch программный запуск без клика пользователя всё равно не работает
+  // (см. документацию Twitch: на мобильных это вообще невозможно без явного жеста), а мьют
+  // только зря дёргал звук без пользы, поэтому убрали
+  if (currentVideoType === 'youtube') {
+    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+  } else if (currentVideoType === 'twitch') {
+    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (videoEl) {
+    isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
+  }
+}
+
 function applyPlaybackState({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
   if (!playerReady) return;
@@ -181,27 +191,6 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
   }
 }
 
-function doPlayPause(isPlaying) {
-  if (currentVideoType === 'youtube') {
-    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
-  } else if (currentVideoType === 'twitch') {
-    if (isPlaying) {
-      // мьютим перед программным play — без звука браузер почти всегда разрешает,
-      // затем возвращаем звук через долю секунды, когда плеер уже реально заиграл
-      twitchPlayer.setMuted(true);
-      twitchPlayer.play();
-      setTimeout(() => twitchPlayer.setMuted(false), 500);
-    } else {
-      twitchPlayer.pause();
-    }
-  } else if (videoEl) {
-    isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
-  }
-}
-
-// Возобновление БЕЗ гарантированного жеста (реакция на сообщение от хоста по сокету) —
-// пробуем, и если браузер заблокировал автовоспроизведение — показываем "нажми, чтобы продолжить"
-// вместо того чтобы молча повторять попытку на каждый heartbeat
 function attemptResume(isPlaying, positionSeconds) {
   lastState = { isPlaying, positionSeconds };
   if (!playerReady) return;
@@ -215,19 +204,32 @@ function attemptResume(isPlaying, positionSeconds) {
     else if (currentVideoType === 'twitch') twitchPlayer.seek(positionSeconds);
     else if (videoEl) videoEl.currentTime = positionSeconds;
 
-    setTimeout(() => doPlayPause(isPlaying), 300); // даём время обработать перемотку перед play
+    setTimeout(() => doPlayPause(isPlaying), 300);
     setTimeout(() => (suppressEvents = false), 1000);
   } else {
-    doPlayPause(isPlaying); // обычный случай "хост продолжил после паузы" — без лишнего seek
+    doPlayPause(isPlaying);
     setTimeout(() => (suppressEvents = false), 400);
   }
 }
 
+// синхронно, БЕЗ единого setTimeout перед play() — сохраняет статус "по клику пользователя",
+// который требуют браузеры/Twitch для программного запуска
+function manualResyncViewer() {
+  const { isPlaying, positionSeconds } = lastState;
+  suppressEvents = true;
 
-function showResumeOverlay() {
-  if (resumeBlocked) return;
-  resumeBlocked = true;
-  setOverlay('Хост продолжил просмотр — нажми, чтобы продолжить тоже', true);
+  if (currentVideoType === 'youtube') {
+    ytPlayer.seekTo(positionSeconds, true);
+    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+  } else if (currentVideoType === 'twitch') {
+    twitchPlayer.seek(positionSeconds);
+    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (videoEl) {
+    videoEl.currentTime = positionSeconds;
+    isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
+  }
+
+  setTimeout(() => (suppressEvents = false), 800);
 }
 
 function enforceHostState() {
@@ -247,8 +249,6 @@ function startHeartbeat() {
   }, 3000);
 }
 
-// Мягкая проверка на каждое входящее обновление — трогает плеер, только если реально разъехались,
-// и не спамит попытки, если уже ждём клика зрителя (resumeBlocked)
 function softSync({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
   if (!playerReady) return;
@@ -261,35 +261,14 @@ function softSync({ isPlaying, positionSeconds }) {
   }
 }
 
-function manualResyncViewer() {
-  const { isPlaying, positionSeconds } = lastState;
-  suppressEvents = true;
-
-  // всё выполняется СИНХРОННО внутри обработчика клика, без единого setTimeout перед play() —
-  // именно задержка рвала связь с пользовательским жестом и Twitch блокировал автозапуск
-  if (currentVideoType === 'youtube') {
-    ytPlayer.seekTo(positionSeconds, true);
-    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
-  } else if (currentVideoType === 'twitch') {
-    twitchPlayer.seek(positionSeconds);
-    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
-  } else if (videoEl) {
-    videoEl.currentTime = positionSeconds;
-    isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
-  }
-
-  setTimeout(() => (suppressEvents = false), 800);
-}
-
 function resync() {
   if (isOwner) {
     emitPlayback(getIsPlayingNow());
   } else {
-    manualResyncViewer(); // синхронно, в рамках клика — сохраняет пользовательский жест для Twitch
-    socket.emit('room:resync', { code }); // заодно подтягиваем самое свежее состояние с сервера на будущее
+    manualResyncViewer();
+    socket.emit('room:resync', { code });
   }
 }
-
 
 function copyRoomLink() {
   navigator.clipboard.writeText(location.href);
@@ -306,8 +285,7 @@ function startWatching() {
     else if (videoEl) videoEl.play().catch(() => {});
     startHeartbeat();
   } else {
-    // это настоящий клик пользователя — гарантированно можно применять жёстко
-    applyPlaybackState(lastState);
+    applyPlaybackState(lastState); // настоящий клик пользователя — можно жёстко
   }
 }
 
@@ -396,11 +374,23 @@ async function init() {
   socket = io();
   socket.on('connect', () => socket.emit('room:join', { code }));
 
+  socket.on('chat:history', (list) => {
+    list.forEach(({ username, text }) => addHistoryMessage({ username, text }));
+  });
+
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag }) => {
     isOwner = ownerFlag;
     lastState = playback;
     await renderPlayer(video);
-    isOwner ? setOverlay('Готово к просмотру', true) : updateWaitingOverlayText();
+
+    if (isOwner) {
+      setOverlay('Готово к просмотру', true);
+    } else {
+      updateWaitingOverlayText();
+      showLocalSystemMessage(
+        `Когда хост запускает видео, тебе нужно запустить у себя вручную (кнопкой или пробелом). После этого можно нажать «Синхронизировать», а сайт сам подстроит тебя автоматически, если отставание больше ${DRIFT_THRESHOLD_SECONDS} секунд.`
+      );
+    }
   });
 
   socket.on('playback:update', (state) => {
@@ -437,6 +427,20 @@ async function init() {
   socket.on('room:error', (err) => alert(err.error));
 }
 
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || !isOwner || !started) return;
+  e.preventDefault();
+
+  if (currentVideoType === 'youtube') {
+    const state = ytPlayer.getPlayerState();
+    state === YT.PlayerState.PLAYING ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+  } else if (currentVideoType === 'twitch') {
+    twitchPlayer.isPaused() ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (videoEl) {
+    videoEl.paused ? videoEl.play() : videoEl.pause();
+  }
+});
+
 function sendMessage(e, fromFullscreen) {
   e.preventDefault();
   const input = document.getElementById(fromFullscreen ? 'fsChatInput' : 'chatInput');
@@ -446,11 +450,25 @@ function sendMessage(e, fromFullscreen) {
   return false;
 }
 
+function escapeHTML(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function formatMessageHTML(username, text) {
+  const isSystem = username === 'Система';
+  const nameHTML = isSystem
+    ? `<span style="color:var(--danger); font-weight:600;">Система</span>`
+    : `<b>${escapeHTML(username)}</b>`;
+  return `${nameHTML}: ${escapeHTML(text)}`;
+}
+
 function appendMessageTo(containerId, username, text) {
   const container = document.getElementById(containerId);
   if (!container) return;
   const div = document.createElement('div');
-  div.textContent = `${username}: ${text}`;
+  div.innerHTML = formatMessageHTML(username, text);
   container.appendChild(div);
   container.scrollTop = 1e9;
 }
@@ -474,6 +492,18 @@ function addMessage({ username, text }) {
   appendMessageTo('messages', username, text);
   appendMessageTo('fsMessages', username, text);
   showFsNotice(username, text);
+}
+
+function addHistoryMessage({ username, text }) {
+  // старые сообщения из истории — без всплывающего уведомления в fullscreen, только сам текст
+  appendMessageTo('messages', username, text);
+  appendMessageTo('fsMessages', username, text);
+}
+
+function showLocalSystemMessage(text) {
+  // видно только этому зрителю локально, не рассылается остальным по сокету
+  appendMessageTo('messages', 'Система', text);
+  appendMessageTo('fsMessages', 'Система', text);
 }
 
 init();

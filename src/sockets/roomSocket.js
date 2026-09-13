@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const Room = require('../models/Room');
+const ChatMessage = require('../models/ChatMessage');
 
 async function updateRoomActivity(io, code) {
   const size = io.sockets.adapter.rooms.get(code)?.size || 0;
@@ -11,8 +12,6 @@ function getParticipants(io, code) {
   const roomSet = io.sockets.adapter.rooms.get(code);
   if (!roomSet) return [];
 
-  // группируем по username — если у одного человека несколько вкладок/сокетов,
-  // в списке он должен быть один раз, а не дублироваться
   const byUsername = new Map();
   for (const socketId of roomSet) {
     const s = io.sockets.sockets.get(socketId);
@@ -53,9 +52,16 @@ function registerRoomSocket(io) {
 
       socket.join(code);
       socket.data.roomCode = code;
+      socket.data.roomId = room._id;
       socket.data.isOwner = String(room.owner) === String(socket.user.id);
 
       await updateRoomActivity(io, code);
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const history = await ChatMessage.find({ room: room._id, createdAt: { $gte: oneHourAgo } })
+        .sort({ createdAt: 1 })
+        .limit(200);
+      socket.emit('chat:history', history.map((m) => ({ username: m.username, text: m.text, at: m.createdAt.getTime() })));
 
       socket.emit('room:state', {
         video: room.video,
@@ -82,7 +88,7 @@ function registerRoomSocket(io) {
         if (!targetSocket) continue;
         targetUserId = targetSocket.user.id;
         targetSocket.emit('room:kicked');
-        targetSocket.disconnect(true); // кикает ВСЕ его вкладки/сессии разом
+        targetSocket.disconnect(true);
       }
 
       if (targetUserId) {
@@ -127,9 +133,15 @@ function registerRoomSocket(io) {
       });
     });
 
-    socket.on('chat:message', ({ code, text }) => {
-      if (!text?.trim()) return;
-      io.to(code).emit('chat:message', { username: socket.user.username, text: text.trim(), at: Date.now() });
+    socket.on('chat:message', async ({ code, text }) => {
+      const trimmed = text?.trim();
+      if (!trimmed) return;
+
+      if (socket.data.roomId) {
+        await ChatMessage.create({ room: socket.data.roomId, username: socket.user.username, text: trimmed });
+      }
+
+      io.to(code).emit('chat:message', { username: socket.user.username, text: trimmed, at: Date.now() });
     });
 
     socket.on('disconnect', async () => {

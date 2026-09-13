@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const Room = require('../models/Room');
 const auth = require('../middleware/auth');
+const ChatMessage = require('../models/ChatMessage');
 
 function generateCode() {
   return crypto.randomBytes(3).toString('hex');
@@ -60,7 +61,8 @@ router.delete('/:code', auth, async (req, res) => {
   }
 
   const io = req.app.get('io');
-  io.to(room.code).emit('room:deleted'); // выкидывает всех, кто сейчас смотрит
+  io.to(room.code).emit('room:deleted');
+  await ChatMessage.deleteMany({ room: room._id });
   await room.deleteOne();
   res.json({ status: 'ok' });
 });
