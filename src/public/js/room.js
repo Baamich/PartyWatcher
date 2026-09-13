@@ -185,7 +185,15 @@ function doPlayPause(isPlaying) {
   if (currentVideoType === 'youtube') {
     isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
   } else if (currentVideoType === 'twitch') {
-    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+    if (isPlaying) {
+      // мьютим перед программным play — без звука браузер почти всегда разрешает,
+      // затем возвращаем звук через долю секунды, когда плеер уже реально заиграл
+      twitchPlayer.setMuted(true);
+      twitchPlayer.play();
+      setTimeout(() => twitchPlayer.setMuted(false), 500);
+    } else {
+      twitchPlayer.pause();
+    }
   } else if (videoEl) {
     isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
   }
