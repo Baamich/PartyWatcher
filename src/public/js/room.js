@@ -261,16 +261,35 @@ function softSync({ isPlaying, positionSeconds }) {
   }
 }
 
+function manualResyncViewer() {
+  const { isPlaying, positionSeconds } = lastState;
+  suppressEvents = true;
+
+  // всё выполняется СИНХРОННО внутри обработчика клика, без единого setTimeout перед play() —
+  // именно задержка рвала связь с пользовательским жестом и Twitch блокировал автозапуск
+  if (currentVideoType === 'youtube') {
+    ytPlayer.seekTo(positionSeconds, true);
+    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+  } else if (currentVideoType === 'twitch') {
+    twitchPlayer.seek(positionSeconds);
+    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (videoEl) {
+    videoEl.currentTime = positionSeconds;
+    isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
+  }
+
+  setTimeout(() => (suppressEvents = false), 800);
+}
+
 function resync() {
   if (isOwner) {
     emitPlayback(getIsPlayingNow());
   } else {
-    // применяем сразу локально, синхронно внутри клика — это и есть тот самый
-    // "пользовательский жест", который требует Twitch для запуска play() программно
-    attemptResume(lastState.isPlaying, lastState.positionSeconds);
-    socket.emit('room:resync', { code }); // заодно подтягиваем самое свежее состояние с сервера
+    manualResyncViewer(); // синхронно, в рамках клика — сохраняет пользовательский жест для Twitch
+    socket.emit('room:resync', { code }); // заодно подтягиваем самое свежее состояние с сервера на будущее
   }
 }
+
 
 function copyRoomLink() {
   navigator.clipboard.writeText(location.href);
