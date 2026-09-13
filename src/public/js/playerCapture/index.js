@@ -93,7 +93,7 @@ function renderNativePlayer(stream, meta, { isOwner, container }) {
   container.innerHTML = '';
   const videoEl = document.createElement('video');
   videoEl.id = 'captureVideo';
-  videoEl.src = stream.url;
+  videoEl.src = `/api/stream/relay?url=${encodeURIComponent(stream.url)}`;
   videoEl.controls = isOwner;
   videoEl.style.width = '100%';
   videoEl.style.height = '100%';
