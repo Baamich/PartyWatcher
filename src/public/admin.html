@@ -15,8 +15,26 @@
   </div>
 
   <h2>Панель администратора</h2>
-  <button onclick="runUpdate()">Обновить код с GitHub</button>
-  <div id="log"></div>
+
+  <div class="admin-grid">
+    <div class="panel panel-update">
+      <h3>Обновление</h3>
+      <button onclick="runUpdate()">Обновить с GitHub (последний коммит)</button>
+      <div id="log"></div>
+    </div>
+
+    <div class="panel panel-commits">
+      <h3>История коммитов</h3>
+      <input
+        type="text"
+        id="commitSearch"
+        placeholder="Поиск по хэшу или сообщению..."
+        oninput="filterCommits()"
+      />
+      <div id="commitList" class="commit-list">Загрузка...</div>
+      <button id="revertBtn" onclick="revertToCommit()" disabled>Вернуться к коммиту</button>
+    </div>
+  </div>
 
   <script src="/js/api.js"></script>
   <script src="/js/admin.js"></script>

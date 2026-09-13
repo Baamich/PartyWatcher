@@ -1,5 +1,5 @@
 body {
-  max-width: 600px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 20px 16px 60px;
 }
@@ -9,15 +9,112 @@ button {
   margin: 4px 0;
 }
 
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+@media (max-width: 700px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  overflow: hidden;
+}
+
+.panel h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
 #log {
   white-space: pre-wrap;
-  background: var(--surface);
+  background: var(--bg, #0000000a);
   color: var(--accent);
   border: 1px solid var(--border);
   padding: 12px;
   margin-top: 12px;
-  min-height: 100px;
+  flex: 1;
+  overflow-y: auto;
   border-radius: var(--radius);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 13px;
+}
+
+#commitSearch {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg, transparent);
+  color: inherit;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.commit-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.commit-item {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.commit-item:hover {
+  background: var(--surface-hover, rgba(128, 128, 128, 0.08));
+}
+
+.commit-hash {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  color: var(--accent);
+  grid-row: 1;
+}
+
+.commit-msg {
+  grid-row: 1;
+  grid-column: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-meta {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.commit-empty {
+  padding: 16px;
+  text-align: center;
+  opacity: 0.6;
+  font-size: 13px;
+}
+
+#revertBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
