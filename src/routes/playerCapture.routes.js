@@ -133,26 +133,30 @@ router.post('/extract', auth, async (req, res) => {
 
     console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
 
-    // ищем на странице любые блоки, где упоминаются "Сезон"/"Серия"/"Озвучка",
-    // чтобы понять точную HTML-структуру выбора серий на этом сайте
-    const episodeBlocksHTML = await page.evaluate(() => {
-      const keywords = ['сезон', 'серия', 'озвучка'];
-      const all = Array.from(document.querySelectorAll('body *'));
-      const matches = all.filter((el) => {
-        const text = (el.textContent || '').toLowerCase();
-        // берём только "мелкие" элементы (не весь body/html), где ключевое слово есть,
-        // но у них самих мало текста внутри — то есть это сам виджет, а не вся страница
-        return keywords.some((k) => text.includes(k)) && text.length < 300;
-      });
-      // убираем вложенные дубли: если родитель уже в списке — не берём детей
-      const top = matches.filter((el) => !matches.some((other) => other !== el && other.contains(el)));
-      return top.slice(0, 15).map((el) => el.outerHTML.slice(0, 2000));
+        // парсим реальный график серий kinogo: таблица tr.epscape_tr
+    const episodesData = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('tr.epscape_tr'));
+      return rows.map((row) => {
+        const cells = row.querySelectorAll('td');
+        const fullText = cells[0]?.textContent.trim() || '';
+        const countdownText = cells[3]?.textContent.trim() || '';
+        const match = fullText.match(/(\d+)\s*сезон\s*(\d+)\s*серия/i);
+        return {
+          season: match ? Number(match[1]) : 1,
+          episode: match ? Number(match[2]) : null,
+          // пустая 4-я ячейка = серия уже вышла; "N дней" = ещё не вышла
+          released: countdownText === '',
+        };
+      }).filter((e) => e.episode !== null);
     });
 
-    console.log('[player-capture] найдено блоков с Сезон/Серия/Озвучка:', episodeBlocksHTML.length);
-    episodeBlocksHTML.forEach((html, i) => {
-      console.log(`[player-capture] блок #${i}:`, html);
-    });
+    console.log('[player-capture] распарсенные серии:', episodesData);
+
+    const releasedEpisodes = episodesData.filter((e) => e.released);
+    const seasonsFound = [...new Set(episodesData.map((e) => e.season))];
+    const totalEpisodes = releasedEpisodes.length
+      ? Math.max(...releasedEpisodes.map((e) => e.episode))
+      : 1;
 
     const KNOWN_HOSTS = [
       'player', 'embed', 'video', 'alloh', 'collaps', 'voidboost',
@@ -176,11 +180,12 @@ router.post('/extract', auth, async (req, res) => {
     const uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
     const uniqueIframes = [...new Set(foundIframes)];
 
-    const meta = {
+        const meta = {
       site: detectSite(url),
-      seasons: [1],
+      seasons: seasonsFound.length ? seasonsFound : [1],
       currentSeason: 1,
       currentEpisode: 1,
+      totalEpisodes,
       voices: [],
     };
 
