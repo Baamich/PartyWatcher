@@ -238,6 +238,12 @@ body {
     padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    margin-bottom: 8px; /* ← вот этот отступ */
+  }
+
+  #chat > button[onclick="resync()"] {
+    margin: 0 10px 8px 10px;
+    width: calc(100% - 20px);
   }
 
   .view-toggle button {

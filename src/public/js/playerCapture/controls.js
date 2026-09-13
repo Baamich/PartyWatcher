@@ -63,14 +63,32 @@ function fillEpisodeSelects(meta) {
 export function onEpisodeChange() {
   if (!currentMeta) return;
 
-  currentMeta.currentSeason = Number(document.getElementById('seasonSelect').value);
-  currentMeta.currentEpisode = Number(document.getElementById('episodeSelect').value);
-  currentMeta.currentVoice = document.getElementById('voiceSelect')?.value || null;
+  const season = Number(document.getElementById('seasonSelect').value);
+  const episode = Number(document.getElementById('episodeSelect').value);
+  const voice = document.getElementById('voiceSelect')?.value || null;
+
+  const changed = 
+    season !== currentMeta.currentSeason ||
+    episode !== currentMeta.currentEpisode ||
+    voice !== currentMeta.currentVoice;
+
+  if (!changed) return;
+
+  currentMeta.currentSeason = season;
+  currentMeta.currentEpisode = episode;
+  currentMeta.currentVoice = voice;
 
   console.log('[playerCapture] changed to', currentMeta);
 
-  // TODO: здесь будет реальная смена серии
-  // Пока просто логируем
+  // Отправляем событие на сервер, чтобы зрители получили системное сообщение
+  if (window.socket && window.code) {
+    window.socket.emit('player_capture:change', {
+      code: window.code,
+      season,
+      episode,
+      voice
+    });
+  }
 }
 
 // Глобально

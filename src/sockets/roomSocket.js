@@ -110,6 +110,18 @@ function registerRoomSocket(io) {
       const room = await Room.findOne({ code }).populate('bannedUsers', 'username');
       socket.emit('room:banned-list', (room?.bannedUsers || []).map((u) => ({ id: u._id, username: u.username })));
     });
+    
+    socket.on('player_capture:change', ({ code, season, episode, voice }) => {
+      if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+
+      // Рассылаем всем, кроме самого хоста
+      socket.to(code).emit('player_capture:change', {
+        season,
+        episode,
+        voice,
+        by: socket.user.username
+      });
+    });
 
     socket.on('playback:update', async ({ code, isPlaying, positionSeconds }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;

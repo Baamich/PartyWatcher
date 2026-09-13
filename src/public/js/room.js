@@ -390,6 +390,9 @@ async function init() {
   socket = io();
   socket.on('connect', () => socket.emit('room:join', { code }));
 
+  window.socket = socket;
+  window.code = code;
+
   socket.on('chat:history', (list) => {
     list.forEach(({ username, text }) => addHistoryMessage({ username, text }));
   });
@@ -437,6 +440,16 @@ async function init() {
   socket.on('room:deleted', () => {
     alert('Комната удалена владельцем');
     location.href = '/index.html';
+  });
+
+  socket.on('player_capture:change', ({ season, episode, voice, by }) => {
+    // Хосту это сообщение не нужно
+    if (isOwner) return;
+
+    let text = `Хост сменил на Сезон ${season}, Серия ${episode}`;
+    if (voice) text += `, озвучка «${voice}»`;
+    
+    addMessage({ username: 'Система', text });
   });
 
   socket.on('chat:message', addMessage);
@@ -635,17 +648,22 @@ function setViewMode(mode) {
   const btnVideo = document.getElementById('btnShowVideo');
   const hostControls = document.getElementById('hostControls');
 
-  if (mode === 'chat') {
+  // Кнопка "Видео" видна только хосту
+  if (btnVideo) {
+    btnVideo.style.display = isOwner ? '' : 'none';
+  }
+
+  if (mode === 'chat' || !isOwner) {
+    // Зрители всегда остаются в чате
     document.body.classList.add('view-chat-only');
     btnChat.classList.add('active');
-    btnVideo.classList.remove('active');
+    if (btnVideo) btnVideo.classList.remove('active');
     if (hostControls) hostControls.classList.add('hidden');
   } else {
     document.body.classList.add('view-video-only');
     btnVideo.classList.add('active');
     btnChat.classList.remove('active');
 
-    // Панель управления показываем только хосту
     if (hostControls) {
       hostControls.classList.toggle('hidden', !isOwner);
     }
@@ -653,7 +671,7 @@ function setViewMode(mode) {
 }
 
 function initViewMode() {
-  // По умолчанию всегда открываем Чат
+  // Зрители всегда в чате, хост тоже по умолчанию в чате
   setViewMode('chat');
 }
 
