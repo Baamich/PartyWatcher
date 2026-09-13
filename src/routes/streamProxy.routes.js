@@ -22,10 +22,11 @@ router.get('/relay', auth, async (req, res) => {
 
   try {
     const dispatcher = buildDispatcher();
-    const response = await fetch(targetUrl, {
+        const response = await fetch(targetUrl, {
       dispatcher,
       headers: {
         'Referer': 'https://balabolka.stravers.live/',
+        'Origin': 'https://balabolka.stravers.live',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
     });
