@@ -6,10 +6,11 @@ const PROXY_SERVER = process.env.PROXY_SERVER;
 const PROXY_USER = process.env.PROXY_USER;
 const PROXY_PASS = process.env.PROXY_PASS;
 
-function buildProxyAgent() {
-  const { HttpsProxyAgent } = require('https-proxy-agent');
+const { ProxyAgent } = require('undici');
+
+function buildDispatcher() {
   if (!PROXY_SERVER) return null;
-  return new HttpsProxyAgent(`http://${PROXY_USER}:${PROXY_PASS}@${PROXY_SERVER}`);
+  return new ProxyAgent(`http://${PROXY_USER}:${PROXY_PASS}@${PROXY_SERVER}`);
 }
 
 // прокидываем .m3u8 манифест и сегменты через сервер, чтобы CDN не банил браузер зрителя
@@ -20,9 +21,9 @@ router.get('/relay', auth, async (req, res) => {
   }
 
   try {
-    const agent = buildProxyAgent();
+    const dispatcher = buildDispatcher();
     const response = await fetch(targetUrl, {
-      agent,
+      dispatcher,
       headers: {
         'Referer': 'https://balabolka.stravers.live/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -30,6 +31,8 @@ router.get('/relay', auth, async (req, res) => {
     });
 
     if (!response.ok) {
+      const bodyText = await response.text().catch(() => '');
+      console.error('[stream-relay] CDN отказал:', response.status, targetUrl.slice(0, 100), bodyText.slice(0, 200));
       return res.status(response.status).json({ error: `CDN вернул ${response.status}` });
     }
 
