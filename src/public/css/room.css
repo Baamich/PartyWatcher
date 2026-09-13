@@ -230,103 +230,100 @@ body {
     padding: 6px;
     font-size: 12px;
   }
+}
 
 /* =====================================================
    Вкладки Чат / Видео + панель хоста + кнопка синхронизации
    ===================================================== */
 
-  .view-toggle {
-    display: flex;
-    gap: 0;
-    padding: 8px 10px 4px 10px;
-    flex-shrink: 0;
-  }
+.view-toggle {
+  display: flex;
+  gap: 0;
+  padding: 8px 10px 4px 10px;
+  flex-shrink: 0;
+}
 
-  .view-toggle button {
+.view-toggle button {
+  flex: 1;
+  padding: 9px 0;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.view-toggle button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.view-toggle button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.view-toggle button.active {
+  background: var(--accent, #7c3aed);
+  color: #fff;
+  border-color: var(--accent, #7c3aed);
+}
+
+.host-controls {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.episode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.episode-row:last-child {
+  margin-bottom: 0;
+}
+
+.episode-row label {
+  width: 70px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.episode-row select {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+#chat > button[onclick="resync()"] {
+  display: block;
+  margin: 12px 10px 10px 10px !important;
+  width: calc(100% - 20px);
+}
+
+body.view-chat-only #playerWrap {
+  display: none !important;
+}
+
+body.view-video-only #chat #messages,
+body.view-video-only #chat #chatForm,
+body.view-video-only #chat button[onclick="resync()"] {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  body.view-video-only #playerWrap {
     flex: 1;
-    padding: 9px 0;
-    font-size: 14px;
-    background: var(--surface);
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    cursor: pointer;
+    aspect-ratio: auto;
+    height: 100%;
   }
-
-  .view-toggle button:first-child {
-    border-radius: 6px 0 0 6px;
-  }
-
-  .view-toggle button:last-child {
-    border-radius: 0 6px 6px 0;
-  }
-
-  .view-toggle button.active {
-    background: var(--accent, #7c3aed);
-    color: #fff;
-    border-color: var(--accent, #7c3aed);
-  }
-
-  /* Панель сезона / серии */
-  .host-controls {
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-  }
-
-  .episode-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-
-  .episode-row:last-child {
-    margin-bottom: 0;
-  }
-
-  .episode-row label {
-    width: 70px;
-    font-size: 13px;
-    color: var(--text-muted);
-  }
-
-  .episode-row select {
-    flex: 1;
-    padding: 7px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-  }
-
-  /* Кнопка «Синхронизировать» — нормальный отступ */
-  #chat > button[onclick="resync()"] {
-    display: block;
-    margin: 12px 10px 10px 10px !important;
-    width: calc(100% - 20px);
-  }
-
-  /* Режимы */
-  body.view-chat-only #playerWrap {
-    display: none !important;
-  }
-
-  body.view-video-only #chat #messages,
-  body.view-video-only #chat #chatForm,
-  body.view-video-only #chat button[onclick="resync()"] {
-    display: none !important;
-  }
-
-  @media (max-width: 768px) {
-    body.view-video-only #playerWrap {
-      flex: 1;
-      aspect-ratio: auto;
-      height: 100%;
-    }
-    body.view-video-only #chat {
-      flex: none;
-      height: auto;
-    }
+  body.view-video-only #chat {
+    flex: none;
+    height: auto;
   }
 }
