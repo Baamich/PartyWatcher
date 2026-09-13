@@ -56,6 +56,7 @@ async function logout() {
 const infoTexts = {
   youtube_twitch: 'Вставь ссылку на видео с YouTube (youtube.com/watch?v=... или youtu.be/...) или на запись (VOD) с Twitch (twitch.tv/videos/1234567890 — именно запись, не текущий эфир). Тип определится автоматически по ссылке.',
   drive: 'На Google Диске: правой кнопкой по видео → "Открыть доступ" → "Все, у кого есть ссылка" → скопируй ссылку и вставь сюда. Без этого сервер не сможет прочитать файл.',
+  player_capture: 'Вставь ссылку на страницу с фильмом/сериалом (Rezka, Kinogo, Lordfilm и т.д.). Сайт попытается встроить плеер. Для некоторых сайтов будет доступен выбор сезона/серии/озвучки.',
 };
 
 let privacyPublic = false; // по умолчанию приватная
@@ -120,6 +121,10 @@ async function createRoom() {
       if (!fileId) return alert('Не удалось распознать ссылку на файл Google Диска');
       type = 'drive';
       url = fileId;
+    } else if (selection === 'player_capture') {
+      if (!rawUrl.startsWith('http')) return alert('Нужна полная ссылка (начинается с http)');
+      type = 'player_capture';
+      url = rawUrl;
     }
 
     const room = await api('/rooms', {

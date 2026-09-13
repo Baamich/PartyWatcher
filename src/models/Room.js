@@ -6,9 +6,20 @@ const roomSchema = new mongoose.Schema(
     code: { type: String, required: true, unique: true },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     video: {
-      type: { type: String, enum: ['youtube', 'twitch', 'vk', 'drive'], required: true },
+      type: { 
+        type: String, 
+        enum: ['youtube', 'twitch', 'vk', 'drive', 'player_capture'], 
+        required: true 
+      },
       url: { type: String, required: true },
       title: { type: String },
+      meta: {
+        seasons: { type: [Number], default: [] },
+        currentSeason: { type: Number, default: null },
+        currentEpisode: { type: Number, default: null },
+        voices: { type: [String], default: [] },
+        currentVoice: { type: String, default: null },
+      }
     },
     isPublic: { type: Boolean, default: false }, // по умолчанию приватная (закрытый замок)
     playback: {

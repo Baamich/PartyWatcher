@@ -230,4 +230,79 @@ body {
     padding: 6px;
     font-size: 12px;
   }
+  .view-toggle {
+    display: flex;
+    gap: 0;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .view-toggle button {
+    flex: 1;
+    padding: 8px 0;
+    font-size: 14px;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    cursor: pointer;
+  }
+
+  .view-toggle button:first-child {
+    border-radius: 6px 0 0 6px;
+  }
+
+  .view-toggle button:last-child {
+    border-radius: 0 6px 6px 0;
+  }
+
+  .view-toggle button.active {
+    background: var(--accent, #3b82f6);
+    color: #fff;
+    border-color: var(--accent, #3b82f6);
+  }
+
+  #episodeSelectBtn {
+    margin: 6px 10px;
+    width: calc(100% - 20px);
+    background: #1e40af;
+    color: #fff;
+  }
+
+  /* Модалка выбора серии */
+  .episode-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .episode-row label {
+    width: 80px;
+    font-size: 14px;
+  }
+
+  .episode-row select {
+    flex: 1;
+    padding: 8px;
+  }
+
+  /* Режим "только чат" на мобилках */
+  body.view-chat-only #playerWrap {
+    display: none;
+  }
+
+  body.view-video-only #chat {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    body.view-chat-only #playerWrap {
+      display: none;
+    }
+    body.view-video-only #chat {
+      display: none;
+    }
+  }
 }

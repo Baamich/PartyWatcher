@@ -10,6 +10,7 @@ let playerReady = false;
 let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
 let heartbeatTimer = null;
+let capturePlayer = null;
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 
@@ -52,6 +53,20 @@ function loadTwitchAPI() {
 function renderPlayer(video) {
   currentVideoType = video.type;
   const container = document.getElementById('player');
+
+  if (video.type === 'player_capture') {
+    // Динамический импорт модуля
+    return import('/js/playerCapture/index.js').then(mod => {
+      return mod.renderPlayerCapture(video, {
+        isOwner,
+        container: document.getElementById('player'),
+      }).then(player => {
+        capturePlayer = player;
+        playerReady = true;
+        return player;
+      });
+    });
+  }
 
   if (video.type === 'youtube') {
     const idMatch = video.url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
@@ -383,6 +398,7 @@ async function init() {
     isOwner = ownerFlag;
     lastState = playback;
     await renderPlayer(video);
+    initViewMode();
 
     if (isOwner) {
       setOverlay('Готово к просмотру', true);
@@ -612,8 +628,31 @@ function makeDraggable(el, storageKey) {
   applySavedPosition();
 }
 
+function setViewMode(mode) {
+  document.body.classList.remove('view-chat-only', 'view-video-only');
+  
+  if (mode === 'chat') {
+    document.body.classList.add('view-chat-only');
+    document.getElementById('btnShowChat').classList.add('active');
+    document.getElementById('btnShowVideo').classList.remove('active');
+  } else {
+    document.body.classList.add('view-video-only');
+    document.getElementById('btnShowVideo').classList.add('active');
+    document.getElementById('btnShowChat').classList.remove('active');
+  }
+}
+
+// По умолчанию на десктопе показываем оба, на мобилке — видео
+function initViewMode() {
+  if (window.innerWidth <= 768) {
+    setViewMode('video');
+  }
+}
+
+window.setViewMode = setViewMode;
+window.closeModal = closeModal;
+
 makeDraggable(document.getElementById('fullscreenBtn'), 'fullscreenBtn');
 makeDraggable(document.getElementById('fsChatToggleBtn'), 'fsChatToggleBtn');
-
 
 init();
