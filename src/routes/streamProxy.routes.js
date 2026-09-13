@@ -67,8 +67,15 @@ router.get('/relay', auth, async (req, res) => {
       return res.send(rewritten);
     }
 
+        const { Readable } = require('stream');
+
     res.setHeader('Content-Type', contentType);
-    response.body.pipe(res);
+    const nodeStream = Readable.fromWeb(response.body);
+    nodeStream.pipe(res);
+    nodeStream.on('error', (streamErr) => {
+      console.error('[stream-relay] ошибка потока:', streamErr.message);
+      if (!res.headersSent) res.status(500).end();
+    });
   } catch (err) {
     console.error('[stream-relay]', err.message);
     res.status(500).json({ error: err.message });
