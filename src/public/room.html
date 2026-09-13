@@ -88,30 +88,6 @@
     </div>
   </div>
 
-  <div id="episodeModal" class="modal hidden">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closeModal('episodeModal')">✕</button>
-      <h3>Выбор серии</h3>
-      
-      <div class="episode-row">
-        <label>Сезон</label>
-        <select id="seasonSelect"></select>
-      </div>
-      
-      <div class="episode-row">
-        <label>Серия</label>
-        <select id="episodeSelect"></select>
-      </div>
-      
-      <div class="episode-row">
-        <label>Озвучка</label>
-        <select id="voiceSelect"></select>
-      </div>
-      
-      <button onclick="applyEpisodeSelection()">Применить</button>
-    </div>
-  </div>
-
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/room.js"></script>
