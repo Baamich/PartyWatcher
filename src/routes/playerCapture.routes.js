@@ -56,7 +56,7 @@ router.post('/extract', auth, async (req, res) => {
     if (PROXY_SERVER && PROXY_USER && PROXY_PASS) {
       await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
     }
-    
+
     const foundStreams = [];
     const foundIframes = [];
 
@@ -127,11 +127,32 @@ router.post('/extract', auth, async (req, res) => {
     // даём время плееру подгрузиться после возможного клика
     await new Promise(r => setTimeout(r, 4000));
 
-    const iframes = await page.$$eval('iframe', (els) =>
+        const iframes = await page.$$eval('iframe', (els) =>
       els.map((el) => el.src).filter(Boolean)
     );
 
     console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
+
+    // ищем на странице любые блоки, где упоминаются "Сезон"/"Серия"/"Озвучка",
+    // чтобы понять точную HTML-структуру выбора серий на этом сайте
+    const episodeBlocksHTML = await page.evaluate(() => {
+      const keywords = ['сезон', 'серия', 'озвучка'];
+      const all = Array.from(document.querySelectorAll('body *'));
+      const matches = all.filter((el) => {
+        const text = (el.textContent || '').toLowerCase();
+        // берём только "мелкие" элементы (не весь body/html), где ключевое слово есть,
+        // но у них самих мало текста внутри — то есть это сам виджет, а не вся страница
+        return keywords.some((k) => text.includes(k)) && text.length < 300;
+      });
+      // убираем вложенные дубли: если родитель уже в списке — не берём детей
+      const top = matches.filter((el) => !matches.some((other) => other !== el && other.contains(el)));
+      return top.slice(0, 15).map((el) => el.outerHTML.slice(0, 2000));
+    });
+
+    console.log('[player-capture] найдено блоков с Сезон/Серия/Озвучка:', episodeBlocksHTML.length);
+    episodeBlocksHTML.forEach((html, i) => {
+      console.log(`[player-capture] блок #${i}:`, html);
+    });
 
     const KNOWN_HOSTS = [
       'player', 'embed', 'video', 'alloh', 'collaps', 'voidboost',
