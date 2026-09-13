@@ -400,6 +400,10 @@ async function init() {
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag }) => {
     isOwner = ownerFlag;
     lastState = playback;
+    
+    // ← вот эта строка
+    setViewMode('chat');   // теперь isOwner уже известен, кнопка "Видео" появится сразу
+
     await renderPlayer(video);
 
     if (isOwner) {

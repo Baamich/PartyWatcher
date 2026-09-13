@@ -238,7 +238,7 @@ body {
     padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    margin-bottom: 8px; /* ← вот этот отступ */
+    margin-bottom: 12px; /* ← вот этот отступ */
   }
 
   #chat > button[onclick="resync()"] {
