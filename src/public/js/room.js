@@ -181,6 +181,16 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
   }
 }
 
+function doPlayPause(isPlaying) {
+  if (currentVideoType === 'youtube') {
+    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+  } else if (currentVideoType === 'twitch') {
+    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (videoEl) {
+    isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
+  }
+}
+
 // Возобновление БЕЗ гарантированного жеста (реакция на сообщение от хоста по сокету) —
 // пробуем, и если браузер заблокировал автовоспроизведение — показываем "нажми, чтобы продолжить"
 // вместо того чтобы молча повторять попытку на каждый heartbeat
@@ -189,30 +199,22 @@ function attemptResume(isPlaying, positionSeconds) {
   if (!playerReady) return;
 
   suppressEvents = true;
+  const drift = Math.abs(getCurrentPosition() - positionSeconds);
+  const needsSeek = drift > DRIFT_THRESHOLD_SECONDS;
 
-  if (currentVideoType === 'youtube') {
-    ytPlayer.seekTo(positionSeconds, true);
-    isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
-  } else if (currentVideoType === 'twitch') {
-    twitchPlayer.seek(positionSeconds);
-    isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
-  } else if (videoEl) {
-    videoEl.currentTime = positionSeconds;
-    if (isPlaying) {
-      const p = videoEl.play();
-      if (p && p.catch) p.catch(() => {}); // сам факт неудачи проверим ниже единообразно для всех типов
-    } else {
-      videoEl.pause();
-    }
+  if (needsSeek) {
+    if (currentVideoType === 'youtube') ytPlayer.seekTo(positionSeconds, true);
+    else if (currentVideoType === 'twitch') twitchPlayer.seek(positionSeconds);
+    else if (videoEl) videoEl.currentTime = positionSeconds;
+
+    setTimeout(() => doPlayPause(isPlaying), 300); // даём время обработать перемотку перед play
+    setTimeout(() => (suppressEvents = false), 1000);
+  } else {
+    doPlayPause(isPlaying); // обычный случай "хост продолжил после паузы" — без лишнего seek
+    setTimeout(() => (suppressEvents = false), 400);
   }
-
-  setTimeout(() => {
-    suppressEvents = false;
-    if (isPlaying && !getIsPlayingNow()) {
-      showResumeOverlay(); // браузер не дал воспроизвести без клика — просим клик
-    }
-  }, 700);
 }
+
 
 function showResumeOverlay() {
   if (resumeBlocked) return;
@@ -241,7 +243,7 @@ function startHeartbeat() {
 // и не спамит попытки, если уже ждём клика зрителя (resumeBlocked)
 function softSync({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
-  if (!playerReady || resumeBlocked) return;
+  if (!playerReady) return;
 
   const playingNow = getIsPlayingNow();
   const drift = Math.abs(getCurrentPosition() - positionSeconds);
@@ -266,7 +268,6 @@ function copyRoomLink() {
 
 function startWatching() {
   started = true;
-  resumeBlocked = false;
   hideOverlay();
 
   if (isOwner) {
@@ -405,27 +406,6 @@ async function init() {
   socket.on('chat:message', addMessage);
   socket.on('room:error', (err) => alert(err.error));
 }
-
-document.addEventListener('keydown', (e) => {
-  if (e.code !== 'Space') return;
-  e.preventDefault();
-
-  if (resumeBlocked) {
-    startWatching(); // пробел тоже считается кликом — снимает блокировку автовоспроизведения
-    return;
-  }
-
-  if (!isOwner || !started) return;
-
-  if (currentVideoType === 'youtube') {
-    const state = ytPlayer.getPlayerState();
-    state === YT.PlayerState.PLAYING ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
-  } else if (currentVideoType === 'twitch') {
-    twitchPlayer.isPaused() ? twitchPlayer.play() : twitchPlayer.pause();
-  } else if (videoEl) {
-    videoEl.paused ? videoEl.play() : videoEl.pause();
-  }
-});
 
 function sendMessage(e, fromFullscreen) {
   e.preventDefault();
