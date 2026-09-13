@@ -32,30 +32,43 @@
   </div>
 
   <div id="chat">
-  <div id="roomHeader">
-    <button onclick="location.href='/index.html'">← Назад</button>
-    <span>Ключ: <b id="roomCodeValue"></b></span>
-    <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-    <button onclick="openSettings()">⚙️ <span id="participantCount">0</span></button>
+    <div id="roomHeader">
+      <button onclick="location.href='/index.html'">← Назад</button>
+      <span>Ключ: <b id="roomCodeValue"></b></span>
+      <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+      <button onclick="openSettings()">⚙️ <span id="participantCount">0</span></button>
+    </div>
+
+    <!-- Вкладки -->
+    <div id="viewToggle" class="view-toggle">
+      <button id="btnShowChat" class="active" onclick="setViewMode('chat')">Чат</button>
+      <button id="btnShowVideo" onclick="setViewMode('video')">Видео</button>
+    </div>
+
+    <!-- Панель управления сериями (только хост + только во вкладке Видео) -->
+    <div id="hostControls" class="host-controls hidden">
+      <div class="episode-row">
+        <label>Сезон</label>
+        <select id="seasonSelect" onchange="onEpisodeChange()"></select>
+      </div>
+      <div class="episode-row">
+        <label>Серия</label>
+        <select id="episodeSelect" onchange="onEpisodeChange()"></select>
+      </div>
+      <div class="episode-row" id="voiceRow">
+        <label>Озвучка</label>
+        <select id="voiceSelect" onchange="onEpisodeChange()"></select>
+      </div>
+    </div>
+
+    <button onclick="resync()">🔄 Синхронизировать</button>
+
+    <div id="messages"></div>
+    <form id="chatForm" onsubmit="return sendMessage(event)">
+      <input id="chatInput" placeholder="Сообщение..." />
+      <button type="submit">➤</button>
+    </form>
   </div>
-
-  <div id="viewToggle" class="view-toggle">
-    <button id="btnShowVideo" class="active" onclick="setViewMode('video')">Видео</button>
-    <button id="btnShowChat" onclick="setViewMode('chat')">Чат</button>
-  </div>
-
-  <button onclick="resync()">🔄 Синхронизировать</button>
-
-  <button id="episodeSelectBtn" class="hidden" onclick="openEpisodeSelector()">
-    Сезон / Серия / Озвучка
-  </button>
-
-  <div id="messages"></div>
-  <form id="chatForm" onsubmit="return sendMessage(event)">
-    <input id="chatInput" placeholder="Сообщение..." />
-    <button type="submit">➤</button>
-  </form>
-</div>
 
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">

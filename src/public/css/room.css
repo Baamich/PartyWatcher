@@ -230,6 +230,8 @@ body {
     padding: 6px;
     font-size: 12px;
   }
+
+  /* Вкладки */
   .view-toggle {
     display: flex;
     gap: 0;
@@ -240,12 +242,11 @@ body {
 
   .view-toggle button {
     flex: 1;
-    padding: 8px 0;
+    padding: 9px 0;
     font-size: 14px;
     background: var(--surface);
     color: var(--text-muted);
     border: 1px solid var(--border);
-    border-radius: 0;
     cursor: pointer;
   }
 
@@ -258,51 +259,67 @@ body {
   }
 
   .view-toggle button.active {
-    background: var(--accent, #3b82f6);
+    background: var(--accent, #7c3aed);
     color: #fff;
-    border-color: var(--accent, #3b82f6);
+    border-color: var(--accent, #7c3aed);
   }
 
-  #episodeSelectBtn {
-    margin: 6px 10px;
-    width: calc(100% - 20px);
-    background: #1e40af;
-    color: #fff;
+  /* Панель хоста (сезон/серия) */
+  .host-controls {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
   }
 
-  /* Модалка выбора серии */
   .episode-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .episode-row:last-child {
+    margin-bottom: 0;
   }
 
   .episode-row label {
-    width: 80px;
-    font-size: 14px;
+    width: 70px;
+    font-size: 13px;
+    color: var(--text-muted);
   }
 
   .episode-row select {
     flex: 1;
-    padding: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
   }
 
-  /* Режим "только чат" на мобилках */
+  /* Режимы отображения */
   body.view-chat-only #playerWrap {
-    display: none;
+    display: none !important;
   }
 
-  body.view-video-only #chat {
-    display: none;
+  body.view-video-only #chat #messages,
+  body.view-video-only #chat #chatForm,
+  body.view-video-only #chat button[onclick="resync()"] {
+    display: none !important;
   }
 
+  /* На мобилках при режиме видео — плеер на весь экран */
   @media (max-width: 768px) {
-    body.view-chat-only #playerWrap {
-      display: none;
+    body.view-video-only #playerWrap {
+      flex: 1;
+      aspect-ratio: auto;
+      height: 100%;
     }
+    
     body.view-video-only #chat {
-      display: none;
+      flex: none;
+      height: auto;
     }
   }
 }

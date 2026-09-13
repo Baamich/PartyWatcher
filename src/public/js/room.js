@@ -398,7 +398,6 @@ async function init() {
     isOwner = ownerFlag;
     lastState = playback;
     await renderPlayer(video);
-    initViewMode();
 
     if (isOwner) {
       setOverlay('Готово к просмотру', true);
@@ -442,6 +441,7 @@ async function init() {
 
   socket.on('chat:message', addMessage);
   socket.on('room:error', (err) => alert(err.error));
+  initViewMode();
 }
 
 document.addEventListener('keydown', (e) => {
@@ -630,25 +630,34 @@ function makeDraggable(el, storageKey) {
 
 function setViewMode(mode) {
   document.body.classList.remove('view-chat-only', 'view-video-only');
-  
+
+  const btnChat = document.getElementById('btnShowChat');
+  const btnVideo = document.getElementById('btnShowVideo');
+  const hostControls = document.getElementById('hostControls');
+
   if (mode === 'chat') {
     document.body.classList.add('view-chat-only');
-    document.getElementById('btnShowChat').classList.add('active');
-    document.getElementById('btnShowVideo').classList.remove('active');
+    btnChat.classList.add('active');
+    btnVideo.classList.remove('active');
+    if (hostControls) hostControls.classList.add('hidden');
   } else {
     document.body.classList.add('view-video-only');
-    document.getElementById('btnShowVideo').classList.add('active');
-    document.getElementById('btnShowChat').classList.remove('active');
+    btnVideo.classList.add('active');
+    btnChat.classList.remove('active');
+
+    // Панель управления показываем только хосту
+    if (hostControls) {
+      hostControls.classList.toggle('hidden', !isOwner);
+    }
   }
 }
 
-// По умолчанию на десктопе показываем оба, на мобилке — видео
 function initViewMode() {
-  if (window.innerWidth <= 768) {
-    setViewMode('video');
-  }
+  // По умолчанию всегда открываем Чат
+  setViewMode('chat');
 }
 
+// Делаем функции доступными из HTML
 window.setViewMode = setViewMode;
 window.closeModal = closeModal;
 
