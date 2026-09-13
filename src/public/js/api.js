@@ -13,4 +13,5 @@ async function api(path, options = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Ошибка запроса');
   return data;
+  
 }
