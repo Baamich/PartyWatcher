@@ -71,11 +71,12 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container }) {
   iframe.referrerPolicy = 'no-referrer';
   container.appendChild(iframe);
 
-  if (isOwner && (meta.seasons?.length || meta.voices?.length)) {
-    showEpisodeControls(meta);
-  } else {
-    hideEpisodeControls();
-  }
+    const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
+    if (isOwner && (hasMultipleEpisodes || meta.voices?.length)) {
+        showEpisodeControls(meta);
+    } else {
+        hideEpisodeControls();
+    }
 
   return {
     type: 'player_capture',
@@ -99,11 +100,12 @@ function renderNativePlayer(stream, meta, { isOwner, container }) {
   videoEl.volume = 0.3;
   container.appendChild(videoEl);
 
-  if (isOwner && (meta.seasons?.length || meta.voices?.length)) {
-    showEpisodeControls(meta);
-  } else {
-    hideEpisodeControls();
-  }
+    const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
+    if (isOwner && (hasMultipleEpisodes || meta.voices?.length)) {
+        showEpisodeControls(meta);
+    } else {
+        hideEpisodeControls();
+    }
 
   return {
     type: 'player_capture',
@@ -141,11 +143,12 @@ function renderFallback(url, meta, { isOwner, container, errorMessage }) {
     </div>
   `;
 
-  if (isOwner && (meta.seasons?.length || meta.voices?.length)) {
-    showEpisodeControls(meta);
-  } else {
-    hideEpisodeControls();
-  }
+    const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
+    if (isOwner && (hasMultipleEpisodes || meta.voices?.length)) {
+        showEpisodeControls(meta);
+    } else {
+        hideEpisodeControls();
+    }
 
   return {
     type: 'player_capture',

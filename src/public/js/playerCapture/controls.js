@@ -35,8 +35,11 @@ function fillEpisodeSelects(meta) {
   });
 
   // Серии (пока 1-24)
+    // Серии — рисуем ровно столько, сколько реально известно с сайта.
+  // Если totalEpisodes не передан (например, это фильм, а не сериал) — не выдумываем список.
   episodeSelect.innerHTML = '';
-  for (let i = 1; i <= 24; i++) {
+  const totalEpisodes = meta.totalEpisodes || 1;
+  for (let i = 1; i <= totalEpisodes; i++) {
     const opt = document.createElement('option');
     opt.value = i;
     opt.textContent = `Серия ${i}`;
