@@ -11,6 +11,8 @@ let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
 let heartbeatTimer = null;
 
+const DRIFT_THRESHOLD_SECONDS = 1.5; // меньше этого — считаем "и так синхронно", не дёргаем плеер
+
 function setOverlay(text, showStartBtn) {
   document.getElementById('overlayText').textContent = text;
   document.getElementById('startBtn').classList.toggle('hidden', !showStartBtn);
@@ -136,6 +138,22 @@ function renderPlayer(video) {
   return Promise.resolve();
 }
 
+function getCurrentPosition() {
+  if (currentVideoType === 'youtube') return ytPlayer?.getCurrentTime() ?? 0;
+  if (currentVideoType === 'twitch') return twitchPlayer?.getCurrentTime() ?? 0;
+  if (videoEl) return videoEl.currentTime;
+  return 0;
+}
+
+function getIsPlayingNow() {
+  if (currentVideoType === 'youtube') return ytPlayer?.getPlayerState() === YT.PlayerState.PLAYING;
+  if (currentVideoType === 'twitch') return !twitchPlayer?.isPaused();
+  if (videoEl) return !videoEl.paused;
+  return false;
+}
+
+// ЖЁСТКАЯ коррекция — реально двигает плеер. Используем только когда точно нужно
+// (явное действие хоста, кнопка "Синхронизировать", первый старт) — не на каждый heartbeat подряд
 function applyPlaybackState({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
   if (!playerReady) return;
@@ -162,44 +180,47 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
   }
 }
 
+// МЯГКАЯ проверка — вызывается на КАЖДОЕ входящее playback:update (включая heartbeat).
+// Трогает плеер, только если реально разъехались — иначе оставляет как есть,
+// чтобы не дёргать кадр каждые 2-3 секунды без необходимости
+function softSync({ isPlaying, positionSeconds }) {
+  lastState = { isPlaying, positionSeconds };
+  if (!playerReady) return;
+
+  const playingNow = getIsPlayingNow();
+  const drift = Math.abs(getCurrentPosition() - positionSeconds);
+
+  if (playingNow !== isPlaying || drift > DRIFT_THRESHOLD_SECONDS) {
+    applyPlaybackState({ isPlaying, positionSeconds });
+  }
+  // иначе — уже синхронно, ничего не трогаем
+}
+
 function enforceHostState() {
   applyPlaybackState(lastState);
 }
 
-function getOwnerIsPlayingNow() {
-  if (currentVideoType === 'youtube') return ytPlayer?.getPlayerState() === YT.PlayerState.PLAYING;
-  if (currentVideoType === 'twitch') return !twitchPlayer?.isPaused();
-  if (videoEl) return !videoEl.paused;
-  return false;
-}
-
 function emitPlayback(isPlaying) {
   if (suppressEvents || !isOwner) return;
-
-  let positionSeconds = 0;
-  if (currentVideoType === 'youtube') positionSeconds = ytPlayer.getCurrentTime();
-  else if (currentVideoType === 'twitch') positionSeconds = twitchPlayer.getCurrentTime();
-  else if (videoEl) positionSeconds = videoEl.currentTime;
-
-  socket.emit('playback:update', { code, isPlaying, positionSeconds });
+  socket.emit('playback:update', { code, isPlaying, positionSeconds: getCurrentPosition() });
 }
 
 // хост раз в 3 секунды сам себя "перепроверяет" — самоисправление на случай
-// потерянного события play/pause (нестабильное соединение через бесплатный туннель)
+// потерянного события play/pause; получатели (зрители) сами решат, надо ли им что-то менять (softSync)
 function startHeartbeat() {
   if (heartbeatTimer) return;
   heartbeatTimer = setInterval(() => {
     if (!isOwner || !started || !playerReady) return;
-    emitPlayback(getOwnerIsPlayingNow());
+    emitPlayback(getIsPlayingNow());
   }, 3000);
 }
 
 function resync() {
   if (isOwner) {
-    // хост форсит своё реальное текущее состояние всем зрителям немедленно
-    emitPlayback(getOwnerIsPlayingNow());
+    // хост форсит своё реальное текущее состояние всем зрителям немедленно (жёстко, целенаправленно)
+    emitPlayback(getIsPlayingNow());
   } else {
-    // зритель просто подтягивает последнее известное состояние хоста себе
+    // зритель запрашивает у сервера последнее известное состояние хоста и жёстко подстраивается под него
     socket.emit('room:resync', { code });
   }
 }
@@ -219,7 +240,7 @@ function startWatching() {
     else if (videoEl) videoEl.play().catch(() => {});
     startHeartbeat();
   } else {
-    applyPlaybackState(lastState);
+    applyPlaybackState(lastState); // первый заход — жёстко, дальше уже softSync
   }
 }
 
@@ -316,9 +337,11 @@ async function init() {
   });
 
   socket.on('playback:update', (state) => {
-    lastState = state;
-    if (started) applyPlaybackState(state);
-    else updateWaitingOverlayText();
+    if (started) softSync(state);
+    else {
+      lastState = state;
+      updateWaitingOverlayText();
+    }
   });
 
   socket.on('room:user-joined', ({ username }) => {
