@@ -23,45 +23,40 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
   let streams = [];
 
   try {
-    // Пробуем достать прямые потоки с сервера
     const res = await fetch('/api/player-capture/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ url: video.url }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ url: video.url }),
     });
+
     const data = await res.json();
+    console.log('[playerCapture] extract result:', data); // ← смотри это в консоли браузера
 
     if (data.success) {
-    // Приоритет 1: прямой поток
-    if (data.streams?.length) {
+        if (data.streams?.length) {
         return renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container });
-    }
-
-    // Приоритет 2: iframe самого плеера (не всей страницы)
-    if (data.playerIframes?.length) {
+        }
+        if (data.playerIframes?.length) {
         return renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });
         }
     }
 
-    // Если ничего не нашли
-    return renderFallback(video.url, meta, { isOwner, container });
+    // Показываем реальную ошибку с сервера
+    return renderFallback(video.url, meta, { 
+        isOwner, 
+        container,
+        errorMessage: data.error || data.message || 'Не удалось найти плеер'
+    });
 
-    if (data.success && data.streams?.length) {
-      streams = data.streams;
-      if (data.meta) meta = { ...meta, ...data.meta };
-    }
-  } catch (e) {
-    console.warn('[playerCapture] extract failed', e);
+    } catch (e) {
+    console.error('[playerCapture] fetch error', e);
+    return renderFallback(video.url, meta, { 
+        isOwner, 
+        container,
+        errorMessage: e.message 
+    });
   }
-
-  // Если нашли поток — играем через <video>
-  if (streams.length > 0) {
-    return renderNativePlayer(streams[0], meta, { isOwner, container });
-  }
-
-  // Иначе — fallback (заглушка + возможность открыть в новой вкладке)
-  return renderFallback(video.url, meta, { isOwner, container });
 }
 
 function renderPlayerIframe(playerUrl, meta, { isOwner, container }) {
@@ -121,7 +116,7 @@ function renderNativePlayer(stream, meta, { isOwner, container }) {
   };
 }
 
-function renderFallback(url, meta, { isOwner, container }) {
+function renderFallback(url, meta, { isOwner, container, errorMessage }) {
   container.innerHTML = `
     <div style="
       display:flex;
@@ -136,9 +131,12 @@ function renderFallback(url, meta, { isOwner, container }) {
     ">
       <div style="font-size:48px; margin-bottom:16px;">🎬</div>
       <h3 style="margin:0 0 8px;">Не удалось встроить плеер</h3>
-      <p style="opacity:0.7; margin:0; max-width:420px; line-height:1.5;">
-        Сайт использует сильную защиту.<br>
-        Попробуем улучшить парсер под этот домен.
+      <p style="opacity:0.7; margin:0 0 12px; max-width:420px; line-height:1.5;">
+        ${errorMessage || 'Сайт использует сильную защиту'}
+      </p>
+      <p style="opacity:0.5; font-size:13px; max-width:420px;">
+        Открой консоль браузера (F12) → вкладка Network → запрос /extract<br>
+        и посмотри, что именно вернул сервер.
       </p>
     </div>
   `;
