@@ -44,10 +44,23 @@ router.get('/relay', auth, async (req, res) => {
     if (contentType.includes('mpegurl') || targetUrl.endsWith('.m3u8')) {
       const text = await response.text();
       const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-      const rewritten = text.split('\n').map((line) => {
-        if (line.startsWith('#') || !line.trim()) return line;
-        const absoluteUrl = line.startsWith('http') ? line : baseUrl + line;
+
+      const toRelay = (relOrAbsUrl) => {
+        const absoluteUrl = relOrAbsUrl.startsWith('http') ? relOrAbsUrl : baseUrl + relOrAbsUrl;
         return `/api/stream/relay?url=${encodeURIComponent(absoluteUrl)}`;
+      };
+
+      const rewritten = text.split('\n').map((line) => {
+        // особый случай: #EXT-X-MAP:URI="init-....mp4" — ссылка спрятана внутри атрибута тега
+        if (line.startsWith('#EXT-X-MAP')) {
+          return line.replace(/URI="([^"]+)"/, (match, uri) => `URI="${toRelay(uri)}"`);
+        }
+
+        // обычные служебные теги без ссылок — пропускаем как есть
+        if (line.startsWith('#') || !line.trim()) return line;
+
+        // обычная строка плейлиста — ссылка на сегмент или вложенный манифест
+        return toRelay(line);
       }).join('\n');
 
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
