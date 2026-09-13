@@ -60,6 +60,8 @@ router.post('/extract', auth, async (req, res) => {
     const foundStreams = [];
     const foundIframes = [];
 
+        let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
+
     page.on('response', async (response) => {
       const reqUrl = response.url();
       const contentType = response.headers()['content-type'] || '';
@@ -67,8 +69,19 @@ router.post('/extract', auth, async (req, res) => {
       if (reqUrl.includes('.m3u8') || contentType.includes('mpegurl')) {
         foundStreams.push({ type: 'hls', url: reqUrl });
       }
-      if (reqUrl.includes('.mp4') && contentType.includes('video')) {
+      if (reqUrl.includes('.mp4') && contentType.includes('video') && !reqUrl.includes('blank.mp4')) {
         foundStreams.push({ type: 'mp4', url: reqUrl });
+      }
+
+      // ловим ответ балаболки конкретно по пути /bnsi/movies/<id>
+      if (reqUrl.includes('/bnsi/movies/') && contentType.includes('application/json')) {
+        try {
+          const json = await response.json();
+          if (json && json.hlsSource) {
+            console.log('[player-capture] найден JSON плеера balabolka:', reqUrl);
+            playerApiData = json;
+          }
+        } catch (e) {}
       }
     });
 
@@ -107,25 +120,61 @@ router.post('/extract', auth, async (req, res) => {
       console.error('[player-capture] не удалось сделать скриншот:', e.message);
     }
 
-    await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
+        await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
 
-        // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
-    const playSelectors = [
-      '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
-      '[class*="play"]', '.video-play-button',
-    ];
-    for (const sel of playSelectors) {
-      try {
-        const el = await page.$(sel);
-        if (el) {
-          await el.click({ delay: 100 }).catch(() => {});
-          break;
+    // если запрошена конкретная серия — переключаем через UI балаболки внутри iframe
+    const requestedEpisode = req.body.episode ? Number(req.body.episode) : null;
+
+    if (requestedEpisode) {
+      // балаболка обычно грузится не мгновенно — дождёмся появления нужного frame
+      let balabolkaFrame = null;
+      for (let i = 0; i < 10; i++) {
+        balabolkaFrame = page.frames().find((f) => f.url().includes('balabolka.stravers.live'));
+        if (balabolkaFrame) break;
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      if (balabolkaFrame) {
+        try {
+          // открываем дропдаун серий
+          await balabolkaFrame.click('div[data-select="episodeType1"] .select_item');
+          await new Promise(r => setTimeout(r, 500));
+
+          // кликаем на нужную серию по data-id
+          const episodeSelector = `div[data-select="episodeType1"] button.select_drop_item[data-id="${requestedEpisode}"]`;
+          const episodeBtn = await balabolkaFrame.$(episodeSelector);
+          if (episodeBtn) {
+            await episodeBtn.click();
+            console.log('[player-capture] переключено на серию', requestedEpisode);
+          } else {
+            console.warn('[player-capture] кнопка серии не найдена:', episodeSelector);
+          }
+        } catch (e) {
+          console.error('[player-capture] ошибка переключения серии:', e.message);
         }
-      } catch (e) {}
-    }
+      } else {
+        console.warn('[player-capture] frame balabolka не найден для переключения серии');
+      }
 
-    // даём время плееру подгрузиться после возможного клика
-    await new Promise(r => setTimeout(r, 4000));
+      // ждём новый запрос /bnsi/movies/<id> с обновлённым потоком
+      await new Promise(r => setTimeout(r, 4000));
+    } else {
+      // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
+      const playSelectors = [
+        '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
+        '[class*="play"]', '.video-play-button',
+      ];
+      for (const sel of playSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el) {
+            await el.click({ delay: 100 }).catch(() => {});
+            break;
+          }
+        } catch (e) {}
+      }
+      await new Promise(r => setTimeout(r, 4000));
+    }
 
         const iframes = await page.$$eval('iframe', (els) =>
       els.map((el) => el.src).filter(Boolean)
@@ -177,7 +226,28 @@ router.post('/extract', auth, async (req, res) => {
       foundIframes.push(...iframes.filter((src) => !src.startsWith('about:blank')));
     }
 
-    const uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
+    let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
+
+    // если нашли богатый JSON от плеера — строим streams из него, это надёжнее
+    if (playerApiData?.hlsSource?.length) {
+      const qualities = playerApiData.hlsSource[0].quality || {};
+      // берём лучшее доступное качество как основной поток
+      const bestQuality = Object.keys(qualities).sort((a, b) => Number(b) - Number(a))[0];
+      if (bestQuality) {
+        uniqueStreams = [
+          { type: 'hls', url: qualities[bestQuality], quality: bestQuality },
+          ...Object.entries(qualities)
+            .filter(([q]) => q !== bestQuality)
+            .map(([q, u]) => ({ type: 'hls', url: u, quality: q })),
+        ];
+      }
+    } else {
+      // приоритет master.m3u8 — это основной манифест, а не отдельный сегмент/заглушка
+      const master = uniqueStreams.find((s) => s.url.includes('master.m3u8'));
+      if (master) {
+        uniqueStreams = [master, ...uniqueStreams.filter((s) => s !== master)];
+      }
+    }
     const uniqueIframes = [...new Set(foundIframes)];
 
         const meta = {

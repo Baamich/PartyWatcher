@@ -27,7 +27,7 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ url: video.url }),
+        body: JSON.stringify({ url: video.url, episode: video.meta?.currentEpisode || null }),
     });
 
     const data = await res.json();
