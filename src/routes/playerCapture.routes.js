@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 
 router.post('/extract', auth, async (req, res) => {
   const { url } = req.body;
