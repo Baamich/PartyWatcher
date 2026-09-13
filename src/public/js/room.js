@@ -668,23 +668,27 @@ function setViewMode(mode) {
   const btnVideo = document.getElementById('btnShowVideo');
   const hostControls = document.getElementById('hostControls');
 
-  // Кнопка "Видео" только у хоста
   if (btnVideo) {
     btnVideo.style.display = isOwner ? '' : 'none';
   }
 
-  if (mode === 'chat' || !isOwner) {
+  // зритель всегда видит и видео, и чат одновременно — переключение вкладок только для хоста
+  if (!isOwner) {
+    btnChat.classList.add('active');
+    if (hostControls) hostControls.classList.add('hidden');
+    return;
+  }
+
+  if (mode === 'chat') {
     document.body.classList.add('view-chat-only');
     btnChat.classList.add('active');
-    if (btnVideo) btnVideo.classList.remove('active');
+    btnVideo.classList.remove('active');
     if (hostControls) hostControls.classList.add('hidden');
   } else {
     document.body.classList.add('view-video-only');
     btnVideo.classList.add('active');
     btnChat.classList.remove('active');
-    if (hostControls) {
-      hostControls.classList.toggle('hidden', !isOwner);
-    }
+    if (hostControls) hostControls.classList.remove('hidden');
   }
 }
 
