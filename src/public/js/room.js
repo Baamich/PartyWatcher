@@ -73,6 +73,7 @@ function renderPlayer(video) {
           onReady: (e) => {
             playerReady = true;
             e.target.setVolume(30);
+            e.target.unloadModule('captions'); // жёстко гасит субтитры, даже если в аккаунте зрителя стоит "всегда показывать"
             resolve();
           },
           onStateChange: (e) => {
@@ -505,5 +506,114 @@ function showLocalSystemMessage(text) {
   appendMessageTo('messages', 'Система', text);
   appendMessageTo('fsMessages', 'Система', text);
 }
+
+function makeDraggable(el, storageKey) {
+  const container = document.getElementById('playerWrap');
+  const LONG_PRESS_MS = 300;
+  const MOVE_CANCEL_THRESHOLD = 6;
+
+  let longPressTimer = null;
+  let dragging = false;
+  let moved = false;
+  let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+  function currentMode() {
+    return document.fullscreenElement ? 'fullscreen' : 'normal';
+  }
+
+  function storageFullKey() {
+    return `pw-pos:${storageKey}:${currentMode()}`;
+  }
+
+  function applySavedPosition() {
+    const saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null');
+    if (saved) {
+      el.style.left = saved.left + 'px';
+      el.style.top = saved.top + 'px';
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+    } else {
+      el.style.left = '';
+      el.style.top = '';
+      el.style.right = '';
+      el.style.bottom = '';
+    }
+  }
+
+  function savePosition(left, top) {
+    localStorage.setItem(storageFullKey(), JSON.stringify({ left, top }));
+  }
+
+  el.addEventListener('pointerdown', (e) => {
+    moved = false;
+    const rect = el.getBoundingClientRect();
+    const parentRect = container.getBoundingClientRect();
+    origLeft = rect.left - parentRect.left;
+    origTop = rect.top - parentRect.top;
+    startX = e.clientX;
+    startY = e.clientY;
+
+    longPressTimer = setTimeout(() => {
+      dragging = true;
+      el.classList.add('dragging');
+      try { el.setPointerCapture(e.pointerId); } catch {}
+    }, LONG_PRESS_MS);
+  });
+
+  el.addEventListener('pointermove', (e) => {
+    if (!dragging) {
+      if (Math.abs(e.clientX - startX) > MOVE_CANCEL_THRESHOLD || Math.abs(e.clientY - startY) > MOVE_CANCEL_THRESHOLD) {
+        clearTimeout(longPressTimer); // сдвинул до истечения таймера — это не долгое нажатие, отменяем
+      }
+      return;
+    }
+
+    moved = true;
+    e.preventDefault();
+
+    const parentRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    let newLeft = origLeft + (e.clientX - startX);
+    let newTop = origTop + (e.clientY - startY);
+
+    newLeft = Math.max(0, Math.min(newLeft, parentRect.width - elRect.width));
+    newTop = Math.max(0, Math.min(newTop, parentRect.height - elRect.height));
+
+    el.style.left = newLeft + 'px';
+    el.style.top = newTop + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+  });
+
+  function endDrag() {
+    clearTimeout(longPressTimer);
+    if (!dragging) return;
+
+    dragging = false;
+    el.classList.remove('dragging');
+
+    if (moved) {
+      savePosition(parseFloat(el.style.left), parseFloat(el.style.top));
+      // после реального перетаскивания гасим следующий click, чтобы отпускание мышки/пальца
+      // не засчиталось как обычное нажатие кнопки (открытие чата / переключение fullscreen)
+      const suppressNextClick = (ce) => {
+        ce.stopPropagation();
+        ce.preventDefault();
+        el.removeEventListener('click', suppressNextClick, true);
+      };
+      el.addEventListener('click', suppressNextClick, true);
+    }
+  }
+
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
+
+  document.addEventListener('fullscreenchange', applySavedPosition);
+  applySavedPosition();
+}
+
+makeDraggable(document.getElementById('fullscreenBtn'), 'fullscreenBtn');
+makeDraggable(document.getElementById('fsChatToggleBtn'), 'fsChatToggleBtn');
+
 
 init();

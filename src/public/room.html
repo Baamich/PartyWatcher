@@ -17,10 +17,8 @@
       <button id="startBtn" class="hidden" onclick="startWatching()">▶ Начать просмотр</button>
     </div>
 
-    <div class="fs-controls">
-      <button id="fsChatToggleBtn" class="hidden" onclick="toggleFsChat()" title="Чат">💬</button>
-      <button id="fullscreenBtn" onclick="toggleFullscreen()" title="Полноэкранный режим">⛶</button>
-    </div>
+    <button id="fsChatToggleBtn" class="fs-draggable hidden" onclick="toggleFsChat()" title="Чат (зажми, чтобы передвинуть)">💬</button>
+    <button id="fullscreenBtn" class="fs-draggable" onclick="toggleFullscreen()" title="Полноэкранный режим (зажми, чтобы передвинуть)">⛶</button>
 
     <div id="fsChatPanel" class="hidden">
       <div id="fsMessages"></div>
