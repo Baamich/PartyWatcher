@@ -67,24 +67,48 @@ router.post('/extract', auth, async (req, res) => {
 
     await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
 
+        // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
+    const playSelectors = [
+      '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
+      '[class*="play"]', '.video-play-button',
+    ];
+    for (const sel of playSelectors) {
+      try {
+        const el = await page.$(sel);
+        if (el) {
+          await el.click({ delay: 100 }).catch(() => {});
+          break;
+        }
+      } catch (e) {}
+    }
+
+    // даём время плееру подгрузиться после возможного клика
+    await new Promise(r => setTimeout(r, 4000));
+
     const iframes = await page.$$eval('iframe', (els) =>
       els.map((el) => el.src).filter(Boolean)
     );
 
+    console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
+
+    const KNOWN_HOSTS = [
+      'player', 'embed', 'video', 'alloh', 'collaps', 'voidboost',
+      'ashdi', 'cdnmovies', 'kodik', 'hdvb', 'eneyida', 'animevost',
+      'moonwalk', 'iframe.', 'vid', 'stream',
+    ];
+
     iframes.forEach((src) => {
-      if (
-        src.includes('player') ||
-        src.includes('embed') ||
-        src.includes('video') ||
-        src.includes('alloh') ||
-        src.includes('collaps') ||
-        src.includes('voidboost') ||
-        src.includes('ashdi') ||
-        src.includes('cdnmovies')
-      ) {
+      if (KNOWN_HOSTS.some((k) => src.includes(k))) {
         foundIframes.push(src);
       }
     });
+
+    // если по ключевым словам ничего не подошло, но iframe вообще есть —
+    // отдаём всё как есть, чтобы фронт хотя бы попытался их отрендерить,
+    // а не молчал "ничего не найдено"
+    if (foundIframes.length === 0 && iframes.length > 0) {
+      foundIframes.push(...iframes.filter((src) => !src.startsWith('about:blank')));
+    }
 
     const uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
     const uniqueIframes = [...new Set(foundIframes)];
