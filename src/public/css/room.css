@@ -231,19 +231,13 @@ body {
     font-size: 12px;
   }
 
-  /* Вкладки */
+  /* ===== Вкладки Чат / Видео ===== */
   .view-toggle {
     display: flex;
     gap: 0;
     padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    margin-bottom: 12px; /* ← вот этот отступ */
-  }
-
-  #chat > button[onclick="resync()"] {
-    margin: 0 10px 8px 10px;
-    width: calc(100% - 20px);
   }
 
   .view-toggle button {
@@ -270,12 +264,13 @@ body {
     border-color: var(--accent, #7c3aed);
   }
 
-  /* Панель хоста (сезон/серия) */
+  /* Панель хоста (сезон / серия / озвучка) */
   .host-controls {
     padding: 10px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     flex-shrink: 0;
+    margin-bottom: 6px;
   }
 
   .episode-row {
@@ -304,6 +299,12 @@ body {
     color: var(--text);
   }
 
+  /* Кнопка синхронизации */
+  #chat > button[onclick="resync()"] {
+    margin: 0 10px 10px 10px;
+    width: calc(100% - 20px);
+  }
+
   /* Режимы отображения */
   body.view-chat-only #playerWrap {
     display: none !important;
@@ -315,7 +316,6 @@ body {
     display: none !important;
   }
 
-  /* На мобилках при режиме видео — плеер на весь экран */
   @media (max-width: 768px) {
     body.view-video-only #playerWrap {
       flex: 1;

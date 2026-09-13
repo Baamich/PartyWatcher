@@ -14,6 +14,7 @@ const roomRoutes = require('./routes/room.routes');
 const videoRoutes = require('./routes/video.routes');
 const adminRoutes = require('./routes/admin.routes');
 const driveRoutes = require('./routes/drive.routes');
+const playerCaptureRoutes = require('./routes/playerCapture.routes');
 
 async function start() {
   await connectDB();
@@ -33,6 +34,7 @@ async function start() {
   app.use('/api/videos', videoRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/drive', driveRoutes);
+  app.use('/api/player-capture', playerCaptureRoutes);
     
   app.set('io', io);
 

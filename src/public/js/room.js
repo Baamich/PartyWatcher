@@ -157,6 +157,9 @@ function renderPlayer(video) {
 function getCurrentPosition() {
   if (currentVideoType === 'youtube') return ytPlayer?.getCurrentTime() ?? 0;
   if (currentVideoType === 'twitch') return twitchPlayer?.getCurrentTime() ?? 0;
+  if (currentVideoType === 'player_capture' && capturePlayer?.getCurrentPosition) {
+    return capturePlayer.getCurrentPosition();
+  }
   if (videoEl) return videoEl.currentTime;
   return 0;
 }
@@ -164,22 +167,25 @@ function getCurrentPosition() {
 function getIsPlayingNow() {
   if (currentVideoType === 'youtube') return ytPlayer?.getPlayerState() === YT.PlayerState.PLAYING;
   if (currentVideoType === 'twitch') return !twitchPlayer?.isPaused();
+  if (currentVideoType === 'player_capture' && capturePlayer?.getIsPlayingNow) {
+    return capturePlayer.getIsPlayingNow();
+  }
   if (videoEl) return !videoEl.paused;
   return false;
 }
 
 function doPlayPause(isPlaying) {
-  // без мьюта — на Twitch программный запуск без клика пользователя всё равно не работает
-  // (см. документацию Twitch: на мобильных это вообще невозможно без явного жеста), а мьют
-  // только зря дёргал звук без пользы, поэтому убрали
   if (currentVideoType === 'youtube') {
     isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
   } else if (currentVideoType === 'twitch') {
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
+    capturePlayer.doPlayPause(isPlaying);
   } else if (videoEl) {
     isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
   }
 }
+
 
 function applyPlaybackState({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
@@ -194,6 +200,10 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
   } else if (currentVideoType === 'twitch') {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+    setTimeout(() => (suppressEvents = false), 800);
+  } else if (currentVideoType === 'player_capture' && capturePlayer) {
+    if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
+    if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
     setTimeout(() => (suppressEvents = false), 800);
   } else if (videoEl) {
     const clearSuppress = () => {
@@ -218,6 +228,9 @@ function attemptResume(isPlaying, positionSeconds) {
   if (needsSeek) {
     if (currentVideoType === 'youtube') ytPlayer.seekTo(positionSeconds, true);
     else if (currentVideoType === 'twitch') twitchPlayer.seek(positionSeconds);
+    else if (currentVideoType === 'player_capture' && capturePlayer?.seekTo) {
+      capturePlayer.seekTo(positionSeconds);
+    }
     else if (videoEl) videoEl.currentTime = positionSeconds;
 
     setTimeout(() => doPlayPause(isPlaying), 300);
@@ -240,6 +253,9 @@ function manualResyncViewer() {
   } else if (currentVideoType === 'twitch') {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (currentVideoType === 'player_capture' && capturePlayer) {
+    if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
+    if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
   } else if (videoEl) {
     videoEl.currentTime = positionSeconds;
     isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
