@@ -32,6 +32,21 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
     });
     const data = await res.json();
 
+    if (data.success) {
+    // Приоритет 1: прямой поток
+    if (data.streams?.length) {
+        return renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container });
+    }
+
+    // Приоритет 2: iframe самого плеера (не всей страницы)
+    if (data.playerIframes?.length) {
+        return renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });
+        }
+    }
+
+    // Если ничего не нашли
+    return renderFallback(video.url, meta, { isOwner, container });
+
     if (data.success && data.streams?.length) {
       streams = data.streams;
       if (data.meta) meta = { ...meta, ...data.meta };
@@ -47,6 +62,35 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
 
   // Иначе — fallback (заглушка + возможность открыть в новой вкладке)
   return renderFallback(video.url, meta, { isOwner, container });
+}
+
+function renderPlayerIframe(playerUrl, meta, { isOwner, container }) {
+  container.innerHTML = '';
+  
+  const iframe = document.createElement('iframe');
+  iframe.src = playerUrl;
+  iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+  iframe.style.border = '0';
+  iframe.referrerPolicy = 'no-referrer';
+  container.appendChild(iframe);
+
+  if (isOwner && (meta.seasons?.length || meta.voices?.length)) {
+    showEpisodeControls(meta);
+  } else {
+    hideEpisodeControls();
+  }
+
+  return {
+    type: 'player_capture',
+    iframe,
+    meta,
+    getCurrentPosition: () => 0,
+    getIsPlayingNow: () => false,
+    doPlayPause: () => {},
+    seekTo: () => {},
+  };
 }
 
 function renderNativePlayer(stream, meta, { isOwner, container }) {
@@ -91,19 +135,11 @@ function renderFallback(url, meta, { isOwner, container }) {
       background:#111;
     ">
       <div style="font-size:48px; margin-bottom:16px;">🎬</div>
-      <h3 style="margin:0 0 8px;">Прямой поток не найден</h3>
-      <p style="opacity:0.7; margin:0 0 20px; max-width:420px; line-height:1.5;">
-        Сайт сильно защищён или использует динамическую загрузку плеера.<br>
-        Пока можно открыть страницу в новой вкладке.
+      <h3 style="margin:0 0 8px;">Не удалось встроить плеер</h3>
+      <p style="opacity:0.7; margin:0; max-width:420px; line-height:1.5;">
+        Сайт использует сильную защиту.<br>
+        Попробуем улучшить парсер под этот домен.
       </p>
-      <a href="${url}" target="_blank" rel="noopener" style="
-        padding:12px 24px;
-        background:#7c3aed;
-        color:#fff;
-        border-radius:8px;
-        text-decoration:none;
-        font-weight:500;
-      ">Открыть в новой вкладке</a>
     </div>
   `;
 

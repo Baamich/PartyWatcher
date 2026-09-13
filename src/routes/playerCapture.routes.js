@@ -72,13 +72,13 @@ router.post('/extract', auth, async (req, res) => {
         success: false,
         error: `Сайт вернул статус ${status}`,
         streams: [],
+        playerIframes: [],
         meta: null,
       });
     }
 
-    const streams = extractStreams(html, url);
+    const { streams, playerIframes } = extractStreams(html, url);
 
-    // Пока простая мета (потом улучшим парсерами)
     const meta = {
       site: detectSite(url),
       seasons: [1],
@@ -87,13 +87,16 @@ router.post('/extract', auth, async (req, res) => {
       voices: [],
     };
 
+    const success = streams.length > 0 || playerIframes.length > 0;
+
     res.json({
-      success: streams.length > 0,
+      success,
       streams,
+      playerIframes,
       meta,
-      message: streams.length
-        ? `Найдено потоков: ${streams.length}`
-        : 'Прямые потоки не найдены (сайт сильно защищён или использует динамическую загрузку)',
+      message: success
+        ? `Найдено: потоков ${streams.length}, iframe-плееров ${playerIframes.length}`
+        : 'Ничего не найдено',
     });
   } catch (err) {
     console.error('[player-capture extract]', err.message);
@@ -101,6 +104,7 @@ router.post('/extract', auth, async (req, res) => {
       success: false,
       error: err.message,
       streams: [],
+      playerIframes: [],
       meta: null,
     });
   }
