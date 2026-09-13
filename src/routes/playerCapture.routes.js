@@ -56,14 +56,40 @@ router.post('/extract', auth, async (req, res) => {
       }
     });
 
-    await page.setUserAgent(
+        await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     );
+    await page.setViewport({ width: 1366, height: 768 });
 
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 30000,
+    // скрываем самые очевидные признаки headless/puppeteer
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
+
+    let response;
+    try {
+      response = await page.goto(url, {
+        waitUntil: 'networkidle2',
+        timeout: 30000,
+      });
+    } catch (navErr) {
+      console.error('[player-capture] ошибка навигации:', navErr.message);
+    }
+
+    console.log('[player-capture] HTTP статус:', response ? response.status() : 'нет ответа');
+    console.log('[player-capture] финальный URL после редиректов:', page.url());
+    console.log('[player-capture] заголовок страницы:', await page.title());
+
+    const bodyLength = await page.evaluate(() => document.body?.innerHTML?.length || 0);
+    console.log('[player-capture] длина HTML body:', bodyLength);
+
+    // сохраняем скриншот, чтобы визуально понять что за страница реально отрисовалась
+    try {
+      await page.screenshot({ path: '/tmp/player-capture-debug.png' });
+      console.log('[player-capture] скриншот сохранён: /tmp/player-capture-debug.png');
+    } catch (e) {
+      console.error('[player-capture] не удалось сделать скриншот:', e.message);
+    }
 
     await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
 
