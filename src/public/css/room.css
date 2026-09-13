@@ -306,22 +306,30 @@ body {
   width: calc(100% - 20px);
 }
 
-body.view-chat-only #playerWrap {
-  display: none !important;
+/* На десктопе режимы "только чат/видео" НЕ скрывают блоки */
+body.view-chat-only #playerWrap,
+body.view-video-only #chat {
+  display: flex !important; /* оставляем как есть */
 }
 
-body.view-video-only #chat #messages,
-body.view-video-only #chat #chatForm,
-body.view-video-only #chat button[onclick="resync()"] {
-  display: none !important;
-}
-
+/* Только на мобилках включаем реальное скрытие */
 @media (max-width: 768px) {
+  body.view-chat-only #playerWrap {
+    display: none !important;
+  }
+
+  body.view-video-only #chat #messages,
+  body.view-video-only #chat #chatForm,
+  body.view-video-only #chat button[onclick="resync()"] {
+    display: none !important;
+  }
+
   body.view-video-only #playerWrap {
     flex: 1;
     aspect-ratio: auto;
     height: 100%;
   }
+
   body.view-video-only #chat {
     flex: none;
     height: auto;

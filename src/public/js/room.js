@@ -668,13 +668,12 @@ function setViewMode(mode) {
   const btnVideo = document.getElementById('btnShowVideo');
   const hostControls = document.getElementById('hostControls');
 
-  // Кнопка "Видео" видна только хосту
+  // Кнопка "Видео" только у хоста
   if (btnVideo) {
     btnVideo.style.display = isOwner ? '' : 'none';
   }
 
   if (mode === 'chat' || !isOwner) {
-    // Зрители всегда остаются в чате
     document.body.classList.add('view-chat-only');
     btnChat.classList.add('active');
     if (btnVideo) btnVideo.classList.remove('active');
@@ -683,7 +682,6 @@ function setViewMode(mode) {
     document.body.classList.add('view-video-only');
     btnVideo.classList.add('active');
     btnChat.classList.remove('active');
-
     if (hostControls) {
       hostControls.classList.toggle('hidden', !isOwner);
     }
