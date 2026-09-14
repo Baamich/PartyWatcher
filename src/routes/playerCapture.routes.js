@@ -136,21 +136,25 @@ router.post('/extract', auth, async (req, res) => {
 
       console.log('[player-capture] найден frame balabolka:', !!balabolkaFrame, balabolkaFrame?.url());
 
-            if (balabolkaFrame) {
+          if (balabolkaFrame) {
         try {
-          // ждём появления дропдауна серий — виджет плеера может грузиться дольше, чем сам видеослой
-          await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] .select_item', { timeout: 10000 });
-          console.log('[player-capture] дропдаун серий появился');
+          try {
+            await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] .select_item', { timeout: 10000 });
+            console.log('[player-capture] дропдаун серий появился');
+          } catch (waitErr) {
+            console.warn('[player-capture] дропдаун не появился, дампим HTML iframe:', waitErr.message);
+            const frameHtml = await balabolkaFrame.evaluate(() => document.body.innerHTML).catch(() => '(не удалось получить HTML)');
+            console.log('[player-capture] HTML внутри iframe (первые 3000 символов):', frameHtml.slice(0, 3000));
+            const allSelectDivs = await balabolkaFrame.evaluate(() =>
+              Array.from(document.querySelectorAll('div[class*="select"]')).map((el) => el.outerHTML.slice(0, 300))
+            ).catch(() => []);
+            console.log('[player-capture] все div с классом select:', allSelectDivs);
+            throw waitErr;
+          }
 
-          // сбрасываем то, что уже успело прийти при автозагрузке серии 1 —
-          // нам нужен именно СЛЕДУЮЩИЙ ответ balabolka, вызванный нашим кликом
           playerApiData = null;
-
-          // открываем дропдаун серий
           await balabolkaFrame.click('div[data-select="episodeType1"] .select_item');
           await new Promise(r => setTimeout(r, 800));
-
-          // ждём появления самих пунктов списка внутри открытого дропдауна
           await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] button.select_drop_item', { timeout: 5000 });
 
           const availableIds = await balabolkaFrame.$$eval(
