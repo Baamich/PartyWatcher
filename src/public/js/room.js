@@ -469,32 +469,36 @@ async function init() {
     if (voice) text += `, озвучка «${voice}»`;
     addMessage({ username: 'Система', text });
 
-    // перезагружаем плеер с новой серией (возьмёт из кэша, если хост уже сходил)
-    if (currentVideoType === 'player_capture' && capturePlayer) {
-      const container = document.getElementById('player');
-      const videoUrl = capturePlayer.meta?.url || null;
+    if (currentVideoType !== 'player_capture') return;
 
-      // url лежит в room state — берём из последнего video
-      // проще: снова вызвать renderPlayerCapture с обновлённым meta
-      try {
-        const mod = await import('/js/playerCapture/index.js');
-        // берём url из текущего video через last known — сохраним его
-        const url = window.__captureVideoUrl;
-        if (!url) return;
+    const container = document.getElementById('player');
+    const url = window.__captureVideoUrl;
+    if (!url || !container) return;
 
-        playerReady = false;
-        const player = await mod.renderPlayerCapture(
-          { type: 'player_capture', url, meta: { currentSeason: season, currentEpisode: episode, currentVoice: voice } },
-          { isOwner: false, container }
-        );
-        capturePlayer = player;
-        playerReady = true;
+    try {
+      playerReady = false;
+      started = false; // сбрасываем — нужен новый клик (autoplay policy)
 
-        // подтянуть позицию хоста
-        if (started) applyPlaybackState(lastState);
-      } catch (e) {
-        console.error('[player_capture] не удалось сменить серию у зрителя:', e);
-      }
+      const mod = await import('/js/playerCapture/index.js');
+      const player = await mod.renderPlayerCapture(
+        {
+          type: 'player_capture',
+          url,
+          meta: {
+            currentSeason: season,
+            currentEpisode: episode,
+            currentVoice: voice || null,
+          },
+        },
+        { isOwner: false, container }
+      );
+      capturePlayer = player;
+      playerReady = true;
+
+      // просим пользователя нажать — иначе mobile/browser не даст play()
+      setOverlay(`Хост сменил серию — нажми, чтобы продолжить`, true);
+    } catch (e) {
+      console.error('[player_capture] не удалось сменить серию у зрителя:', e);
     }
   });
 
