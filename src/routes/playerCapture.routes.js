@@ -136,24 +136,29 @@ router.post('/extract', auth, async (req, res) => {
 
       console.log('[player-capture] найден frame balabolka:', !!balabolkaFrame, balabolkaFrame?.url());
 
-      if (balabolkaFrame) {
+            if (balabolkaFrame) {
         try {
-          // проверяем, что дропдаун вообще есть на странице к этому моменту
-          const dropdownExists = await balabolkaFrame.$('div[data-select="episodeType1"] .select_item');
-          console.log('[player-capture] дропдаун серий найден:', !!dropdownExists);
+          // ждём появления дропдауна серий — виджет плеера может грузиться дольше, чем сам видеослой
+          await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] .select_item', { timeout: 10000 });
+          console.log('[player-capture] дропдаун серий появился');
+
+          // сбрасываем то, что уже успело прийти при автозагрузке серии 1 —
+          // нам нужен именно СЛЕДУЮЩИЙ ответ balabolka, вызванный нашим кликом
+          playerApiData = null;
 
           // открываем дропдаун серий
           await balabolkaFrame.click('div[data-select="episodeType1"] .select_item');
           await new Promise(r => setTimeout(r, 800));
 
-          // логируем все доступные data-id в дропдауне на этот момент
+          // ждём появления самих пунктов списка внутри открытого дропдауна
+          await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] button.select_drop_item', { timeout: 5000 });
+
           const availableIds = await balabolkaFrame.$$eval(
             'div[data-select="episodeType1"] button.select_drop_item',
             (els) => els.map((el) => el.getAttribute('data-id'))
           ).catch(() => []);
           console.log('[player-capture] доступные data-id серий:', availableIds);
 
-          // кликаем на нужную серию по data-id
           const episodeSelector = `div[data-select="episodeType1"] button.select_drop_item[data-id="${requestedEpisode}"]`;
           const episodeBtn = await balabolkaFrame.$(episodeSelector);
           if (episodeBtn) {
@@ -169,10 +174,13 @@ router.post('/extract', auth, async (req, res) => {
         console.warn('[player-capture] frame balabolka не найден для переключения серии');
       }
 
-      // ждём новый запрос /bnsi/movies/<id> с обновлённым потоком
-      await new Promise(r => setTimeout(r, 4000));
+            // ждём новый запрос /bnsi/movies/<id> с обновлённым потоком
+      await new Promise(r => setTimeout(r, 5000));
 
       console.log('[player-capture] playerApiData после клика получен:', !!playerApiData);
+      if (!playerApiData) {
+        console.warn('[player-capture] после клика новый JSON от balabolka так и не пришёл — переключение не сработало');
+      }
     } else {
       // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
       const playSelectors = [
