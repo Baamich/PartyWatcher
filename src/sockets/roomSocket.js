@@ -111,8 +111,18 @@ function registerRoomSocket(io) {
       socket.emit('room:banned-list', (room?.bannedUsers || []).map((u) => ({ id: u._id, username: u.username })));
     });
     
-    socket.on('player_capture:change', ({ code, season, episode, voice }) => {
+    socket.on('player_capture:change', async ({ code, season, episode, voice }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+
+      // сохраняем актуальную серию в комнате — иначе новый зритель получит устаревший meta
+      await Room.findOneAndUpdate(
+        { code },
+        {
+          'video.meta.currentSeason': season,
+          'video.meta.currentEpisode': episode,
+          'video.meta.currentVoice': voice || null,
+        }
+      );
 
       // Рассылаем всем, кроме самого хоста
       socket.to(code).emit('player_capture:change', {
