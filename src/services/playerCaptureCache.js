@@ -1,4 +1,4 @@
-playerCaptureCache.js
+// playerCaptureCache.js
 // простой in-memory кэш результатов /extract, живёт пока жива комната
 const cache = new Map(); // key: `${roomCode}:${episode}` → { data, expiresAt }
 
