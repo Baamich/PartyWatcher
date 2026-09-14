@@ -87,6 +87,16 @@ export async function onEpisodeChange() {
   console.log('[playerCapture] changed to', currentMeta);
 
   // Отправляем событие на сервер, чтобы зрители получили системное сообщение
+  if (onEpisodeChangeCallback) {
+    try {
+      await onEpisodeChangeCallback(episode);
+    } catch (e) {
+      console.error('[playerCapture] ошибка при смене серии:', e.message);
+      return; // не шлём change, если серия не загрузилась
+    }
+  }
+
+  // emit только после успешного extract — кэш уже заполнен
   if (window.socket && window.code) {
     window.socket.emit('player_capture:change', {
       code: window.code,
@@ -94,15 +104,6 @@ export async function onEpisodeChange() {
       episode,
       voice
     });
-  }
-
-  // реально перезагружаем плеер с новой серией
-  if (onEpisodeChangeCallback) {
-    try {
-      await onEpisodeChangeCallback(episode);
-    } catch (e) {
-      console.error('[playerCapture] ошибка при смене серии:', e.message);
-    }
   }
 }
 

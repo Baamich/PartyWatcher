@@ -2,7 +2,7 @@
 // простой in-memory кэш результатов /extract, живёт пока жива комната
 const cache = new Map(); // key: `${roomCode}:${episode}` → { data, expiresAt }
 
-const TTL_MS = 90 * 1000; // 90 секунд — компромисс между экономией запросов и свежестью CDN-ссылок
+const TTL_MS = 60 * 60 * 1000; // 60 минут — хватает на серию, ссылки CDN ещё живые
 
 function buildKey(roomCode, episode) {
   return `${roomCode}:${episode || 1}`;
