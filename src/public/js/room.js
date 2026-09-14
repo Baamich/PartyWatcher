@@ -201,10 +201,24 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
     setTimeout(() => (suppressEvents = false), 800);
-  } else if (currentVideoType === 'player_capture' && capturePlayer) {
-    if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
-    if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
-    setTimeout(() => (suppressEvents = false), 800);
+    } else if (currentVideoType === 'player_capture' && capturePlayer) {
+    const v = capturePlayer.videoEl;
+    const run = () => {
+      if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
+      if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
+      setTimeout(() => (suppressEvents = false), 1000);
+    };
+
+    if (v && v.readyState < 2) {
+      const onReady = () => {
+        v.removeEventListener('loadeddata', onReady);
+        run();
+      };
+      v.addEventListener('loadeddata', onReady);
+      setTimeout(run, 4000); // запасной таймаут
+    } else {
+      run();
+    }
   } else if (videoEl) {
     const clearSuppress = () => {
       videoEl.removeEventListener('seeked', clearSuppress);
@@ -254,8 +268,18 @@ function manualResyncViewer() {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
   } else if (currentVideoType === 'player_capture' && capturePlayer) {
-    if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
-    if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
+    const v = capturePlayer.videoEl;
+    const run = () => {
+      if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
+      if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
+      setTimeout(() => (suppressEvents = false), 1000);
+    };
+    if (v && v.readyState < 2) {
+      v.addEventListener('loadeddata', run, { once: true });
+      setTimeout(run, 4000);
+    } else {
+      run();
+    }
   } else if (videoEl) {
     videoEl.currentTime = positionSeconds;
     isPlaying ? videoEl.play().catch(() => {}) : videoEl.pause();
@@ -314,10 +338,22 @@ function startWatching() {
   if (isOwner) {
     if (currentVideoType === 'youtube') ytPlayer.playVideo();
     else if (currentVideoType === 'twitch') twitchPlayer.play();
-    else if (videoEl) videoEl.play().catch(() => {});
+    else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
+      capturePlayer.doPlayPause(true);
+      // слушатели play/pause для capture (один раз на текущий videoEl)
+      const v = capturePlayer.videoEl;
+      if (v && !v.dataset.captureBoundBound) {
+        v.dataset.captureBound = '1';
+        v.addEventListener('play', () => emitPlayback(true));
+        v.addEventListener('pause', () => emitPlayback(false));
+        v.addEventListener('seeked', () => emitPlayback(!v.paused));
+      }
+    } else if (videoEl) {
+      videoEl.play().catch(() => {});
+    }
     startHeartbeat();
   } else {
-    applyPlaybackState(lastState); // настоящий клик пользователя — можно жёстко
+    applyPlaybackState(lastState);
   }
 }
 
@@ -416,10 +452,9 @@ async function init() {
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag }) => {
     isOwner = ownerFlag;
     lastState = playback;
-    
-    // ← вот эта строка
-    setViewMode('chat');   // теперь isOwner уже известен, кнопка "Видео" появится сразу
+    window.__captureVideoUrl = video?.url || window.__captureVideoUrl || null;
 
+    setViewMode('chat');
     await renderPlayer(video);
 
     if (isOwner) {
@@ -469,17 +504,20 @@ async function init() {
     if (voice) text += `, озвучка «${voice}»`;
     addMessage({ username: 'Система', text });
 
-    if (currentVideoType !== 'player_capture') return;
-
-    const container = document.getElementById('player');
     const url = window.__captureVideoUrl;
-    if (!url || !container) return;
+    const container = document.getElementById('player');
+    console.log('[viewer] player_capture:change', { season, episode, url: !!url, type: currentVideoType });
+
+    if (!url || !container) {
+      console.warn('[viewer] нет url/container — не могу перезагрузить плеер');
+      return;
+    }
 
     try {
       playerReady = false;
-      started = false; // сбрасываем — нужен новый клик (autoplay policy)
+      started = false;
 
-      const mod = await import('/js/playerCapture/index.js');
+      const mod = await import('/js/playerCapture/index.js?t=' + Date.now());
       const player = await mod.renderPlayerCapture(
         {
           type: 'player_capture',
@@ -493,12 +531,13 @@ async function init() {
         { isOwner: false, container }
       );
       capturePlayer = player;
+      currentVideoType = 'player_capture';
       playerReady = true;
 
-      // просим пользователя нажать — иначе mobile/browser не даст play()
-      setOverlay(`Хост сменил серию — нажми, чтобы продолжить`, true);
+      setOverlay('Хост сменил серию — нажми, чтобы продолжить', true);
     } catch (e) {
-      console.error('[player_capture] не удалось сменить серию у зрителя:', e);
+      console.error('[viewer] ошибка смены серии:', e);
+      setOverlay('Ошибка загрузки серии. Обнови страницу.', false);
     }
   });
 

@@ -73,7 +73,7 @@ export async function onEpisodeChange() {
   const episode = Number(document.getElementById('episodeSelect').value);
   const voice = document.getElementById('voiceSelect')?.value || null;
 
-  const changed = 
+  const changed =
     season !== currentMeta.currentSeason ||
     episode !== currentMeta.currentEpisode ||
     voice !== currentMeta.currentVoice;
@@ -84,25 +84,29 @@ export async function onEpisodeChange() {
   currentMeta.currentEpisode = episode;
   currentMeta.currentVoice = voice;
 
-  console.log('[playerCapture] changed to', currentMeta);
-
-  // Отправляем событие на сервер, чтобы зрители получили системное сообщение
+  // сначала грузим серию
   if (onEpisodeChangeCallback) {
     try {
       await onEpisodeChangeCallback(episode);
     } catch (e) {
       console.error('[playerCapture] ошибка при смене серии:', e.message);
-      return; // не шлём change, если серия не загрузилась
+      return;
     }
   }
 
-  // emit только после успешного extract — кэш уже заполнен
+  // сброс позиции — иначе зрители seek'ают в старое время новой серии
   if (window.socket && window.code) {
+    window.socket.emit('playback:update', {
+      code: window.code,
+      isPlaying: false,
+      positionSeconds: 0,
+    });
+
     window.socket.emit('player_capture:change', {
       code: window.code,
       season,
       episode,
-      voice
+      voice,
     });
   }
 }
