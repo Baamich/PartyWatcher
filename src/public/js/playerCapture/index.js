@@ -116,7 +116,29 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
   videoEl.style.width = '100%';
   videoEl.style.height = '100%';
   videoEl.volume = 0.3;
-  container.appendChild(videoEl);
+    container.appendChild(videoEl);
+
+  if (isOwner) {
+    videoEl.addEventListener('play', () => {
+      if (window.socket && window.code) {
+        window.socket.emit('playback:update', {
+          code: window.code,
+          isPlaying: true,
+          positionSeconds: videoEl.currentTime || 0,
+        });
+      }
+    });
+    videoEl.addEventListener('pause', () => {
+      if (window.socket && window.code) {
+        window.socket.emit('playback:update', {
+          code: window.code,
+          isPlaying: false,
+          positionSeconds: videoEl.currentTime || 0,
+        });
+      }
+    });
+  }
+
 
   // перезагрузка видео при смене серии: заново дёргаем /extract с новым episode
 const reloadWithEpisode = async (episode) => {
@@ -170,6 +192,17 @@ const reloadWithEpisode = async (episode) => {
     doPlayPause: (play) => play ? videoEl.play().catch(() => {}) : videoEl.pause(),
     seekTo: (sec) => { videoEl.currentTime = sec; },
   };
+}
+
+export function renderFromStreams(streams, meta, { isOwner, container, videoUrl }) {
+  if (!streams?.length) {
+    return renderFallback(videoUrl || '', meta || {}, {
+      isOwner,
+      container,
+      errorMessage: 'Нет потоков',
+    });
+  }
+  return renderNativePlayer(streams[0], meta || {}, { isOwner, container, videoUrl });
 }
 
 function renderFallback(url, meta, { isOwner, container, errorMessage }) {
