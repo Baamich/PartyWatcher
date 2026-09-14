@@ -101,7 +101,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
   container.appendChild(videoEl);
 
   // перезагрузка видео при смене серии: заново дёргаем /extract с новым episode
-  const reloadWithEpisode = async (episode) => {
+const reloadWithEpisode = async (episode) => {
     container.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
         <div>⏳ Загружаем серию ${episode}...</div>
@@ -112,7 +112,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ url: video.url, episode: video.meta?.currentEpisode || null, roomCode: window.code }),
+        body: JSON.stringify({ url: videoUrl, episode, roomCode: window.code }),
     });
     const data = await res.json();
 
