@@ -1,4 +1,4 @@
-// iframeManager.js
+// iframeManager.js (playerCapture)
 
 export function createIframePlayer(url, container) {
   const iframe = document.createElement('iframe');

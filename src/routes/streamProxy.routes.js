@@ -1,3 +1,4 @@
+// streamProxy.routes.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
@@ -22,13 +23,20 @@ router.get('/relay', auth, async (req, res) => {
 
   try {
     const dispatcher = buildDispatcher();
-        const response = await fetch(targetUrl, {
+    const response = await fetch(targetUrl, {
       dispatcher,
       headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://balabolka.stravers.live/',
         'Origin': 'https://balabolka.stravers.live',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
       },
+      // важно: не следовать редиректам автоматически, если CDN кидает 302/403
+      redirect: 'manual',
     });
 
     if (!response.ok) {

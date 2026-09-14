@@ -1,3 +1,5 @@
+// index.js (playerCapture)
+
 import { createIframePlayer } from './iframeManager.js';
 import { detectMeta } from './detector.js';
 import { showEpisodeControls, hideEpisodeControls } from './controls.js';

@@ -1,3 +1,4 @@
+//controls.js (playerCapture)
 let currentMeta = null;
 let onEpisodeChangeCallback = null; 
 
