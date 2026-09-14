@@ -125,7 +125,7 @@ router.post('/extract', auth, async (req, res) => {
     // если запрошена конкретная серия — переключаем через UI балаболки внутри iframe
     const requestedEpisode = req.body.episode ? Number(req.body.episode) : null;
 
-    if (requestedEpisode) {
+        if (requestedEpisode) {
       // балаболка обычно грузится не мгновенно — дождёмся появления нужного frame
       let balabolkaFrame = null;
       for (let i = 0; i < 10; i++) {
@@ -134,18 +134,31 @@ router.post('/extract', auth, async (req, res) => {
         await new Promise(r => setTimeout(r, 500));
       }
 
+      console.log('[player-capture] найден frame balabolka:', !!balabolkaFrame, balabolkaFrame?.url());
+
       if (balabolkaFrame) {
         try {
+          // проверяем, что дропдаун вообще есть на странице к этому моменту
+          const dropdownExists = await balabolkaFrame.$('div[data-select="episodeType1"] .select_item');
+          console.log('[player-capture] дропдаун серий найден:', !!dropdownExists);
+
           // открываем дропдаун серий
           await balabolkaFrame.click('div[data-select="episodeType1"] .select_item');
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 800));
+
+          // логируем все доступные data-id в дропдауне на этот момент
+          const availableIds = await balabolkaFrame.$$eval(
+            'div[data-select="episodeType1"] button.select_drop_item',
+            (els) => els.map((el) => el.getAttribute('data-id'))
+          ).catch(() => []);
+          console.log('[player-capture] доступные data-id серий:', availableIds);
 
           // кликаем на нужную серию по data-id
           const episodeSelector = `div[data-select="episodeType1"] button.select_drop_item[data-id="${requestedEpisode}"]`;
           const episodeBtn = await balabolkaFrame.$(episodeSelector);
           if (episodeBtn) {
             await episodeBtn.click();
-            console.log('[player-capture] переключено на серию', requestedEpisode);
+            console.log('[player-capture] клик по кнопке серии', requestedEpisode, 'выполнен');
           } else {
             console.warn('[player-capture] кнопка серии не найдена:', episodeSelector);
           }
@@ -158,6 +171,8 @@ router.post('/extract', auth, async (req, res) => {
 
       // ждём новый запрос /bnsi/movies/<id> с обновлённым потоком
       await new Promise(r => setTimeout(r, 4000));
+
+      console.log('[player-capture] playerApiData после клика получен:', !!playerApiData);
     } else {
       // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
       const playSelectors = [
