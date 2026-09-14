@@ -507,7 +507,7 @@ async function init() {
     }
   });
 
-    socket.on('playback:update', (state) => {
+  socket.on('playback:update', (state) => {
     lastState = state;
 
     if (!started) {
@@ -515,21 +515,24 @@ async function init() {
       return;
     }
 
-    // для capture — простой жёсткий sync, без softSync
     if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) {
       const v = capturePlayer.videoEl;
+
       if (state.isPlaying) {
-        if (v.paused) {
+        const drift = Math.abs((v.currentTime || 0) - (state.positionSeconds || 0));
+
+        if (drift > 3) {
+          // вместо «голого» seek — пауза → позиция → пуск (как у хоста)
+          v.pause();
+          try { v.currentTime = state.positionSeconds; } catch (_) {}
+          setTimeout(() => {
+            v.play().catch((e) => console.warn('[viewer] sync play failed', e));
+          }, 150);
+        } else if (v.paused) {
           v.play().catch((e) => console.warn('[viewer] sync play failed', e));
         }
-        const drift = Math.abs((v.currentTime || 0) - (state.positionSeconds || 0));
-        if (drift > 5) {
-          setTimeout(() => {
-            try { v.currentTime = state.positionSeconds; } catch (_) {}
-          }, 600);
-        }
       } else {
-        v.pause();
+        if (!v.paused) v.pause();
       }
       return;
     }
