@@ -1,25 +1,53 @@
 // services/site-adapters.js
+//
+// Два режима адаптера:
+//
+// 'schedule-table' — на самой странице сайта (не в плеере) есть таблица
+//   с расписанием серий, а внутри плеера свой домен-фрейм с дропдауном,
+//   где пункты имеют data-id. Пример: rezka (плеер balabolka).
+//
+// 'dropdown' — сезон/серия известны ТОЛЬКО из дропдаунов внутри самого
+//   плеера, пункты списка различаются только текстом, без data-id,
+//   и нет отдельной таблицы расписания. Пример: kinogo (плеер "allplay").
+//   Плеер ищется не по домену фрейма (он может быть любым), а по
+//   CSS-селектору markerSelector — во всех фреймах страницы.
+
 module.exports = {
   rezka: {
+    mode: 'schedule-table',
     playerFrameMatch: (frameUrl) => frameUrl.includes('balabolka.stravers.live'),
     episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item',
     episodeButtonSelector: (id) => `div[data-select="episodeType1"] button.select__drop-item[data-id="${id}"]`,
     episodeListSelector: 'div[data-select="episodeType1"] button.select__drop-item',
     scheduleRowSelector: 'tr.epscape_tr',
-    scheduleRowParser: (row) => {
+    scheduleRowParserBody: `
       const cells = row.querySelectorAll('td');
       const fullText = cells[0]?.textContent.trim() || '';
       const countdownText = cells[3]?.textContent.trim() || '';
-      const match = fullText.match(/(\d+)\s*сезон\s*(\d+)\s*серия/i);
+      const match = fullText.match(/(\\d+)\\s*сезон\\s*(\\d+)\\s*серия/i);
       return {
         season: match ? Number(match[1]) : 1,
         episode: match ? Number(match[2]) : null,
         released: countdownText === '',
       };
-    },
+    `,
   },
 
-  // TODO: заполнить реальными селекторами после дампа DOM
-  kinogo: null,
+  // Плеер "allplay" — контейнер класса .allplay, дропдауны
+  // data-select="seasonType1" / "episodeType1" / "translationType1".
+  // Судя по HTML (Vue + виртуальный скролл baron_*), номер сезона/серии
+  // определяется только по тексту пункта ("Серия 2"), data-id не видно.
+  kinogo: {
+    mode: 'dropdown',
+    markerSelector: '.allplay, [data-select="episodeType1"]',
+    seasonDropdownTrigger: 'div[data-select="seasonType1"] .select_item',
+    seasonListContainer: 'div[data-select="seasonType1"] .select_drop',
+    episodeDropdownTrigger: 'div[data-select="episodeType1"] .select_item',
+    episodeListContainer: 'div[data-select="episodeType1"] .select_drop',
+  },
+
+  // lordfilm пока не трогаем — договорились сначала полностью закрыть kinogo.
+  // Если у lordfilm окажется тот же плеер "allplay" — можно будет просто
+  // сделать lordfilm: module.exports.kinogo (тот же объект).
   lordfilm: null,
 };

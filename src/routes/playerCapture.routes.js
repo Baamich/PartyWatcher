@@ -11,6 +11,7 @@ try {
 
 const playerCaptureCache = require('../services/playerCaptureCache');
 const siteAdapters = require('../services/site-adapters');
+const { findPlayerContext, readDropdownTexts, selectDropdownOptionByNumber } = require('../services/dropdown-player');
 
 function detectSite(url) {
   const lower = url.toLowerCase();
@@ -120,7 +121,7 @@ router.post('/extract', auth, async (req, res) => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
-    let response;
+        let response;
     try {
       response = await page.goto(url, {
         waitUntil: 'networkidle2',
@@ -132,9 +133,32 @@ router.post('/extract', auth, async (req, res) => {
 
     console.log('[player-capture] HTTP статус:', response ? response.status() : 'нет ответа');
     console.log('[player-capture] финальный URL после редиректов:', page.url());
-    console.log('[player-capture] заголовок страницы:', await page.title());
 
-    const bodyLength = await page.evaluate(() => document.body?.innerHTML?.length || 0);
+    // если навигация не удалась вообще (таймаут, ERR_TUNNEL_CONNECTION_FAILED,
+    // DNS-ошибка и т.п.) — страницы фактически нет, дальше делать нечего.
+    // Раньше код лез читать document.body у пустой/убитой страницы и падал
+    // с невнятным "Execution context was destroyed".
+    if (!response) {
+      console.warn('[player-capture] навигация провалилась, страница пуста — прерываю');
+      return res.json({
+        success: false,
+        error: 'Не удалось открыть страницу (сайт недоступен через прокси или ссылка битая). Проверь прокси/URL.',
+        streams: [],
+        playerIframes: [],
+        meta: null,
+      });
+    }
+
+    let pageTitle = '(не удалось получить)';
+    let bodyLength = 0;
+    try {
+      pageTitle = await page.title();
+      bodyLength = await page.evaluate(() => document.body?.innerHTML?.length || 0);
+    } catch (e) {
+      // страница могла уйти в очередной редирект прямо в этот момент — не критично
+      console.warn('[player-capture] не удалось прочитать title/body:', e.message);
+    }
+    console.log('[player-capture] заголовок страницы:', pageTitle);
     console.log('[player-capture] длина HTML body:', bodyLength);
 
     // сохраняем скриншот, чтобы визуально понять что за страница реально отрисовалась
@@ -150,8 +174,41 @@ router.post('/extract', auth, async (req, res) => {
     // если запрошена конкретная серия — переключаем через UI балаболки внутри iframe
     const requestedEpisode = req.body.episode ? Number(req.body.episode) : null;
 
-      if (requestedEpisode && adapter?.playerFrameMatch) {
-      // ждём появления фрейма нужного плеера (по правилу из адаптера сайта)
+              if (requestedEpisode && adapter?.mode === 'dropdown') {
+      // режим kinogo/allplay: серия переключается через дропдаун по тексту
+      const playerContext = await findPlayerContext(page, adapter.markerSelector);
+      console.log('[player-capture] контекст плеера (dropdown) найден:', !!playerContext);
+
+      if (playerContext) {
+        // сбрасываем старые потоки — иначе после смены серии в ответе
+        // может остаться master.m3u8 от предыдущей серии
+        foundStreams.length = 0;
+        try {
+          const clicked = await selectDropdownOptionByNumber(
+            playerContext,
+            adapter.episodeDropdownTrigger,
+            adapter.episodeListContainer,
+            requestedEpisode
+          );
+          console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен:', clicked);
+          if (!clicked) {
+            console.warn('[player-capture] пункт серии', requestedEpisode, 'не найден в дропдауне');
+            const listHtml = await playerContext
+              .evaluate((sel) => document.querySelector(sel)?.outerHTML?.slice(0, 2000) || '(пусто)', adapter.episodeListContainer)
+              .catch(() => '(не удалось получить HTML)');
+            console.log('[player-capture] HTML списка серий для отладки:', listHtml);
+          }
+        } catch (e) {
+          console.error('[player-capture] ошибка переключения серии (dropdown):', e.message);
+        }
+      } else {
+        console.warn('[player-capture] не найден контекст плеера (markerSelector не сработал)');
+      }
+
+      // ждём, пока новый .m3u8 для выбранной серии успеет засветиться в сети
+      await new Promise(r => setTimeout(r, 5000));
+    } else if (requestedEpisode && adapter?.playerFrameMatch) {
+      // режим rezka: фрейм по домену + дропдаун с data-id
       let targetFrame = null;
       for (let i = 0; i < 10; i++) {
         targetFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
@@ -174,6 +231,7 @@ router.post('/extract', auth, async (req, res) => {
           }
 
           playerApiData = null;
+          foundStreams.length = 0;
           await targetFrame.click(adapter.episodeDropdownTrigger);
           await new Promise(r => setTimeout(r, 800));
           await targetFrame.waitForSelector(adapter.episodeListSelector, { timeout: 5000 });
@@ -199,7 +257,7 @@ router.post('/extract', auth, async (req, res) => {
         console.warn('[player-capture] после клика новый JSON так и не пришёл — переключение не сработало');
       }
     } else {
-      if (requestedEpisode && !adapter?.playerFrameMatch) {
+      if (requestedEpisode) {
         console.warn('[player-capture] нет адаптера переключения серий для сайта', siteName);
       }
       // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
@@ -226,49 +284,61 @@ router.post('/extract', auth, async (req, res) => {
     console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
 
     // парсим график серий — селектор и парсер берём из адаптера конкретного сайта
-    let episodesData = [];
-    if (adapter?.scheduleRowSelector) {
-      episodesData = await page.$$eval(
+          // определяем сезоны/серии — способ зависит от режима адаптера сайта
+    let seasonsFound = [1];
+    let totalEpisodes = 1;
+
+    if (adapter?.mode === 'dropdown') {
+      // kinogo/allplay: считаем количество пунктов прямо в дропдаунах плеера
+      const playerContext = await findPlayerContext(page, adapter.markerSelector);
+      console.log('[player-capture] контекст плеера для чтения meta найден:', !!playerContext);
+
+      if (playerContext) {
+        try {
+          if (adapter.seasonDropdownTrigger) {
+            const seasonTexts = await readDropdownTexts(playerContext, adapter.seasonDropdownTrigger, adapter.seasonListContainer);
+            console.log('[player-capture] пункты сезонов:', seasonTexts);
+            const seasonNums = seasonTexts.map((t) => Number((t.match(/\d+/) || [])[0])).filter((n) => !Number.isNaN(n));
+            if (seasonNums.length) seasonsFound = seasonNums;
+          }
+
+          const episodeTexts = await readDropdownTexts(playerContext, adapter.episodeDropdownTrigger, adapter.episodeListContainer);
+          console.log('[player-capture] пункты серий:', episodeTexts);
+          const episodeNums = episodeTexts.map((t) => Number((t.match(/\d+/) || [])[0])).filter((n) => !Number.isNaN(n));
+          if (episodeNums.length) totalEpisodes = Math.max(...episodeNums);
+        } catch (e) {
+          console.error('[player-capture] ошибка чтения дропдаунов сезон/серия:', e.message);
+        }
+      }
+    } else if (adapter?.scheduleRowSelector) {
+      // rezka: расписание берём из таблицы на странице
+      const episodesData = await page.$$eval(
         adapter.scheduleRowSelector,
         (rows, parserBody) => {
           const parser = new Function('row', parserBody);
           return rows.map(parser).filter((e) => e && e.episode !== null);
         },
-        // тело функции без сигнатуры "(row) =>", т.к. new Function() собирает его сам
-        `
-          const cells = row.querySelectorAll('td');
-          const fullText = cells[0]?.textContent.trim() || '';
-          const countdownText = cells[3]?.textContent.trim() || '';
-          const match = fullText.match(/(\\d+)\\s*сезон\\s*(\\d+)\\s*серия/i);
-          return {
-            season: match ? Number(match[1]) : 1,
-            episode: match ? Number(match[2]) : null,
-            released: countdownText === '',
-          };
-        `
+        adapter.scheduleRowParserBody
       ).catch((e) => {
         console.error('[player-capture] ошибка парсинга расписания:', e.message);
         return [];
       });
+
+      console.log('[player-capture] распарсенные серии:', episodesData);
+
+      const releasedEpisodes = episodesData.filter((e) => e.released);
+      seasonsFound = [...new Set(episodesData.map((e) => e.season))];
+      totalEpisodes = releasedEpisodes.length ? Math.max(...releasedEpisodes.map((e) => e.episode)) : 1;
     } else {
-      // нет адаптера под этот сайт — вместо тишины дампим кандидатов,
-      // чтобы можно было быстро дописать scheduleRowSelector для нового сайта
+      // нет адаптера под этот сайт вообще — дампим кандидатов для будущего адаптера
       const candidateRows = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('tr, li, div'))
+        return Array.from(document.querySelectorAll('tr, li, div, button'))
           .filter((el) => /сезон|серия|эпизод/i.test(el.textContent) && el.textContent.length < 200)
           .slice(0, 15)
-          .map((el) => ({ tag: el.tagName, className: el.className, text: el.textContent.trim().slice(0, 100) }));
+          .map((el) => ({ tag: el.tagName, className: el.className, dataSelect: el.closest('[data-select]')?.getAttribute('data-select') || null, text: el.textContent.trim().slice(0, 100) }));
       }).catch(() => []);
-      console.log('[player-capture] нет адаптера для сайта', siteName, '— кандидаты для нового scheduleRowSelector:', JSON.stringify(candidateRows, null, 2));
+      console.log('[player-capture] нет адаптера для сайта', siteName, '— кандидаты для нового адаптера:', JSON.stringify(candidateRows, null, 2));
     }
-
-    console.log('[player-capture] распарсенные серии:', episodesData);
-
-    const releasedEpisodes = episodesData.filter((e) => e.released);
-    const seasonsFound = [...new Set(episodesData.map((e) => e.season))];
-    const totalEpisodes = releasedEpisodes.length
-      ? Math.max(...releasedEpisodes.map((e) => e.episode))
-      : 1;
 
     const KNOWN_HOSTS = [
       'player', 'embed', 'video', 'alloh', 'collaps', 'voidboost',
