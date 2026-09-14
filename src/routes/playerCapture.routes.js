@@ -9,6 +9,8 @@ try {
   console.warn('[player-capture] puppeteer-core не установлен');
 }
 
+const playerCaptureCache = require('../services/playerCaptureCache');
+
 router.post('/extract', auth, async (req, res) => {
     if (!puppeteer) {
         return res.json({
@@ -19,10 +21,20 @@ router.post('/extract', auth, async (req, res) => {
         meta: null,
         });
     }
-  const { url } = req.body;
+  const { url, roomCode } = req.body;
+  const requestedEpisodeForCache = req.body.episode ? Number(req.body.episode) : null;
 
   if (!url || !url.startsWith('http')) {
     return res.status(400).json({ error: 'Нужна валидная ссылка' });
+  }
+
+  // если для этой комнаты+серии уже есть свежий кэш — не гоняем puppeteer заново
+  if (roomCode) {
+    const cached = playerCaptureCache.get(roomCode, requestedEpisodeForCache);
+    if (cached) {
+      console.log('[player-capture] отдаю из кэша для комнаты', roomCode, 'серия', requestedEpisodeForCache || 1);
+      return res.json(cached);
+    }
   }
 
   let browser = null;
@@ -277,18 +289,18 @@ router.post('/extract', auth, async (req, res) => {
     }
     const uniqueIframes = [...new Set(foundIframes)];
 
-        const meta = {
+    const meta = {
       site: detectSite(url),
       seasons: seasonsFound.length ? seasonsFound : [1],
       currentSeason: 1,
-      currentEpisode: 1,
+      currentEpisode: requestedEpisode || 1,
       totalEpisodes,
       voices: [],
     };
 
     const success = uniqueStreams.length > 0 || uniqueIframes.length > 0;
 
-    res.json({
+    const responseData = {
       success,
       streams: uniqueStreams,
       playerIframes: uniqueIframes,
@@ -296,7 +308,14 @@ router.post('/extract', auth, async (req, res) => {
       message: success
         ? `Найдено потоков: ${uniqueStreams.length}, iframe: ${uniqueIframes.length}`
         : 'Ничего не найдено',
-    });
+    };
+
+    // кэшируем только успешный результат — ошибку нет смысла хранить, вдруг в следующий раз получится
+    if (roomCode && success) {
+      playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
+    }
+
+    res.json(responseData);
   } catch (err) {
     console.error('[player-capture puppeteer]', err.message);
     res.json({

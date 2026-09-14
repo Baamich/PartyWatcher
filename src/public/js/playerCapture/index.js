@@ -24,10 +24,10 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
 
   try {
     const res = await fetch('/api/player-capture/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ url: video.url, episode: video.meta?.currentEpisode || null }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ url: videoUrl, episode, roomCode: window.code }),
     });
 
     const data = await res.json();
@@ -109,10 +109,10 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     `;
 
     const res = await fetch('/api/player-capture/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ url: videoUrl, episode }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ url: video.url, episode: video.meta?.currentEpisode || null, roomCode: window.code }),
     });
     const data = await res.json();
 

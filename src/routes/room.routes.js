@@ -65,6 +65,10 @@ router.delete('/:code', auth, async (req, res) => {
   io.to(room.code).emit('room:deleted');
   await ChatMessage.deleteMany({ room: room._id });
   await room.deleteOne();
+
+  const playerCaptureCache = require('../services/playerCaptureCache');
+  playerCaptureCache.clearRoom(room.code);
+
   res.json({ status: 'ok' });
 });
 
