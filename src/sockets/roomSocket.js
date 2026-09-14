@@ -112,20 +112,23 @@ function registerRoomSocket(io) {
       socket.emit('room:banned-list', (room?.bannedUsers || []).map((u) => ({ id: u._id, username: u.username })));
     });
     
-    socket.on('player_capture:change', async ({ code, season, episode, voice }) => {
+        socket.on('player_capture:change', async ({ code, season, episode, voice }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
 
-      // сохраняем актуальную серию в комнате — иначе новый зритель получит устаревший meta
       await Room.findOneAndUpdate(
         { code },
         {
           'video.meta.currentSeason': season,
           'video.meta.currentEpisode': episode,
           'video.meta.currentVoice': voice || null,
+          // важно: сбрасываем позицию, иначе зрители seek'ают в середину новой серии
+          playback: { isPlaying: false, positionSeconds: 0, updatedAt: new Date() },
         }
       );
 
-      // Рассылаем всем, кроме самого хоста
+      // сначала сброс playback, потом смена серии
+      socket.to(code).emit('playback:update', { isPlaying: false, positionSeconds: 0 });
+
       socket.to(code).emit('player_capture:change', {
         season,
         episode,
