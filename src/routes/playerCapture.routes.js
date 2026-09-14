@@ -10,6 +10,15 @@ try {
 }
 
 const playerCaptureCache = require('../services/playerCaptureCache');
+const siteAdapters = require('../services/site-adapters');
+
+function detectSite(url) {
+  const lower = url.toLowerCase();
+  if (lower.includes('rezka') || lower.includes('hdrezka')) return 'rezka';
+  if (lower.includes('kinogo')) return 'kinogo';
+  if (lower.includes('lordfilm') || lower.includes('lordserial')) return 'lordfilm';
+  return 'unknown';
+}
 
 router.post('/extract', auth, async (req, res) => {
     if (!puppeteer) {
@@ -27,6 +36,10 @@ router.post('/extract', auth, async (req, res) => {
   if (!url || !url.startsWith('http')) {
     return res.status(400).json({ error: 'Нужна валидная ссылка' });
   }
+
+  const siteName = detectSite(url);
+  const adapter = siteAdapters[siteName] || null;
+  console.log('[player-capture] сайт определён как:', siteName, '| адаптер найден:', !!adapter);
 
   // если для этой комнаты+серии уже есть свежий кэш — не гоняем puppeteer заново
   if (roomCode) {
@@ -137,67 +150,58 @@ router.post('/extract', auth, async (req, res) => {
     // если запрошена конкретная серия — переключаем через UI балаболки внутри iframe
     const requestedEpisode = req.body.episode ? Number(req.body.episode) : null;
 
-        if (requestedEpisode) {
-      // балаболка обычно грузится не мгновенно — дождёмся появления нужного frame
-      let balabolkaFrame = null;
+      if (requestedEpisode && adapter?.playerFrameMatch) {
+      // ждём появления фрейма нужного плеера (по правилу из адаптера сайта)
+      let targetFrame = null;
       for (let i = 0; i < 10; i++) {
-        balabolkaFrame = page.frames().find((f) => f.url().includes('balabolka.stravers.live'));
-        if (balabolkaFrame) break;
+        targetFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
+        if (targetFrame) break;
         await new Promise(r => setTimeout(r, 500));
       }
 
-      console.log('[player-capture] найден frame balabolka:', !!balabolkaFrame, balabolkaFrame?.url());
+      console.log('[player-capture] найден фрейм плеера:', !!targetFrame, targetFrame?.url());
 
-    if (balabolkaFrame) {
+      if (targetFrame) {
         try {
-                    try {
-            await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] .select__item', { timeout: 10000 });
+          try {
+            await targetFrame.waitForSelector(adapter.episodeDropdownTrigger, { timeout: 10000 });
             console.log('[player-capture] дропдаун серий появился');
           } catch (waitErr) {
             console.warn('[player-capture] дропдаун не появился, дампим HTML iframe:', waitErr.message);
-            const frameHtml = await balabolkaFrame.evaluate(() => document.body.innerHTML).catch(() => '(не удалось получить HTML)');
+            const frameHtml = await targetFrame.evaluate(() => document.body.innerHTML).catch(() => '(не удалось получить HTML)');
             console.log('[player-capture] HTML внутри iframe (первые 3000 символов):', frameHtml.slice(0, 3000));
-            const allSelectDivs = await balabolkaFrame.evaluate(() =>
-              Array.from(document.querySelectorAll('div[class*="select"]')).map((el) => el.outerHTML.slice(0, 300))
-            ).catch(() => []);
-            console.log('[player-capture] все div с классом select:', allSelectDivs);
             throw waitErr;
           }
 
           playerApiData = null;
-          await balabolkaFrame.click('div[data-select="episodeType1"] .select__item');
+          await targetFrame.click(adapter.episodeDropdownTrigger);
           await new Promise(r => setTimeout(r, 800));
-          await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] button.select__drop-item', { timeout: 5000 });
+          await targetFrame.waitForSelector(adapter.episodeListSelector, { timeout: 5000 });
 
-          const availableIds = await balabolkaFrame.$$eval(
-            'div[data-select="episodeType1"] button.select__drop-item',
-            (els) => els.map((el) => el.getAttribute('data-id'))
-          ).catch(() => []);
-          console.log('[player-capture] доступные data-id серий:', availableIds);
-
-          const episodeSelector = `div[data-select="episodeType1"] button.select__drop-item[data-id="${requestedEpisode}"]`;
-          const episodeBtn = await balabolkaFrame.$(episodeSelector);
+          const episodeBtn = await targetFrame.$(adapter.episodeButtonSelector(requestedEpisode));
           if (episodeBtn) {
             await episodeBtn.click();
             console.log('[player-capture] клик по кнопке серии', requestedEpisode, 'выполнен');
           } else {
-            console.warn('[player-capture] кнопка серии не найдена:', episodeSelector);
+            console.warn('[player-capture] кнопка серии не найдена для id', requestedEpisode);
           }
         } catch (e) {
           console.error('[player-capture] ошибка переключения серии:', e.message);
         }
       } else {
-        console.warn('[player-capture] frame balabolka не найден для переключения серии');
+        console.warn('[player-capture] фрейм плеера не найден для переключения серии');
       }
 
-            // ждём новый запрос /bnsi/movies/<id> с обновлённым потоком
       await new Promise(r => setTimeout(r, 5000));
 
       console.log('[player-capture] playerApiData после клика получен:', !!playerApiData);
       if (!playerApiData) {
-        console.warn('[player-capture] после клика новый JSON от balabolka так и не пришёл — переключение не сработало');
+        console.warn('[player-capture] после клика новый JSON так и не пришёл — переключение не сработало');
       }
     } else {
+      if (requestedEpisode && !adapter?.playerFrameMatch) {
+        console.warn('[player-capture] нет адаптера переключения серий для сайта', siteName);
+      }
       // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
       const playSelectors = [
         '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
@@ -221,22 +225,42 @@ router.post('/extract', auth, async (req, res) => {
 
     console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
 
-        // парсим реальный график серий kinogo: таблица tr.epscape_tr
-    const episodesData = await page.evaluate(() => {
-      const rows = Array.from(document.querySelectorAll('tr.epscape_tr'));
-      return rows.map((row) => {
-        const cells = row.querySelectorAll('td');
-        const fullText = cells[0]?.textContent.trim() || '';
-        const countdownText = cells[3]?.textContent.trim() || '';
-        const match = fullText.match(/(\d+)\s*сезон\s*(\d+)\s*серия/i);
-        return {
-          season: match ? Number(match[1]) : 1,
-          episode: match ? Number(match[2]) : null,
-          // пустая 4-я ячейка = серия уже вышла; "N дней" = ещё не вышла
-          released: countdownText === '',
-        };
-      }).filter((e) => e.episode !== null);
-    });
+    // парсим график серий — селектор и парсер берём из адаптера конкретного сайта
+    let episodesData = [];
+    if (adapter?.scheduleRowSelector) {
+      episodesData = await page.$$eval(
+        adapter.scheduleRowSelector,
+        (rows, parserBody) => {
+          const parser = new Function('row', parserBody);
+          return rows.map(parser).filter((e) => e && e.episode !== null);
+        },
+        // тело функции без сигнатуры "(row) =>", т.к. new Function() собирает его сам
+        `
+          const cells = row.querySelectorAll('td');
+          const fullText = cells[0]?.textContent.trim() || '';
+          const countdownText = cells[3]?.textContent.trim() || '';
+          const match = fullText.match(/(\\d+)\\s*сезон\\s*(\\d+)\\s*серия/i);
+          return {
+            season: match ? Number(match[1]) : 1,
+            episode: match ? Number(match[2]) : null,
+            released: countdownText === '',
+          };
+        `
+      ).catch((e) => {
+        console.error('[player-capture] ошибка парсинга расписания:', e.message);
+        return [];
+      });
+    } else {
+      // нет адаптера под этот сайт — вместо тишины дампим кандидатов,
+      // чтобы можно было быстро дописать scheduleRowSelector для нового сайта
+      const candidateRows = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('tr, li, div'))
+          .filter((el) => /сезон|серия|эпизод/i.test(el.textContent) && el.textContent.length < 200)
+          .slice(0, 15)
+          .map((el) => ({ tag: el.tagName, className: el.className, text: el.textContent.trim().slice(0, 100) }));
+      }).catch(() => []);
+      console.log('[player-capture] нет адаптера для сайта', siteName, '— кандидаты для нового scheduleRowSelector:', JSON.stringify(candidateRows, null, 2));
+    }
 
     console.log('[player-capture] распарсенные серии:', episodesData);
 
@@ -335,13 +359,5 @@ router.post('/extract', auth, async (req, res) => {
     if (browser) await browser.close();
   }
 });
-
-function detectSite(url) {
-  const lower = url.toLowerCase();
-  if (lower.includes('rezka') || lower.includes('hdrezka')) return 'rezka';
-  if (lower.includes('kinogo')) return 'kinogo';
-  if (lower.includes('lordfilm') || lower.includes('lordserial')) return 'lordfilm';
-  return 'unknown';
-}
 
 module.exports = router;
