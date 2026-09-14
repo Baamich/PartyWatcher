@@ -1,7 +1,9 @@
 let currentMeta = null;
+let onEpisodeChangeCallback = null; 
 
-export function showEpisodeControls(meta) {
+export function showEpisodeControls(meta, onChange) {
   currentMeta = meta;
+  onEpisodeChangeCallback = onChange || null;
   fillEpisodeSelects(meta);
   
   // Показываем панель только если мы сейчас во вкладке "Видео" и мы хост
@@ -63,7 +65,7 @@ function fillEpisodeSelects(meta) {
   }
 }
 
-export function onEpisodeChange() {
+export async function onEpisodeChange() {
   if (!currentMeta) return;
 
   const season = Number(document.getElementById('seasonSelect').value);
@@ -91,6 +93,15 @@ export function onEpisodeChange() {
       episode,
       voice
     });
+  }
+
+  // реально перезагружаем плеер с новой серией
+  if (onEpisodeChangeCallback) {
+    try {
+      await onEpisodeChangeCallback(episode);
+    } catch (e) {
+      console.error('[playerCapture] ошибка при смене серии:', e.message);
+    }
   }
 }
 

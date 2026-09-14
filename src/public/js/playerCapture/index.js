@@ -35,10 +35,10 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
 
     if (data.success) {
         if (data.streams?.length) {
-        return renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container });
+        return renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl: video.url });
         }
         if (data.playerIframes?.length) {
-        return renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });
+        return renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container, videoUrl: video.url });
         }
     }
 
@@ -89,7 +89,7 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container }) {
   };
 }
 
-function renderNativePlayer(stream, meta, { isOwner, container }) {
+function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
   container.innerHTML = '';
   const videoEl = document.createElement('video');
   videoEl.id = 'captureVideo';
@@ -100,12 +100,36 @@ function renderNativePlayer(stream, meta, { isOwner, container }) {
   videoEl.volume = 0.3;
   container.appendChild(videoEl);
 
-    const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
-    if (isOwner && (hasMultipleEpisodes || meta.voices?.length)) {
-        showEpisodeControls(meta);
+  // перезагрузка видео при смене серии: заново дёргаем /extract с новым episode
+  const reloadWithEpisode = async (episode) => {
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
+        <div>⏳ Загружаем серию ${episode}...</div>
+      </div>
+    `;
+
+    const res = await fetch('/api/player-capture/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ url: videoUrl, episode }),
+    });
+    const data = await res.json();
+
+    if (data.success && data.streams?.length) {
+      renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl });
+    } else if (data.success && data.playerIframes?.length) {
+      renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });
     } else {
-        hideEpisodeControls();
+      renderFallback(videoUrl, meta, { isOwner, container, errorMessage: data.error || 'Не удалось загрузить серию' });
     }
+  };
+
+  if (isOwner && (meta.seasons?.length > 1 || meta.totalEpisodes > 1 || meta.voices?.length)) {
+    showEpisodeControls(meta, reloadWithEpisode);
+  } else {
+    hideEpisodeControls();
+  }
 
   return {
     type: 'player_capture',
