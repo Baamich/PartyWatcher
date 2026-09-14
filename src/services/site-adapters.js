@@ -40,10 +40,10 @@ module.exports = {
   kinogo: {
     mode: 'dropdown',
     markerSelector: '.allplay, [data-select="episodeType1"]',
-    seasonDropdownTrigger: 'div[data-select="seasonType1"] .select_item',
-    seasonListContainer: 'div[data-select="seasonType1"] .select_drop',
-    episodeDropdownTrigger: 'div[data-select="episodeType1"] .select_item',
-    episodeListContainer: 'div[data-select="episodeType1"] .select_drop',
+    seasonDropdownTrigger: 'div[data-select="seasonType1"] .select__item',
+    seasonListContainer: 'div[data-select="seasonType1"] .select__drop',
+    episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item',
+    episodeListContainer: 'div[data-select="episodeType1"] .select__drop',
   },
 
   // lordfilm пока не трогаем — договорились сначала полностью закрыть kinogo.
