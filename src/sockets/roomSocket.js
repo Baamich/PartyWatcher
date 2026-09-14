@@ -112,28 +112,38 @@ function registerRoomSocket(io) {
       socket.emit('room:banned-list', (room?.bannedUsers || []).map((u) => ({ id: u._id, username: u.username })));
     });
     
-        socket.on('player_capture:change', async ({ code, season, episode, voice }) => {
+      socket.on('player_capture:streams', async ({ code, season, episode, voice, streams, playerIframes, meta }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+      if (!streams?.length) return;
+
+      const playerCaptureCache = require('../services/playerCaptureCache');
+      playerCaptureCache.set(code, episode, {
+        success: true,
+        streams,
+        playerIframes: playerIframes || [],
+        meta: meta || {},
+        message: `Найдено потоков: ${streams.length}`,
+      });
 
       await Room.findOneAndUpdate(
         { code },
         {
-          'video.meta.currentSeason': season,
-          'video.meta.currentEpisode': episode,
+          'video.meta.currentSeason': season || 1,
+          'video.meta.currentEpisode': episode || 1,
           'video.meta.currentVoice': voice || null,
-          // важно: сбрасываем позицию, иначе зрители seek'ают в середину новой серии
           playback: { isPlaying: false, positionSeconds: 0, updatedAt: new Date() },
         }
       );
 
-      // сначала сброс playback, потом смена серии
       socket.to(code).emit('playback:update', { isPlaying: false, positionSeconds: 0 });
-
-      socket.to(code).emit('player_capture:change', {
+      socket.to(code).emit('player_capture:streams', {
         season,
         episode,
         voice,
-        by: socket.user.username
+        streams,
+        playerIframes: playerIframes || [],
+        meta: meta || {},
+        by: socket.user.username,
       });
     });
 

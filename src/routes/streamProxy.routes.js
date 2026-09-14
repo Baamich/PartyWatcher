@@ -35,8 +35,6 @@ router.get('/relay', auth, async (req, res) => {
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'cross-site',
       },
-      // важно: не следовать редиректам автоматически, если CDN кидает 302/403
-      redirect: 'manual',
     });
 
     if (!response.ok) {

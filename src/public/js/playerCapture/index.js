@@ -29,14 +29,30 @@ try {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ url: video.url, episode: video.meta?.currentEpisode || null, roomCode: window.code }),
+      body: JSON.stringify({
+      url: video.url,
+      episode: video.meta?.currentEpisode || null,
+      roomCode: window.code,
+      onlyCache: !isOwner, // зритель — только кэш
+    }),
     });
 
     const data = await res.json();
     console.log('[playerCapture] extract result:', data); // ← смотри это в консоли браузера
 
     if (data.success) {
-        if (data.streams?.length) {
+      if (isOwner && window.socket && window.code && data.streams?.length) {
+        window.socket.emit('player_capture:streams', {
+          code: window.code,
+          season: data.meta?.currentSeason || 1,
+          episode: data.meta?.currentEpisode || 1,
+          voice: data.meta?.currentVoice || null,
+          streams: data.streams,
+          playerIframes: data.playerIframes || [],
+          meta: data.meta,
+        });
+      }
+      if (data.streams?.length) {
         return renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl: video.url });
         }
         if (data.playerIframes?.length) {
@@ -119,6 +135,18 @@ const reloadWithEpisode = async (episode) => {
     const data = await res.json();
 
     if (data.success && data.streams?.length) {
+      // хост отдаёт готовый поток всем зрителям — без их extract
+      if (isOwner && window.socket && window.code) {
+        window.socket.emit('player_capture:streams', {
+          code: window.code,
+          season: data.meta?.currentSeason || 1,
+          episode,
+          voice: data.meta?.currentVoice || null,
+          streams: data.streams,
+          playerIframes: data.playerIframes || [],
+          meta: data.meta,
+        });
+      }
       renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl });
     } else if (data.success && data.playerIframes?.length) {
       renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });

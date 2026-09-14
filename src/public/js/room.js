@@ -497,47 +497,49 @@ async function init() {
     location.href = '/index.html';
   });
 
-  socket.on('player_capture:change', async ({ season, episode, voice, by }) => {
+    socket.on('player_capture:streams', async ({ season, episode, voice, streams, meta, by }) => {
     if (isOwner) return;
 
-    let text = `Хост сменил на Сезон ${season}, Серия ${episode}`;
-    if (voice) text += `, озвучка «${voice}»`;
-    addMessage({ username: 'Система', text });
+    addMessage({
+      username: 'Система',
+      text: `Хост сменил на Сезон ${season}, Серия ${episode}`,
+    });
 
-    const url = window.__captureVideoUrl;
+    lastState = { isPlaying: false, positionSeconds: 0 };
+    started = false;
+    playerReady = false;
+
     const container = document.getElementById('player');
-    console.log('[viewer] player_capture:change', { season, episode, url: !!url, type: currentVideoType });
-
-    if (!url || !container) {
-      console.warn('[viewer] нет url/container — не могу перезагрузить плеер');
-      return;
-    }
+    const url = window.__captureVideoUrl;
+    if (!container || !streams?.length) return;
 
     try {
-      playerReady = false;
-      started = false;
+      container.innerHTML = '';
+      const videoEl = document.createElement('video');
+      videoEl.id = 'captureVideo';
+      videoEl.src = `/api/stream/relay?url=${encodeURIComponent(streams[0].url)}`;
+      videoEl.controls = false;
+      videoEl.playsInline = true;
+      videoEl.style.width = '100%';
+      videoEl.style.height = '100%';
+      videoEl.volume = 0.3;
+      container.appendChild(videoEl);
 
-      const mod = await import('/js/playerCapture/index.js?t=' + Date.now());
-      const player = await mod.renderPlayerCapture(
-        {
-          type: 'player_capture',
-          url,
-          meta: {
-            currentSeason: season,
-            currentEpisode: episode,
-            currentVoice: voice || null,
-          },
-        },
-        { isOwner: false, container }
-      );
-      capturePlayer = player;
+      capturePlayer = {
+        type: 'player_capture',
+        videoEl,
+        meta: meta || { currentSeason: season, currentEpisode: episode },
+        getCurrentPosition: () => videoEl.currentTime || 0,
+        getIsPlayingNow: () => !videoEl.paused,
+        doPlayPause: (play) => (play ? videoEl.play().catch(() => {}) : videoEl.pause()),
+        seekTo: (sec) => { videoEl.currentTime = sec; },
+      };
       currentVideoType = 'player_capture';
       playerReady = true;
 
       setOverlay('Хост сменил серию — нажми, чтобы продолжить', true);
     } catch (e) {
-      console.error('[viewer] ошибка смены серии:', e);
-      setOverlay('Ошибка загрузки серии. Обнови страницу.', false);
+      console.error('[viewer] streams error', e);
     }
   });
 

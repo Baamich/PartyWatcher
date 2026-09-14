@@ -50,6 +50,17 @@ router.post('/extract', auth, async (req, res) => {
       console.log('[player-capture] отдаю из кэша для комнаты', roomCode, 'серия', requestedEpisodeForCache || 1);
       return res.json(cached);
     }
+
+    // зритель: только кэш, puppeteer не трогаем
+    if (req.body.onlyCache) {
+      return res.json({
+        success: false,
+        error: 'Поток ещё не готов — подожди хоста',
+        streams: [],
+        playerIframes: [],
+        meta: null,
+      });
+    }
   }
 
   let browser = null;
