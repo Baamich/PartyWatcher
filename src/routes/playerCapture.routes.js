@@ -215,8 +215,8 @@ router.post('/extract', auth, async (req, res) => {
       await new Promise(r => setTimeout(r, 4000));
     }
 
-        const iframes = await page.$$eval('iframe', (els) =>
-      els.map((el) => el.src).filter(Boolean)
+    const iframes = await page.$$eval('iframe', (els) =>
+      els.map((el) => el.getAttribute('data-lazy-src') || el.src).filter(Boolean)
     );
 
     console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
@@ -249,20 +249,26 @@ router.post('/extract', auth, async (req, res) => {
     const KNOWN_HOSTS = [
       'player', 'embed', 'video', 'alloh', 'collaps', 'voidboost',
       'ashdi', 'cdnmovies', 'kodik', 'hdvb', 'eneyida', 'animevost',
-      'moonwalk', 'iframe.', 'vid', 'stream',
+      'moonwalk', 'iframe.', 'vid', 'stream', 'tobaco', 'balabolka',
     ];
 
-    iframes.forEach((src) => {
+    // виджеты соцкнопок, счётчики и прочий шум — точно не видеоплееры
+    const IGNORED_HOSTS = ['addtoany', 'yadro', 'counter', 'analytics', 'ads'];
+
+    const relevantIframes = iframes.filter(
+      (src) => !IGNORED_HOSTS.some((k) => src.includes(k))
+    );
+
+    relevantIframes.forEach((src) => {
       if (KNOWN_HOSTS.some((k) => src.includes(k))) {
         foundIframes.push(src);
       }
     });
 
-    // если по ключевым словам ничего не подошло, но iframe вообще есть —
-    // отдаём всё как есть, чтобы фронт хотя бы попытался их отрендерить,
-    // а не молчал "ничего не найдено"
-    if (foundIframes.length === 0 && iframes.length > 0) {
-      foundIframes.push(...iframes.filter((src) => !src.startsWith('about:blank')));
+    // если по ключевым словам ничего не подошло, но релевантные iframe есть —
+    // отдаём их как есть, чтобы фронт хотя бы попытался отрендерить
+    if (foundIframes.length === 0 && relevantIframes.length > 0) {
+      foundIframes.push(...relevantIframes.filter((src) => !src.startsWith('about:blank')));
     }
 
     let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
