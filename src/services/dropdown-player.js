@@ -29,23 +29,24 @@ async function findPlayerContext(page, markerSelector, { attempts = 10, delayMs 
 // Нужно, чтобы узнать сколько всего серий/сезонов есть на сайте.
 async function readDropdownTexts(context, triggerSelector, listContainerSelector) {
   await context.waitForSelector(triggerSelector, { timeout: 10000 });
-  await context.click(triggerSelector);
-  await new Promise((r) => setTimeout(r, 600));
+
+  // кликаем через JS — надёжнее, чем page.click()
+  await context.$eval(triggerSelector, (el) => el.click());
+  await new Promise((r) => setTimeout(r, 800));
+
   await context.waitForSelector(listContainerSelector, { timeout: 5000 });
 
   const texts = await context.evaluate((containerSel) => {
     const container = document.querySelector(containerSel);
     if (!container) return [];
-    // берём только "листовые" элементы (без вложенных детей),
-    // чтобы не задвоить текст из-за обёрток span > div > ...
     return Array.from(container.querySelectorAll('*'))
       .filter((el) => el.children.length === 0)
       .map((el) => el.textContent.trim())
       .filter(Boolean);
   }, listContainerSelector);
 
-  // закрываем дропдаун обратно, чтобы не мешал следующему клику
-  await context.click(triggerSelector).catch(() => {});
+  // закрываем обратно
+  await context.$eval(triggerSelector, (el) => el.click()).catch(() => {});
   await new Promise((r) => setTimeout(r, 300));
 
   return texts;
@@ -54,10 +55,10 @@ async function readDropdownTexts(context, triggerSelector, listContainerSelector
 // Открывает дропдаун и кликает по пункту, чей текст содержит нужный номер.
 async function selectDropdownOptionByNumber(context, triggerSelector, listContainerSelector, number) {
   await context.waitForSelector(triggerSelector, { timeout: 10000 });
-  await context.click(triggerSelector);
-  await new Promise((r) => setTimeout(r, 600));
+  await context.$eval(triggerSelector, (el) => el.click());
+  await new Promise((r) => setTimeout(r, 800));
   await context.waitForSelector(listContainerSelector, { timeout: 5000 });
-
+  
   const clicked = await context.evaluate((containerSel, num) => {
     const container = document.querySelector(containerSel);
     if (!container) return false;
