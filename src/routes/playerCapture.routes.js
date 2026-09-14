@@ -136,10 +136,10 @@ router.post('/extract', auth, async (req, res) => {
 
       console.log('[player-capture] найден frame balabolka:', !!balabolkaFrame, balabolkaFrame?.url());
 
-          if (balabolkaFrame) {
+    if (balabolkaFrame) {
         try {
-          try {
-            await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] .select_item', { timeout: 10000 });
+                    try {
+            await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] .select__item', { timeout: 10000 });
             console.log('[player-capture] дропдаун серий появился');
           } catch (waitErr) {
             console.warn('[player-capture] дропдаун не появился, дампим HTML iframe:', waitErr.message);
@@ -153,17 +153,17 @@ router.post('/extract', auth, async (req, res) => {
           }
 
           playerApiData = null;
-          await balabolkaFrame.click('div[data-select="episodeType1"] .select_item');
+          await balabolkaFrame.click('div[data-select="episodeType1"] .select__item');
           await new Promise(r => setTimeout(r, 800));
-          await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] button.select_drop_item', { timeout: 5000 });
+          await balabolkaFrame.waitForSelector('div[data-select="episodeType1"] button.select__drop-item', { timeout: 5000 });
 
           const availableIds = await balabolkaFrame.$$eval(
-            'div[data-select="episodeType1"] button.select_drop_item',
+            'div[data-select="episodeType1"] button.select__drop-item',
             (els) => els.map((el) => el.getAttribute('data-id'))
           ).catch(() => []);
           console.log('[player-capture] доступные data-id серий:', availableIds);
 
-          const episodeSelector = `div[data-select="episodeType1"] button.select_drop_item[data-id="${requestedEpisode}"]`;
+          const episodeSelector = `div[data-select="episodeType1"] button.select__drop-item[data-id="${requestedEpisode}"]`;
           const episodeBtn = await balabolkaFrame.$(episodeSelector);
           if (episodeBtn) {
             await episodeBtn.click();
