@@ -201,12 +201,29 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
     setTimeout(() => (suppressEvents = false), 800);
-    } else if (currentVideoType === 'player_capture' && capturePlayer) {
+      } else if (currentVideoType === 'player_capture' && capturePlayer) {
     const v = capturePlayer.videoEl;
     const run = () => {
-      if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
-      if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
-      setTimeout(() => (suppressEvents = false), 1000);
+      if (!v) {
+        suppressEvents = false;
+        return;
+      }
+
+      if (isPlaying) {
+        v.play().catch((e) => console.warn('[capture] play failed', e));
+        if (positionSeconds > 2) {
+          const doSeek = () => {
+            try { v.currentTime = positionSeconds; } catch (_) {}
+          };
+          if (v.readyState >= 2) setTimeout(doSeek, 800);
+          else v.addEventListener('loadeddata', () => setTimeout(doSeek, 800), { once: true });
+        }
+      } else {
+        try { v.currentTime = positionSeconds || 0; } catch (_) {}
+        v.pause();
+      }
+
+      setTimeout(() => (suppressEvents = false), 1500);
     };
 
     if (v && v.readyState < 2) {
@@ -215,7 +232,7 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
         run();
       };
       v.addEventListener('loadeddata', onReady);
-      setTimeout(run, 4000); // запасной таймаут
+      setTimeout(run, 4000);
     } else {
       run();
     }
@@ -267,12 +284,29 @@ function manualResyncViewer() {
   } else if (currentVideoType === 'twitch') {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
-  } else if (currentVideoType === 'player_capture' && capturePlayer) {
+    } else if (currentVideoType === 'player_capture' && capturePlayer) {
     const v = capturePlayer.videoEl;
     const run = () => {
-      if (capturePlayer.seekTo) capturePlayer.seekTo(positionSeconds);
-      if (capturePlayer.doPlayPause) capturePlayer.doPlayPause(isPlaying);
-      setTimeout(() => (suppressEvents = false), 1000);
+      if (!v) {
+        suppressEvents = false;
+        return;
+      }
+
+      if (isPlaying) {
+        v.play().catch((e) => console.warn('[capture] resync play failed', e));
+        if (positionSeconds > 2) {
+          const doSeek = () => {
+            try { v.currentTime = positionSeconds; } catch (_) {}
+          };
+          if (v.readyState >= 2) setTimeout(doSeek, 800);
+          else v.addEventListener('loadeddata', () => setTimeout(doSeek, 800), { once: true });
+        }
+      } else {
+        try { v.currentTime = positionSeconds || 0; } catch (_) {}
+        v.pause();
+      }
+
+      setTimeout(() => (suppressEvents = false), 1500);
     };
     if (v && v.readyState < 2) {
       v.addEventListener('loadeddata', run, { once: true });
@@ -340,7 +374,6 @@ function startWatching() {
     else if (currentVideoType === 'twitch') twitchPlayer.play();
     else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
       capturePlayer.doPlayPause(true);
-      // слушатели play/pause для capture (один раз на текущий videoEl)
       const v = capturePlayer.videoEl;
       if (v && !v.dataset.captureBoundBound) {
         v.dataset.captureBound = '1';
@@ -353,7 +386,14 @@ function startWatching() {
     }
     startHeartbeat();
   } else {
-    applyPlaybackState(lastState);
+    if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) {
+      const v = capturePlayer.videoEl;
+      try { v.currentTime = 0; } catch (_) {}
+      v.play().catch((e) => console.warn('[viewer] start play failed', e));
+      setTimeout(() => softSync(lastState), 2000);
+    } else {
+      applyPlaybackState(lastState);
+    }
   }
 }
 
@@ -515,11 +555,13 @@ async function init() {
 
     try {
       container.innerHTML = '';
-      const videoEl = document.createElement('video');
+    const videoEl = document.createElement('video');
       videoEl.id = 'captureVideo';
       videoEl.src = `/api/stream/relay?url=${encodeURIComponent(streams[0].url)}`;
       videoEl.controls = false;
       videoEl.playsInline = true;
+      videoEl.setAttribute('playsinline', '');
+      videoEl.setAttribute('webkit-playsinline', '');
       videoEl.style.width = '100%';
       videoEl.style.height = '100%';
       videoEl.volume = 0.3;
