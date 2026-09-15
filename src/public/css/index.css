@@ -14,15 +14,61 @@ body {
   margin: 0 auto;
   padding: 16px 16px 0;
   display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-right {
+  display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+  margin-left: auto;
 }
 
 .corner-menu {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ---- логотип PartyWatcher ---- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+}
+
+.brand-text {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.brand-party {
+  color: var(--accent);
+}
+
+.brand-watcher {
+  color: var(--logo-alt);
+}
+
+@media (max-width: 600px) {
+  .brand-text { font-size: 22px; }
+  .brand-mark { width: 30px; height: 30px; }
 }
 
 .layout {
@@ -126,6 +172,19 @@ button {
 
 .room-card:hover {
   transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+[data-theme="light"] .room-card {
+  box-shadow: 0 1px 3px rgba(35, 40, 65, 0.08);
+}
+
+[data-theme="light"] .room-card:hover {
+  box-shadow: 0 6px 18px rgba(35, 40, 65, 0.12);
+}
+
+[data-theme="light"] .info-popup {
+  background: #eceff6;
 }
 
 .room-card .delete-btn {

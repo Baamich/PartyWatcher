@@ -11,6 +11,7 @@ function required(name, fallback) {
 module.exports = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
+  adminPort: parseInt(process.env.ADMIN_PORT || '3001', 10),
   publicUrl: process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`,
 
   mongoUri: required('MONGO_URI'),

@@ -1,21 +1,23 @@
 require('dotenv').config();
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GIST_FILENAME = process.env.GIST_FILENAME || 'partywatcher-tunnel-url.txt';
+const GIST_FILENAME_BASE = process.env.GIST_FILENAME || 'partywatcher-tunnel'; // без расширения — добавим суффикс по имени туннеля
 let GIST_ID = process.env.GIST_ID; // пусто при первом запуске
 
 const API_BASE = 'https://api.github.com';
 
-async function pushUrl(url) {
+async function pushUrl(url, tunnelName = 'main') {
   if (!GITHUB_TOKEN) {
     throw new Error('GITHUB_TOKEN не задан в .env');
   }
 
+  const filename = `${GIST_FILENAME_BASE}-${tunnelName}-url.txt`;
+
   const body = {
-    description: 'PartyWatcher — текущий адрес Cloudflare Tunnel',
+    description: 'PartyWatcher — текущие адреса Cloudflare Tunnel',
     public: false,
     files: {
-      [GIST_FILENAME]: { content: url },
+      [filename]: { content: url },
     },
   };
 
