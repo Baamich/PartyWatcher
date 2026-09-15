@@ -453,6 +453,8 @@ function onFullscreenChange() {
   const chatBtn = document.getElementById('fsChatToggleBtn');
   if (chatBtn) chatBtn.classList.toggle('hidden', !inFullscreen);
 
+  document.getElementById('playerWrap')?.classList.toggle('in-fullscreen', inFullscreen);
+
   if (!inFullscreen) {
     document.getElementById('fsChatPanel')?.classList.add('hidden');
     document.getElementById('playerWrap')?.classList.remove('fs-controls-hidden');
@@ -980,11 +982,34 @@ function toggleSubtitles() {
 window.toggleSubtitles = toggleSubtitles;
 
 
-document.getElementById('playerWrap')?.addEventListener('pointerdown', () => {
+const playerWrapEl = document.getElementById('playerWrap');
+
+playerWrapEl?.addEventListener('pointerdown', () => {
   playerFocused = true;
   if (document.fullscreenElement) showFsControls();
+}, true); // capture — ловим до того, как событие съест внутренний элемент
+
+playerWrapEl?.addEventListener('mousemove', () => {
+  if (document.fullscreenElement) showFsControls();
 });
-document.getElementById('playerWrap')?.addEventListener('mousemove', () => {
+
+// сам перехватчик: единственный способ поймать тап поверх iframe
+const catcherEl = document.getElementById('fsActivityCatcher');
+catcherEl?.addEventListener('pointerdown', (e) => {
+  playerFocused = true;
+  e.stopPropagation();
+  e.preventDefault(); // первый тап только показывает кнопки, в плеер не проваливается
+  showFsControls();
+});
+catcherEl?.addEventListener('pointermove', () => showFsControls());
+
+// клавиши в фулскрине (пробел/стрелки) тоже "будят" кнопки
+document.addEventListener('keydown', () => {
+  if (document.fullscreenElement) showFsControls();
+}, true);
+
+// клик внутрь iframe (YouTube/Twitch) отбирает фокус у окна — используем это как сигнал активности
+window.addEventListener('blur', () => {
   if (document.fullscreenElement) showFsControls();
 });
 document.getElementById('chat')?.addEventListener('pointerdown', () => {
