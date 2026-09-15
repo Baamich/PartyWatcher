@@ -366,11 +366,30 @@ function copyRoomLink() {
   alert('Ссылка на комнату скопирована');
 }
 
+let copyToastTimer = null;
+
+function showCopyToast(message) {
+  const el = document.getElementById('copyToast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('hidden');
+  // reflow, чтобы transition сработал повторно
+  void el.offsetWidth;
+  el.classList.add('show');
+
+  clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.classList.add('hidden'), 200);
+  }, 1200);
+}
+
 function copyText(text, label) {
+  const okMsg = label === 'Название' ? 'Название скопировано' : `${label} скопирован`;
   navigator.clipboard.writeText(text).then(() => {
-    alert(`${label} скопирован`);
+    showCopyToast(okMsg);
   }).catch(() => {
-    alert(`Не удалось скопировать ${label.toLowerCase()}`);
+    showCopyToast('Не удалось скопировать');
   });
 }
 
@@ -949,5 +968,6 @@ window.closeModal = closeModal;
 
 makeDraggable(document.getElementById('fullscreenBtn'), 'fullscreenBtn');
 makeDraggable(document.getElementById('fsChatToggleBtn'), 'fsChatToggleBtn');
+makeDraggable(document.getElementById('ccBtn'), 'ccBtn');
 
 init();
