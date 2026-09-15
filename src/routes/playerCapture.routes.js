@@ -134,14 +134,14 @@ router.post('/extract', auth, async (req, res) => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
-        let response;
+  let response;
     try {
       response = await page.goto(url, {
-        waitUntil: 'networkidle2',
-        timeout: 30000,
+        waitUntil: 'domcontentloaded',
+        timeout: 45000,
       });
     } catch (navErr) {
-      console.error('[player-capture] ошибка навигации:', navErr.message);
+      console.error('[player-capture] ошибка навигации:', navErr.message, 'at', url);
     }
 
     console.log('[player-capture] HTTP статус:', response ? response.status() : 'нет ответа');
