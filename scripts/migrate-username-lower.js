@@ -1,4 +1,5 @@
 // migrate-username-lower.js — запустить один раз через node
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const config = require('../src/config');
 const User = require('../src/models/User');
