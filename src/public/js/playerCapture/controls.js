@@ -7,9 +7,12 @@ export function showEpisodeControls(meta, onChange) {
   onEpisodeChangeCallback = onChange || null;
   fillEpisodeSelects(meta);
   
-  // Показываем панель только если мы сейчас во вкладке "Видео" и мы хост
   const hostControls = document.getElementById('hostControls');
-  if (hostControls && document.body.classList.contains('view-video-only')) {
+  if (!hostControls) return;
+
+  // Хост: если уже на вкладке «Видео» — показываем сразу.
+  // Если на «Чат» — панель появится при переключении на «Видео» (setViewMode).
+  if (document.body.classList.contains('view-video-only')) {
     hostControls.classList.remove('hidden');
   }
 }

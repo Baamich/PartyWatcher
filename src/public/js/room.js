@@ -952,7 +952,15 @@ function setViewMode(mode) {
     document.body.classList.add('view-video-only');
     btnVideo.classList.add('active');
     btnChat.classList.remove('active');
-    if (hostControls) hostControls.classList.remove('hidden');
+    // показываем только если селекты уже заполнены (есть опции)
+    if (hostControls) {
+      const hasOptions =
+        document.querySelectorAll('#seasonSelect option').length > 0 ||
+        document.querySelectorAll('#playerSelect option').length > 0;
+      if (hasOptions) {
+        hostControls.classList.remove('hidden');
+      }
+    }
   }
 }
 

@@ -140,14 +140,23 @@ async function createRoom() {
       return alert('Выбери тип видео');
     }
 
-    const room = await api('/rooms', {
-      method: 'POST',
-      body: JSON.stringify({
-        name,
-        video: { type, url },
-        isPublic: privacyPublic,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    let room;
+    try {
+      room = await api('/rooms', {
+        method: 'POST',
+        body: {
+          name,
+          video: { type, url },
+          isPublic: privacyPublic,
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!room?.code) {
       throw new Error(room?.error || 'Сервер не вернул код комнаты');
@@ -155,7 +164,11 @@ async function createRoom() {
     location.href = `/room.html?code=${room.code}`;
   } catch (err) {
     console.error('[createRoom]', err);
-    alert(err.message || 'Не удалось создать комнату');
+    if (err.name === 'AbortError') {
+      alert('Сервер не ответил за 15 секунд. Проверь логи pm2 / MongoDB.');
+    } else {
+      alert(err.message || 'Не удалось создать комнату');
+    }
   }
 }
 

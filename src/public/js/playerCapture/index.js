@@ -61,18 +61,20 @@ try {
     }
 
     // Показываем реальную ошибку с сервера
-    return renderFallback(video.url, meta, { 
+      return renderFallback(video.url, data.meta || meta, { 
         isOwner, 
         container,
-        errorMessage: data.error || data.message || 'Не удалось найти плеер'
+        errorMessage: data.error || data.message || 'Не удалось найти плеер',
+        videoUrl: video.url,
     });
 
     } catch (e) {
     console.error('[playerCapture] fetch error', e);
-    return renderFallback(video.url, meta, { 
+      return renderFallback(video.url, meta, { 
         isOwner, 
         container,
-        errorMessage: e.message 
+        errorMessage: e.message,
+        videoUrl: video.url,
     });
   }
 }
@@ -186,7 +188,12 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
       }
       return player;
     } else {
-      renderFallback(videoUrl, meta, { isOwner, container, errorMessage: data.error || 'Не удалось загрузить серию' });
+      renderFallback(videoUrl, data.meta || meta, {
+        isOwner,
+        container,
+        errorMessage: data.error || 'Не удалось загрузить серию',
+        videoUrl,
+      });
     }
   };
 
@@ -213,12 +220,13 @@ export function renderFromStreams(streams, meta, { isOwner, container, videoUrl 
       isOwner,
       container,
       errorMessage: 'Нет потоков',
+      videoUrl,
     });
   }
   return renderNativePlayer(streams[0], meta || {}, { isOwner, container, videoUrl });
 }
 
-function renderFallback(url, meta, { isOwner, container, errorMessage }) {
+function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl }) {
   container.innerHTML = `
     <div style="
       display:flex;
@@ -237,18 +245,80 @@ function renderFallback(url, meta, { isOwner, container, errorMessage }) {
         ${errorMessage || 'Сайт использует сильную защиту'}
       </p>
       <p style="opacity:0.5; font-size:13px; max-width:420px;">
-        Открой консоль браузера (F12) → вкладка Network → запрос /extract<br>
-        и посмотри, что именно вернул сервер.
+        Если есть выбор плеера (например «4К Качество») — переключи его справа<br>
+        и подожди повторной загрузки.
       </p>
     </div>
   `;
 
-    const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
-    if (isOwner && (hasMultipleEpisodes || meta.voices?.length)) {
-        showEpisodeControls(meta);
-    } else {
-        hideEpisodeControls();
-    }
+  const hasPlayers = meta.players && meta.players.length > 1;
+  const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
+
+  if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
+    const reloadWithEpisode = async (episode, playerLabel) => {
+      container.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
+          <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
+        </div>
+      `;
+
+      const res = await fetch('/api/player-capture/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          url: videoUrl || url,
+          episode,
+          player: playerLabel || null,
+          roomCode: window.code,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.streams?.length) {
+        if (isOwner && window.socket && window.code) {
+          window.socket.emit('player_capture:streams', {
+            code: window.code,
+            season: data.meta?.currentSeason || 1,
+            episode,
+            voice: data.meta?.currentVoice || null,
+            streams: data.streams,
+            playerIframes: data.playerIframes || [],
+            meta: data.meta,
+          });
+        }
+        const player = renderNativePlayer(data.streams[0], data.meta || meta, {
+          isOwner,
+          container,
+          videoUrl: videoUrl || url,
+        });
+        if (typeof window.__onCapturePlayerReload === 'function') {
+          window.__onCapturePlayerReload(player);
+        }
+        return player;
+      } else if (data.success && data.playerIframes?.length) {
+        const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
+          isOwner,
+          container,
+        });
+        if (typeof window.__onCapturePlayerReload === 'function') {
+          window.__onCapturePlayerReload(player);
+        }
+        return player;
+      } else {
+        renderFallback(videoUrl || url, data.meta || meta, {
+          isOwner,
+          container,
+          errorMessage: data.error || data.message || 'Не удалось загрузить',
+          videoUrl: videoUrl || url,
+        });
+      }
+    };
+
+    showEpisodeControls(meta, reloadWithEpisode);
+  } else {
+    hideEpisodeControls();
+  }
 
   return {
     type: 'player_capture',
