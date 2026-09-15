@@ -11,6 +11,7 @@ let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
 let heartbeatTimer = null;
 let capturePlayer = null;
+let playerFocused = false;
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 
@@ -365,6 +366,14 @@ function copyRoomLink() {
   alert('Ссылка на комнату скопирована');
 }
 
+function copyText(text, label) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert(`${label} скопирован`);
+  }).catch(() => {
+    alert(`Не удалось скопировать ${label.toLowerCase()}`);
+  });
+}
+
 function startWatching() {
   started = true;
   hideOverlay();
@@ -477,6 +486,7 @@ async function init() {
   if (!me) return (location.href = '/index.html');
 
   document.getElementById('roomCodeValue').textContent = code;
+  document.getElementById('roomCodeValue').onclick = () => copyText(code, 'Код');
   setOverlay('Загрузка комнаты...', false);
 
   socket = io();
@@ -489,13 +499,20 @@ async function init() {
     list.forEach(({ username, text }) => addHistoryMessage({ username, text }));
   });
 
-  socket.on('room:state', async ({ video, playback, isOwner: ownerFlag }) => {
+  socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name }) => {
     isOwner = ownerFlag;
     lastState = playback;
     window.__captureVideoUrl = video?.url || window.__captureVideoUrl || null;
 
+    const nameEl = document.getElementById('roomNameValue');
+    if (nameEl) {
+      nameEl.textContent = name || 'Без названия';
+      nameEl.onclick = () => copyText(name || '', 'Название');
+    }
+
     setViewMode('chat');
     await renderPlayer(video);
+    setTimeout(refreshCcButton, 800);
 
     if (isOwner) {
       setOverlay('Готово к просмотру', true);
@@ -520,6 +537,7 @@ window.__onCapturePlayerReload = (player) => {
     v.addEventListener('pause', () => emitPlayback(false));
     v.addEventListener('seeked', () => emitPlayback(!v.paused));
   }
+  setTimeout(refreshCcButton, 500);
 };
 
   socket.on('playback:update', (state) => {
@@ -615,7 +633,7 @@ window.__onCapturePlayerReload = (player) => {
           }
         });
       }
-
+      setTimeout(refreshCcButton, 500);
       setOverlay('Хост сменил серию — нажми, чтобы продолжить', true);
     } catch (e) {
       console.error('[viewer] streams error', e);
@@ -630,6 +648,13 @@ window.__onCapturePlayerReload = (player) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || !isOwner || !started) return;
+
+  // если печатаем в чате / инпуте — пробел обычный
+  const el = document.activeElement;
+  const tag = el?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+  if (!playerFocused) return;
+
   e.preventDefault();
 
   if (currentVideoType === 'youtube') {
@@ -637,6 +662,9 @@ document.addEventListener('keydown', (e) => {
     state === YT.PlayerState.PLAYING ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
   } else if (currentVideoType === 'twitch') {
     twitchPlayer.isPaused() ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) {
+    const v = capturePlayer.videoEl;
+    v.paused ? v.play().catch(() => {}) : v.pause();
   } else if (videoEl) {
     videoEl.paused ? videoEl.play() : videoEl.pause();
   }
@@ -847,6 +875,73 @@ function initViewMode() {
   // Зрители всегда в чате, хост тоже по умолчанию в чате
   setViewMode('chat');
 }
+
+let subtitlesOn = false;
+
+function getActiveVideoEl() {
+  if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) return capturePlayer.videoEl;
+  if (videoEl) return videoEl;
+  return null;
+}
+
+function refreshCcButton() {
+  const btn = document.getElementById('ccBtn');
+  if (!btn) return;
+
+  if (currentVideoType === 'youtube' && ytPlayer) {
+    btn.classList.remove('hidden-cc');
+    btn.classList.toggle('active', subtitlesOn);
+    return;
+  }
+
+  const v = getActiveVideoEl();
+  const hasTracks = v && v.textTracks && v.textTracks.length > 0;
+  if (!hasTracks) {
+    btn.classList.add('hidden-cc');
+    return;
+  }
+  btn.classList.remove('hidden-cc');
+  btn.classList.toggle('active', subtitlesOn);
+}
+
+function toggleSubtitles() {
+  subtitlesOn = !subtitlesOn;
+
+  if (currentVideoType === 'youtube' && ytPlayer) {
+    try {
+      if (subtitlesOn) {
+        ytPlayer.loadModule('captions');
+        ytPlayer.setOption('captions', 'track', { languageCode: 'ru' });
+      } else {
+        ytPlayer.unloadModule('captions');
+      }
+    } catch (_) {}
+    refreshCcButton();
+    return;
+  }
+
+  const v = getActiveVideoEl();
+  if (!v?.textTracks) {
+    subtitlesOn = false;
+    refreshCcButton();
+    return;
+  }
+
+  for (let i = 0; i < v.textTracks.length; i++) {
+    v.textTracks[i].mode = subtitlesOn ? 'showing' : 'hidden';
+  }
+  refreshCcButton();
+}
+
+window.toggleSubtitles = toggleSubtitles;
+
+
+document.getElementById('playerWrap')?.addEventListener('pointerdown', () => {
+  playerFocused = true;
+});
+document.getElementById('chat')?.addEventListener('pointerdown', () => {
+  playerFocused = false;
+});
 
 // Делаем функции доступными из HTML
 window.setViewMode = setViewMode;

@@ -68,6 +68,7 @@ function registerRoomSocket(io) {
         video: room.video,
         playback: room.playback,
         isOwner: socket.data.isOwner,
+        name: room.name,
       });
       socket.to(code).emit('room:user-joined', { username: socket.user.username });
       broadcastParticipants(io, code);

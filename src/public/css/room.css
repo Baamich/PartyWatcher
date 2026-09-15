@@ -335,3 +335,49 @@ body.view-video-only #chat {
     height: auto;
   }
 }
+
+#roomMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.room-meta-line {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copyable {
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.copyable:hover {
+  color: var(--accent);
+}
+
+
+#ccBtn {
+  top: 10px;
+  right: 110px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.45;
+}
+
+#ccBtn.active {
+  opacity: 1;
+  background: var(--accent, #7c3aed);
+  border-color: var(--accent, #7c3aed);
+}
+
+#ccBtn.hidden-cc {
+  display: none;
+}

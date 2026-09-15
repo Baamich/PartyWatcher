@@ -18,6 +18,7 @@
     </div>
 
     <button id="fsChatToggleBtn" class="fs-draggable hidden" onclick="toggleFsChat()" title="Чат (зажми, чтобы передвинуть)">💬</button>
+    <button id="ccBtn" class="fs-draggable" onclick="toggleSubtitles()" title="Субтитры">CC</button>
     <button id="fullscreenBtn" class="fs-draggable" onclick="toggleFullscreen()" title="Полноэкранный режим (зажми, чтобы передвинуть)">⛶</button>
 
     <div id="fsChatPanel" class="hidden">
@@ -34,7 +35,16 @@
   <div id="chat">
     <div id="roomHeader">
       <button onclick="location.href='/index.html'">← Назад</button>
-      <span>Ключ: <b id="roomCodeValue"></b></span>
+      <div id="roomMeta">
+        <span class="room-meta-line">
+          Название:
+          <b id="roomNameValue" class="copyable" title="Нажми, чтобы скопировать"></b>
+        </span>
+        <span class="room-meta-line">
+          Ключ:
+          <b id="roomCodeValue" class="copyable" title="Нажми, чтобы скопировать"></b>
+        </span>
+      </div>
       <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
       <button onclick="openSettings()">⚙️ <span id="participantCount">0</span></button>
     </div>
