@@ -44,6 +44,7 @@ module.exports = {
     seasonListContainer: 'div[data-select="seasonType1"] .select__drop',
     episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item',
     episodeListContainer: 'div[data-select="episodeType1"] .select__drop',
+    playerTabsSelector: 'ul.tabs li[data-src]',
   },
 
   // lordfilm пока не трогаем — договорились сначала полностью закрыть kinogo.

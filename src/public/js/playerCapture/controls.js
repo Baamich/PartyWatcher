@@ -24,6 +24,8 @@ function fillEpisodeSelects(meta) {
   const episodeSelect = document.getElementById('episodeSelect');
   const voiceSelect = document.getElementById('voiceSelect');
   const voiceRow = document.getElementById('voiceRow');
+  const playerSelect = document.getElementById('playerSelect');
+  const playerRow = document.getElementById('playerRow');
 
   if (!seasonSelect) return;
 
@@ -37,8 +39,7 @@ function fillEpisodeSelects(meta) {
     seasonSelect.appendChild(opt);
   });
 
-  // Серии (пока 1-24)
-    // Серии — рисуем ровно столько, сколько реально известно с сайта.
+  // Серии — рисуем ровно столько, сколько реально известно с сайта.
   // Если totalEpisodes не передан (например, это фильм, а не сериал) — не выдумываем список.
   episodeSelect.innerHTML = '';
   const totalEpisodes = meta.totalEpisodes || 1;
@@ -64,6 +65,23 @@ function fillEpisodeSelects(meta) {
   } else {
     voiceRow.style.display = 'none';
   }
+
+  // Плееры (вкладки с сайта: Смотреть онлайн / 4K Качество / ...)
+  if (playerSelect && playerRow) {
+    if (meta.players && meta.players.length > 1) {
+      playerRow.style.display = 'flex';
+      playerSelect.innerHTML = '';
+      meta.players.forEach((label) => {
+        const opt = document.createElement('option');
+        opt.value = label;
+        opt.textContent = label;
+        if (label === meta.currentPlayer) opt.selected = true;
+        playerSelect.appendChild(opt);
+      });
+    } else {
+      playerRow.style.display = 'none';
+    }
+  }
 }
 
 export async function onEpisodeChange() {
@@ -72,24 +90,27 @@ export async function onEpisodeChange() {
   const season = Number(document.getElementById('seasonSelect').value);
   const episode = Number(document.getElementById('episodeSelect').value);
   const voice = document.getElementById('voiceSelect')?.value || null;
+  const player = document.getElementById('playerSelect')?.value || null;
 
   const changed =
     season !== currentMeta.currentSeason ||
     episode !== currentMeta.currentEpisode ||
-    voice !== currentMeta.currentVoice;
+    voice !== currentMeta.currentVoice ||
+    player !== currentMeta.currentPlayer;
 
   if (!changed) return;
 
   currentMeta.currentSeason = season;
   currentMeta.currentEpisode = episode;
   currentMeta.currentVoice = voice;
+  currentMeta.currentPlayer = player;
 
-  // сначала грузим серию
+  // сначала грузим серию / плеер
   if (onEpisodeChangeCallback) {
     try {
-      await onEpisodeChangeCallback(episode);
+      await onEpisodeChangeCallback(episode, player);
     } catch (e) {
-      console.error('[playerCapture] ошибка при смене серии:', e.message);
+      console.error('[playerCapture] ошибка при смене серии/плеера:', e.message);
       return;
     }
   }

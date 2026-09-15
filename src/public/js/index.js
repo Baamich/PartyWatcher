@@ -109,8 +109,13 @@ function extractDriveFileId(url) {
 
 async function createRoom() {
   try {
+    const name = document.getElementById('roomName').value.trim();
+    if (!name) return alert('Введи название комнаты');
+
     const selection = document.getElementById('videoType').value;
     const rawUrl = document.getElementById('videoUrl').value.trim();
+    if (!rawUrl) return alert('Вставь ссылку на видео');
+
     let type, url;
 
     if (selection === 'youtube_twitch') {
@@ -131,18 +136,27 @@ async function createRoom() {
       if (!rawUrl.startsWith('http')) return alert('Нужна полная ссылка (начинается с http)');
       type = 'direct';
       url = rawUrl;
+    } else {
+      return alert('Выбери тип видео');
     }
 
     const room = await api('/rooms', {
       method: 'POST',
       body: JSON.stringify({
-        name: document.getElementById('roomName').value,
+        name,
         video: { type, url },
         isPublic: privacyPublic,
       }),
     });
+
+    if (!room?.code) {
+      throw new Error(room?.error || 'Сервер не вернул код комнаты');
+    }
     location.href = `/room.html?code=${room.code}`;
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    console.error('[createRoom]', err);
+    alert(err.message || 'Не удалось создать комнату');
+  }
 }
 
 async function joinByCode() {

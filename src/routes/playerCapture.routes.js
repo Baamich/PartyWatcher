@@ -185,10 +185,53 @@ router.post('/extract', auth, async (req, res) => {
 
         await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
 
+    // --- вкладки плееров (Kinogo и похожие: Смотреть онлайн / 4K Качество / ...) ---
+    let playersFound = [];
+    if (adapter?.playerTabsSelector) {
+      try {
+        playersFound = await page.$$eval(adapter.playerTabsSelector, (lis) =>
+          lis
+            .map((li) => ({
+              label: (li.textContent || '').trim(),
+              src: li.getAttribute('data-src') || '',
+              tab: li.getAttribute('data-tab') || '',
+            }))
+            .filter((p) => p.label && p.src && !/трейлер/i.test(p.label))
+        );
+        console.log('[player-capture] найдены плееры:', playersFound.map((p) => p.label));
+      } catch (e) {
+        console.warn('[player-capture] не удалось прочитать вкладки плееров:', e.message);
+      }
+    }
+
+    const requestedPlayer = (req.body.player || '').trim();
+    if (requestedPlayer && playersFound.length) {
+      const target = playersFound.find(
+        (p) => p.label.toLowerCase() === requestedPlayer.toLowerCase()
+      );
+      if (target) {
+        console.log('[player-capture] переключаю на плеер:', target.label);
+        foundStreams.length = 0;
+        playerApiData = null;
+        try {
+          await page.evaluate((label) => {
+            const lis = Array.from(document.querySelectorAll('ul.tabs li[data-src]'));
+            const li = lis.find((el) => (el.textContent || '').trim() === label);
+            if (li) li.click();
+          }, target.label);
+          await new Promise((r) => setTimeout(r, 6000));
+        } catch (e) {
+          console.error('[player-capture] ошибка клика по вкладке плеера:', e.message);
+        }
+      } else {
+        console.warn('[player-capture] запрошенный плеер не найден:', requestedPlayer);
+      }
+    }
+
     // если запрошена конкретная серия — переключаем через UI балаболки внутри iframe
     const requestedEpisode = req.body.episode ? Number(req.body.episode) : null;
 
-              if (requestedEpisode && adapter?.mode === 'dropdown') {
+    if (requestedEpisode && adapter?.mode === 'dropdown') {
       // режим kinogo/allplay: серия переключается через дропдаун по тексту
       const playerContext = await findPlayerContext(page, adapter.markerSelector);
       console.log('[player-capture] контекст плеера (dropdown) найден:', !!playerContext);
@@ -270,7 +313,7 @@ router.post('/extract', auth, async (req, res) => {
       if (!playerApiData) {
         console.warn('[player-capture] после клика новый JSON так и не пришёл — переключение не сработало');
       }
-        } else {
+    } else {
       if (requestedEpisode) {
         console.warn('[player-capture] нет адаптера переключения серий для сайта', siteName);
       }
@@ -329,7 +372,7 @@ router.post('/extract', auth, async (req, res) => {
     console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
 
     // парсим график серий — селектор и парсер берём из адаптера конкретного сайта
-          // определяем сезоны/серии — способ зависит от режима адаптера сайта
+    // определяем сезоны/серии — способ зависит от режима адаптера сайта
     let seasonsFound = [1];
     let totalEpisodes = 1;
 
@@ -374,7 +417,7 @@ router.post('/extract', auth, async (req, res) => {
       const releasedEpisodes = episodesData.filter((e) => e.released);
       seasonsFound = [...new Set(episodesData.map((e) => e.season))];
       totalEpisodes = releasedEpisodes.length ? Math.max(...releasedEpisodes.map((e) => e.episode)) : 1;
-      } else if (!adapter) {
+    } else if (!adapter) {
       // нет адаптера под этот сайт вообще — дампим кандидатов для будущего адаптера
       const candidateRows = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('tr, li, div, button'))
@@ -442,6 +485,8 @@ router.post('/extract', auth, async (req, res) => {
       currentEpisode: requestedEpisode || 1,
       totalEpisodes,
       voices: [],
+      players: playersFound.map((p) => p.label),
+      currentPlayer: requestedPlayer || (playersFound[0]?.label || null),
     };
 
     const success = uniqueStreams.length > 0 || uniqueIframes.length > 0;

@@ -141,10 +141,10 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
 
 
   // перезагрузка видео при смене серии: заново дёргаем /extract с новым episode
-const reloadWithEpisode = async (episode) => {
+  const reloadWithEpisode = async (episode, playerLabel) => {
     container.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
-        <div>⏳ Загружаем серию ${episode}...</div>
+        <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
       </div>
     `;
 
@@ -152,7 +152,12 @@ const reloadWithEpisode = async (episode) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ url: videoUrl, episode, roomCode: window.code }),
+        body: JSON.stringify({
+          url: videoUrl,
+          episode,
+          player: playerLabel || null,
+          roomCode: window.code,
+        }),
     });
     const data = await res.json();
 
@@ -185,7 +190,7 @@ const reloadWithEpisode = async (episode) => {
     }
   };
 
-  if (isOwner && (meta.seasons?.length > 1 || meta.totalEpisodes > 1 || meta.voices?.length)) {
+  if (isOwner && (meta.seasons?.length > 1 || meta.totalEpisodes > 1 || meta.voices?.length || (meta.players && meta.players.length > 1))) {
     showEpisodeControls(meta, reloadWithEpisode);
   } else {
     hideEpisodeControls();
