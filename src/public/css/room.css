@@ -357,6 +357,10 @@ body.view-video-only #chat {
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .copyable:hover {
@@ -401,4 +405,15 @@ body.view-video-only #chat {
 .copy-toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+
+#playerWrap.fs-controls-hidden .fs-draggable {
+  opacity: 0 !important;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+#playerWrap .fs-draggable {
+  transition: opacity 0.35s ease;
 }

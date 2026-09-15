@@ -431,10 +431,35 @@ function toggleFullscreen() {
   else document.exitFullscreen?.();
 }
 
+let fsControlsTimer = null;
+
+function showFsControls() {
+  const wrap = document.getElementById('playerWrap');
+  if (!wrap) return;
+  wrap.classList.remove('fs-controls-hidden');
+
+  clearTimeout(fsControlsTimer);
+  if (!document.fullscreenElement) return;
+
+  fsControlsTimer = setTimeout(() => {
+    if (document.fullscreenElement) {
+      wrap.classList.add('fs-controls-hidden');
+    }
+  }, 3000);
+}
+
 function onFullscreenChange() {
   const inFullscreen = !!document.fullscreenElement;
-  document.getElementById('fsChatToggleBtn').classList.toggle('hidden', !inFullscreen);
-  if (!inFullscreen) document.getElementById('fsChatPanel').classList.add('hidden');
+  const chatBtn = document.getElementById('fsChatToggleBtn');
+  if (chatBtn) chatBtn.classList.toggle('hidden', !inFullscreen);
+
+  if (!inFullscreen) {
+    document.getElementById('fsChatPanel')?.classList.add('hidden');
+    document.getElementById('playerWrap')?.classList.remove('fs-controls-hidden');
+    clearTimeout(fsControlsTimer);
+  } else {
+    showFsControls();
+  }
 }
 
 function toggleFsChat() {
@@ -957,6 +982,10 @@ window.toggleSubtitles = toggleSubtitles;
 
 document.getElementById('playerWrap')?.addEventListener('pointerdown', () => {
   playerFocused = true;
+  if (document.fullscreenElement) showFsControls();
+});
+document.getElementById('playerWrap')?.addEventListener('mousemove', () => {
+  if (document.fullscreenElement) showFsControls();
 });
 document.getElementById('chat')?.addEventListener('pointerdown', () => {
   playerFocused = false;
