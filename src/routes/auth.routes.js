@@ -15,11 +15,17 @@ function signToken(user) {
 }
 
 function setTokenCookie(res, token) {
+  // secure только если реально HTTPS (cloudflare tunnel / prod)
+  const isHttps =
+    config.publicUrl?.startsWith('https://') ||
+    process.env.FORCE_SECURE_COOKIE === '1';
+
   res.cookie('token', token, {
     httpOnly: true,
-    secure: config.env === 'production',
+    secure: isHttps,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: '/',
   });
 }
 

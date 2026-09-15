@@ -439,3 +439,12 @@ button {
 [data-theme="light"] .auth-card {
   background: #f7f8fc;
 }
+
+#appBox:not(.hidden) {
+  display: block;
+  min-height: 100vh;
+}
+
+#authBox.hidden {
+  display: none !important;
+}

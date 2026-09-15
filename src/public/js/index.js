@@ -1,20 +1,30 @@
 async function checkAuth() {
+  const authBox = document.getElementById('authBox');
+  const appBox = document.getElementById('appBox');
+
   try {
     const me = await api('/auth/me');
-    document.getElementById('authBox').classList.add('hidden');
-    document.getElementById('appBox').classList.remove('hidden');
-    document.getElementById('meName').textContent = me.username;
+
+    if (authBox) authBox.classList.add('hidden');
+    if (appBox) appBox.classList.remove('hidden');
+
+    const meName = document.getElementById('meName');
+    if (meName) meName.textContent = me.username || '';
 
     const adminLink = document.getElementById('adminLink');
-    adminLink.classList.toggle('hidden', me.role !== 'admin');
+    if (adminLink) {
+      adminLink.classList.toggle('hidden', me.role !== 'admin');
+    }
 
-    loadMyRooms();
-    loadPublicRooms();
+    await loadMyRooms();
+    await loadPublicRooms();
     startAutoRefresh();
-  } catch {
-    document.getElementById('authBox').classList.remove('hidden');
-    document.getElementById('appBox').classList.add('hidden');
+  } catch (err) {
+    console.warn('[checkAuth] не авторизован:', err?.message || err);
+    if (authBox) authBox.classList.remove('hidden');
+    if (appBox) appBox.classList.add('hidden');
     stopAutoRefresh();
+    showLoginPanel();
   }
 }
 
@@ -160,7 +170,7 @@ async function login() {
         password,
       },
     });
-    checkAuth();
+    await checkAuth();
   } catch (err) {
     showAuthError('loginError', err.message || 'Не удалось войти');
   }
@@ -197,7 +207,7 @@ async function register() {
       method: 'POST',
       body: { username, email, password },
     });
-    checkAuth();
+    await checkAuth();
   } catch (err) {
     showAuthError('registerError', err.message || 'Не удалось зарегистрироваться');
   }
