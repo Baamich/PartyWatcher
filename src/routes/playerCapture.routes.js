@@ -392,23 +392,28 @@ router.post('/extract', auth, async (req, res) => {
       // это надёжнее для кастомных lazy-load плееров без узнаваемых классов
       if (!clickedPlaySelector) {
         try {
+          // сначала скроллим элемент в видимую область — иначе getBoundingClientRect
+          // может вернуть координаты за пределами viewport (768px по высоте),
+          // и клик по ним попадёт в пустоту, ни во что не задев
           const box = await page.evaluate(() => {
-            const el = document.querySelector('#cdnplayer-container') || document.querySelector('#player');
+            const el = document.querySelector('#cdnplayer-container');
             if (!el) return null;
+            el.scrollIntoView({ block: 'center' });
             const r = el.getBoundingClientRect();
             return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
           });
           if (box) {
+            console.log('[player-capture] координаты #cdnplayer-container после скролла:', box);
             await page.mouse.click(box.x, box.y);
-            console.log('[player-capture] fallback-клик по координатам центра плеера:', box);
+            console.log('[player-capture] клик по #cdnplayer-container для запуска ленивой загрузки плеера выполнен');
           } else {
-            console.warn('[player-capture] не найден ни один известный контейнер плеера для fallback-клика');
+            console.warn('[player-capture] #cdnplayer-container не найден на странице');
           }
         } catch (e) {
-          console.error('[player-capture] ошибка fallback-клика:', e.message);
+          console.error('[player-capture] ошибка клика по #cdnplayer-container:', e.message);
         }
       }
-      }
+    }
 
       // некоторые сайты (yandex-превью, my.mail.ru) отдают видео через чужой
       // iframe-плеер — обычный page.$() внутрь фрейма не заглядывает. Если у
