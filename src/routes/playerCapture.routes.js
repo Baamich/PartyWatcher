@@ -100,7 +100,11 @@ router.post('/extract', auth, async (req, res) => {
     const foundStreams = [];
     const foundIframes = [];
 
-        let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
+    // рекламные CDN, которые Rezka показывает поверх плеера при первом клике —
+    // если поток пришёл отсюда, это реклама (ставки/казино), а не фильм
+    const AD_STREAM_HOSTS = ['botsford.link', 'r.botsford', 'adv.', '.bet', 'casino'];
+
+    let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
 
     page.on('response', async (response) => {
       const reqUrl = response.url();
@@ -109,7 +113,12 @@ router.post('/extract', auth, async (req, res) => {
       if (reqUrl.includes('.m3u8') || contentType.includes('mpegurl')) {
         foundStreams.push({ type: 'hls', url: reqUrl });
       }
-      if (reqUrl.includes('.mp4') && contentType.includes('video') && !reqUrl.includes('blank.mp4')) {
+      if (
+        reqUrl.includes('.mp4') &&
+        contentType.includes('video') &&
+        !reqUrl.includes('blank.mp4') &&
+        !AD_STREAM_HOSTS.some((h) => reqUrl.includes(h))
+      ) {
         foundStreams.push({ type: 'mp4', url: reqUrl });
       }
 
@@ -352,7 +361,7 @@ router.post('/extract', auth, async (req, res) => {
         // (см. историю поломок с chrome-error) — но сам плеер тоже лениво грузится и без
         // клика остаётся пустым about:blank. Поэтому кликаем ТОЧЕЧНО по известному контейнеру
         // плеера конкретно этого сайта, а не по общим классам, гуляющим по всей странице.
-        try {
+                try {
           // сначала скроллим элемент в видимую область — иначе getBoundingClientRect
           // может вернуть координаты за пределами viewport (768px по высоте),
           // и клик по ним попадёт в пустоту, ни во что не задев
@@ -365,8 +374,21 @@ router.post('/extract', auth, async (req, res) => {
           });
           if (box) {
             console.log('[player-capture] координаты #cdnplayer-container после скролла:', box);
-            await page.mouse.click(box.x, box.y);
-            console.log('[player-capture] клик по #cdnplayer-container для запуска ленивой загрузки плеера выполнен');
+
+            // первый клик на Rezka почти всегда открывает рекламный оверлей
+            // (ставки/казино), а не сам плеер. Кликаем несколько раз с паузами —
+            // каждый следующий клик обычно закрывает рекламу и продвигает к реальному плееру
+            for (let i = 0; i < 3; i++) {
+              await page.mouse.click(box.x, box.y);
+              console.log(`[player-capture] клик по #cdnplayer-container #${i + 1} выполнен`);
+              await new Promise((r) => setTimeout(r, 2000));
+
+              const foundNow = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
+              if (foundNow) {
+                console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
+                break;
+              }
+            }
           } else {
             console.warn('[player-capture] #cdnplayer-container не найден на странице');
           }
