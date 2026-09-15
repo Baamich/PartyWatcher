@@ -347,21 +347,26 @@ router.post('/extract', auth, async (req, res) => {
       // пропускаем кликанье и просто ждём появления фрейма плеера напрямую.
       const skipGenericClick = !!adapter?.playerFrameMatch;
 
-      if (skipGenericClick) {
+        if (skipGenericClick) {
         // общий клик по .play/[class*="play"] на таких сайтах слишком часто попадает по рекламе
         // (см. историю поломок с chrome-error) — но сам плеер тоже лениво грузится и без
         // клика остаётся пустым about:blank. Поэтому кликаем ТОЧЕЧНО по известному контейнеру
         // плеера конкретно этого сайта, а не по общим классам, гуляющим по всей странице.
         try {
+          // сначала скроллим элемент в видимую область — иначе getBoundingClientRect
+          // может вернуть координаты за пределами viewport (768px по высоте),
+          // и клик по ним попадёт в пустоту, ни во что не задев
           const box = await page.evaluate(() => {
             const el = document.querySelector('#cdnplayer-container');
             if (!el) return null;
+            el.scrollIntoView({ block: 'center' });
             const r = el.getBoundingClientRect();
             return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
           });
           if (box) {
+            console.log('[player-capture] координаты #cdnplayer-container после скролла:', box);
             await page.mouse.click(box.x, box.y);
-            console.log('[player-capture] клик по #cdnplayer-container для запуска ленивой загрузки плеера:', box);
+            console.log('[player-capture] клик по #cdnplayer-container для запуска ленивой загрузки плеера выполнен');
           } else {
             console.warn('[player-capture] #cdnplayer-container не найден на странице');
           }
