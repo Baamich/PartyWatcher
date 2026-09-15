@@ -16,18 +16,23 @@ function withLiveStatus(room, io) {
 }
 
 router.post('/', auth, async (req, res) => {
-  const { name, video, isPublic } = req.body;
-  if (!name || !video?.type || !video?.url) {
-    return res.status(400).json({ error: 'Нужно имя комнаты и видео' });
+  try {
+    const { name, video, isPublic } = req.body;
+    if (!name || !video?.type || !video?.url) {
+      return res.status(400).json({ error: 'Нужно имя комнаты и видео' });
+    }
+
+    let code;
+    do {
+      code = generateCode();
+    } while (await Room.findOne({ code }));
+
+    const room = await Room.create({ name, code, owner: req.user.id, video, isPublic: !!isPublic });
+    res.status(201).json(room);
+  } catch (err) {
+    console.error('[rooms/create]', err);
+    res.status(500).json({ error: err.message || 'Не удалось создать комнату' });
   }
-
-  let code;
-  do {
-    code = generateCode();
-  } while (await Room.findOne({ code }));
-
-  const room = await Room.create({ name, code, owner: req.user.id, video, isPublic: !!isPublic });
-  res.status(201).json(room);
 });
 
 router.get('/public', auth, async (req, res) => {
