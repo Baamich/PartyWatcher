@@ -449,6 +449,12 @@ router.post('/extract', auth, async (req, res) => {
       // fallback: если ни один селектор не найден — кликаем прямо в центр контейнера плеера по координатам,
       // это надёжнее для кастомных lazy-load плееров без узнаваемых классов
       if (!clickedPlaySelector) {
+                const popupCloserMovie = (popup) => {
+          console.log('[player-capture] (фильм) обнаружен рекламный попап, закрываю:', popup.url());
+          popup.close().catch(() => {});
+        };
+        page.on('popup', popupCloserMovie);
+
         try {
           // сначала скроллим элемент в видимую область — иначе getBoundingClientRect
           // может вернуть координаты за пределами viewport (768px по высоте),
@@ -462,13 +468,28 @@ router.post('/extract', auth, async (req, res) => {
           });
           if (box) {
             console.log('[player-capture] координаты #cdnplayer-container после скролла:', box);
-            await page.mouse.click(box.x, box.y);
-            console.log('[player-capture] клик по #cdnplayer-container для запуска ленивой загрузки плеера выполнен');
+
+            // первый клик на Rezka почти всегда открывает рекламный оверлей
+            // (ставки/казино), а не сам плеер. Кликаем несколько раз с паузами —
+            // каждый следующий клик обычно закрывает рекламу и продвигает к реальному плееру
+            for (let i = 0; i < 5; i++) {
+              await page.mouse.click(box.x, box.y);
+              console.log(`[player-capture] клик по #cdnplayer-container #${i + 1} выполнен`);
+              await new Promise((r) => setTimeout(r, 2000));
+
+              const foundNow = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
+              if (foundNow) {
+                console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
+                break;
+              }
+            }
           } else {
             console.warn('[player-capture] #cdnplayer-container не найден на странице');
           }
         } catch (e) {
           console.error('[player-capture] ошибка клика по #cdnplayer-container:', e.message);
+        } finally {
+          page.off('popup', popupCloserMovie);
         }
       }
     }
