@@ -18,32 +18,199 @@ async function checkAuth() {
   }
 }
 
+function showLoginPanel() {
+  document.getElementById('loginPanel').classList.remove('hidden');
+  document.getElementById('registerPanel').classList.add('hidden');
+  hideAuthError('loginError');
+}
+
+function showRegisterPanel() {
+  document.getElementById('registerPanel').classList.remove('hidden');
+  document.getElementById('loginPanel').classList.add('hidden');
+  hideAuthError('registerError');
+  validateRegisterForm();
+}
+
+function showAuthError(id, message) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+function hideAuthError(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁';
+  btn.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
+}
+
+function isValidEmail(email) {
+  // практичная проверка: есть @, домен с точкой, без пробелов
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(email).trim());
+}
+
+function getEmailError(email) {
+  const v = String(email).trim();
+  if (!v) return 'Введите почту';
+  if (v.includes(' ')) return 'Почта не должна содержать пробелы';
+  if (!v.includes('@')) return 'В почте должен быть символ @';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'Некорректный формат почты';
+  return null;
+}
+
+function updateEmailStatus() {
+  const input = document.getElementById('regEmail');
+  const status = document.getElementById('emailStatus');
+  const hint = document.getElementById('emailHint');
+  if (!input || !status || !hint) return;
+
+  const err = getEmailError(input.value);
+  if (!input.value.trim()) {
+    status.textContent = '';
+    status.className = 'field-status';
+    status.title = '';
+    hint.classList.add('hidden');
+    hint.textContent = '';
+    return;
+  }
+
+  if (err) {
+    status.textContent = '!';
+    status.className = 'field-status bad';
+    status.title = 'Нажми, чтобы увидеть ошибку';
+    status.onclick = () => {
+      hint.textContent = err;
+      hint.classList.remove('hidden');
+    };
+  } else {
+    status.textContent = '✓';
+    status.className = 'field-status ok';
+    status.title = 'Почта корректна';
+    status.onclick = null;
+    hint.classList.add('hidden');
+    hint.textContent = '';
+  }
+}
+
+function getPasswordChecks(password) {
+  const p = String(password || '');
+  return {
+    length: p.length >= 8,
+    upper: /^[A-Z]/.test(p),
+    letter: /[A-Za-z]/.test(p),
+    digit: /\d/.test(p),
+  };
+}
+
+function updatePasswordRules() {
+  const password = document.getElementById('regPassword')?.value || '';
+  const confirm = document.getElementById('regPasswordConfirm')?.value || '';
+  const checks = getPasswordChecks(password);
+  const match = password.length > 0 && password === confirm;
+
+  const map = [
+    ['ruleLength', checks.length],
+    ['ruleUpper', checks.upper],
+    ['ruleLetter', checks.letter],
+    ['ruleDigit', checks.digit],
+    ['ruleMatch', match],
+  ];
+
+  map.forEach(([id, ok]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('rule-ok', ok);
+    el.classList.toggle('rule-bad', !ok);
+  });
+
+  return checks.length && checks.upper && checks.letter && checks.digit && match;
+}
+
+function validateRegisterForm() {
+  const username = document.getElementById('regUsername')?.value.trim() || '';
+  const emailOk = !getEmailError(document.getElementById('regEmail')?.value || '');
+  const passwordOk = updatePasswordRules();
+  const btn = document.getElementById('registerBtn');
+  if (btn) btn.disabled = !(username && emailOk && passwordOk);
+}
+
 async function login() {
+  hideAuthError('loginError');
+  const loginVal = document.getElementById('loginInput').value.trim();
+  const password = document.getElementById('passwordInput').value;
+  if (!loginVal || !password) {
+    showAuthError('loginError', 'Введите логин и пароль');
+    return;
+  }
   try {
     await api('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({
-        login: document.getElementById('loginInput').value,
-        password: document.getElementById('passwordInput').value,
-      }),
+      body: {
+        login: loginVal,
+        password,
+      },
     });
     checkAuth();
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    showAuthError('loginError', err.message || 'Не удалось войти');
+  }
 }
 
 async function register() {
+  hideAuthError('registerError');
+  const username = document.getElementById('regUsername').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const confirm = document.getElementById('regPasswordConfirm').value;
+
+  if (!username) {
+    showAuthError('registerError', 'Введите логин');
+    return;
+  }
+  const emailErr = getEmailError(email);
+  if (emailErr) {
+    showAuthError('registerError', emailErr);
+    updateEmailStatus();
+    return;
+  }
+  if (!updatePasswordRules()) {
+    if (password !== confirm) {
+      showAuthError('registerError', 'Пароли не совпадают');
+    } else {
+      showAuthError('registerError', 'Пароль не соответствует требованиям');
+    }
+    return;
+  }
+
   try {
     await api('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({
-        username: document.getElementById('regUsername').value,
-        email: document.getElementById('regEmail').value,
-        password: document.getElementById('regPassword').value,
-      }),
+      body: { username, email, password },
     });
     checkAuth();
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    showAuthError('registerError', err.message || 'Не удалось зарегистрироваться');
+  }
 }
+
+document.getElementById('regEmail')?.addEventListener('blur', updateEmailStatus);
+document.getElementById('regEmail')?.addEventListener('input', () => {
+  document.getElementById('emailHint')?.classList.add('hidden');
+  validateRegisterForm();
+});
+document.getElementById('regPassword')?.addEventListener('input', validateRegisterForm);
+document.getElementById('regPasswordConfirm')?.addEventListener('input', validateRegisterForm);
+document.getElementById('regUsername')?.addEventListener('input', validateRegisterForm);
 
 async function logout() {
   await api('/auth/logout', { method: 'POST' });

@@ -11,18 +11,72 @@
   <title>PartyWatcher</title>
 </head>
 <body>
-  <div id="authBox">
-    <h2>Вход</h2>
-    <input id="loginInput" placeholder="Логин или email" />
-    <input id="passwordInput" type="password" placeholder="Пароль" />
-    <button onclick="login()">Войти</button>
+    <div id="authBox">
+    <div class="auth-card">
+      <!-- ВХОД -->
+      <div id="loginPanel">
+        <h1 class="auth-title">Вход</h1>
+        <div id="loginError" class="auth-error hidden"></div>
 
-    <h2>Регистрация</h2>
-    <input id="regUsername" placeholder="Username" />
-    <input id="regEmail" placeholder="Email" />
-    <input id="regPassword" type="password" placeholder="Пароль" />
-    <button onclick="register()">Зарегистрироваться</button>
-  </div>
+        <label class="auth-label" for="loginInput">Логин или email</label>
+        <input id="loginInput" autocomplete="username" placeholder="Логин или email" />
+
+        <label class="auth-label" for="passwordInput">Пароль</label>
+        <div class="password-wrap">
+          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Пароль" />
+          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('passwordInput', this)" aria-label="Показать пароль">👁</button>
+        </div>
+
+        <button class="auth-submit" onclick="login()">Войти</button>
+
+        <p class="auth-switch">
+          Нет аккаунта?
+          <button type="button" class="auth-link" onclick="showRegisterPanel()">Зарегистрироваться</button>
+        </p>
+      </div>
+
+      <!-- РЕГИСТРАЦИЯ -->
+        <div id="registerPanel" class="hidden">
+        <h1 class="auth-title">Регистрация</h1>
+        <div id="registerError" class="auth-error hidden"></div>
+
+        <label class="auth-label" for="regUsername">Логин</label>
+        <input id="regUsername" autocomplete="username" placeholder="Логин" />
+
+        <label class="auth-label" for="regEmail">Почта</label>
+        <div class="field-wrap">
+          <input id="regEmail" type="email" autocomplete="email" placeholder="email@example.com" />
+          <span id="emailStatus" class="field-status" title=""></span>
+        </div>
+        <div id="emailHint" class="field-hint hidden"></div>
+
+        <label class="auth-label" for="regPassword">Пароль</label>
+        <div class="password-wrap">
+          <input id="regPassword" type="password" autocomplete="new-password" placeholder="Пароль" />
+          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPassword', this)" aria-label="Показать пароль">👁</button>
+        </div>
+
+        <ul id="passwordRules" class="password-rules">
+          <li id="ruleLength" class="rule-bad">Минимум 8 символов</li>
+          <li id="ruleUpper" class="rule-bad">Первая буква — заглавная латиница (A–Z)</li>
+          <li id="ruleLetter" class="rule-bad">Есть буквы</li>
+          <li id="ruleDigit" class="rule-bad">Есть цифры</li>
+          <li id="ruleMatch" class="rule-bad">Пароли совпадают</li>
+        </ul>
+
+        <label class="auth-label" for="regPasswordConfirm">Повторите пароль</label>
+        <div class="password-wrap">
+          <input id="regPasswordConfirm" type="password" autocomplete="new-password" placeholder="Повторите пароль" />
+          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPasswordConfirm', this)" aria-label="Показать пароль">👁</button>
+        </div>
+
+        <button id="registerBtn" class="auth-submit" onclick="register()" disabled>Зарегистрироваться</button>
+
+        <p class="auth-switch">
+          Уже есть аккаунт?
+          <button type="button" class="auth-link" onclick="showLoginPanel()">Войти</button>
+        </p>
+      </div>
 
   <div id="appBox" class="hidden">
     <div class="page-header">

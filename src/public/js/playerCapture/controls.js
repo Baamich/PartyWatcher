@@ -69,7 +69,6 @@ function fillEpisodeSelects(meta) {
     voiceRow.style.display = 'none';
   }
 
-  // Плееры (вкладки с сайта: Смотреть онлайн / 4K Качество / ...)
   if (playerSelect && playerRow) {
     if (meta.players && meta.players.length > 1) {
       playerRow.style.display = 'flex';
@@ -78,9 +77,19 @@ function fillEpisodeSelects(meta) {
         const opt = document.createElement('option');
         opt.value = label;
         opt.textContent = label;
-        if (label === meta.currentPlayer) opt.selected = true;
         playerSelect.appendChild(opt);
       });
+      // явно ставим тот плеер, который реально отработал (в т.ч. после авто-перебора)
+      if (meta.currentPlayer) {
+        playerSelect.value = meta.currentPlayer;
+        // если точного совпадения нет (пробелы/регистр) — ищем близкий
+        if (playerSelect.value !== meta.currentPlayer) {
+          const found = meta.players.find(
+            (p) => p.trim().toLowerCase() === String(meta.currentPlayer).trim().toLowerCase()
+          );
+          if (found) playerSelect.value = found;
+        }
+      }
     } else {
       playerRow.style.display = 'none';
     }

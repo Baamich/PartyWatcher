@@ -23,21 +23,71 @@ function setTokenCookie(res, token) {
   });
 }
 
-router.post('/register', async (req, res) => {
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) {
-    return res.status(400).json({ error: 'Заполни все поля' });
+function validatePassword(password) {
+  if (typeof password !== 'string' || password.length < 8) {
+    return 'Пароль должен быть не короче 8 символов';
   }
+  if (!/^[A-Z]/.test(password)) {
+    return 'Пароль должен начинаться с заглавной латинской буквы (A–Z)';
+  }
+  if (!/[A-Za-z]/.test(password)) {
+    return 'Пароль должен содержать буквы';
+  }
+  if (!/\d/.test(password)) {
+    return 'Пароль должен содержать цифры';
+  }
+  return null;
+}
 
-  const exists = await User.findOne({ $or: [{ username }, { email }] });
-  if (exists) return res.status(409).json({ error: 'Юзер уже существует' });
+function validateEmail(email) {
+  if (typeof email !== 'string') return 'Некорректная почта';
+  const v = email.trim();
+  if (!v) return 'Введите почту';
+  if (v.includes(' ')) return 'Почта не должна содержать пробелы';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'Некорректный формат почты';
+  return null;
+}
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await User.create({ username, email, passwordHash });
+router.post('/register', async (req, res) => {
+  try {
+    const username = String(req.body.username || '').trim();
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
-  const token = signToken(user);
-  setTokenCookie(res, token);
-  res.status(201).json({ id: user._id, username: user.username, role: user.role });
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Заполни все поля' });
+    }
+    if (username.length < 3 || username.length > 32) {
+      return res.status(400).json({ error: 'Логин: от 3 до 32 символов' });
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({ error: 'Логин: только латиница, цифры и _' });
+    }
+
+    const emailErr = validateEmail(email);
+    if (emailErr) return res.status(400).json({ error: emailErr });
+
+    const passErr = validatePassword(password);
+    if (passErr) return res.status(400).json({ error: passErr });
+
+    const exists = await User.findOne({ $or: [{ username }, { email }] });
+    if (exists) {
+      if (exists.username === username) {
+        return res.status(409).json({ error: 'Такой логин уже занят' });
+      }
+      return res.status(409).json({ error: 'Такая почта уже зарегистрирована' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await User.create({ username, email, passwordHash });
+
+    const token = signToken(user);
+    setTokenCookie(res, token);
+    res.status(201).json({ id: user._id, username: user.username, role: user.role });
+  } catch (err) {
+    console.error('[auth/register]', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
 });
 
 router.post('/login', async (req, res) => {
