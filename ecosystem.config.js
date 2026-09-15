@@ -22,8 +22,8 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       env: {
-        TUNNEL_NAME: 'main',
-        TUNNEL_LOCAL_URL: 'http://localhost:3000',
+        PW_TUNNEL_NAME: 'main',
+        PW_TUNNEL_URL: 'http://localhost:3000',
       },
     },
     {
@@ -33,8 +33,8 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       env: {
-        TUNNEL_NAME: 'admin',
-        TUNNEL_LOCAL_URL: 'http://localhost:32800',
+        PW_TUNNEL_NAME: 'admin',
+        PW_TUNNEL_URL: 'http://localhost:32800',
       },
     },
   ],

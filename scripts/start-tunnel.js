@@ -5,11 +5,11 @@ const path = require('path');
 const gist = require('./gist');
 
 const CLOUDFLARED_PATH = process.env.CLOUDFLARED_PATH || 'cloudflared';
-const LOCAL_URL = process.env.TUNNEL_LOCAL_URL || 'http://localhost:3000';
+const LOCAL_URL = process.env.PW_TUNNEL_URL || 'http://localhost:3000';
 
 // имя туннеля — влияет на имя файла и ключ в Gist, чтобы основной и админский
 // туннели не затирали друг друга; по умолчанию — старое поведение (main)
-const TUNNEL_NAME = process.env.TUNNEL_NAME || 'main';
+const TUNNEL_NAME = process.env.PW_TUNNEL_NAME || 'main';
 const OUTPUT_FILE = path.join(process.cwd(), `tunnel-${TUNNEL_NAME}-url.txt`);
 
 const URL_REGEX = /https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/;
@@ -42,7 +42,14 @@ async function onUrlCaptured(url) {
   }
 }
 
-const cloudflared = spawn(CLOUDFLARED_PATH, ['tunnel', '--url', LOCAL_URL]);
+// убираем из окружения все TUNNEL_* — cloudflared считает их своими флагами
+const childEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([k]) => !k.startsWith('TUNNEL_'))
+);
+
+const cloudflared = spawn(CLOUDFLARED_PATH, ['tunnel', '--url', LOCAL_URL], {
+  env: childEnv,
+});
 
 cloudflared.stdout.on('data', handleOutput);
 cloudflared.stderr.on('data', handleOutput);
@@ -50,9 +57,15 @@ cloudflared.stderr.on('data', handleOutput);
 cloudflared.on('close', (code) => {
   console.log(`[tunnel:${TUNNEL_NAME}] cloudflared завершился с кодом ${code}`);
   captured = false;
+  process.exit(code ?? 1);
 });
 
 process.on('SIGINT', () => {
-  cloudflared.kill();
-  process.exit();
+  cloudflared.kill('SIGINT');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  cloudflared.kill('SIGTERM');
+  process.exit(0);
 });
