@@ -76,9 +76,10 @@ router.post('/register', async (req, res) => {
     const passErr = validatePassword(password);
     if (passErr) return res.status(400).json({ error: passErr });
 
-    const exists = await User.findOne({ $or: [{ username }, { email }] });
+    const usernameLower = username.toLowerCase();
+    const exists = await User.findOne({ $or: [{ usernameLower }, { email }] });
     if (exists) {
-      if (exists.username === username) {
+      if (exists.usernameLower === usernameLower) {
         return res.status(409).json({ error: 'Такой логин уже занят' });
       }
       return res.status(409).json({ error: 'Такая почта уже зарегистрирована' });
@@ -98,7 +99,8 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   const { login, password } = req.body; // логин = username или email
-  const user = await User.findOne({ $or: [{ username: login }, { email: login }] });
+  const loginLower = String(login || '').trim().toLowerCase();
+  const user = await User.findOne({ $or: [{ usernameLower: loginLower }, { email: loginLower }] });
   if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
 
   const ok = await bcrypt.compare(password, user.passwordHash);
