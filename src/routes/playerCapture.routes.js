@@ -291,6 +291,35 @@ router.post('/extract', auth, async (req, res) => {
       // ждём, пока новый .m3u8 для выбранной серии успеет засветиться в сети
       await new Promise(r => setTimeout(r, 5000));
     } else if (requestedEpisode && adapter?.playerFrameMatch) {
+      // плеер лениво грузится только по клику по #cdnplayer-container — без этого
+      // фрейм balabolka никогда не появится, сколько его ни жди.
+      // Первый клик почти всегда открывает рекламный оверлей (ставки/казино),
+      // поэтому кликаем несколько раз с паузами, проверяя появление плеера после каждого.
+      try {
+        const box = await page.evaluate(() => {
+          const el = document.querySelector('#cdnplayer-container');
+          if (!el) return null;
+          el.scrollIntoView({ block: 'center' });
+          const r = el.getBoundingClientRect();
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        });
+        if (box) {
+          for (let i = 0; i < 3; i++) {
+            await page.mouse.click(box.x, box.y);
+            console.log(`[player-capture] (серия) клик по #cdnplayer-container #${i + 1} выполнен`);
+            await new Promise((r) => setTimeout(r, 2000));
+            if (page.frames().some((f) => adapter.playerFrameMatch(f.url()))) {
+              console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
+              break;
+            }
+          }
+        } else {
+          console.warn('[player-capture] #cdnplayer-container не найден на странице (серийный режим)');
+        }
+      } catch (e) {
+        console.error('[player-capture] ошибка клика по #cdnplayer-container (серийный режим):', e.message);
+      }
+
       // режим rezka: фрейм по домену + дропдаун с data-id
       let targetFrame = null;
       for (let i = 0; i < 20; i++) {
