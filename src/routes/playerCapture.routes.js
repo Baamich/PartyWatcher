@@ -24,16 +24,75 @@ function detectSite(url) {
   return 'unknown';
 }
 
-router.post('/extract', auth, async (req, res) => {
-    if (!puppeteer) {
-        return res.json({
-        success: false,
-        error: 'puppeteer-core не установлен',
-        streams: [],
-        playerIframes: [],
-        meta: null,
-        });
+/**
+ * Кликает по #cdnplayer-container несколько раз подряд, проверяя после каждого клика,
+ * не появился ли фрейм плеера (adapter.playerFrameMatch). Нужно потому что:
+ * 1) плеер грузится лениво — без клика фрейм вообще не появится;
+ * 2) первый клик на Rezka почти всегда открывает рекламный оверлей (ставки/казино),
+ *    а не сам плеер — поэтому кликаем несколько раз с паузами;
+ * 3) реклама иногда открывается отдельной вкладкой (window.open), а не фреймом внутри
+ *    страницы — на время кликов слушаем событие 'popup' и сразу закрываем такие вкладки,
+ *    чтобы они не мешали.
+ *
+ * @param {import('puppeteer-core').Page} page
+ * @param {object} adapter - адаптер сайта, обязателен playerFrameMatch
+ * @param {string} logLabel - префикс для логов, чтобы отличать сценарий (серия/фильм)
+ * @param {number} maxAttempts - сколько раз кликать максимум
+ * @returns {Promise<boolean>} true если фрейм плеера найден после кликов
+ */
+async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5) {
+  const box = await page.evaluate(() => {
+    const el = document.querySelector('#cdnplayer-container');
+    if (!el) return null;
+    // скроллим в видимую область — иначе getBoundingClientRect может вернуть
+    // координаты за пределами viewport, и клик попадёт в пустоту
+    el.scrollIntoView({ block: 'center' });
+    const r = el.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+
+  if (!box) {
+    console.warn(`[player-capture] (${logLabel}) #cdnplayer-container не найден на странице`);
+    return false;
+  }
+
+  const popupCloser = (popup) => {
+    console.log(`[player-capture] (${logLabel}) обнаружен рекламный попап, закрываю:`, popup.url());
+    popup.close().catch(() => {});
+  };
+  page.on('popup', popupCloser);
+
+  try {
+    for (let i = 0; i < maxAttempts; i++) {
+      await page.mouse.click(box.x, box.y);
+      console.log(`[player-capture] (${logLabel}) клик по #cdnplayer-container #${i + 1} выполнен`);
+      await new Promise((r) => setTimeout(r, 2000));
+
+      if (page.frames().some((f) => adapter.playerFrameMatch(f.url()))) {
+        console.log(`[player-capture] (${logLabel}) balabolka найдена после клика #${i + 1}`);
+        return true;
+      }
     }
+    console.warn(`[player-capture] (${logLabel}) плеер так и не появился после ${maxAttempts} кликов`);
+    return false;
+  } catch (e) {
+    console.error(`[player-capture] (${logLabel}) ошибка клика по #cdnplayer-container:`, e.message);
+    return false;
+  } finally {
+    page.off('popup', popupCloser);
+  }
+}
+
+router.post('/extract', auth, async (req, res) => {
+  if (!puppeteer) {
+    return res.json({
+      success: false,
+      error: 'puppeteer-core не установлен',
+      streams: [],
+      playerIframes: [],
+      meta: null,
+    });
+  }
   const { url, roomCode } = req.body;
   const requestedEpisodeForCache = req.body.episode ? Number(req.body.episode) : null;
 
@@ -68,7 +127,7 @@ router.post('/extract', auth, async (req, res) => {
   let browser = null;
 
   try {
-        // прокси Webshare — вынесено в переменные окружения, см. .env
+    // прокси Webshare — вынесено в переменные окружения, см. .env
     const PROXY_SERVER = process.env.PROXY_SERVER;   // например "31.58.9.4:6077"
     const PROXY_USER = process.env.PROXY_USER;        // "ksiyitlp"
     const PROXY_PASS = process.env.PROXY_PASS;        // "oiv7evgr7rk3"
@@ -134,7 +193,7 @@ router.post('/extract', auth, async (req, res) => {
       }
     });
 
-        await page.setUserAgent(
+    await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     );
     await page.setViewport({ width: 1366, height: 768 });
@@ -144,7 +203,7 @@ router.post('/extract', auth, async (req, res) => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
-  let response;
+    let response;
     try {
       response = await page.goto(url, {
         waitUntil: 'domcontentloaded',
@@ -209,7 +268,7 @@ router.post('/extract', auth, async (req, res) => {
       console.error('[player-capture] не удалось сделать скриншот:', e.message);
     }
 
-        await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
+    await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
 
     // --- вкладки плееров (Kinogo и похожие: Смотреть онлайн / 4K Качество / ...) ---
     let playersFound = [];
@@ -293,32 +352,7 @@ router.post('/extract', auth, async (req, res) => {
     } else if (requestedEpisode && adapter?.playerFrameMatch) {
       // плеер лениво грузится только по клику по #cdnplayer-container — без этого
       // фрейм balabolka никогда не появится, сколько его ни жди.
-      // Первый клик почти всегда открывает рекламный оверлей (ставки/казино),
-      // поэтому кликаем несколько раз с паузами, проверяя появление плеера после каждого.
-      try {
-        const box = await page.evaluate(() => {
-          const el = document.querySelector('#cdnplayer-container');
-          if (!el) return null;
-          el.scrollIntoView({ block: 'center' });
-          const r = el.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        });
-        if (box) {
-          for (let i = 0; i < 3; i++) {
-            await page.mouse.click(box.x, box.y);
-            console.log(`[player-capture] (серия) клик по #cdnplayer-container #${i + 1} выполнен`);
-            await new Promise((r) => setTimeout(r, 2000));
-            if (page.frames().some((f) => adapter.playerFrameMatch(f.url()))) {
-              console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
-              break;
-            }
-          }
-        } else {
-          console.warn('[player-capture] #cdnplayer-container не найден на странице (серийный режим)');
-        }
-      } catch (e) {
-        console.error('[player-capture] ошибка клика по #cdnplayer-container (серийный режим):', e.message);
-      }
+      await clickPlayerAndWaitFrame(page, adapter, 'серия');
 
       // режим rezka: фрейм по домену + дропдаун с data-id
       let targetFrame = null;
@@ -371,7 +405,7 @@ router.post('/extract', auth, async (req, res) => {
       if (!playerApiData) {
         console.warn('[player-capture] после клика новый JSON так и не пришёл — переключение не сработало');
       }
-        } else {
+    } else {
       if (requestedEpisode) {
         console.warn('[player-capture] нет адаптера переключения серий для сайта', siteName);
       }
@@ -382,117 +416,38 @@ router.post('/extract', auth, async (req, res) => {
       // Это триггерит верхнеуровневую навигацию через прокси, которая падает
       // (рекламный домен заблокирован/недоступен) и убивает уже загруженный плеер
       // (весь фрейм улетает в chrome-error). Поэтому для таких сайтов вообще
-      // пропускаем кликанье и просто ждём появления фрейма плеера напрямую.
+      // пропускаем кликанье по общим классам и жмём точечно по контейнеру плеера.
       const skipGenericClick = !!adapter?.playerFrameMatch;
 
-        if (skipGenericClick) {
-        // общий клик по .play/[class*="play"] на таких сайтах слишком часто попадает по рекламе
-        // (см. историю поломок с chrome-error) — но сам плеер тоже лениво грузится и без
-        // клика остаётся пустым about:blank. Поэтому кликаем ТОЧЕЧНО по известному контейнеру
-        // плеера конкретно этого сайта, а не по общим классам, гуляющим по всей странице.
-              // рекламные оверлеи Rezka часто открываются как ОТДЕЛЬНАЯ вкладка (window.open),
-      // а не как фрейм внутри страницы — puppeteer их не видит в page.frames(),
-      // и пока такая вкладка "висит" открытой, клики по основной странице могут работать некорректно.
-      // Ловим такие попапы и сразу закрываем, чтобы не мешали.
-      const popupCloser = (popup) => {
-        console.log('[player-capture] обнаружен рекламный попап, закрываю:', popup.url());
-        popup.close().catch(() => {});
-      };
-      page.on('popup', popupCloser);
-
-      try {
-        const box = await page.evaluate(() => {
-          const el = document.querySelector('#cdnplayer-container');
-          if (!el) return null;
-          el.scrollIntoView({ block: 'center' });
-          const r = el.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        });
-        if (box) {
-          for (let i = 0; i < 5; i++) {
-            await page.mouse.click(box.x, box.y);
-            console.log(`[player-capture] (серия) клик по #cdnplayer-container #${i + 1} выполнен`);
-            await new Promise((r) => setTimeout(r, 2000));
-            if (page.frames().some((f) => adapter.playerFrameMatch(f.url()))) {
-              console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
+      if (skipGenericClick) {
+        await clickPlayerAndWaitFrame(page, adapter, 'фильм');
+      } else {
+        // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
+        const playSelectors = [
+          '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
+          '[class*="play"]', '.video-play-button',
+          '#cdnplayer-container', '.b-post__player', '#player',
+        ];
+        let clickedPlaySelector = false;
+        for (const sel of playSelectors) {
+          try {
+            const el = await page.$(sel);
+            if (el) {
+              await el.click({ delay: 100 }).catch(() => {});
+              console.log('[player-capture] клик по селектору плеера:', sel);
+              clickedPlaySelector = true;
               break;
             }
-          }
-        } else {
-          console.warn('[player-capture] #cdnplayer-container не найден на странице (серийный режим)');
+          } catch (e) {}
         }
-      } catch (e) {
-        console.error('[player-capture] ошибка клика по #cdnplayer-container (серийный режим):', e.message);
-      } finally {
-        page.off('popup', popupCloser);
-      }
-      } else {
-      // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
-      const playSelectors = [
-        '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
-        '[class*="play"]', '.video-play-button',
-        '#cdnplayer-container', '.b-post__player', '#player',
-      ];
-      let clickedPlaySelector = false;
-      for (const sel of playSelectors) {
-        try {
-          const el = await page.$(sel);
-          if (el) {
-            await el.click({ delay: 100 }).catch(() => {});
-            console.log('[player-capture] клик по селектору плеера:', sel);
-            clickedPlaySelector = true;
-            break;
-          }
-        } catch (e) {}
-      }
 
-      // fallback: если ни один селектор не найден — кликаем прямо в центр контейнера плеера по координатам,
-      // это надёжнее для кастомных lazy-load плееров без узнаваемых классов
-      if (!clickedPlaySelector) {
-                const popupCloserMovie = (popup) => {
-          console.log('[player-capture] (фильм) обнаружен рекламный попап, закрываю:', popup.url());
-          popup.close().catch(() => {});
-        };
-        page.on('popup', popupCloserMovie);
-
-        try {
-          // сначала скроллим элемент в видимую область — иначе getBoundingClientRect
-          // может вернуть координаты за пределами viewport (768px по высоте),
-          // и клик по ним попадёт в пустоту, ни во что не задев
-          const box = await page.evaluate(() => {
-            const el = document.querySelector('#cdnplayer-container');
-            if (!el) return null;
-            el.scrollIntoView({ block: 'center' });
-            const r = el.getBoundingClientRect();
-            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          });
-          if (box) {
-            console.log('[player-capture] координаты #cdnplayer-container после скролла:', box);
-
-            // первый клик на Rezka почти всегда открывает рекламный оверлей
-            // (ставки/казино), а не сам плеер. Кликаем несколько раз с паузами —
-            // каждый следующий клик обычно закрывает рекламу и продвигает к реальному плееру
-            for (let i = 0; i < 5; i++) {
-              await page.mouse.click(box.x, box.y);
-              console.log(`[player-capture] клик по #cdnplayer-container #${i + 1} выполнен`);
-              await new Promise((r) => setTimeout(r, 2000));
-
-              const foundNow = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
-              if (foundNow) {
-                console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
-                break;
-              }
-            }
-          } else {
-            console.warn('[player-capture] #cdnplayer-container не найден на странице');
-          }
-        } catch (e) {
-          console.error('[player-capture] ошибка клика по #cdnplayer-container:', e.message);
-        } finally {
-          page.off('popup', popupCloserMovie);
+        // fallback: если ни один селектор не найден — используем ту же логику
+        // клика+ожидания фрейма, что и для Rezka (сработает, только если у адаптера
+        // вообще есть playerFrameMatch — для остальных сайтов просто ничего не сделает)
+        if (!clickedPlaySelector && adapter?.playerFrameMatch) {
+          await clickPlayerAndWaitFrame(page, adapter, 'фильм-fallback');
         }
       }
-    }
 
       // некоторые сайты (yandex-превью, my.mail.ru) отдают видео через чужой
       // iframe-плеер — обычный page.$() внутрь фрейма не заглядывает. Если у
@@ -527,14 +482,19 @@ router.post('/extract', auth, async (req, res) => {
       // rezka/кастомным CDN-плеерам без явного episode-режима нужно больше времени на разворачивание
       await new Promise(r => setTimeout(r, 8000));
 
-      // фильмы (без requestedEpisode) тоже используют balabolka — просто дожидаемся его появления,
-      // не переключая серию. Исключаем декой-фреймы вида /series/.../....html (виджеты "похожие релизы")
+      // фильмы (без requestedEpisode) тоже используют balabolka — на случай, если
+      // clickPlayerAndWaitFrame выше не успел поймать фрейм с первого раза, даём
+      // ещё немного времени и логируем итог для отладки. Исключаем декой-фреймы
+      // вида /series/.../....html (виджеты "похожие релизы") — они уже отсеяны
+      // самим adapter.playerFrameMatch.
       if (adapter?.playerFrameMatch) {
-        let movieFrame = null;
-        for (let i = 0; i < 15; i++) {
-          movieFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
-          if (movieFrame) break;
-          await new Promise(r => setTimeout(r, 1000));
+        let movieFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
+        if (!movieFrame) {
+          for (let i = 0; i < 10; i++) {
+            movieFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
+            if (movieFrame) break;
+            await new Promise(r => setTimeout(r, 1000));
+          }
         }
         console.log('[player-capture] (фильм) найден фрейм плеера:', !!movieFrame, movieFrame?.url());
         if (!movieFrame) {
@@ -543,7 +503,7 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
-      const iframes = await page.$$eval('iframe', (els) =>
+    const iframes = await page.$$eval('iframe', (els) =>
       els.map((el) => el.getAttribute('data-lazy-src') || el.src).filter(Boolean)
     );
 
