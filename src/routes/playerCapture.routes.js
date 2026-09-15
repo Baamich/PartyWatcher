@@ -20,6 +20,7 @@ function detectSite(url) {
   if (lower.includes('kinogo')) return 'kinogo';
   if (lower.includes('lordfilm') || lower.includes('lordserial')) return 'lordfilm';
   if (lower.includes('yandex.ru/video')) return 'yandex';
+  if (lower.includes('my.mail.ru')) return 'mailru';
   return 'unknown';
 }
 
@@ -269,7 +270,7 @@ router.post('/extract', auth, async (req, res) => {
       if (!playerApiData) {
         console.warn('[player-capture] после клика новый JSON так и не пришёл — переключение не сработало');
       }
-    } else {
+        } else {
       if (requestedEpisode) {
         console.warn('[player-capture] нет адаптера переключения серий для сайта', siteName);
       }
@@ -287,6 +288,37 @@ router.post('/extract', auth, async (req, res) => {
           }
         } catch (e) {}
       }
+
+      // некоторые сайты (yandex-превью, my.mail.ru) отдают видео через чужой
+      // iframe-плеер — обычный page.$() внутрь фрейма не заглядывает. Если у
+      // адаптера есть frameMatch — ищем такой фрейм отдельно и жмём play уже в нём.
+      if (adapter?.frameMatch) {
+        let embedFrame = null;
+        for (let i = 0; i < 10; i++) {
+          embedFrame = page.frames().find((f) => adapter.frameMatch(f.url()));
+          if (embedFrame) break;
+          await new Promise(r => setTimeout(r, 500));
+        }
+        console.log('[player-capture] найден embed-фрейм для клика:', !!embedFrame, embedFrame?.url());
+
+        if (embedFrame && adapter.playSelector) {
+          try {
+            const el = await embedFrame.$(adapter.playSelector);
+            if (el) {
+              await el.click({ delay: 100 }).catch(() => {});
+              console.log('[player-capture] клик по play внутри embed-фрейма выполнен');
+            } else {
+              console.warn('[player-capture] play-кнопка не найдена внутри embed-фрейма');
+            }
+          } catch (e) {
+            console.error('[player-capture] ошибка клика внутри embed-фрейма:', e.message);
+          }
+        }
+
+        // embed-плеерам через прокси нужно больше времени на подгрузку потока
+        await new Promise(r => setTimeout(r, 4000));
+      }
+
       await new Promise(r => setTimeout(r, 4000));
     }
 

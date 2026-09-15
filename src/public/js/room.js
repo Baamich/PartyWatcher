@@ -69,6 +69,45 @@ function renderPlayer(video) {
     });
   }
 
+  if (video.type === 'direct') {
+    const isRawVideoFile = /\.(mp4|webm|ogg|m3u8)(\?|$)/i.test(video.url);
+
+    if (isRawVideoFile) {
+      container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${video.url}"></video>`;
+      videoEl = document.getElementById('videoEl');
+      videoEl.volume = 0.3;
+      playerReady = true;
+
+      if (isOwner) {
+        videoEl.addEventListener('play', () => emitPlayback(true));
+        videoEl.addEventListener('pause', () => emitPlayback(false));
+        videoEl.addEventListener('seeked', () => emitPlayback(!videoEl.paused));
+      } else {
+        videoEl.addEventListener('play', () => { if (!suppressEvents) enforceHostState(); });
+        videoEl.addEventListener('seeking', () => { if (!suppressEvents) enforceHostState(); });
+        videoEl.oncontextmenu = () => false;
+        videoEl.disablePictureInPicture = true;
+      }
+      return Promise.resolve();
+    }
+
+    // не файл, а страница/embed чужого плеера — вставляем как iframe.
+    // Синк play/pause здесь технически невозможен (чужой домен) — так же,
+    // как и в fallback-режиме player_capture с playerIframes.
+    videoEl = null;
+    container.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.src = video.url;
+    iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = '0';
+    iframe.referrerPolicy = 'no-referrer';
+    container.appendChild(iframe);
+    playerReady = true;
+    return Promise.resolve();
+  }
+
   if (video.type === 'youtube') {
     const idMatch = video.url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     const videoId = idMatch ? idMatch[1] : '';

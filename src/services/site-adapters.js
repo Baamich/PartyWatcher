@@ -54,5 +54,13 @@ module.exports = {
 
   yandex: {
     mode: null,
+    frameMatch: (frameUrl) => frameUrl.includes('my.mail.ru/video/embed'),
+    playSelector: 'video, .player, [class*="play"]',
+  },
+
+  mailru: {
+    mode: null,
+    frameMatch: (frameUrl) => frameUrl.includes('my.mail.ru/video/embed'),
+    playSelector: 'video, .player, [class*="play"]',
   },
 };
