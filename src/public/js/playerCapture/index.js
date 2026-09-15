@@ -37,8 +37,55 @@ try {
     }),
     });
 
-    const data = await res.json();
-    console.log('[playerCapture] extract result:', data); // ← смотри это в консоли браузера
+        let data = await res.json();
+    console.log('[playerCapture] extract result:', data);
+
+    // Универсальный перебор плееров: если у текущего нет streams —
+    // пробуем остальные из meta.players по очереди.
+    if (isOwner && data.meta?.players?.length > 1 && !data.streams?.length) {
+      const tried = new Set();
+      const first = data.meta.currentPlayer || data.meta.players[0];
+      if (first) tried.add(first);
+
+      for (const label of data.meta.players) {
+        if (tried.has(label)) continue;
+        tried.add(label);
+
+        console.log('[playerCapture] нет streams, пробую плеер:', label);
+        container.innerHTML = `
+          <div style="
+            display:flex;align-items:center;justify-content:center;
+            height:100%;color:#fff;background:#111;flex-direction:column;gap:12px;
+          ">
+            <div style="font-size:32px;">⏳</div>
+            <div>Пробуем плеер «${label}»...</div>
+          </div>
+        `;
+
+        const resNext = await fetch('/api/player-capture/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            url: video.url,
+            episode: video.meta?.currentEpisode || null,
+            player: label,
+            roomCode: window.code,
+          }),
+        });
+        const next = await resNext.json();
+        console.log('[playerCapture] extract result (player:', label, '):', next);
+
+        if (next.success && next.streams?.length) {
+          data = next;
+          break;
+        }
+        // сохраняем последний ответ с players, даже если streams пусто
+        if (next.meta?.players?.length) {
+          data = next;
+        }
+      }
+    }
 
     if (data.success) {
       if (isOwner && window.socket && window.code && data.streams?.length) {
@@ -53,19 +100,26 @@ try {
         });
       }
       if (data.streams?.length) {
-        return renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl: video.url });
-        }
-        if (data.playerIframes?.length) {
-        return renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container, videoUrl: video.url });
-        }
+        return renderNativePlayer(data.streams[0], data.meta || meta, {
+          isOwner,
+          container,
+          videoUrl: video.url,
+        });
+      }
+      if (data.playerIframes?.length) {
+        return renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
+          isOwner,
+          container,
+          videoUrl: video.url,
+        });
+      }
     }
 
-    // Показываем реальную ошибку с сервера
-      return renderFallback(video.url, data.meta || meta, { 
-        isOwner, 
-        container,
-        errorMessage: data.error || data.message || 'Не удалось найти плеер',
-        videoUrl: video.url,
+    return renderFallback(video.url, data.meta || meta, {
+      isOwner,
+      container,
+      errorMessage: data.error || data.message || 'Не удалось найти плеер',
+      videoUrl: video.url,
     });
 
     } catch (e) {
@@ -79,7 +133,7 @@ try {
   }
 }
 
-function renderPlayerIframe(playerUrl, meta, { isOwner, container }) {
+function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
   container.innerHTML = '';
   
   const iframe = document.createElement('iframe');
@@ -91,12 +145,75 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container }) {
   iframe.referrerPolicy = 'no-referrer';
   container.appendChild(iframe);
 
-    const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
-    if (isOwner && (hasMultipleEpisodes || meta.voices?.length)) {
-        showEpisodeControls(meta);
-    } else {
-        hideEpisodeControls();
-    }
+  const hasPlayers = meta.players && meta.players.length > 1;
+  const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
+
+  if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
+    const reloadWithEpisode = async (episode, playerLabel) => {
+      container.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
+          <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
+        </div>
+      `;
+
+      const res = await fetch('/api/player-capture/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          url: videoUrl,
+          episode,
+          player: playerLabel || null,
+          roomCode: window.code,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.streams?.length) {
+        if (isOwner && window.socket && window.code) {
+          window.socket.emit('player_capture:streams', {
+            code: window.code,
+            season: data.meta?.currentSeason || 1,
+            episode,
+            voice: data.meta?.currentVoice || null,
+            streams: data.streams,
+            playerIframes: data.playerIframes || [],
+            meta: data.meta,
+          });
+        }
+        const player = renderNativePlayer(data.streams[0], data.meta || meta, {
+          isOwner,
+          container,
+          videoUrl,
+        });
+        if (typeof window.__onCapturePlayerReload === 'function') {
+          window.__onCapturePlayerReload(player);
+        }
+        return player;
+      } else if (data.success && data.playerIframes?.length) {
+        const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
+          isOwner,
+          container,
+          videoUrl,
+        });
+        if (typeof window.__onCapturePlayerReload === 'function') {
+          window.__onCapturePlayerReload(player);
+        }
+        return player;
+      } else {
+        renderFallback(videoUrl, data.meta || meta, {
+          isOwner,
+          container,
+          errorMessage: data.error || data.message || 'Не удалось загрузить',
+          videoUrl,
+        });
+      }
+    };
+
+    showEpisodeControls(meta, reloadWithEpisode);
+  } else {
+    hideEpisodeControls();
+  }
 
   return {
     type: 'player_capture',
@@ -248,7 +365,11 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
       }
       return player;
     } else if (data.success && data.playerIframes?.length) {
-      const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });
+      const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
+        isOwner,
+        container,
+        videoUrl,
+      });
       if (typeof window.__onCapturePlayerReload === 'function') {
         window.__onCapturePlayerReload(player);
       }
@@ -373,6 +494,7 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
         const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
           isOwner,
           container,
+          videoUrl: videoUrl || url,
         });
         if (typeof window.__onCapturePlayerReload === 'function') {
           window.__onCapturePlayerReload(player);
