@@ -109,16 +109,83 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container }) {
   };
 }
 
+function loadHlsScript() {
+  return new Promise((resolve, reject) => {
+    if (window.Hls) return resolve(window.Hls);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
+    s.onload = () => resolve(window.Hls);
+    s.onerror = () => reject(new Error('Не удалось загрузить hls.js'));
+    document.head.appendChild(s);
+  });
+}
+
 function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
   container.innerHTML = '';
   const videoEl = document.createElement('video');
   videoEl.id = 'captureVideo';
-  videoEl.src = `/api/stream/relay?url=${encodeURIComponent(stream.url)}`;
   videoEl.controls = isOwner;
+  videoEl.playsInline = true;
+  videoEl.setAttribute('playsinline', '');
+  videoEl.setAttribute('webkit-playsinline', '');
   videoEl.style.width = '100%';
   videoEl.style.height = '100%';
   videoEl.volume = 0.3;
-    container.appendChild(videoEl);
+  container.appendChild(videoEl);
+
+  videoEl.addEventListener('error', () => {
+    console.error('[capture] video error', videoEl.error);
+  });
+
+  const streamUrl = stream.url;
+  const isHls = stream.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl);
+
+  // через relay — чтобы обойти CORS у vkvideo.cloud
+  const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}`;
+
+  let hlsInstance = null;
+
+  const setupSource = async () => {
+    try {
+      if (isHls) {
+        const Hls = await loadHlsScript();
+        if (Hls.isSupported()) {
+          hlsInstance = new Hls({
+            enableWorker: true,
+            xhrSetup: (xhr) => {
+              // сегменты тоже через тот же origin при необходимости
+            },
+          });
+          hlsInstance.loadSource(playUrl);
+          hlsInstance.attachMedia(videoEl);
+          hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+            console.error('[capture] hls error', data);
+            if (data.fatal) {
+              // fallback: пробуем прямой URL без relay
+              try {
+                hlsInstance.destroy();
+              } catch (_) {}
+              hlsInstance = new Hls();
+              hlsInstance.loadSource(streamUrl);
+              hlsInstance.attachMedia(videoEl);
+            }
+          });
+        } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+          // Safari
+          videoEl.src = playUrl;
+        } else {
+          videoEl.src = playUrl;
+        }
+      } else {
+        videoEl.src = playUrl;
+      }
+    } catch (e) {
+      console.error('[capture] setupSource failed', e);
+      videoEl.src = playUrl;
+    }
+  };
+
+  setupSource();
 
   if (isOwner) {
     videoEl.addEventListener('play', () => {
@@ -141,8 +208,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     });
   }
 
-
-  // перезагрузка видео при смене серии: заново дёргаем /extract с новым episode
+  // перезагрузка видео при смене серии / плеера
   const reloadWithEpisode = async (episode, playerLabel) => {
     container.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
@@ -203,14 +269,21 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     hideEpisodeControls();
   }
 
-  return {
-    type: 'player_capture',
+    return {
+  type: 'player_capture',
     videoEl,
     meta,
+    hls: () => hlsInstance,
     getCurrentPosition: () => videoEl.currentTime || 0,
     getIsPlayingNow: () => !videoEl.paused,
     doPlayPause: (play) => play ? videoEl.play().catch(() => {}) : videoEl.pause(),
     seekTo: (sec) => { videoEl.currentTime = sec; },
+    destroy: () => {
+      try {
+        if (hlsInstance) hlsInstance.destroy();
+      } catch (_) {}
+      hlsInstance = null;
+    },
   };
 }
 
