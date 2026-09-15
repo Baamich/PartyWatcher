@@ -507,6 +507,21 @@ async function init() {
     }
   });
 
+window.__onCapturePlayerReload = (player) => {
+  capturePlayer = player;
+  currentVideoType = 'player_capture';
+  playerReady = true;
+
+  // хост: слушатели на НОВОМ video
+  if (isOwner && player?.videoEl && !player.videoEl.dataset.captureBound) {
+    const v = player.videoEl;
+    v.dataset.captureBound = '1';
+    v.addEventListener('play', () => emitPlayback(true));
+    v.addEventListener('pause', () => emitPlayback(false));
+    v.addEventListener('seeked', () => emitPlayback(!v.paused));
+  }
+};
+
   socket.on('playback:update', (state) => {
     lastState = state;
 
@@ -519,16 +534,7 @@ async function init() {
       const v = capturePlayer.videoEl;
 
       if (state.isPlaying) {
-        const drift = Math.abs((v.currentTime || 0) - (state.positionSeconds || 0));
-
-        if (drift > 3) {
-          // вместо «голого» seek — пауза → позиция → пуск (как у хоста)
-          v.pause();
-          try { v.currentTime = state.positionSeconds; } catch (_) {}
-          setTimeout(() => {
-            v.play().catch((e) => console.warn('[viewer] sync play failed', e));
-          }, 150);
-        } else if (v.paused) {
+        if (v.paused) {
           v.play().catch((e) => console.warn('[viewer] sync play failed', e));
         }
       } else {
@@ -591,12 +597,22 @@ async function init() {
       currentVideoType = 'player_capture';
       playerReady = true;
 
-      const v = capturePlayer.videoEl;
+    const v = capturePlayer.videoEl;
       if (v) {
         v.setAttribute('playsinline', '');
         v.setAttribute('webkit-playsinline', '');
         v.addEventListener('error', () => {
           console.error('[viewer] video error', v.error);
+        });
+        // если буфер/HLS сам поставил на паузу — поднимаем, пока хост играет
+        v.addEventListener('pause', () => {
+          if (started && lastState.isPlaying) {
+            setTimeout(() => {
+              if (lastState.isPlaying && v.paused) {
+                v.play().catch(() => {});
+              }
+            }, 200);
+          }
         });
       }
 

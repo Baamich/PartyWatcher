@@ -157,7 +157,6 @@ const reloadWithEpisode = async (episode) => {
     const data = await res.json();
 
     if (data.success && data.streams?.length) {
-      // хост отдаёт готовый поток всем зрителям — без их extract
       if (isOwner && window.socket && window.code) {
         window.socket.emit('player_capture:streams', {
           code: window.code,
@@ -169,9 +168,18 @@ const reloadWithEpisode = async (episode) => {
           meta: data.meta,
         });
       }
-      renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl });
+      const player = renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl });
+      // важно: room.js должен знать новый videoEl
+      if (typeof window.__onCapturePlayerReload === 'function') {
+        window.__onCapturePlayerReload(player);
+      }
+      return player;
     } else if (data.success && data.playerIframes?.length) {
-      renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });
+      const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, { isOwner, container });
+      if (typeof window.__onCapturePlayerReload === 'function') {
+        window.__onCapturePlayerReload(player);
+      }
+      return player;
     } else {
       renderFallback(videoUrl, meta, { isOwner, container, errorMessage: data.error || 'Не удалось загрузить серию' });
     }

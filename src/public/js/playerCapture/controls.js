@@ -94,21 +94,8 @@ export async function onEpisodeChange() {
     }
   }
 
-  // сброс позиции — иначе зрители seek'ают в старое время новой серии
-  if (window.socket && window.code) {
-    window.socket.emit('playback:update', {
-      code: window.code,
-      isPlaying: false,
-      positionSeconds: 0,
-    });
-
-    window.socket.emit('player_capture:change', {
-      code: window.code,
-      season,
-      episode,
-      voice,
-    });
-  }
+  // сброс playback уже делает сервер в player_capture:streams — тут не дублируем,
+  // иначе можно случайно послать pause уже после того, как хост нажал play
 }
 
 // Глобально
