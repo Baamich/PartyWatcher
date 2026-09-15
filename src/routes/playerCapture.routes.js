@@ -19,6 +19,7 @@ function detectSite(url) {
   if (lower.includes('rezka') || lower.includes('hdrezka')) return 'rezka';
   if (lower.includes('kinogo')) return 'kinogo';
   if (lower.includes('lordfilm') || lower.includes('lordserial')) return 'lordfilm';
+  if (lower.includes('yandex.ru/video')) return 'yandex';
   return 'unknown';
 }
 
@@ -341,7 +342,7 @@ router.post('/extract', auth, async (req, res) => {
       const releasedEpisodes = episodesData.filter((e) => e.released);
       seasonsFound = [...new Set(episodesData.map((e) => e.season))];
       totalEpisodes = releasedEpisodes.length ? Math.max(...releasedEpisodes.map((e) => e.episode)) : 1;
-    } else {
+      } else if (!adapter) {
       // нет адаптера под этот сайт вообще — дампим кандидатов для будущего адаптера
       const candidateRows = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('tr, li, div, button'))
@@ -351,6 +352,7 @@ router.post('/extract', auth, async (req, res) => {
       }).catch(() => []);
       console.log('[player-capture] нет адаптера для сайта', siteName, '— кандидаты для нового адаптера:', JSON.stringify(candidateRows, null, 2));
     }
+    // адаптер есть, но mode:null (например yandex) — доп. парсинг серий не нужен, молча пропускаем
 
     const KNOWN_HOSTS = [
       'player', 'embed', 'video', 'alloh', 'collaps', 'voidboost',

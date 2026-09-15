@@ -50,4 +50,9 @@ module.exports = {
   // Если у lordfilm окажется тот же плеер "allplay" — можно будет просто
   // сделать lordfilm: module.exports.kinogo (тот же объект).
   lordfilm: null,
+
+
+  yandex: {
+    mode: null,
+  },
 };
