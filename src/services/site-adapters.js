@@ -15,7 +15,8 @@
 module.exports = {
   rezka: {
     mode: 'schedule-table',
-    playerFrameMatch: (frameUrl) => frameUrl.includes('balabolka.stravers.live'),
+    playerFrameMatch: (frameUrl) =>
+      frameUrl.includes('balabolka.stravers.live') && !/\/(series|films)\/.+\.html/.test(frameUrl),
     episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item',
     episodeButtonSelector: (id) => `div[data-select="episodeType1"] button.select__drop-item[data-id="${id}"]`,
     episodeListSelector: 'div[data-select="episodeType1"] button.select__drop-item',

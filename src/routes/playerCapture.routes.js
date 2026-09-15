@@ -284,10 +284,13 @@ router.post('/extract', auth, async (req, res) => {
     } else if (requestedEpisode && adapter?.playerFrameMatch) {
       // режим rezka: фрейм по домену + дропдаун с data-id
       let targetFrame = null;
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 20; i++) {
         targetFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
         if (targetFrame) break;
-        await new Promise(r => setTimeout(r, 500));
+        if (i === 9) {
+          console.log('[player-capture] плеер ещё не найден на середине ожидания, текущие фреймы:', page.frames().map((f) => f.url()));
+        }
+        await new Promise(r => setTimeout(r, 1000));
       }
 
       console.log('[player-capture] найден фрейм плеера:', !!targetFrame, targetFrame?.url());
@@ -400,11 +403,27 @@ router.post('/extract', auth, async (req, res) => {
           }
         }
 
-        // rezka/кастомным CDN-плеерам без явного episode-режима нужно больше времени на разворачивание
-        await new Promise(r => setTimeout(r, 8000));
+        // embed-плеерам через прокси нужно больше времени на подгрузку потока
+        await new Promise(r => setTimeout(r, 4000));
       }
 
+      // rezka/кастомным CDN-плеерам без явного episode-режима нужно больше времени на разворачивание
       await new Promise(r => setTimeout(r, 8000));
+
+      // фильмы (без requestedEpisode) тоже используют balabolka — просто дожидаемся его появления,
+      // не переключая серию. Исключаем декой-фреймы вида /series/.../....html (виджеты "похожие релизы")
+      if (adapter?.playerFrameMatch) {
+        let movieFrame = null;
+        for (let i = 0; i < 15; i++) {
+          movieFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
+          if (movieFrame) break;
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        console.log('[player-capture] (фильм) найден фрейм плеера:', !!movieFrame, movieFrame?.url());
+        if (!movieFrame) {
+          console.log('[player-capture] (фильм) все фреймы на странице:', page.frames().map((f) => f.url()));
+        }
+      }
     }
 
       const iframes = await page.$$eval('iframe', (els) =>
