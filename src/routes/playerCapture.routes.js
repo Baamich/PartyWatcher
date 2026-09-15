@@ -348,7 +348,26 @@ router.post('/extract', auth, async (req, res) => {
       const skipGenericClick = !!adapter?.playerFrameMatch;
 
       if (skipGenericClick) {
-        console.log('[player-capture] у сайта есть playerFrameMatch — пропускаю общий клик по .play, жду плеер напрямую');
+        // общий клик по .play/[class*="play"] на таких сайтах слишком часто попадает по рекламе
+        // (см. историю поломок с chrome-error) — но сам плеер тоже лениво грузится и без
+        // клика остаётся пустым about:blank. Поэтому кликаем ТОЧЕЧНО по известному контейнеру
+        // плеера конкретно этого сайта, а не по общим классам, гуляющим по всей странице.
+        try {
+          const box = await page.evaluate(() => {
+            const el = document.querySelector('#cdnplayer-container');
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+          });
+          if (box) {
+            await page.mouse.click(box.x, box.y);
+            console.log('[player-capture] клик по #cdnplayer-container для запуска ленивой загрузки плеера:', box);
+          } else {
+            console.warn('[player-capture] #cdnplayer-container не найден на странице');
+          }
+        } catch (e) {
+          console.error('[player-capture] ошибка клика по #cdnplayer-container:', e.message);
+        }
       } else {
       // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
       const playSelectors = [
