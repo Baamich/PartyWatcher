@@ -148,6 +148,23 @@ router.post('/extract', auth, async (req, res) => {
     console.log('[player-capture] HTTP статус:', response ? response.status() : 'нет ответа');
     console.log('[player-capture] финальный URL после редиректов:', page.url());
 
+    // антибот-заглушка Rezka показывает короткую страницу с этим текстом,
+    // сама себя обычно редиректит через несколько секунд после JS-проверки —
+    // ждём и пробуем перечитать страницу ещё раз
+    try {
+      const initialTitle = await page.title();
+      if (/не бот|checking|just a moment/i.test(initialTitle)) {
+        console.warn('[player-capture] похоже на антибот-заглушку, жду 8 сек и перезахожу...');
+        await new Promise(r => setTimeout(r, 8000));
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch((e) => {
+          console.error('[player-capture] повторный заход не удался:', e.message);
+        });
+        console.log('[player-capture] заголовок после повторного захода:', await page.title().catch(() => '?'));
+      }
+    } catch (e) {
+      console.warn('[player-capture] ошибка проверки антибот-заглушки:', e.message);
+    }
+
     // если навигация не удалась вообще (таймаут, ERR_TUNNEL_CONNECTION_FAILED,
     // DNS-ошибка и т.п.) — страницы фактически нет, дальше делать нечего.
     // Раньше код лез читать document.body у пустой/убитой страницы и падал
