@@ -333,10 +333,23 @@ router.post('/extract', auth, async (req, res) => {
       if (!playerApiData) {
         console.warn('[player-capture] после клика новый JSON так и не пришёл — переключение не сработало');
       }
-    } else {
+        } else {
       if (requestedEpisode) {
         console.warn('[player-capture] нет адаптера переключения серий для сайта', siteName);
       }
+
+      // Сайты с известным playerFrameMatch (например Rezka/balabolka) обычно
+      // грузят плеер сами по себе, без клика — а общий клик по ".play"/"[class*=play]"
+      // на таких сайтах слишком часто попадает по рекламному оверлею.
+      // Это триггерит верхнеуровневую навигацию через прокси, которая падает
+      // (рекламный домен заблокирован/недоступен) и убивает уже загруженный плеер
+      // (весь фрейм улетает в chrome-error). Поэтому для таких сайтов вообще
+      // пропускаем кликанье и просто ждём появления фрейма плеера напрямую.
+      const skipGenericClick = !!adapter?.playerFrameMatch;
+
+      if (skipGenericClick) {
+        console.log('[player-capture] у сайта есть playerFrameMatch — пропускаю общий клик по .play, жду плеер напрямую');
+      } else {
       // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
       const playSelectors = [
         '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
@@ -375,6 +388,7 @@ router.post('/extract', auth, async (req, res) => {
         } catch (e) {
           console.error('[player-capture] ошибка fallback-клика:', e.message);
         }
+      }
       }
 
       // некоторые сайты (yandex-превью, my.mail.ru) отдают видео через чужой
