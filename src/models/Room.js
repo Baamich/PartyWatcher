@@ -8,7 +8,7 @@ const roomSchema = new mongoose.Schema(
     video: {
       type: { 
         type: String, 
-        enum: ['youtube', 'twitch', 'vk', 'drive', 'player_capture'], 
+        enum: ['youtube', 'twitch', 'vk', 'drive', 'player_capture', 'direct'], 
         required: true 
       },
       url: { type: String, required: true },
