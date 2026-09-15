@@ -1,7 +1,7 @@
 // migrate-username-lower.js — запустить один раз через node
 const mongoose = require('mongoose');
-const config = require('./config');
-const User = require('./models/User');
+const config = require('../config');
+const User = require('../models/User');
 
 (async () => {
   await mongoose.connect(config.mongo.uri);
