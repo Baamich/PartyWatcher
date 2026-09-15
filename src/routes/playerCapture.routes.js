@@ -390,40 +390,42 @@ router.post('/extract', auth, async (req, res) => {
         // (см. историю поломок с chrome-error) — но сам плеер тоже лениво грузится и без
         // клика остаётся пустым about:blank. Поэтому кликаем ТОЧЕЧНО по известному контейнеру
         // плеера конкретно этого сайта, а не по общим классам, гуляющим по всей странице.
-                try {
-          // сначала скроллим элемент в видимую область — иначе getBoundingClientRect
-          // может вернуть координаты за пределами viewport (768px по высоте),
-          // и клик по ним попадёт в пустоту, ни во что не задев
-          const box = await page.evaluate(() => {
-            const el = document.querySelector('#cdnplayer-container');
-            if (!el) return null;
-            el.scrollIntoView({ block: 'center' });
-            const r = el.getBoundingClientRect();
-            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          });
-          if (box) {
-            console.log('[player-capture] координаты #cdnplayer-container после скролла:', box);
+              // рекламные оверлеи Rezka часто открываются как ОТДЕЛЬНАЯ вкладка (window.open),
+      // а не как фрейм внутри страницы — puppeteer их не видит в page.frames(),
+      // и пока такая вкладка "висит" открытой, клики по основной странице могут работать некорректно.
+      // Ловим такие попапы и сразу закрываем, чтобы не мешали.
+      const popupCloser = (popup) => {
+        console.log('[player-capture] обнаружен рекламный попап, закрываю:', popup.url());
+        popup.close().catch(() => {});
+      };
+      page.on('popup', popupCloser);
 
-            // первый клик на Rezka почти всегда открывает рекламный оверлей
-            // (ставки/казино), а не сам плеер. Кликаем несколько раз с паузами —
-            // каждый следующий клик обычно закрывает рекламу и продвигает к реальному плееру
-            for (let i = 0; i < 3; i++) {
-              await page.mouse.click(box.x, box.y);
-              console.log(`[player-capture] клик по #cdnplayer-container #${i + 1} выполнен`);
-              await new Promise((r) => setTimeout(r, 2000));
-
-              const foundNow = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
-              if (foundNow) {
-                console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
-                break;
-              }
+      try {
+        const box = await page.evaluate(() => {
+          const el = document.querySelector('#cdnplayer-container');
+          if (!el) return null;
+          el.scrollIntoView({ block: 'center' });
+          const r = el.getBoundingClientRect();
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        });
+        if (box) {
+          for (let i = 0; i < 5; i++) {
+            await page.mouse.click(box.x, box.y);
+            console.log(`[player-capture] (серия) клик по #cdnplayer-container #${i + 1} выполнен`);
+            await new Promise((r) => setTimeout(r, 2000));
+            if (page.frames().some((f) => adapter.playerFrameMatch(f.url()))) {
+              console.log('[player-capture] balabolka найдена после клика #' + (i + 1));
+              break;
             }
-          } else {
-            console.warn('[player-capture] #cdnplayer-container не найден на странице');
           }
-        } catch (e) {
-          console.error('[player-capture] ошибка клика по #cdnplayer-container:', e.message);
+        } else {
+          console.warn('[player-capture] #cdnplayer-container не найден на странице (серийный режим)');
         }
+      } catch (e) {
+        console.error('[player-capture] ошибка клика по #cdnplayer-container (серийный режим):', e.message);
+      } finally {
+        page.off('popup', popupCloser);
+      }
       } else {
       // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
       const playSelectors = [
