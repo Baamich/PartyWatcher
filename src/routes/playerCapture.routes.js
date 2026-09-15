@@ -321,15 +321,40 @@ router.post('/extract', auth, async (req, res) => {
       const playSelectors = [
         '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
         '[class*="play"]', '.video-play-button',
+        '#cdnplayer-container', '.b-post__player', '#player',
       ];
+      let clickedPlaySelector = false;
       for (const sel of playSelectors) {
         try {
           const el = await page.$(sel);
           if (el) {
             await el.click({ delay: 100 }).catch(() => {});
+            console.log('[player-capture] клик по селектору плеера:', sel);
+            clickedPlaySelector = true;
             break;
           }
         } catch (e) {}
+      }
+
+      // fallback: если ни один селектор не найден — кликаем прямо в центр контейнера плеера по координатам,
+      // это надёжнее для кастомных lazy-load плееров без узнаваемых классов
+      if (!clickedPlaySelector) {
+        try {
+          const box = await page.evaluate(() => {
+            const el = document.querySelector('#cdnplayer-container') || document.querySelector('#player');
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+          });
+          if (box) {
+            await page.mouse.click(box.x, box.y);
+            console.log('[player-capture] fallback-клик по координатам центра плеера:', box);
+          } else {
+            console.warn('[player-capture] не найден ни один известный контейнер плеера для fallback-клика');
+          }
+        } catch (e) {
+          console.error('[player-capture] ошибка fallback-клика:', e.message);
+        }
       }
 
       // некоторые сайты (yandex-превью, my.mail.ru) отдают видео через чужой
@@ -358,18 +383,19 @@ router.post('/extract', auth, async (req, res) => {
           }
         }
 
-        // embed-плеерам через прокси нужно больше времени на подгрузку потока
-        await new Promise(r => setTimeout(r, 4000));
+        // rezka/кастомным CDN-плеерам без явного episode-режима нужно больше времени на разворачивание
+        await new Promise(r => setTimeout(r, 8000));
       }
 
-      await new Promise(r => setTimeout(r, 4000));
+      await new Promise(r => setTimeout(r, 8000));
     }
 
-    const iframes = await page.$$eval('iframe', (els) =>
+      const iframes = await page.$$eval('iframe', (els) =>
       els.map((el) => el.getAttribute('data-lazy-src') || el.src).filter(Boolean)
     );
 
     console.log('[player-capture] все iframe на странице:', iframes); // ← смотри в pm2 logs
+    console.log('[player-capture] все фреймы страницы (frames()):', page.frames().map((f) => f.url()));
 
     // парсим график серий — селектор и парсер берём из адаптера конкретного сайта
     // определяем сезоны/серии — способ зависит от режима адаптера сайта
