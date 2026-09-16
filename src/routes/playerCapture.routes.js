@@ -249,7 +249,7 @@ router.post('/extract', auth, async (req, res) => {
     const PROXY_USER = process.env.PROXY_USER;        // "ksiyitlp"
     const PROXY_PASS = process.env.PROXY_PASS;        // "oiv7evgr7rk3"
 
-    const launchArgs = [
+        const launchArgs = [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -257,21 +257,26 @@ router.post('/extract', auth, async (req, res) => {
       '--single-process',
     ];
 
-    if (PROXY_SERVER) {
+    // kinogo: прокси ломает доступ к vkvideo.cloud (ERR_TUNNEL_CONNECTION_FAILED)
+    const useProxy = PROXY_SERVER && siteName !== 'kinogo';
+
+    if (useProxy) {
       launchArgs.push(`--proxy-server=${PROXY_SERVER}`);
     }
 
     browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: '/usr/bin/chromium-browser', // ← системный Chromium для ARM
+      executablePath: '/usr/bin/chromium-browser',
       args: launchArgs,
     });
 
     const page = await browser.newPage();
 
-    if (PROXY_SERVER && PROXY_USER && PROXY_PASS) {
+    if (useProxy && PROXY_USER && PROXY_PASS) {
       await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
     }
+
+    console.log('[player-capture] proxy:', useProxy ? 'ON' : 'OFF (kinogo без прокси)');
 
     // подключаем настоящий adblock-движок (см. getAdblocker выше) — блокирует
     // сами рекламные/трекинговые скрипты по сигнатурам, а не по домену,
@@ -1320,7 +1325,7 @@ router.post('/extract', auth, async (req, res) => {
         try {
           // качаем m3u8 через отдельную вкладку — без CORS
           checkPage = await browser.newPage();
-          if (PROXY_SERVER && PROXY_USER && PROXY_PASS) {
+          if (useProxy && PROXY_USER && PROXY_PASS) {
             await checkPage.authenticate({ username: PROXY_USER, password: PROXY_PASS });
           }
           await checkPage.setUserAgent(

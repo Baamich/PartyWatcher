@@ -57,7 +57,10 @@ router.get('/relay', auth, async (req, res) => {
   console.log('[stream-relay] proxy:', PROXY_SERVER ? 'ON' : 'OFF', 'url:', targetUrl.slice(0, 80));
 
   try {
-    const dispatcher = buildDispatcher();
+     // VK CDN часто недоступен через Webshare-прокси
+    const isVk = /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn/i.test(targetUrl);
+    const dispatcher = isVk ? null : buildDispatcher();
+    console.log('[stream-relay] proxy:', dispatcher ? 'ON' : 'OFF', 'vk:', isVk, 'url:', targetUrl.slice(0, 80));
     const primary = guessReferer(targetUrl);
 
     // для VK CDN пробуем несколько referer по очереди
