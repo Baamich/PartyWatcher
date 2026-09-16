@@ -734,11 +734,30 @@ router.post('/extract', auth, async (req, res) => {
         playerApiData = null;
         try {
           await page.evaluate((label) => {
-            const lis = Array.from(document.querySelectorAll('ul.tabs li[data-src]'));
-            const li = lis.find((el) => (el.textContent || '').trim() === label);
-            if (li) li.click();
-          }, target.label);
-          await new Promise((r) => setTimeout(r, 4000));
+          const lis = Array.from(document.querySelectorAll('ul.tabs li[data-src]'));
+          const li = lis.find((el) => (el.textContent || '').trim() === label);
+          if (li) li.click();
+        }, target.label);
+
+        // ждём появления JSON плеера или iframe до 12 сек
+        {
+          const maxWait = 12000;
+          const step = 400;
+          let t = 0;
+          while (t < maxWait && !playerApiData) {
+            await new Promise((r) => setTimeout(r, step));
+            t += step;
+            const hasPlayerFrame = page.frames().some((f) =>
+              f.url().includes('stravers.live') || f.url().includes('ortified.ws')
+            );
+            if (hasPlayerFrame && t > 3000) {
+              // iframe уже есть — даём ещё немного на JSON
+              await new Promise((r) => setTimeout(r, 2000));
+              break;
+            }
+          }
+          console.log('[player-capture] после переключения плеера ждали', t, 'мс, playerApiData:', !!playerApiData);
+        }
         } catch (e) {
           console.error('[player-capture] ошибка клика по вкладке плеера:', e.message);
         }
@@ -1249,7 +1268,18 @@ router.post('/extract', auth, async (req, res) => {
     if (foundIframes.length === 0 && relevantIframes.length > 0) {
       foundIframes.push(...relevantIframes.filter((src) => !src.startsWith('about:blank')));
     }
+    // если JSON так и не пришёл, но есть iframe плеера — ещё раз подождём сеть
+    if (!playerApiData && foundIframes.some((u) => u.includes('stravers.live') || u.includes('ortified'))) {
+      console.log('[player-capture] iframe есть, JSON нет — доп. ожидание 5с');
+      await new Promise((r) => setTimeout(r, 5000));
+    }
 
+    if (playerApiData) {
+      console.log('[player-capture] playerApiData keys:', Object.keys(playerApiData));
+      try {
+        console.log('[player-capture] hlsSource sample:', JSON.stringify(playerApiData.hlsSource || null).slice(0, 600));
+      } catch (_) {}
+    }
     let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
     if (playerApiData) {
       console.log('[player-capture] playerApiData keys:', Object.keys(playerApiData));
