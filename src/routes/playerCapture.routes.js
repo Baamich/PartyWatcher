@@ -156,12 +156,32 @@ router.post('/extract', auth, async (req, res) => {
       await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
     }
 
-    const foundStreams = [];
-    const foundIframes = [];
-
     // рекламные CDN, которые Rezka показывает поверх плеера при первом клике —
     // если поток пришёл отсюда, это реклама (ставки/казино), а не фильм
     const AD_STREAM_HOSTS = ['botsford.link', 'r.botsford', 'adv.', '.bet', 'casino'];
+
+    // домены рекламных/букмекерских сетей, которые перехватывают клик по #cdnplayer-container
+    // и открывают попап вместо настоящего плеера. Блокируем их запросы на уровне сети —
+    // так рекламный оверлей вообще не успевает загрузиться и подписаться на клик,
+    // и клик по контейнеру должен доходить до реального плеера под ним.
+    const AD_BLOCK_HOSTS = [
+      'stawkibet', '.bet', 'casino', 'botsford.link', 'r.botsford',
+      'onclickalgo', 'popads', 'propellerads', 'adsterra', 'exoclick',
+      'juicyads', 'trafficjunky', 'adnium', 'clickadu',
+    ];
+
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const reqUrl = req.url();
+      if (AD_BLOCK_HOSTS.some((h) => reqUrl.includes(h))) {
+        req.abort().catch(() => {});
+        return;
+      }
+      req.continue().catch(() => {});
+    });
+
+    const foundStreams = [];
+    const foundIframes = [];
 
     let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
 
