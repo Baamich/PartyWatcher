@@ -4,3 +4,4 @@ uploads/*
 !uploads/.gitkeep
 logs/
 *.log
+debug-screenshots/*
