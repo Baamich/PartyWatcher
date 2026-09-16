@@ -254,6 +254,16 @@ router.post('/extract', auth, async (req, res) => {
     if (blocker) {
       await blocker.enableBlockingInPage(page);
       console.log('[player-capture] adblocker подключен к странице');
+
+      // логируем каждый заблокированный запрос — нужно увидеть, действительно ли
+      // adblocker режет рекламный редирект (или, наоборот, случайно блокирует
+      // что-то из настоящего плеера balabolka)
+      blocker.on('request-blocked', (request) => {
+        console.log('[adblock] заблокирован запрос:', request.url);
+      });
+      blocker.on('request-redirected', (request) => {
+        console.log('[adblock] редирект запроса (например анти-трекинг):', request.url);
+      });
     } else {
       console.warn('[player-capture] adblocker недоступен — работаем без него');
     }
