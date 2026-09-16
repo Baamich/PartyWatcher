@@ -63,18 +63,40 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
   page.on('popup', popupCloser);
 
   try {
-    for (let i = 0; i < maxAttempts; i++) {
-      await page.mouse.click(box.x, box.y);
-      console.log(`[player-capture] (${logLabel}) клик по #cdnplayer-container #${i + 1} выполнен`);
-      await new Promise((r) => setTimeout(r, 2000));
+    // Первый клик почти наверняка запускает рекламный preroll (ставки/видео) —
+    // не долбим кликами часто (это может каждый раз ЗАНОВО перезапускать рекламу),
+    // а кликаем один раз и терпеливо ждём подольше, изредка проверяя,
+    // не появился ли настоящий плеер (реклама должна доиграть/закрыться сама).
+    await page.mouse.click(box.x, box.y);
+    console.log(`[player-capture] (${logLabel}) первый клик по #cdnplayer-container выполнен, жду...`);
+
+    const totalWaitMs = 25000;
+    const pollEveryMs = 2000;
+    let waited = 0;
+
+    while (waited < totalWaitMs) {
+      await new Promise((r) => setTimeout(r, pollEveryMs));
+      waited += pollEveryMs;
 
       if (page.frames().some((f) => adapter.playerFrameMatch(f.url()))) {
-        console.log(`[player-capture] (${logLabel}) balabolka найдена после клика #${i + 1}`);
+        console.log(`[player-capture] (${logLabel}) balabolka найдена после ${waited}мс ожидания`);
         return true;
       }
     }
-    console.warn(`[player-capture] (${logLabel}) плеер так и не появился после ${maxAttempts} кликов`);
-    return false;
+
+    // если за долгое ожидание ничего не произошло — пробуем ещё один клик
+    // (реклама могла зависнуть и не закрыться сама, второй клик иногда её пропускает)
+    console.warn(`[player-capture] (${logLabel}) плеер не появился за ${totalWaitMs}мс, пробую повторный клик`);
+    await page.mouse.click(box.x, box.y);
+    await new Promise((r) => setTimeout(r, 5000));
+
+    const foundAfterRetry = page.frames().some((f) => adapter.playerFrameMatch(f.url()));
+    if (foundAfterRetry) {
+      console.log(`[player-capture] (${logLabel}) balabolka найдена после повторного клика`);
+    } else {
+      console.warn(`[player-capture] (${logLabel}) плеер так и не появился`);
+    }
+    return foundAfterRetry;
   } catch (e) {
     console.error(`[player-capture] (${logLabel}) ошибка клика по #cdnplayer-container:`, e.message);
     return false;
@@ -156,29 +178,17 @@ router.post('/extract', auth, async (req, res) => {
       await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
     }
 
-    // рекламные CDN, которые Rezka показывает поверх плеера при первом клике —
+        // рекламные CDN, которые Rezka показывает поверх плеера при первом клике —
     // если поток пришёл отсюда, это реклама (ставки/казино), а не фильм
     const AD_STREAM_HOSTS = ['botsford.link', 'r.botsford', 'adv.', '.bet', 'casino'];
 
-    // домены рекламных/букмекерских сетей, которые перехватывают клик по #cdnplayer-container
-    // и открывают попап вместо настоящего плеера. Блокируем их запросы на уровне сети —
-    // так рекламный оверлей вообще не успевает загрузиться и подписаться на клик,
-    // и клик по контейнеру должен доходить до реального плеера под ним.
-    const AD_BLOCK_HOSTS = [
-      'stawkibet', '.bet', 'casino', 'botsford.link', 'r.botsford',
-      'onclickalgo', 'popads', 'propellerads', 'adsterra', 'exoclick',
-      'juicyads', 'trafficjunky', 'adnium', 'clickadu',
-    ];
-
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const reqUrl = req.url();
-      if (AD_BLOCK_HOSTS.some((h) => reqUrl.includes(h))) {
-        req.abort().catch(() => {});
-        return;
-      }
-      req.continue().catch(() => {});
-    });
+    // ВАЖНО: попытка блокировать рекламные домены на уровне сети (page.setRequestInterception)
+    // не сработала — похоже, Rezka открывает настоящий плеер ТОЛЬКО после того, как
+    // рекламный preroll-скрипт успешно отработает (классическая VAST-схема монетизации).
+    // Оборвав запрос к рекламной сети, мы обрываем и сигнал "реклама показана",
+    // из-за чего реальный плеер вообще не открывается. Поэтому сеть не трогаем —
+    // вместо этого просто закрываем всплывающие попапы (см. clickPlayerAndWaitFrame)
+    // и даём рекламе спокойно доиграть/закрыться самой.
 
     const foundStreams = [];
     const foundIframes = [];
