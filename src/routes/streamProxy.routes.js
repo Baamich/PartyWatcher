@@ -56,27 +56,63 @@ router.get('/relay', auth, async (req, res) => {
 
   try {
     const dispatcher = buildDispatcher();
-    const { referer, origin } = guessReferer(targetUrl);
+    const primary = guessReferer(targetUrl);
 
-    const response = await fetch(targetUrl, {
-    dispatcher,
-    headers: {
+    // для VK CDN пробуем несколько referer по очереди
+    const refererCandidates = [
+      primary,
+      { referer: 'https://kinogomy.stravers.live/', origin: 'https://kinogomy.stravers.live' },
+      { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' },
+      { referer: 'https://vk.com/', origin: 'https://vk.com' },
+      { referer: 'https://kinogomy.net/', origin: 'https://kinogomy.net' },
+    ];
+
+    // убираем дубли
+    const seen = new Set();
+    const uniqueCandidates = refererCandidates.filter((c) => {
+      const key = c.referer + '|' + c.origin;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    let response = null;
+    let lastStatus = 0;
+    let lastBody = '';
+
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+    const { referer, origin } = uniqueCandidates[i];
+    const isLast = i === uniqueCandidates.length - 1;
+
+    const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Referer': referer,
-      'Origin': origin,
       'Accept': '*/*',
       'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
       'Sec-Fetch-Dest': 'empty',
       'Sec-Fetch-Mode': 'cors',
       'Sec-Fetch-Site': 'cross-site',
       'Connection': 'keep-alive',
-    },
-  });
+    };
+    // на последней попытке Origin не ставим — VK иногда из‑за него отдаёт 403
+    if (!isLast) headers['Origin'] = origin;
 
-    if (!response.ok) {
-      const bodyText = await response.text().catch(() => '');
-      console.error('[stream-relay] CDN отказал:', response.status, targetUrl.slice(0, 120), bodyText.slice(0, 200));
-      return res.status(response.status).json({ error: `CDN вернул ${response.status}` });
+    response = await fetch(targetUrl, { dispatcher, headers });
+
+      if (response.ok) {
+        console.log('[stream-relay] OK с referer:', referer);
+        break;
+      }
+
+      lastStatus = response.status;
+      lastBody = await response.text().catch(() => '');
+      console.warn('[stream-relay] отказ', response.status, 'referer:', referer, targetUrl.slice(0, 80));
+      response = null;
+    }
+
+    if (!response) {
+      console.error('[stream-relay] CDN отказал всеми referer:', lastStatus, targetUrl.slice(0, 120), lastBody.slice(0, 200));
+      return res.status(lastStatus || 502).json({ error: `CDN вернул ${lastStatus}` });
     }
 
     const contentType = response.headers.get('content-type') || '';
