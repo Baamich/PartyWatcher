@@ -8,6 +8,7 @@ const { Server } = require('socket.io');
 const config = require('./config');
 const connectDB = require('./db/mongoose');
 const registerRoomSocket = require('./sockets/roomSocket');
+require('./services/roomCleanup');
 
 const authRoutes = require('./routes/auth.routes');
 const roomRoutes = require('./routes/room.routes');
