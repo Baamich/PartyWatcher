@@ -78,13 +78,11 @@ const inFlightExtracts = new Map(); // key: `${roomCode}:${episode}` → Promise
  * @returns {Promise<boolean>} true если фрейм плеера найден после кликов
  */
 async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5) {
-  // Реальное колесо мыши вместо scrollIntoView() — некоторые сайты отличают
-  // программный скролл от настоящего и используют это как сигнал для антибота.
-  for (let i = 0; i < 6; i++) {
-    await page.mouse.wheel({ deltaY: 300 });
-    await new Promise((r) => setTimeout(r, 200 + Math.random() * 200));
+  // короткий скролл — хватает, чтобы контейнер попал в зону
+  for (let i = 0; i < 3; i++) {
+    await page.mouse.wheel({ deltaY: 400 });
+    await new Promise((r) => setTimeout(r, 100));
   }
-  await new Promise((r) => setTimeout(r, 500));
 
   const box = await page.evaluate(() => {
     const el = document.querySelector('#cdnplayer-container') ||
@@ -101,90 +99,60 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
     return false;
   }
 
-  // движение мыши по нескольким промежуточным точкам вместо телепортации курсора
-  const startX = 100 + Math.random() * 200;
-  const startY = 100 + Math.random() * 200;
-  await page.mouse.move(startX, startY);
-  await page.mouse.move(box.x, box.y, { steps: 25 });
-  await new Promise((r) => setTimeout(r, 300 + Math.random() * 300));
+  await page.mouse.move(box.x, box.y, { steps: 8 });
+  await new Promise((r) => setTimeout(r, 150));
 
   const popupCloser = (popup) => {
-    console.log(`[player-capture] (${logLabel}) обнаружен рекламный попап, закрываю:`, popup.url());
+    console.log(`[player-capture] (${logLabel}) рекламный попап, закрываю:`, popup.url());
     popup.close().catch(() => {});
   };
   page.on('popup', popupCloser);
 
   try {
     await page.mouse.click(box.x, box.y);
-    console.log(`[player-capture] (${logLabel}) первый клик по контейнеру плеера выполнен, жду...`);
+    console.log(`[player-capture] (${logLabel}) клик по контейнеру плеера, жду...`);
 
-    const totalWaitMs = 10000;
-    const pollEveryMs = 1000;
+    const totalWaitMs = 5000;
+    const pollEveryMs = 400;
     let waited = 0;
 
     while (waited < totalWaitMs) {
       await new Promise((r) => setTimeout(r, pollEveryMs));
       waited += pollEveryMs;
 
-      // 1) старый способ — iframe balabolka
       const hasIframe = adapter?.playerFrameMatch
         ? page.frames().some((f) => adapter.playerFrameMatch(f.url()))
         : false;
 
-      // 2) новый способ — native CDN-player на основной странице
-      const hasNativeVideo = await page.evaluate(() => {
-        return !!(
-          document.querySelector('#oframecdnplayer video') ||
-          document.querySelector('#cdnplayer video') ||
-          document.querySelector('#cdnplayer-container video') ||
-          document.querySelector('.b-player video')
-        );
-      });
-
-      if (hasIframe) {
-        console.log(`[player-capture] (${logLabel}) balabolka iframe найдена после ${waited}мс`);
-        return true;
-      }
-      if (hasNativeVideo) {
-        console.log(`[player-capture] (${logLabel}) native <video> найден после ${waited}мс`);
-        return true;
-      }
-    }
-
-    // повторный клик
-    console.warn(`[player-capture] (${logLabel}) плеер не появился за ${totalWaitMs}мс, пробую повторный клик`);
-    await page.mouse.click(box.x, box.y);
-    await new Promise((r) => setTimeout(r, 5000));
-
-    const foundAfterRetryIframe = adapter?.playerFrameMatch
-      ? page.frames().some((f) => adapter.playerFrameMatch(f.url()))
-      : false;
-
-    const foundAfterRetryNative = await page.evaluate(() => {
-      return !!(
+      const hasNativeVideo = await page.evaluate(() => !!(
         document.querySelector('#oframecdnplayer video') ||
         document.querySelector('#cdnplayer video') ||
         document.querySelector('#cdnplayer-container video') ||
         document.querySelector('.b-player video')
-      );
-    });
+      ));
 
-    if (foundAfterRetryIframe) {
-      console.log(`[player-capture] (${logLabel}) balabolka iframe найдена после повторного клика`);
-    } else if (foundAfterRetryNative) {
-      console.log(`[player-capture] (${logLabel}) native <video> найден после повторного клика`);
-    } else {
-      console.warn(`[player-capture] (${logLabel}) плеер так и не появился`);
-      try {
-        const failFile = `failed-${logLabel}.png`;
-        await page.screenshot({ path: path.join(debugScreenshotsDir, failFile) });
-        console.log(`[player-capture] (${logLabel}) скриншот провала сохранён: debug-screenshots/${failFile}`);
-      } catch (e) {}
+      if (hasIframe || hasNativeVideo) {
+        console.log(`[player-capture] (${logLabel}) плеер найден за ${waited}мс`);
+        return true;
+      }
     }
 
-    return foundAfterRetryIframe || foundAfterRetryNative;
+    // один быстрый retry
+    console.warn(`[player-capture] (${logLabel}) не появился за ${totalWaitMs}мс, повторный клик`);
+    await page.mouse.click(box.x, box.y);
+    await new Promise((r) => setTimeout(r, 900));
+
+    const ok = adapter?.playerFrameMatch
+      ? page.frames().some((f) => adapter.playerFrameMatch(f.url()))
+      : false;
+    const okNative = await page.evaluate(() => !!(
+      document.querySelector('#oframecdnplayer video') ||
+      document.querySelector('#cdnplayer video') ||
+      document.querySelector('.b-player video')
+    ));
+    return ok || okNative;
   } catch (e) {
-    console.error(`[player-capture] (${logLabel}) ошибка клика по контейнеру плеера:`, e.message);
+    console.error(`[player-capture] (${logLabel}) ошибка клика:`, e.message);
     return false;
   } finally {
     page.off('popup', popupCloser);
@@ -445,7 +413,7 @@ router.post('/extract', auth, async (req, res) => {
       const initialTitle = await page.title();
       if (/не бот|checking|just a moment/i.test(initialTitle)) {
         console.warn('[player-capture] похоже на антибот-заглушку, жду 8 сек и перезахожу...');
-        await new Promise(r => setTimeout(r, 8000));
+        await new Promise(r => setTimeout(r, 4000));
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch((e) => {
           console.error('[player-capture] повторный заход не удался:', e.message);
         });
@@ -484,14 +452,18 @@ router.post('/extract', auth, async (req, res) => {
 
     // сохраняем скриншот в папку проекта (не /tmp) и отдаём через статику Express —
     // так его можно открыть прямо в браузере по ссылке, без scp/ssh-ключей
-    try {
-      await page.screenshot({ path: path.join(debugScreenshotsDir, 'before-click.png') });
-      console.log('[player-capture] скриншот сохранён: debug-screenshots/before-click.png');
-    } catch (e) {
-      console.error('[player-capture] не удалось сделать скриншот:', e.message);
+    if (process.env.PLAYER_CAPTURE_DEBUG === '1') {
+      try {
+        await page.screenshot({ path: path.join(debugScreenshotsDir, 'before-click.png') });
+        console.log('[player-capture] скриншот сохранён: debug-screenshots/before-click.png');
+      } catch (e) {}
     }
 
-    await new Promise(r => setTimeout(r, 5000)); // ждём загрузки плеера
+        // ждём контейнер плеера или просто 1.5с
+    try {
+      await page.waitForSelector('#cdnplayer-container, #cdnplayer, .b-player', { timeout: 2500 });
+    } catch (_) {}
+    await new Promise(r => setTimeout(r, 800));
 
     // --- вкладки плееров (Kinogo и похожие: Смотреть онлайн / 4K Качество / ...) ---
     let playersFound = [];
@@ -527,7 +499,7 @@ router.post('/extract', auth, async (req, res) => {
             const li = lis.find((el) => (el.textContent || '').trim() === label);
             if (li) li.click();
           }, target.label);
-          await new Promise((r) => setTimeout(r, 6000));
+          await new Promise((r) => setTimeout(r, 2500));
         } catch (e) {
           console.error('[player-capture] ошибка клика по вкладке плеера:', e.message);
         }
@@ -652,12 +624,15 @@ router.post('/extract', auth, async (req, res) => {
           return false;
         }, requestedEpisode);
 
-        // чистим старые потоки в начале — потом ещё раз перед ФИНАЛЬНЫМ кликом
-        playerApiData = null;
-        foundStreams.length = 0;
-        cdnSeriesStreams.length = 0;
-
-        if (alreadyActive) {
+        // если CDN уже поймали при load/клике плеера и серия активна — не чистим и не дёргаем
+        if (cdnSeriesStreams.length > 0 && alreadyActive) {
+          console.log('[player-capture] CDN уже есть для активной серии, skip toggle, потоков:', cdnSeriesStreams.length);
+          episodeSwitched = true;
+        } else if (alreadyActive) {
+          // нужен toggle — только тогда чистим
+          playerApiData = null;
+          foundStreams.length = 0;
+          cdnSeriesStreams.length = 0;
           // серия уже активна → get_cdn_series сам не придёт.
           // Трюк: кликаем любую ДРУГУЮ серию, потом обратно нужную.
           console.log('[player-capture] серия', requestedEpisode, 'уже активна — делаю принудительное переключение туда-обратно');
@@ -703,56 +678,66 @@ router.post('/extract', auth, async (req, res) => {
             episodeSwitched = true;
           }
         } else {
-        // серия другая — просто кликаем
-        const clicked = await page.evaluate((ep) => {
-          const selectors = [
-            `li.b-simple_episode_item[data-episode_id="${ep}"]`,
-            `li.b-simple_episode_item[data-id][data-episode_id="${ep}"]`,
-            `.b-simple_episodes_list li[data-episode_id="${ep}"]`,
-            `#simple-episodes-list-1 li[data-episode_id="${ep}"]`,
-            `.b-simple_episodes__list li[data-episode_id="${ep}"]`,
-          ];
+          // серия другая — чистим старое и кликаем
+          playerApiData = null;
+          foundStreams.length = 0;
+          cdnSeriesStreams.length = 0;
 
-          for (const sel of selectors) {
-            const li = document.querySelector(sel);
-            if (li) {
-              li.click();
-              return sel;
+          const clicked = await page.evaluate((ep) => {
+            const selectors = [
+              `li.b-simple_episode_item[data-episode_id="${ep}"]`,
+              `li.b-simple_episode_item[data-id][data-episode_id="${ep}"]`,
+              `.b-simple_episodes_list li[data-episode_id="${ep}"]`,
+              `#simple-episodes-list-1 li[data-episode_id="${ep}"]`,
+              `.b-simple_episodes__list li[data-episode_id="${ep}"]`,
+            ];
+
+            for (const sel of selectors) {
+              const li = document.querySelector(sel);
+              if (li) {
+                li.click();
+                return sel;
+              }
             }
+            return null;
+          }, requestedEpisode);
+
+          if (clicked) {
+            console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен (native), селектор:', clicked);
+            episodeSwitched = true;
+          } else {
+            console.warn('[player-capture] native кнопка серии не найдена для', requestedEpisode);
+
+            const debugList = await page.evaluate(() => {
+              return Array.from(document.querySelectorAll('li.b-simple_episode_item, .b-simple_episodes_list li'))
+                .slice(0, 15)
+                .map((li) => ({
+                  text: (li.textContent || '').trim().slice(0, 40),
+                  episodeId: li.getAttribute('data-episode_id'),
+                  seasonId: li.getAttribute('data-season_id'),
+                  className: li.className,
+                }));
+            }).catch(() => []);
+            console.log('[player-capture] найденные элементы серий на странице:', JSON.stringify(debugList, null, 2));
           }
-          return null;
-        }, requestedEpisode);
-
-        if (clicked) {
-          console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен (native), селектор:', clicked);
-          episodeSwitched = true;
-        } else {
-          console.warn('[player-capture] native кнопка серии не найдена для', requestedEpisode);
-
-          const debugList = await page.evaluate(() => {
-            return Array.from(document.querySelectorAll('li.b-simple_episode_item, .b-simple_episodes_list li'))
-              .slice(0, 15)
-              .map((li) => ({
-                text: (li.textContent || '').trim().slice(0, 40),
-                episodeId: li.getAttribute('data-episode_id'),
-                seasonId: li.getAttribute('data-season_id'),
-                className: li.className,
-              }));
-          }).catch(() => []);
-          console.log('[player-capture] найденные элементы серий на странице:', JSON.stringify(debugList, null, 2));
         }
       }
+
+      // ждём get_cdn_series до 4с, выходим раньше если уже есть
+      {
+        const maxWait = 4000;
+        const step = 300;
+        let t = 0;
+        while (t < maxWait && cdnSeriesStreams.length === 0) {
+          await new Promise((r) => setTimeout(r, step));
+          t += step;
+        }
+        console.log('[player-capture] ожидание CDN:', t, 'мс, потоков:', cdnSeriesStreams.length);
       }
 
-       // ждём, пока сеть отдаст поток (для активной серии он мог прийти раньше, для новой — после клика)
-      await new Promise(r => setTimeout(r, 6000));
-
-    // если есть потоки именно из get_cdn_series — оставляем ТОЛЬКО их
-      // (сетевые .m3u8-сегменты часто битые и дают MediaError на фронте)
       if (cdnSeriesStreams.length > 0) {
         const before = foundStreams.length;
         foundStreams.length = 0;
-        // уникальные по url
         const uniq = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()];
         foundStreams.push(...uniq);
         console.log('[player-capture] оставил только CDN-потоки:', foundStreams.length, '(было всего', before, ')');
@@ -864,11 +849,11 @@ router.post('/extract', auth, async (req, res) => {
         }
 
         // embed-плеерам через прокси нужно больше времени на подгрузку потока
-        await new Promise(r => setTimeout(r, 4000));
+        await new Promise(r => setTimeout(r, 1500));
       }
 
       // rezka/кастомным CDN-плеерам без явного episode-режима нужно больше времени на разворачивание
-      await new Promise(r => setTimeout(r, 8000));
+      await new Promise(r => setTimeout(r, 2500));
 
       // фильмы (без requestedEpisode) тоже используют balabolka — на случай, если
       // clickPlayerAndWaitFrame выше не успел поймать фрейм с первого раза, даём

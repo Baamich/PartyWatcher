@@ -1063,6 +1063,26 @@ document.getElementById('chat')?.addEventListener('pointerdown', () => {
   playerFocused = false;
 });
 
+function leaveRoom() {
+  try {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  } catch (_) {}
+  try {
+    if (capturePlayer?.destroy) capturePlayer.destroy();
+  } catch (_) {}
+  try {
+    if (socket) {
+      socket.removeAllListeners();
+      socket.disconnect();
+    }
+  } catch (_) {}
+  window.location.replace('/index.html');
+}
+
+
 // Делаем функции доступными из HTML
 window.setViewMode = setViewMode;
 window.closeModal = closeModal;
