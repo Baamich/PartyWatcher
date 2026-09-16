@@ -18,6 +18,33 @@ const playerCaptureCache = require('../services/playerCaptureCache');
 const siteAdapters = require('../services/site-adapters');
 const { findPlayerContext, readDropdownTexts, selectDropdownOptionByNumber } = require('../services/dropdown-player');
 
+const fetch = require('cross-fetch');
+const { PuppeteerBlocker } = require('@cliqz/adblocker-puppeteer');
+
+// Настоящий adblock-движок (те же списки фильтров, что у AdGuard/uBlock —
+// EasyList + EasyPrivacy), а не наивный список доменов. Важно: рекламные
+// скрипты на Rezka "зеркалируются" под постоянно меняющимися доменами
+// (franecki.net, ad2the.net, get2.fun, botsford.link, stawkibet4.io...) —
+// статичный список доменов устаревает за считанные дни. Фильтр-листы вместо
+// этого матчят по URL-паттернам (например "point/?method=video_link",
+// "gfp=", "adtag="), которые остаются стабильными даже когда домен меняется.
+// Скачиваем списки один раз при старте сервера и переиспользуем между запросами.
+let adblockerPromise = null;
+function getAdblocker() {
+  if (!adblockerPromise) {
+    adblockerPromise = PuppeteerBlocker.fromLists(fetch, [
+      'https://easylist.to/easylist/easylist.txt',
+      'https://easylist.to/easylist/easyprivacy.txt',
+      'https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/BaseFilter/sections/adservers.txt',
+    ]).catch((e) => {
+      console.error('[player-capture] не удалось загрузить фильтр-листы adblocker:', e.message);
+      adblockerPromise = null; // разрешаем повторную попытку при следующем запросе
+      return null;
+    });
+  }
+  return adblockerPromise;
+}
+
 function detectSite(url) {
   const lower = url.toLowerCase();
   if (lower.includes('rezka') || lower.includes('hdrezka')) return 'rezka';
@@ -27,6 +54,11 @@ function detectSite(url) {
   if (lower.includes('my.mail.ru')) return 'mailru';
   return 'unknown';
 }
+
+// защита от дублей: если для одной комнаты+серии уже выполняется /extract,
+// повторный запрос просто ждёт результат первого, вместо запуска второго
+// Puppeteer+прокси параллельно (что удваивает нагрузку и путает логи)
+const inFlightExtracts = new Map(); // key: `${roomCode}:${episode}` → Promise
 
 /**
  * Кликает по #cdnplayer-container несколько раз подряд, проверяя после каждого клика,
@@ -80,15 +112,14 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
   page.on('popup', popupCloser);
 
   try {
-    // Первый клик почти наверняка запускает рекламный preroll (ставки/видео) —
-    // не долбим кликами часто (это может каждый раз ЗАНОВО перезапускать рекламу),
-    // а кликаем один раз и терпеливо ждём подольше, изредка проверяя,
-    // не появился ли настоящий плеер (реклама должна доиграть/закрыться сама).
+    // С adblocker'ом рекламный скрипт не должен успевать перехватить клик —
+    // ждём короче, но оставляем возможность повторного клика на случай,
+    // если что-то всё же проскочило мимо фильтров.
     await page.mouse.click(box.x, box.y);
     console.log(`[player-capture] (${logLabel}) первый клик по #cdnplayer-container выполнен, жду...`);
 
-    const totalWaitMs = 25000;
-    const pollEveryMs = 2000;
+    const totalWaitMs = 10000;
+    const pollEveryMs = 1000;
     let waited = 0;
 
     while (waited < totalWaitMs) {
@@ -139,7 +170,7 @@ router.post('/extract', auth, async (req, res) => {
     return res.status(400).json({ error: 'Нужна валидная ссылка' });
   }
 
-  const siteName = detectSite(url);
+    const siteName = detectSite(url);
   const adapter = siteAdapters[siteName] || null;
   console.log('[player-capture] сайт определён как:', siteName, '| адаптер найден:', !!adapter);
 
@@ -163,7 +194,28 @@ router.post('/extract', auth, async (req, res) => {
     }
   }
 
+  // если для этой же комнаты+серии уже выполняется extract прямо сейчас —
+  // не запускаем второй Puppeteer параллельно, а просто ждём результат первого
+  const inFlightKey = roomCode ? `${roomCode}:${requestedEpisodeForCache || 1}` : null;
+  if (inFlightKey && inFlightExtracts.has(inFlightKey)) {
+    console.log('[player-capture] extract уже выполняется для', inFlightKey, '— жду результат вместо повторного запуска');
+    try {
+      const result = await inFlightExtracts.get(inFlightKey);
+      return res.json(result);
+    } catch (e) {
+      return res.json({ success: false, error: e.message, streams: [], playerIframes: [], meta: null });
+    }
+  }
+
   let browser = null;
+  let resolveInFlight, rejectInFlight;
+  if (inFlightKey) {
+    const promise = new Promise((resolve, reject) => {
+      resolveInFlight = resolve;
+      rejectInFlight = reject;
+    });
+    inFlightExtracts.set(inFlightKey, promise);
+  }
 
   try {
     // прокси Webshare — вынесено в переменные окружения, см. .env
@@ -195,17 +247,21 @@ router.post('/extract', auth, async (req, res) => {
       await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
     }
 
-        // рекламные CDN, которые Rezka показывает поверх плеера при первом клике —
-    // если поток пришёл отсюда, это реклама (ставки/казино), а не фильм
-    const AD_STREAM_HOSTS = ['botsford.link', 'r.botsford', 'adv.', '.bet', 'casino'];
+    // подключаем настоящий adblock-движок (см. getAdblocker выше) — блокирует
+    // сами рекламные/трекинговые скрипты по сигнатурам, а не по домену,
+    // так что клик по плееру доходит до реального контента, а не до рекламы
+    const blocker = await getAdblocker();
+    if (blocker) {
+      await blocker.enableBlockingInPage(page);
+      console.log('[player-capture] adblocker подключен к странице');
+    } else {
+      console.warn('[player-capture] adblocker недоступен — работаем без него');
+    }
 
-    // ВАЖНО: попытка блокировать рекламные домены на уровне сети (page.setRequestInterception)
-    // не сработала — похоже, Rezka открывает настоящий плеер ТОЛЬКО после того, как
-    // рекламный preroll-скрипт успешно отработает (классическая VAST-схема монетизации).
-    // Оборвав запрос к рекламной сети, мы обрываем и сигнал "реклама показана",
-    // из-за чего реальный плеер вообще не открывается. Поэтому сеть не трогаем —
-    // вместо этого просто закрываем всплывающие попапы (см. clickPlayerAndWaitFrame)
-    // и даём рекламе спокойно доиграть/закрыться самой.
+    // рекламные CDN, которые Rezka показывает поверх плеера при первом клике —
+    // если поток пришёл отсюда, это реклама (ставки/казино), а не фильм.
+    // Оставляем как доп. страховку — вдруг что-то проскочит мимо adblocker'а.
+    const AD_STREAM_HOSTS = ['botsford.link', 'r.botsford', 'adv.', '.bet', 'casino'];
 
     const foundStreams = [];
     const foundIframes = [];
@@ -692,18 +748,22 @@ router.post('/extract', auth, async (req, res) => {
       playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
     }
 
-    res.json(responseData);
+      res.json(responseData);
+    if (inFlightKey) resolveInFlight(responseData);
   } catch (err) {
     console.error('[player-capture puppeteer]', err.message);
-    res.json({
+    const errorData = {
       success: false,
       error: err.message,
       streams: [],
       playerIframes: [],
       meta: null,
-    });
+    };
+    res.json(errorData);
+    if (inFlightKey) resolveInFlight(errorData); // резолвим (не реджектим), чтобы ждущие запросы получили тот же ответ с ошибкой
   } finally {
     if (browser) await browser.close();
+    if (inFlightKey) inFlightExtracts.delete(inFlightKey);
   }
 });
 
