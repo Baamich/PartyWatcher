@@ -507,12 +507,13 @@ router.post('/extract', auth, async (req, res) => {
     } catch (_) {}
     await new Promise(r => setTimeout(r, 800));
 
-    // ============================================================
+        // ============================================================
     // REZKA: прямой AJAX get_cdn_series (фильм + сериал)
+    // translator_id=59 + favs UUID — как в реальном браузере
     // ============================================================
     if (siteName === 'rezka') {
       try {
-                const pageMeta = await page.evaluate(() => {
+        const pageMeta = await page.evaluate(() => {
           const postId =
             document.querySelector('#post_id')?.value ||
             document.querySelector('[name="post_id"]')?.value ||
@@ -520,10 +521,8 @@ router.post('/extract', auth, async (req, res) => {
             (location.pathname.match(/\/(\d+)-/) || [])[1] ||
             null;
 
-          // все возможные места translator_id
           const translators = [];
           const seen = new Set();
-
           const push = (id, name, active, premium) => {
             if (!id || seen.has(String(id))) return;
             seen.add(String(id));
@@ -535,19 +534,17 @@ router.post('/extract', auth, async (req, res) => {
             });
           };
 
-          // 1) классические кнопки озвучек
           document.querySelectorAll(
-            '.b-translator__item[data-translator_id], [data-translator_id], .b-translator__list [data-translator_id]'
+            '.b-translator__item[data-translator_id], [data-translator_id]'
           ).forEach((el) => {
             push(
               el.getAttribute('data-translator_id'),
               el.textContent,
               el.classList.contains('active'),
-              /prem|premium|pro/i.test(el.className || '') || !!el.querySelector('.prem, .b-prem, [class*="prem"]')
+              /prem|premium|pro/i.test(el.className || '')
             );
           });
 
-          // 2) sof.tv.initCDNMoviesEvents / initCDNSeriesEvents — может быть несколько вызовов
           for (const s of Array.from(document.scripts)) {
             const txt = s.textContent || '';
             const re = /sof\.tv\.initCDN(?:Movies|Series)Events\(\s*(\d+)\s*,\s*(\d+)/g;
@@ -557,17 +554,23 @@ router.post('/extract', auth, async (req, res) => {
             }
           }
 
-          // 3) data-translator в любых data-* / onclick
-          document.querySelectorAll('[onclick*="translator"], [data-id]').forEach((el) => {
-            const oc = el.getAttribute('onclick') || '';
-            const m = oc.match(/translator[_-]?id['\":\s=]+(\d+)/i);
-            if (m) push(m[1], el.textContent, el.classList.contains('active'), false);
-          });
-
-          let sofTranslator = translators[0]?.id || null;
+          let favs =
+            document.querySelector('#favs')?.value ||
+            document.querySelector('[name="favs"]')?.value ||
+            null;
+          if (!favs) {
+            const cm = document.cookie.match(/(?:^|;\s*)favs=([a-f0-9-]{36})/i);
+            if (cm) favs = cm[1];
+          }
+          if (!favs) {
+            for (const s of Array.from(document.scripts)) {
+              const m = (s.textContent || '').match(/favs['\":\s=]+['\"]([a-f0-9-]{36})['\"]/i);
+              if (m) { favs = m[1]; break; }
+            }
+          }
 
           const activeSeason =
-            document.querySelector('.b-simple_season__item.active, .b-simple_seasons__list .active')?.getAttribute('data-tab_id') ||
+            document.querySelector('.b-simple_season__item.active')?.getAttribute('data-tab_id') ||
             document.querySelector('[data-season_id].active')?.getAttribute('data-season_id') ||
             '1';
 
@@ -576,55 +579,41 @@ router.post('/extract', auth, async (req, res) => {
             null;
 
           return {
-            postId: postId,
+            postId,
             translators,
-            sofTranslator,
+            favs,
             activeSeason: Number(activeSeason) || 1,
             activeEpisode: activeEpisode ? Number(activeEpisode) : null,
-            isSeries: /\/series\//.test(location.pathname) || !!document.querySelector('li.b-simple_episode_item, .b-simple_episodes_list'),
+            isSeries: /\/series\//.test(location.pathname) || !!document.querySelector('li.b-simple_episode_item'),
           };
         });
 
-        console.log('[player-capture] rezka pageMeta:', JSON.stringify({
-          postId: pageMeta.postId,
-          translators: pageMeta.translators.map((t) => `${t.id}:${t.name}${t.active ? '*' : ''}`),
-          sofTranslator: pageMeta.sofTranslator,
-          activeSeason: pageMeta.activeSeason,
-          activeEpisode: pageMeta.activeEpisode,
-          isSeries: pageMeta.isSeries,
-        }));
+        console.log('[player-capture] rezka pageMeta:', JSON.stringify(pageMeta));
 
-                if (pageMeta.postId) {
-          // список id для перебора: active non-prem → non-prem → active → остальные → sof
+        if (pageMeta.postId) {
           const idsToTry = [];
           const addId = (id) => {
             if (id && !idsToTry.includes(String(id))) idsToTry.push(String(id));
           };
+          addId('59'); // рабочий из браузера
           pageMeta.translators.filter((t) => t.active && !t.premium).forEach((t) => addId(t.id));
           pageMeta.translators.filter((t) => !t.premium).forEach((t) => addId(t.id));
-          pageMeta.translators.filter((t) => t.active).forEach((t) => addId(t.id));
           pageMeta.translators.forEach((t) => addId(t.id));
-          addId(pageMeta.sofTranslator);
+          ['110', '1', '56', '238'].forEach(addId);
 
-          // запасные частые id (если на странице вообще пусто)
-          if (idsToTry.length === 0) {
-            ['110', '1', '56', '238', '111'].forEach(addId);
-          }
-
-          console.log('[player-capture] translators to try:', idsToTry);
-
+          const favs = pageMeta.favs || 'a258b7e9-78f2-443a-b3bb-7dbd4b715dd6';
           const isSeries = pageMeta.isSeries;
           const season = pageMeta.activeSeason || 1;
           const episode = requestedEpisodeForCache || pageMeta.activeEpisode || 1;
 
-          let gotUrl = false;
+          console.log('[player-capture] translators to try:', idsToTry, 'favs:', favs);
 
+          let gotUrl = false;
           for (const translatorId of idsToTry) {
             const form = new URLSearchParams();
             form.set('id', String(pageMeta.postId));
             form.set('translator_id', String(translatorId));
-            // некоторые зеркала требуют favs
-            form.set('favs', String(Math.floor(Math.random() * 1e8)));
+            form.set('favs', favs);
             if (isSeries) {
               form.set('season', String(season));
               form.set('episode', String(episode));
@@ -633,7 +622,7 @@ router.post('/extract', auth, async (req, res) => {
               form.set('action', 'get_movie');
             }
 
-            console.log('[player-capture] AJAX get_cdn_series body:', form.toString());
+            console.log('[player-capture] AJAX body:', form.toString());
 
             const cdnJson = await page.evaluate(async (bodyStr) => {
               const res = await fetch('/ajax/get_cdn_series/?t=' + Date.now(), {
@@ -646,15 +635,12 @@ router.post('/extract', auth, async (req, res) => {
                 credentials: 'same-origin',
               });
               const text = await res.text();
-              try {
-                return JSON.parse(text);
-              } catch {
-                return { _raw: text.slice(0, 300) };
-              }
+              try { return JSON.parse(text); }
+              catch { return { _raw: text.slice(0, 300) }; }
             }, form.toString());
 
             if (cdnJson?.url && cdnJson.url !== false && String(cdnJson.url).length > 10) {
-              console.log('[player-capture] AJAX CDN OK (translator', translatorId, '), url slice:', String(cdnJson.url).slice(0, 180));
+              console.log('[player-capture] AJAX CDN OK (tr', translatorId, '):', String(cdnJson.url).slice(0, 160));
 
               const parts = String(cdnJson.url).split(',');
               for (const part of parts) {
@@ -662,16 +648,9 @@ router.post('/extract', auth, async (req, res) => {
                 const quality = qualityMatch ? qualityMatch[1] : undefined;
                 const urlMatch = part.match(/https?:\/\/[^\s,]+/i);
                 if (!urlMatch) continue;
-
                 let streamUrl = urlMatch[0].trim().replace(/["')]+$/, '');
                 const lower = streamUrl.toLowerCase();
-                if (
-                  lower.includes('.svg') || lower.includes('.png') || lower.includes('.jpg') ||
-                  lower.includes('.jpeg') || lower.includes('.gif') || lower.includes('.webp') ||
-                  lower.includes('.css') || lower.includes('.js') || lower.includes('prem-icon') ||
-                  lower.includes('/images/')
-                ) continue;
-
+                if (/\.(svg|png|jpg|jpeg|gif|webp|css|js)|prem-icon|\/images\//i.test(lower)) continue;
                 if (streamUrl.startsWith('http')) {
                   const entry = {
                     type: streamUrl.includes('.mp4') ? 'mp4' : 'hls',
@@ -680,21 +659,18 @@ router.post('/extract', auth, async (req, res) => {
                   };
                   cdnSeriesStreams.push(entry);
                   foundStreams.push(entry);
-                  console.log('[player-capture] AJAX CDN stream:', quality || '?', streamUrl.slice(0, 100));
+                  console.log('[player-capture] AJAX stream:', quality || '?', streamUrl.slice(0, 100));
                 }
               }
               gotUrl = true;
-              break; // хватит одного рабочего translator
+              break;
             } else {
-              console.warn('[player-capture] AJAX translator', translatorId, 'без url:', JSON.stringify(cdnJson).slice(0, 200));
+              console.warn('[player-capture] AJAX tr', translatorId, 'без url:', JSON.stringify(cdnJson).slice(0, 180));
             }
           }
-
-          if (!gotUrl) {
-            console.warn('[player-capture] ни один translator не вернул url');
-          }
+          if (!gotUrl) console.warn('[player-capture] ни один translator не вернул url');
         } else {
-          console.warn('[player-capture] post_id не найден на странице');
+          console.warn('[player-capture] post_id не найден');
         }
       } catch (e) {
         console.error('[player-capture] AJAX CDN ошибка:', e.message);
