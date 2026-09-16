@@ -806,59 +806,9 @@ router.post('/extract', auth, async (req, res) => {
       // пропускаем кликанье по общим классам и жмём точечно по контейнеру плеера.
       const skipGenericClick = !!adapter?.playerFrameMatch;
 
-      if (skipGenericClick) {
+            if (skipGenericClick) {
         await clickPlayerAndWaitFrame(page, adapter, 'фильм');
       } else {
-              // --- Rezka FILM: native CDN, без iframe ---
-      if (siteName === 'rezka') {
-        // клик по play внутри плеера (если есть)
-        await page.evaluate(() => {
-          const play =
-            document.querySelector('#cdnplayer-container .play') ||
-            document.querySelector('#cdnplayer .play') ||
-            document.querySelector('.b-player .play') ||
-            document.querySelector('#oframecdnplayer') ||
-            document.querySelector('#cdnplayer-container');
-          if (play) play.click();
-        }).catch(() => {});
-
-        // ждём get_cdn_series / get_cdn (фильмы тоже часто через ajax)
-        {
-          const maxWait = 5000;
-          const step = 300;
-          let t = 0;
-          while (t < maxWait && cdnSeriesStreams.length === 0) {
-            await new Promise((r) => setTimeout(r, step));
-            t += step;
-          }
-          console.log('[player-capture] (фильм) ожидание CDN:', t, 'мс, потоков:', cdnSeriesStreams.length);
-        }
-
-        if (cdnSeriesStreams.length > 0) {
-          foundStreams.length = 0;
-          foundStreams.push(...[...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]);
-          console.log('[player-capture] (фильм) CDN-потоки:', foundStreams.map((s) => s.quality || s.url.slice(0, 60)));
-        } else {
-          // fallback: src у <video>
-          const videoSrc = await page.evaluate(() => {
-            const v =
-              document.querySelector('#oframecdnplayer video') ||
-              document.querySelector('#cdnplayer video') ||
-              document.querySelector('#cdnplayer-container video') ||
-              document.querySelector('.b-player video') ||
-              document.querySelector('video');
-            return v ? (v.currentSrc || v.src || null) : null;
-          }).catch(() => null);
-
-          if (videoSrc && (videoSrc.includes('.m3u8') || videoSrc.includes('.mp4'))) {
-            console.log('[player-capture] (фильм) поток из <video>:', videoSrc.slice(0, 120));
-            foundStreams.push({
-              type: videoSrc.includes('.m3u8') ? 'hls' : 'mp4',
-              url: videoSrc,
-            });
-          }
-        }
-      }
         // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
         const playSelectors = [
           '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
@@ -878,11 +828,56 @@ router.post('/extract', auth, async (req, res) => {
           } catch (e) {}
         }
 
-        // fallback: если ни один селектор не найден — используем ту же логику
-        // клика+ожидания фрейма, что и для Rezka (сработает, только если у адаптера
-        // вообще есть playerFrameMatch — для остальных сайтов просто ничего не сделает)
         if (!clickedPlaySelector && adapter?.playerFrameMatch) {
           await clickPlayerAndWaitFrame(page, adapter, 'фильм-fallback');
+        }
+      }
+
+      // --- Rezka FILM: native CDN (всегда, и при skipGenericClick тоже) ---
+      if (siteName === 'rezka') {
+        await page.evaluate(() => {
+          const play =
+            document.querySelector('#cdnplayer-container .play') ||
+            document.querySelector('#cdnplayer .play') ||
+            document.querySelector('.b-player .play') ||
+            document.querySelector('#oframecdnplayer') ||
+            document.querySelector('#cdnplayer-container');
+          if (play) play.click();
+        }).catch(() => {});
+
+        {
+          const maxWait = 5000;
+          const step = 300;
+          let t = 0;
+          while (t < maxWait && cdnSeriesStreams.length === 0) {
+            await new Promise((r) => setTimeout(r, step));
+            t += step;
+          }
+          console.log('[player-capture] (фильм) ожидание CDN:', t, 'мс, потоков:', cdnSeriesStreams.length);
+        }
+
+        if (cdnSeriesStreams.length > 0) {
+          foundStreams.length = 0;
+          foundStreams.push(...[...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]);
+          console.log('[player-capture] (фильм) CDN-потоки:', foundStreams.map((s) => s.quality || s.url.slice(0, 60)));
+        } else {
+          const videoSrc = await page.evaluate(() => {
+            const v =
+              document.querySelector('#oframecdnplayer video') ||
+              document.querySelector('#cdnplayer video') ||
+              document.querySelector('#cdnplayer-container video') ||
+              document.querySelector('.b-player video') ||
+              document.querySelector('video');
+            return v ? (v.currentSrc || v.src || null) : null;
+          }).catch(() => null);
+
+          if (videoSrc && (videoSrc.includes('.m3u8') || videoSrc.includes('.mp4'))) {
+            console.log('[player-capture] (фильм) поток из <video>:', videoSrc.slice(0, 120));
+            foundStreams.push({
+              type: videoSrc.includes('.m3u8') ? 'hls' : 'mp4',
+              url: videoSrc,
+            });
+          }
         }
       }
 
