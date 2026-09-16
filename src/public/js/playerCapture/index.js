@@ -275,27 +275,34 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
   let hlsInstance = null;
 
   const setupSource = async (streamToPlay) => {
-    const streamUrl = streamToPlay.url;
-    const isHls = streamToPlay.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl);
-    const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}`;
+  const streamUrl = streamToPlay.url;
+  const isHls = streamToPlay.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl);
+  const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}`;
+  try {
+    if (hlsInstance) {
+      try { hlsInstance.destroy(); } catch (_) {}
+      hlsInstance = null;
+    }
+    if (isHls) {
+      const Hls = await loadHlsScript();
+      if (Hls.isSupported()) {
+        hlsInstance = new Hls({
+          enableWorker: true,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+        });
 
-    try {
-      if (hlsInstance) {
-        try { hlsInstance.destroy(); } catch (_) {}
-        hlsInstance = null;
-      }
-
-      if (isHls) {
-        const Hls = await loadHlsScript();
-        if (Hls.isSupported()) {
-          hlsInstance = new Hls({
-            enableWorker: true,
-            maxBufferLength: 30,
-            maxMaxBufferLength: 60,
-          });
+        // если сервер уже скачал playlist через браузер — играем из blob
+        if (streamToPlay.playlist) {
+          const blob = new Blob([streamToPlay.playlist], { type: 'application/vnd.apple.mpegurl' });
+          const blobUrl = URL.createObjectURL(blob);
+          hlsInstance.loadSource(blobUrl);
+        } else {
           hlsInstance.loadSource(playUrl);
-          hlsInstance.attachMedia(videoEl);
-          hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+        }
+
+        hlsInstance.attachMedia(videoEl);
+        hlsInstance.on(Hls.Events.ERROR, (event, data) => {
           console.error('[capture] hls error', data);
           if (data.fatal) {
             try { hlsInstance.destroy(); } catch (_) {}
@@ -304,23 +311,28 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
               maxBufferLength: 30,
               maxMaxBufferLength: 60,
             });
-            hlsInstance.loadSource(playUrl); // обязательно через relay, не голый streamUrl
+            if (streamToPlay.playlist) {
+              const blob = new Blob([streamToPlay.playlist], { type: 'application/vnd.apple.mpegurl' });
+              hlsInstance.loadSource(URL.createObjectURL(blob));
+            } else {
+              hlsInstance.loadSource(playUrl);
+            }
             hlsInstance.attachMedia(videoEl);
           }
         });
-        } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-          videoEl.src = playUrl;
-        } else {
-          videoEl.src = playUrl;
-        }
+      } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        videoEl.src = playUrl;
       } else {
         videoEl.src = playUrl;
       }
-    } catch (e) {
-      console.error('[capture] setupSource failed', e);
+    } else {
       videoEl.src = playUrl;
     }
-  };
+  } catch (e) {
+    console.error('[capture] setupSource failed', e);
+    videoEl.src = playUrl;
+  }
+};
 
   setupSource(currentStream);
 

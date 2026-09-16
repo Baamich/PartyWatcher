@@ -48,6 +48,7 @@ function guessReferer(targetUrl) {
   }
 }
 
+console.log('[stream-relay] proxy:', PROXY_SERVER ? 'ON' : 'OFF', 'url:', targetUrl.slice(0, 80));
 router.get('/relay', auth, async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl || !targetUrl.startsWith('http')) {

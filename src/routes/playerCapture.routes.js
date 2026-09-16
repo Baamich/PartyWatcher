@@ -1297,10 +1297,8 @@ router.post('/extract', auth, async (req, res) => {
         console.log('[player-capture] hlsSource sample:', JSON.stringify(playerApiData.hlsSource || null).slice(0, 600));
       } catch (_) {}
     }
-    // если нашли богатый JSON от плеера — строим streams из него, это надёжнее
     if (playerApiData?.hlsSource?.length) {
       const qualities = playerApiData.hlsSource[0].quality || {};
-      // берём лучшее доступное качество как основной поток
       const bestQuality = Object.keys(qualities).sort((a, b) => Number(b) - Number(a))[0];
       if (bestQuality) {
         uniqueStreams = [
@@ -1310,7 +1308,66 @@ router.post('/extract', auth, async (req, res) => {
             .map(([q, u]) => ({ type: 'hls', url: u, quality: q })),
         ];
       }
-        } else if (cdnSeriesStreams.length > 0) {
+
+      // проверка: открывается ли поток из того же браузера (прокси)
+      if (uniqueStreams.length > 0) {
+        const testUrl = uniqueStreams[0].url;
+        try {
+          const check = await page.evaluate(async (u) => {
+            try {
+              const r = await fetch(u, { method: 'GET', credentials: 'omit' });
+              const text = await r.text();
+              return { status: r.status, ok: r.ok, sample: text.slice(0, 200) };
+            } catch (e) {
+              return { status: 0, ok: false, error: e.message };
+            }
+          }, testUrl);
+          console.log('[player-capture] проверка потока из браузера:', check.status, check.ok, (check.sample || check.error || '').slice(0, 120));
+        } catch (e) {
+          console.warn('[player-capture] не удалось проверить поток из браузера:', e.message);
+        }
+      }
+
+      // если VK — скачиваем master.m3u8 через браузер и кладём playlist в stream
+      if (uniqueStreams.length > 0 && uniqueStreams[0].url.includes('vkvideo.cloud')) {
+        try {
+          const masterUrl = uniqueStreams[0].url;
+          const playlistText = await page.evaluate(async (u) => {
+            const r = await fetch(u, { credentials: 'omit' });
+            if (!r.ok) return null;
+            return await r.text();
+          }, masterUrl);
+
+          if (playlistText && playlistText.includes('#EXTM3U')) {
+            console.log('[player-capture] master.m3u8 скачан через browser, длина:', playlistText.length);
+            const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+            const rewritten = playlistText.split('\n').map((line) => {
+              if (line.startsWith('#EXT-X-MAP')) {
+                return line.replace(/URI="([^"]+)"/, (_, uri) => {
+                  const abs = uri.startsWith('http') ? uri : baseUrl + uri;
+                  return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
+                });
+              }
+              if (line.startsWith('#') || !line.trim()) return line;
+              const abs = line.trim().startsWith('http') ? line.trim() : baseUrl + line.trim();
+              return `/api/stream/relay?url=${encodeURIComponent(abs)}`;
+            }).join('\n');
+
+            uniqueStreams = [
+              {
+                type: 'hls',
+                url: masterUrl,
+                quality: uniqueStreams[0].quality,
+                playlist: rewritten,
+              },
+              ...uniqueStreams.slice(1),
+            ];
+          }
+        } catch (e) {
+          console.warn('[player-capture] не удалось скачать master через browser:', e.message);
+        }
+      }
+    }else if (cdnSeriesStreams.length > 0) {
       // Rezka native: только то, что пришло из get_cdn_series
       uniqueStreams = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]
         .filter((s) => {
