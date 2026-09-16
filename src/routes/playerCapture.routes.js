@@ -1310,10 +1310,17 @@ router.post('/extract', auth, async (req, res) => {
       }
 
       // проверка: открывается ли поток из того же браузера (прокси)
+            // проверка потока: сначала из фрейма плеера, потом с основной страницы
+      let streamOk = false;
       if (uniqueStreams.length > 0) {
         const testUrl = uniqueStreams[0].url;
         try {
-          const check = await page.evaluate(async (u) => {
+          const playerFrame = page.frames().find((f) =>
+            f.url().includes('stravers.live') || f.url().includes('ortified.ws')
+          );
+          const ctx = playerFrame || page;
+
+          const check = await ctx.evaluate(async (u) => {
             try {
               const r = await fetch(u, { method: 'GET', credentials: 'omit' });
               const text = await r.text();
@@ -1322,17 +1329,29 @@ router.post('/extract', auth, async (req, res) => {
               return { status: 0, ok: false, error: e.message };
             }
           }, testUrl);
+
           console.log('[player-capture] проверка потока из браузера:', check.status, check.ok, (check.sample || check.error || '').slice(0, 120));
+          streamOk = !!(check.ok && check.status >= 200 && check.status < 400);
         } catch (e) {
           console.warn('[player-capture] не удалось проверить поток из браузера:', e.message);
+          streamOk = false;
         }
       }
 
-      // если VK — скачиваем master.m3u8 через браузер и кладём playlist в stream
-      if (uniqueStreams.length > 0 && uniqueStreams[0].url.includes('vkvideo.cloud')) {
+      // если поток недоступен (403 / Failed to fetch) — не отдаём битые streams, оставляем только iframe
+      if (!streamOk && uniqueStreams.length > 0) {
+        console.warn('[player-capture] потоки недоступны из браузера — сбрасываю streams, оставляю iframe');
+        uniqueStreams = [];
+      }
+
+      // если поток ОК — пробуем скачать master и положить playlist
+      if (streamOk && uniqueStreams.length > 0 && uniqueStreams[0].url.includes('vkvideo.cloud')) {
         try {
           const masterUrl = uniqueStreams[0].url;
-          const playlistText = await page.evaluate(async (u) => {
+          const playerFrame = page.frames().find((f) => f.url().includes('stravers.live'));
+          const ctx = playerFrame || page;
+
+          const playlistText = await ctx.evaluate(async (u) => {
             const r = await fetch(u, { credentials: 'omit' });
             if (!r.ok) return null;
             return await r.text();
