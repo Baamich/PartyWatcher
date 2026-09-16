@@ -508,7 +508,12 @@ router.post('/extract', auth, async (req, res) => {
     await new Promise(r => setTimeout(r, 800));
     // даём странице дописать cookie favs
     await new Promise(r => setTimeout(r, 1500));
-        // ============================================================
+
+    const dbgCookies = await page.evaluate(() => document.cookie);
+    console.log('[player-capture] cookies:', dbgCookies.slice(0, 300));
+    const hasSof = await page.evaluate(() => typeof sof !== 'undefined' && typeof sof.ajax === 'function');
+    console.log('[player-capture] sof.ajax:', hasSof);
+    // ============================================================
     // REZKA: прямой AJAX get_cdn_series (фильм + сериал)
     // translator_id=59 + favs UUID — как в реальном браузере
     // ============================================================
@@ -628,9 +633,26 @@ router.post('/extract', auth, async (req, res) => {
               form.set('action', 'get_movie');
             }
 
-            console.log('[player-capture] AJAX body:', form.toString());
+          console.log('[player-capture] AJAX body:', form.toString());
 
-            const cdnJson = await page.evaluate(async (bodyStr) => {
+            const cdnJson = await page.evaluate(async (params) => {
+              // 1) родной sof.ajax — как в браузере
+              if (typeof sof !== 'undefined' && typeof sof.ajax === 'function') {
+                return await new Promise((resolve) => {
+                  try {
+                    sof.ajax('/ajax/get_cdn_series/?t=' + Date.now(), params, (json) => {
+                      resolve(json || { _empty: true });
+                    });
+                    setTimeout(() => resolve({ _timeout: true }), 8000);
+                  } catch (e) {
+                    resolve({ _sofErr: e.message });
+                  }
+                });
+              }
+              // 2) fallback fetch
+              const bodyStr = Object.entries(params)
+                .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+                .join('&');
               const res = await fetch('/ajax/get_cdn_series/?t=' + Date.now(), {
                 method: 'POST',
                 headers: {
@@ -643,7 +665,7 @@ router.post('/extract', auth, async (req, res) => {
               const text = await res.text();
               try { return JSON.parse(text); }
               catch { return { _raw: text.slice(0, 300) }; }
-            }, form.toString());
+            }, Object.fromEntries(form));
 
             if (cdnJson?.url && cdnJson.url !== false && String(cdnJson.url).length > 10) {
               console.log('[player-capture] AJAX CDN OK (tr', translatorId, '):', String(cdnJson.url).slice(0, 160));
