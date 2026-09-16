@@ -512,7 +512,7 @@ router.post('/extract', auth, async (req, res) => {
     // ============================================================
     if (siteName === 'rezka') {
       try {
-        const pageMeta = await page.evaluate(() => {
+                const pageMeta = await page.evaluate(() => {
           const postId =
             document.querySelector('#post_id')?.value ||
             document.querySelector('[name="post_id"]')?.value ||
@@ -520,28 +520,51 @@ router.post('/extract', auth, async (req, res) => {
             (location.pathname.match(/\/(\d+)-/) || [])[1] ||
             null;
 
-          const translators = Array.from(
-            document.querySelectorAll('.b-translator__item[data-translator_id], [data-translator_id]')
-          )
-            .map((el) => ({
-              id: el.getAttribute('data-translator_id'),
-              name: (el.textContent || '').trim().replace(/\s+/g, ' '),
-              active: el.classList.contains('active'),
-              premium: /prem|premium|pro/i.test(el.className || '') || !!el.querySelector('.prem, .b-prem'),
-            }))
-            .filter((t) => t.id);
+          // все возможные места translator_id
+          const translators = [];
+          const seen = new Set();
 
-          let sofId = null;
-          let sofTranslator = null;
+          const push = (id, name, active, premium) => {
+            if (!id || seen.has(String(id))) return;
+            seen.add(String(id));
+            translators.push({
+              id: String(id),
+              name: (name || '').trim().replace(/\s+/g, ' '),
+              active: !!active,
+              premium: !!premium,
+            });
+          };
+
+          // 1) классические кнопки озвучек
+          document.querySelectorAll(
+            '.b-translator__item[data-translator_id], [data-translator_id], .b-translator__list [data-translator_id]'
+          ).forEach((el) => {
+            push(
+              el.getAttribute('data-translator_id'),
+              el.textContent,
+              el.classList.contains('active'),
+              /prem|premium|pro/i.test(el.className || '') || !!el.querySelector('.prem, .b-prem, [class*="prem"]')
+            );
+          });
+
+          // 2) sof.tv.initCDNMoviesEvents / initCDNSeriesEvents — может быть несколько вызовов
           for (const s of Array.from(document.scripts)) {
             const txt = s.textContent || '';
-            const m = txt.match(/sof\.tv\.initCDN(?:Movies|Series)Events\(\s*(\d+)\s*,\s*(\d+)/);
-            if (m) {
-              sofId = m[1];
-              sofTranslator = m[2];
-              break;
+            const re = /sof\.tv\.initCDN(?:Movies|Series)Events\(\s*(\d+)\s*,\s*(\d+)/g;
+            let m;
+            while ((m = re.exec(txt)) !== null) {
+              push(m[2], 'sof', false, false);
             }
           }
+
+          // 3) data-translator в любых data-* / onclick
+          document.querySelectorAll('[onclick*="translator"], [data-id]').forEach((el) => {
+            const oc = el.getAttribute('onclick') || '';
+            const m = oc.match(/translator[_-]?id['\":\s=]+(\d+)/i);
+            if (m) push(m[1], el.textContent, el.classList.contains('active'), false);
+          });
+
+          let sofTranslator = translators[0]?.id || null;
 
           const activeSeason =
             document.querySelector('.b-simple_season__item.active, .b-simple_seasons__list .active')?.getAttribute('data-tab_id') ||
@@ -553,7 +576,7 @@ router.post('/extract', auth, async (req, res) => {
             null;
 
           return {
-            postId: postId || sofId,
+            postId: postId,
             translators,
             sofTranslator,
             activeSeason: Number(activeSeason) || 1,
@@ -571,23 +594,37 @@ router.post('/extract', auth, async (req, res) => {
           isSeries: pageMeta.isSeries,
         }));
 
-        if (pageMeta.postId) {
-          const preferred =
-            pageMeta.translators.find((t) => t.active && !t.premium) ||
-            pageMeta.translators.find((t) => !t.premium) ||
-            pageMeta.translators.find((t) => t.active) ||
-            pageMeta.translators[0];
+                if (pageMeta.postId) {
+          // список id для перебора: active non-prem → non-prem → active → остальные → sof
+          const idsToTry = [];
+          const addId = (id) => {
+            if (id && !idsToTry.includes(String(id))) idsToTry.push(String(id));
+          };
+          pageMeta.translators.filter((t) => t.active && !t.premium).forEach((t) => addId(t.id));
+          pageMeta.translators.filter((t) => !t.premium).forEach((t) => addId(t.id));
+          pageMeta.translators.filter((t) => t.active).forEach((t) => addId(t.id));
+          pageMeta.translators.forEach((t) => addId(t.id));
+          addId(pageMeta.sofTranslator);
 
-          const translatorId = preferred?.id || pageMeta.sofTranslator;
+          // запасные частые id (если на странице вообще пусто)
+          if (idsToTry.length === 0) {
+            ['110', '1', '56', '238', '111'].forEach(addId);
+          }
 
-          if (translatorId) {
-            const isSeries = pageMeta.isSeries;
-            const season = pageMeta.activeSeason || 1;
-            const episode = requestedEpisodeForCache || pageMeta.activeEpisode || 1;
+          console.log('[player-capture] translators to try:', idsToTry);
 
+          const isSeries = pageMeta.isSeries;
+          const season = pageMeta.activeSeason || 1;
+          const episode = requestedEpisodeForCache || pageMeta.activeEpisode || 1;
+
+          let gotUrl = false;
+
+          for (const translatorId of idsToTry) {
             const form = new URLSearchParams();
             form.set('id', String(pageMeta.postId));
             form.set('translator_id', String(translatorId));
+            // некоторые зеркала требуют favs
+            form.set('favs', String(Math.floor(Math.random() * 1e8)));
             if (isSeries) {
               form.set('season', String(season));
               form.set('episode', String(episode));
@@ -616,8 +653,8 @@ router.post('/extract', auth, async (req, res) => {
               }
             }, form.toString());
 
-            if (cdnJson?.url) {
-              console.log('[player-capture] AJAX CDN OK, url slice:', String(cdnJson.url).slice(0, 180));
+            if (cdnJson?.url && cdnJson.url !== false && String(cdnJson.url).length > 10) {
+              console.log('[player-capture] AJAX CDN OK (translator', translatorId, '), url slice:', String(cdnJson.url).slice(0, 180));
 
               const parts = String(cdnJson.url).split(',');
               for (const part of parts) {
@@ -646,11 +683,15 @@ router.post('/extract', auth, async (req, res) => {
                   console.log('[player-capture] AJAX CDN stream:', quality || '?', streamUrl.slice(0, 100));
                 }
               }
+              gotUrl = true;
+              break; // хватит одного рабочего translator
             } else {
-              console.warn('[player-capture] AJAX без url:', JSON.stringify(cdnJson).slice(0, 400));
+              console.warn('[player-capture] AJAX translator', translatorId, 'без url:', JSON.stringify(cdnJson).slice(0, 200));
             }
-          } else {
-            console.warn('[player-capture] translator_id не найден');
+          }
+
+          if (!gotUrl) {
+            console.warn('[player-capture] ни один translator не вернул url');
           }
         } else {
           console.warn('[player-capture] post_id не найден на странице');
