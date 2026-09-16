@@ -310,6 +310,11 @@ router.post('/extract', auth, async (req, res) => {
     const reqUrl = response.url();
     const contentType = response.headers()['content-type'] || '';
 
+    // DEBUG: все ajax rezka
+    if (reqUrl.includes('/ajax/') || reqUrl.includes('get_cdn') || reqUrl.includes('voidboost')) {
+      console.log('[player-capture] NET:', response.status(), reqUrl.slice(0, 180));
+    }
+
     if (reqUrl.includes('.m3u8') || contentType.includes('mpegurl')) {
       foundStreams.push({ type: 'hls', url: reqUrl });
     }
@@ -857,20 +862,56 @@ router.post('/extract', auth, async (req, res) => {
         }
       }
 
-      // --- Rezka FILM: native CDN (всегда, и при skipGenericClick тоже) ---
+      // --- Rezka FILM: native CDN ---
       if (siteName === 'rezka') {
+        // закрыть/спрятать премиум-кнопку, если мешает
         await page.evaluate(() => {
-          const play =
-            document.querySelector('#cdnplayer-container .play') ||
-            document.querySelector('#cdnplayer .play') ||
-            document.querySelector('.b-player .play') ||
-            document.querySelector('#oframecdnplayer') ||
-            document.querySelector('#cdnplayer-container');
-          if (play) play.click();
+          document.querySelectorAll('.b-prem-button, #prem-modal, .b-prem-content, [class*="prem"]').forEach((el) => {
+            try { el.style.pointerEvents = 'none'; } catch (_) {}
+          });
         }).catch(() => {});
 
+        // клик именно по play / оверлею плеера
+        const clickedPlay = await page.evaluate(() => {
+          const candidates = [
+            '#cdnplayer-container .play',
+            '#cdnplayer .play',
+            '.b-player .play',
+            '#oframecdnplayer .play',
+            '.b-player__holder_cdn',
+            '#cdnplayer-container',
+            '#cdnplayer',
+          ];
+          for (const sel of candidates) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            // не кликаем premium
+            if (/prem|premium|support/i.test(el.className || '') || /prem|premium/i.test(el.id || '')) continue;
+            el.click();
+            return sel;
+          }
+          return null;
+        }).catch(() => null);
+
+        console.log('[player-capture] (фильм) клик play:', clickedPlay);
+
+        // второй клик мышкой по центру контейнера плеера (не по низу, где Premium)
+        try {
+          const box = await page.evaluate(() => {
+            const el = document.querySelector('#cdnplayer-container') || document.querySelector('.b-player');
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            // чуть выше центра — меньше шанс попасть в кнопку Premium
+            return { x: r.x + r.width / 2, y: r.y + r.height * 0.35 };
+          });
+          if (box) {
+            await page.mouse.click(box.x, box.y);
+            console.log('[player-capture] (фильм) mouse click upper-center player');
+          }
+        } catch (_) {}
+
         {
-          const maxWait = 5000;
+          const maxWait = 6000;
           const step = 300;
           let t = 0;
           while (t < maxWait && cdnSeriesStreams.length === 0) {
@@ -901,6 +942,8 @@ router.post('/extract', auth, async (req, res) => {
               type: videoSrc.includes('.m3u8') ? 'hls' : 'mp4',
               url: videoSrc,
             });
+          } else {
+            console.warn('[player-capture] (фильм) нет CDN и нет video src');
           }
         }
       }
