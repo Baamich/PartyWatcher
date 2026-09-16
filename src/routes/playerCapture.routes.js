@@ -1311,30 +1311,80 @@ router.post('/extract', auth, async (req, res) => {
 
       // проверка: открывается ли поток из того же браузера (прокси)
             // проверка потока: сначала из фрейма плеера, потом с основной страницы
-      let streamOk = false;
+            let streamOk = false;
+      let downloadedPlaylist = null;
+
       if (uniqueStreams.length > 0) {
         const testUrl = uniqueStreams[0].url;
+        let checkPage = null;
         try {
-          const playerFrame = page.frames().find((f) =>
-            f.url().includes('stravers.live') || f.url().includes('ortified.ws')
+          // качаем m3u8 через отдельную вкладку — без CORS
+          checkPage = await browser.newPage();
+          if (PROXY_SERVER && PROXY_USER && PROXY_PASS) {
+            await checkPage.authenticate({ username: PROXY_USER, password: PROXY_PASS });
+          }
+          await checkPage.setUserAgent(
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           );
-          const ctx = playerFrame || page;
+          await checkPage.setExtraHTTPHeaders({
+            'Referer': 'https://kinogomy.stravers.live/',
+            'Accept': '*/*',
+          });
 
-          const check = await ctx.evaluate(async (u) => {
-            try {
-              const r = await fetch(u, { method: 'GET', credentials: 'omit' });
-              const text = await r.text();
-              return { status: r.status, ok: r.ok, sample: text.slice(0, 200) };
-            } catch (e) {
-              return { status: 0, ok: false, error: e.message };
-            }
-          }, testUrl);
+          const resp = await checkPage.goto(testUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 20000,
+          });
+          const status = resp ? resp.status() : 0;
+          const text = resp ? await resp.text() : '';
+          const ok = status >= 200 && status < 400 && text.includes('#EXTM3U');
 
-          console.log('[player-capture] проверка потока из браузера:', check.status, check.ok, (check.sample || check.error || '').slice(0, 120));
-          streamOk = !!(check.ok && check.status >= 200 && check.status < 400);
+          console.log('[player-capture] проверка потока (goto):', status, ok, text.slice(0, 120));
+          streamOk = ok;
+          if (ok) downloadedPlaylist = text;
         } catch (e) {
-          console.warn('[player-capture] не удалось проверить поток из браузера:', e.message);
+          console.warn('[player-capture] не удалось проверить поток (goto):', e.message);
           streamOk = false;
+        } finally {
+          if (checkPage) await checkPage.close().catch(() => {});
+        }
+      }
+
+      // если поток недоступен — сбрасываем streams (iframe всё равно 404 у зрителя)
+      if (!streamOk && uniqueStreams.length > 0) {
+        console.warn('[player-capture] потоки недоступны — сбрасываю streams');
+        uniqueStreams = [];
+      }
+
+      // если скачали master — переписываем на relay и кладём playlist
+      if (streamOk && downloadedPlaylist && uniqueStreams.length > 0) {
+        try {
+          const masterUrl = uniqueStreams[0].url;
+          console.log('[player-capture] master.m3u8 скачан, длина:', downloadedPlaylist.length);
+          const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+          const rewritten = downloadedPlaylist.split('\n').map((line) => {
+            if (line.startsWith('#EXT-X-MAP')) {
+              return line.replace(/URI="([^"]+)"/, (_, uri) => {
+                const abs = uri.startsWith('http') ? uri : baseUrl + uri;
+                return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
+              });
+            }
+            if (line.startsWith('#') || !line.trim()) return line;
+            const abs = line.trim().startsWith('http') ? line.trim() : baseUrl + line.trim();
+            return `/api/stream/relay?url=${encodeURIComponent(abs)}`;
+          }).join('\n');
+
+          uniqueStreams = [
+            {
+              type: 'hls',
+              url: masterUrl,
+              quality: uniqueStreams[0].quality,
+              playlist: rewritten,
+            },
+            ...uniqueStreams.slice(1),
+          ];
+        } catch (e) {
+          console.warn('[player-capture] не удалось переписать playlist:', e.message);
         }
       }
 
