@@ -17,6 +17,7 @@ const driveRoutes = require('./routes/drive.routes');
 const playerCaptureRoutes = require('./routes/playerCapture.routes');
 const streamProxyRoutes = require('./routes/streamProxy.routes');
 
+const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
 
 async function start() {
   await connectDB();
@@ -38,6 +39,7 @@ async function start() {
   app.use('/api/drive', driveRoutes);
   app.use('/api/player-capture', playerCaptureRoutes);
   app.use('/api/stream', streamProxyRoutes);
+  app.use('/debug-screenshots', express.static(debugScreenshotsDir));
     
   app.set('io', io);
 

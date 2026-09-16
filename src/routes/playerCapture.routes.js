@@ -1,7 +1,14 @@
 // playerCapture.routes.js
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const router = express.Router();
 const auth = require('../middleware/auth');
+
+// папка для отладочных скриншотов — внутри проекта, чтобы отдавать через статику
+// Express и смотреть в браузере, без scp/ssh (см. подключение статики в server.js)
+const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
+if (!fs.existsSync(debugScreenshotsDir)) fs.mkdirSync(debugScreenshotsDir, { recursive: true });
 
 let puppeteer = null;
 try {
@@ -143,6 +150,13 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
       console.log(`[player-capture] (${logLabel}) balabolka найдена после повторного клика`);
     } else {
       console.warn(`[player-capture] (${logLabel}) плеер так и не появился`);
+            // делаем скриншот именно в момент провала — чтобы увидеть, что реально
+      // отрисовано в #cdnplayer-container (реклама зависла? чёрный экран? заглушка?)
+      try {
+        const failFile = `failed-${logLabel}.png`;
+        await page.screenshot({ path: path.join(debugScreenshotsDir, failFile) });
+        console.log(`[player-capture] (${logLabel}) скриншот провала сохранён: debug-screenshots/${failFile}`);
+      } catch (e) {}
     }
     return foundAfterRetry;
   } catch (e) {
@@ -373,10 +387,11 @@ router.post('/extract', auth, async (req, res) => {
     console.log('[player-capture] заголовок страницы:', pageTitle);
     console.log('[player-capture] длина HTML body:', bodyLength);
 
-    // сохраняем скриншот, чтобы визуально понять что за страница реально отрисовалась
+    // сохраняем скриншот в папку проекта (не /tmp) и отдаём через статику Express —
+    // так его можно открыть прямо в браузере по ссылке, без scp/ssh-ключей
     try {
-      await page.screenshot({ path: '/tmp/player-capture-debug.png' });
-      console.log('[player-capture] скриншот сохранён: /tmp/player-capture-debug.png');
+      await page.screenshot({ path: path.join(debugScreenshotsDir, 'before-click.png') });
+      console.log('[player-capture] скриншот сохранён: debug-screenshots/before-click.png');
     } catch (e) {
       console.error('[player-capture] не удалось сделать скриншот:', e.message);
     }
