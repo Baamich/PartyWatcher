@@ -506,7 +506,8 @@ router.post('/extract', auth, async (req, res) => {
       await page.waitForSelector('#cdnplayer-container, #cdnplayer, .b-player', { timeout: 2500 });
     } catch (_) {}
     await new Promise(r => setTimeout(r, 800));
-
+    // даём странице дописать cookie favs
+    await new Promise(r => setTimeout(r, 1500));
         // ============================================================
     // REZKA: прямой AJAX get_cdn_series (фильм + сериал)
     // translator_id=59 + favs UUID — как в реальном браузере
@@ -554,17 +555,18 @@ router.post('/extract', auth, async (req, res) => {
             }
           }
 
+        // главный источник на rezka — #ctrl_favs
           let favs =
-            document.querySelector('#favs')?.value ||
-            document.querySelector('[name="favs"]')?.value ||
+            document.querySelector('#ctrl_favs')?.value ||
+            document.querySelector('#favs, [name="favs"]')?.value ||
             null;
           if (!favs) {
-            const cm = document.cookie.match(/(?:^|;\s*)favs=([a-f0-9-]{36})/i);
-            if (cm) favs = cm[1];
+            const cm = document.cookie.match(/(?:^|;\s*)favs=([^;]+)/i);
+            if (cm) favs = decodeURIComponent(cm[1]).trim();
           }
           if (!favs) {
             for (const s of Array.from(document.scripts)) {
-              const m = (s.textContent || '').match(/favs['\":\s=]+['\"]([a-f0-9-]{36})['\"]/i);
+              const m = (s.textContent || '').match(/favs['\":\s=]+['\"]([a-f0-9-]{8,})['\"]/i);
               if (m) { favs = m[1]; break; }
             }
           }
@@ -601,7 +603,11 @@ router.post('/extract', auth, async (req, res) => {
           pageMeta.translators.forEach((t) => addId(t.id));
           ['110', '1', '56', '238'].forEach(addId);
 
-          const favs = pageMeta.favs || 'a258b7e9-78f2-443a-b3bb-7dbd4b715dd6';
+        // без чужого UUID — только то, что выдал ЭТОТ браузер/сессия
+          const favs = pageMeta.favs || '';
+          if (!favs) {
+            console.warn('[player-capture] favs пустой — AJAX почти наверняка даст "сессия истекла"');
+          }
           const isSeries = pageMeta.isSeries;
           const season = pageMeta.activeSeason || 1;
           const episode = requestedEpisodeForCache || pageMeta.activeEpisode || 1;
@@ -613,7 +619,7 @@ router.post('/extract', auth, async (req, res) => {
             const form = new URLSearchParams();
             form.set('id', String(pageMeta.postId));
             form.set('translator_id', String(translatorId));
-            form.set('favs', favs);
+            if (favs) form.set('favs', favs);
             if (isSeries) {
               form.set('season', String(season));
               form.set('episode', String(episode));
