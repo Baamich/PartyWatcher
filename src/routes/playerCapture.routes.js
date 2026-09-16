@@ -28,14 +28,7 @@ const { findPlayerContext, readDropdownTexts, selectDropdownOptionByNumber } = r
 const fetch = require('cross-fetch');
 const { PuppeteerBlocker } = require('@cliqz/adblocker-puppeteer');
 
-// Настоящий adblock-движок (те же списки фильтров, что у AdGuard/uBlock —
-// EasyList + EasyPrivacy), а не наивный список доменов. Важно: рекламные
-// скрипты на Rezka "зеркалируются" под постоянно меняющимися доменами
-// (franecki.net, ad2the.net, get2.fun, botsford.link, stawkibet4.io...) —
-// статичный список доменов устаревает за считанные дни. Фильтр-листы вместо
-// этого матчят по URL-паттернам (например "point/?method=video_link",
-// "gfp=", "adtag="), которые остаются стабильными даже когда домен меняется.
-// Скачиваем списки один раз при старте сервера и переиспользуем между запросами.
+
 let adblockerPromise = null;
 function getAdblocker() {
   if (!adblockerPromise) {
@@ -43,6 +36,7 @@ function getAdblocker() {
       'https://easylist.to/easylist/easylist.txt',
       'https://easylist.to/easylist/easyprivacy.txt',
       'https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/BaseFilter/sections/adservers.txt',
+      'https://filters.adtidy.org/extension/chromium/filters/18.txt',
     ]).catch((e) => {
       console.error('[player-capture] не удалось загрузить фильтр-листы adblocker:', e.message);
       adblockerPromise = null; // разрешаем повторную попытку при следующем запросе
