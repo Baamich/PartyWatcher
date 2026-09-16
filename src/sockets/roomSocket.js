@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const Room = require('../models/Room');
 const ChatMessage = require('../models/ChatMessage');
+const SupportTicket = require('../models/SupportTicket');
 
 async function updateRoomActivity(io, code) {
   const size = io.sockets.adapter.rooms.get(code)?.size || 0;
@@ -43,7 +44,17 @@ function registerRoomSocket(io) {
     }
   });
 
-  io.on('connection', (socket) => {
+    io.on('connection', (socket) => {
+    // админы сразу в комнату support-событий
+    if (socket.user?.role === 'admin') {
+      socket.join('admins');
+      SupportTicket.countDocuments({ status: 'unread' })
+        .then((unreadCount) => {
+          socket.emit('support:count', { unreadCount });
+        })
+        .catch(() => {});
+    }
+
     socket.on('room:join', async ({ code }) => {
       const room = await Room.findOne({ code });
       if (!room) return socket.emit('room:error', { error: 'Комната не найдена' });

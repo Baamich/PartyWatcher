@@ -16,7 +16,7 @@ const adminRoutes = require('./routes/admin.routes');
 const driveRoutes = require('./routes/drive.routes');
 const playerCaptureRoutes = require('./routes/playerCapture.routes');
 const streamProxyRoutes = require('./routes/streamProxy.routes');
-
+const supportRoutes = require('./routes/support.routes');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
 
 async function start() {
@@ -40,6 +40,7 @@ async function start() {
   app.use('/api/player-capture', playerCaptureRoutes);
   app.use('/api/stream', streamProxyRoutes);
   app.use('/debug-screenshots', express.static(debugScreenshotsDir));
+  app.use('/api/support', supportRoutes);
     
   app.set('io', io);
 

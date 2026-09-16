@@ -233,7 +233,7 @@ async function logout() {
 const infoTexts = {
   youtube_twitch: 'Вставь ссылку на видео с YouTube (youtube.com/watch?v=... или youtu.be/...) или на запись (VOD) с Twitch (twitch.tv/videos/1234567890 — именно запись, не текущий эфир). <br>Тип определится автоматически по ссылке.',
   drive: '(не тестировалось)<br>На Google Диске: правой кнопкой по видео → "Открыть доступ" → "Все, у кого есть ссылка" → скопируй ссылку и вставь сюда. Без этого сервер не сможет прочитать файл.',
-  player_capture: 'Вставь ссылку на страницу с фильмом/сериалом. Оптимизировано для:<br>• Kinogo(<a href="https://kinogo2026.com" target="_blank" rel="noopener">https://kinogo2026.com</a>),<br>• Rezka (<a href="https://rezka-ua.tv" target="_blank" rel="noopener">https://rezka-ua.tv</a>) и их возможные другие домены (могут быть нюансы, но должно работать фильм/сериал). <br>Другие сайты тоже могут сработать, но не гарантировано. <br>⚠️ my.mail.ru не поддерживается (его нельзя перехватить). <br>Для некоторых сайтов будет доступен выбор сезона/серии/озвучки.',
+  player_capture: 'Вставь ссылку на страницу с фильмом/сериалом. Оптимизировано для:<br>• Kinogo(<a href="https://kinogo2026.com" target="_blank" rel="noopener">https://kinogo2026.com</a>),<br>• Rezka (<a href="https://rezka-ua.tv" target="_blank" rel="noopener">https://rezka-ua.tv</a>) и их возможные другие домены (могут быть нюансы, но должно работать фильм/сериал). <br>Другие сайты тоже могут сработать, но не гарантировано. <br>⚠️ my.mail.ru не поддерживается (его нельзя перехватить<br> rezka.ag требуется личный прокси). <br>Для некоторых сайтов будет доступен выбор сезона/серии/озвучки.',
   direct: 'Вставь ГОТОВУЮ прямую ссылку на видео — сюда НЕ подходит адрес обычной страницы сайта (например, страницы просмотра на my.mail.ru), только:<br>• ссылка на сам видеофайл: .mp4, .m3u8<br>• ссылка на embed-плеер, который сайт САМ разрешает встраивать (не все сайты это позволяют по тиму my.mail.ru.<br>Такую ссылку обычно нужно искать в исходном коде страницы — сервер её не ищет сам, в отличие от "Захвата плеера".',
 
 };
@@ -450,4 +450,65 @@ function stopAutoRefresh() {
   refreshTimer = null;
 }
 
+
+// ---- Служба поддержки ----
+(function initSupport() {
+  const fab = document.getElementById('supportFab');
+  const modal = document.getElementById('supportModal');
+  const closeBtn = document.getElementById('supportModalClose');
+  const sendBtn = document.getElementById('supportSendBtn');
+  if (!fab || !modal) return;
+
+  function openSupport() {
+    modal.classList.remove('hidden');
+    document.getElementById('supportError')?.classList.add('hidden');
+    document.getElementById('supportOk')?.classList.add('hidden');
+  }
+  function closeSupport() {
+    modal.classList.add('hidden');
+  }
+
+  fab.addEventListener('click', openSupport);
+  closeBtn?.addEventListener('click', closeSupport);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeSupport();
+  });
+
+  sendBtn?.addEventListener('click', async () => {
+    const name = (document.getElementById('supportName')?.value || '').trim().slice(0, 12);
+    const email = (document.getElementById('supportEmail')?.value || '').trim().slice(0, 26);
+    const description = (document.getElementById('supportDesc')?.value || '').trim().slice(0, 1000);
+    const errEl = document.getElementById('supportError');
+    const okEl = document.getElementById('supportOk');
+    errEl?.classList.add('hidden');
+    okEl?.classList.add('hidden');
+
+    if (!description || description.length < 5) {
+      if (errEl) {
+        errEl.textContent = 'Опишите проблему (минимум 5 символов)';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    sendBtn.disabled = true;
+    try {
+      await api('/support', {
+        method: 'POST',
+        body: { name, email, description },
+      });
+      if (okEl) okEl.classList.remove('hidden');
+      const desc = document.getElementById('supportDesc');
+      if (desc) desc.value = '';
+      setTimeout(closeSupport, 1200);
+    } catch (e) {
+      if (errEl) {
+        errEl.textContent = e.message || 'Не удалось отправить';
+        errEl.classList.remove('hidden');
+      }
+    } finally {
+      sendBtn.disabled = false;
+    }
+  });
+})();
 checkAuth();

@@ -139,6 +139,31 @@
     </div>
   </div><!-- /appBox -->
 
+    <!-- Служба поддержки FAB -->
+  <button type="button" id="supportFab" class="support-fab" title="Служба поддержки" aria-label="Служба поддержки">
+    <svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" fill="currentColor" opacity="0.15"/>
+      <path fill="currentColor" d="M24 10c-7.2 0-13 4.9-13 11 0 3.4 1.6 6.4 4.2 8.5V36l4.8-2.6c1.3.3 2.6.5 4 .5 7.2 0 13-4.9 13-11S31.2 10 24 10zm-1.5 14.5h-3v-3h3v3zm0-5h-3v-6h3v6zm6 5h-3v-3h3v3zm0-5h-3v-6h3v6z"/>
+    </svg>
+  </button>
+
+  <div id="supportModal" class="modal hidden">
+    <div class="modal-content support-modal-content">
+      <button type="button" class="modal-close" id="supportModalClose" aria-label="Закрыть">×</button>
+      <h3 class="support-modal-title">Служба поддержки</h3>
+      <p class="support-modal-hint">Опишите проблему — мы постараемся помочь</p>
+      <label class="auth-label" for="supportName">Имя (необязательно)</label>
+      <input id="supportName" maxlength="12" placeholder="До 12 символов" />
+      <label class="auth-label" for="supportEmail">Почта (необязательно)</label>
+      <input id="supportEmail" type="email" maxlength="26" placeholder="До 26 символов" />
+      <label class="auth-label" for="supportDesc">Описание проблемы</label>
+      <textarea id="supportDesc" maxlength="1000" rows="5" placeholder="Что случилось? (до 1000 символов)"></textarea>
+      <div id="supportError" class="auth-error hidden"></div>
+      <div id="supportOk" class="support-ok hidden">Отправлено ✓</div>
+      <button type="button" id="supportSendBtn" class="auth-submit">Отправить</button>
+    </div>
+  </div>
+  
   <script src="/js/api.js"></script>
   <script src="/js/index.js"></script>
 </body>

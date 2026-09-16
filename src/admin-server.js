@@ -8,6 +8,7 @@ const config = require('./config');
 const connectDB = require('./db/mongoose');
 const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');
+const supportRoutes = require('./routes/support.routes');
 
 async function start() {
   await connectDB(); // отдельное подключение к той же базе, не зависит от основного процесса
@@ -17,6 +18,7 @@ async function start() {
   app.use(cors());
   app.use(express.json());
   app.use(cookieParser());
+  app.use('/api/support', supportRoutes);
 
   // отдаём только то, что нужно админке — не поднимаем весь public целиком без разбора,
   // но проще всего отдать всю папку, там нет ничего секретного

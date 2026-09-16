@@ -14,6 +14,10 @@
   <div class="corner-menu">
     <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
     <button class="icon-btn" onclick="location.href='/index.html'">← Назад</button>
+        <button class="icon-btn support-admin-btn" id="supportAdminBtn" type="button">
+      Жалобы
+      <span class="support-badge" id="supportBadge">0</span>
+    </button>
   </div>
 
   <h2>Панель администратора</h2>
@@ -38,6 +42,22 @@
     </div>
   </div>
 
+    <div id="supportAdminOverlay" class="support-admin-overlay hidden">
+    <div class="support-admin-panel">
+      <div class="support-admin-header">
+        <h3>Обращения в поддержку</h3>
+        <button type="button" class="modal-close" id="supportAdminClose">×</button>
+      </div>
+      <div class="support-tabs">
+        <button type="button" class="support-tab active" data-status="unread">Непрочитанные</button>
+        <button type="button" class="support-tab" data-status="accepted">Приняты</button>
+        <button type="button" class="support-tab" data-status="trivial">Пустяк</button>
+      </div>
+      <div id="supportTicketsList" class="support-tickets-list"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/admin.js"></script>
 </body>
