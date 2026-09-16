@@ -202,13 +202,25 @@ router.post('/extract', auth, async (req, res) => {
     });
   }
   const { url, roomCode } = req.body;
-  const requestedEpisodeForCache = req.body.episode ? Number(req.body.episode) : null;
+  let requestedEpisodeForCache = req.body.episode ? Number(req.body.episode) : null;
 
   if (!url || !url.startsWith('http')) {
     return res.status(400).json({ error: 'Нужна валидная ссылка' });
   }
 
-    const siteName = detectSite(url);
+  // если episode не передали в body — пробуем вытащить из хеша Rezka:
+  // #t:440-s:1-e:2  или  #t:440-s:1-e2  или  #t:440-s:1-e:1
+  if (!requestedEpisodeForCache) {
+    const hashMatch = url.match(/[#&](?:e|episode)[=:]?(\d+)/i) ||
+                      url.match(/-e[=:]?(\d+)/i) ||
+                      url.match(/e[=:](\d+)/i);
+    if (hashMatch) {
+      requestedEpisodeForCache = Number(hashMatch[1]);
+      console.log('[player-capture] episode взят из URL-хеша:', requestedEpisodeForCache);
+    }
+  }
+
+  const siteName = detectSite(url);
   const adapter = siteAdapters[siteName] || null;
   console.log('[player-capture] сайт определён как:', siteName, '| адаптер найден:', !!adapter);
 
@@ -495,8 +507,8 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
-    // если запрошена конкретная серия — переключаем через UI балаболки внутри iframe
-    const requestedEpisode = req.body.episode ? Number(req.body.episode) : null;
+        // используем то же значение, что и для кэша (body или хеш)
+    const requestedEpisode = requestedEpisodeForCache;
 
     if (requestedEpisode && adapter?.mode === 'dropdown') {
       // режим kinogo/allplay: серия переключается через дропдаун по тексту
@@ -611,53 +623,92 @@ router.post('/extract', auth, async (req, res) => {
           return false;
         }, requestedEpisode);
 
-        if (alreadyActive) {
-          console.log('[player-capture] серия', requestedEpisode, 'уже активна — клик не нужен, ждём поток от текущего плеера');
-          episodeSwitched = true;
-          // НЕ чистим foundStreams — то, что уже поймали при открытии плеера, оставляем
-        } else {
-          // серия другая — чистим старые потоки и кликаем
-          playerApiData = null;
-          foundStreams.length = 0;
+      // всегда чистим старые потоки перед выбором серии —
+      // иначе можно случайно отдать поток от другой серии
+      playerApiData = null;
+      foundStreams.length = 0;
 
-          const clicked = await page.evaluate((ep) => {
-            const selectors = [
-              `li.b-simple_episode_item[data-episode_id="${ep}"]`,
-              `li.b-simple_episode_item[data-id][data-episode_id="${ep}"]`,
-              `.b-simple_episodes_list li[data-episode_id="${ep}"]`,
-              `#simple-episodes-list-1 li[data-episode_id="${ep}"]`,
-              `.b-simple_episodes__list li[data-episode_id="${ep}"]`,
-            ];
+      if (alreadyActive) {
+        // серия уже активна → get_cdn_series сам не придёт.
+        // Трюк: кликаем любую ДРУГУЮ серию, потом обратно нужную.
+        console.log('[player-capture] серия', requestedEpisode, 'уже активна — делаю принудительное переключение туда-обратно');
 
-            for (const sel of selectors) {
-              const li = document.querySelector(sel);
-              if (li) {
-                li.click();
-                return sel;
-              }
-            }
-            return null;
-          }, requestedEpisode);
-
-          if (clicked) {
-            console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен (native), селектор:', clicked);
-            episodeSwitched = true;
-          } else {
-            console.warn('[player-capture] native кнопка серии не найдена для', requestedEpisode);
-
-            const debugList = await page.evaluate(() => {
-              return Array.from(document.querySelectorAll('li.b-simple_episode_item, .b-simple_episodes_list li'))
-                .slice(0, 15)
-                .map((li) => ({
-                  text: (li.textContent || '').trim().slice(0, 40),
-                  episodeId: li.getAttribute('data-episode_id'),
-                  seasonId: li.getAttribute('data-season_id'),
-                  className: li.className,
-                }));
-            }).catch(() => []);
-            console.log('[player-capture] найденные элементы серий на странице:', JSON.stringify(debugList, null, 2));
+        const otherEp = await page.evaluate((ep) => {
+          const items = Array.from(document.querySelectorAll(
+            'li.b-simple_episode_item[data-episode_id], #simple-episodes-list-1 li[data-episode_id]'
+          ));
+          for (const li of items) {
+            const id = Number(li.getAttribute('data-episode_id'));
+            if (id && id !== Number(ep)) return id;
           }
+          return null;
+        }, requestedEpisode);
+
+        if (otherEp) {
+          // 1) клик по другой серии
+          await page.evaluate((ep) => {
+            const li = document.querySelector(
+              `li.b-simple_episode_item[data-episode_id="${ep}"], #simple-episodes-list-1 li[data-episode_id="${ep}"]`
+            );
+            if (li) li.click();
+          }, otherEp);
+          console.log('[player-capture] временно кликнул серию', otherEp);
+          await new Promise((r) => setTimeout(r, 1500));
+
+          // 2) клик обратно на нужную
+          await page.evaluate((ep) => {
+            const li = document.querySelector(
+              `li.b-simple_episode_item[data-episode_id="${ep}"], #simple-episodes-list-1 li[data-episode_id="${ep}"]`
+            );
+            if (li) li.click();
+          }, requestedEpisode);
+          console.log('[player-capture] клик обратно на серию', requestedEpisode);
+          episodeSwitched = true;
+        } else {
+          // других серий нет (фильм?) — просто ждём поток от текущего плеера
+          console.log('[player-capture] других серий нет, жду поток от уже активного плеера');
+          episodeSwitched = true;
         }
+      } else {
+        // серия другая — просто кликаем
+        const clicked = await page.evaluate((ep) => {
+          const selectors = [
+            `li.b-simple_episode_item[data-episode_id="${ep}"]`,
+            `li.b-simple_episode_item[data-id][data-episode_id="${ep}"]`,
+            `.b-simple_episodes_list li[data-episode_id="${ep}"]`,
+            `#simple-episodes-list-1 li[data-episode_id="${ep}"]`,
+            `.b-simple_episodes__list li[data-episode_id="${ep}"]`,
+          ];
+
+          for (const sel of selectors) {
+            const li = document.querySelector(sel);
+            if (li) {
+              li.click();
+              return sel;
+            }
+          }
+          return null;
+        }, requestedEpisode);
+
+        if (clicked) {
+          console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен (native), селектор:', clicked);
+          episodeSwitched = true;
+        } else {
+          console.warn('[player-capture] native кнопка серии не найдена для', requestedEpisode);
+
+          const debugList = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('li.b-simple_episode_item, .b-simple_episodes_list li'))
+              .slice(0, 15)
+              .map((li) => ({
+                text: (li.textContent || '').trim().slice(0, 40),
+                episodeId: li.getAttribute('data-episode_id'),
+                seasonId: li.getAttribute('data-season_id'),
+                className: li.className,
+              }));
+          }).catch(() => []);
+          console.log('[player-capture] найденные элементы серий на странице:', JSON.stringify(debugList, null, 2));
+        }
+      }
       }
 
       // ждём, пока сеть отдаст поток (для активной серии он мог прийти раньше, для новой — после клика)
