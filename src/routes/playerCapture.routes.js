@@ -374,10 +374,27 @@ router.post('/extract', auth, async (req, res) => {
 
             // берём первую https-ссылку в куске (до " or " / пробела, если есть)
             const urlMatch = part.match(/https?:\/\/[^\s,]+/i);
-            if (urlMatch) {
+                        if (urlMatch) {
               let streamUrl = urlMatch[0].trim();
               // иногда в конце лишняя скобка/кавычка
               streamUrl = streamUrl.replace(/["')]+$/, '');
+
+              // отсекаем мусор: иконки, картинки, css, js
+              const lower = streamUrl.toLowerCase();
+              if (
+                lower.includes('.svg') ||
+                lower.includes('.png') ||
+                lower.includes('.jpg') ||
+                lower.includes('.jpeg') ||
+                lower.includes('.gif') ||
+                lower.includes('.webp') ||
+                lower.includes('.css') ||
+                lower.includes('.js') ||
+                lower.includes('prem-icon') ||
+                lower.includes('/images/')
+              ) {
+                continue;
+              }
 
               if (streamUrl.startsWith('http')) {
                 const entry = {
@@ -1010,15 +1027,25 @@ router.post('/extract', auth, async (req, res) => {
             .map(([q, u]) => ({ type: 'hls', url: u, quality: q })),
         ];
       }
-    } else if (cdnSeriesStreams.length > 0) {
+        } else if (cdnSeriesStreams.length > 0) {
       // Rezka native: только то, что пришло из get_cdn_series
-      uniqueStreams = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()];
-      // лучшее качество первым
-      uniqueStreams.sort((a, b) => {
-        const qa = parseInt(a.quality, 10) || 0;
-        const qb = parseInt(b.quality, 10) || 0;
-        return qb - qa;
-      });
+      uniqueStreams = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]
+        .filter((s) => {
+          const u = (s.url || '').toLowerCase();
+          return !u.includes('.svg') && !u.includes('prem-icon') && !u.includes('/images/');
+        });
+
+      // сортировка: 720p → 1080p → 480p → 360p (720 стабильнее для HLS через voidboost)
+      const rank = (q) => {
+        const n = parseInt(q, 10) || 0;
+        if (n === 720) return 1000;
+        if (n === 1080) return 900;
+        if (n === 480) return 800;
+        if (n === 360) return 700;
+        return n;
+      };
+      uniqueStreams.sort((a, b) => rank(b.quality) - rank(a.quality));
+
       console.log('[player-capture] uniqueStreams из CDN:', uniqueStreams.map((s) => s.quality || s.url.slice(0, 60)));
     } else {
       // приоритет master.m3u8 — это основной манифест, а не отдельный сегмент/заглушка
@@ -1027,7 +1054,7 @@ router.post('/extract', auth, async (req, res) => {
         uniqueStreams = [master, ...uniqueStreams.filter((s) => s !== master)];
       }
     }
-    
+
     const uniqueIframes = [...new Set(foundIframes)];
 
     const meta = {

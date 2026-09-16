@@ -1,17 +1,20 @@
 //controls.js (playerCapture)
 let currentMeta = null;
-let onEpisodeChangeCallback = null; 
+let onEpisodeChangeCallback = null;
+let onQualityChangeCallback = null;
+let availableStreams = [];
 
-export function showEpisodeControls(meta, onChange) {
+export function showEpisodeControls(meta, onChange, streams, onQualityChange) {
   currentMeta = meta;
   onEpisodeChangeCallback = onChange || null;
+  onQualityChangeCallback = onQualityChange || null;
+  availableStreams = Array.isArray(streams) ? streams : [];
   fillEpisodeSelects(meta);
-  
+  fillQualitySelect(availableStreams, meta?.currentQuality);
+
   const hostControls = document.getElementById('hostControls');
   if (!hostControls) return;
 
-  // Хост: если уже на вкладке «Видео» — показываем сразу.
-  // Если на «Чат» — панель появится при переключении на «Видео» (setViewMode).
   if (document.body.classList.contains('view-video-only')) {
     hostControls.classList.remove('hidden');
   }
@@ -32,7 +35,6 @@ function fillEpisodeSelects(meta) {
 
   if (!seasonSelect) return;
 
-  // Сезоны
   seasonSelect.innerHTML = '';
   (meta.seasons || [1]).forEach(s => {
     const opt = document.createElement('option');
@@ -42,8 +44,6 @@ function fillEpisodeSelects(meta) {
     seasonSelect.appendChild(opt);
   });
 
-  // Серии — рисуем ровно столько, сколько реально известно с сайта.
-  // Если totalEpisodes не передан (например, это фильм, а не сериал) — не выдумываем список.
   episodeSelect.innerHTML = '';
   const totalEpisodes = meta.totalEpisodes || 1;
   for (let i = 1; i <= totalEpisodes; i++) {
@@ -54,7 +54,6 @@ function fillEpisodeSelects(meta) {
     episodeSelect.appendChild(opt);
   }
 
-  // Озвучки
   if (meta.voices && meta.voices.length) {
     voiceRow.style.display = 'flex';
     voiceSelect.innerHTML = '';
@@ -79,10 +78,8 @@ function fillEpisodeSelects(meta) {
         opt.textContent = label;
         playerSelect.appendChild(opt);
       });
-      // явно ставим тот плеер, который реально отработал (в т.ч. после авто-перебора)
       if (meta.currentPlayer) {
         playerSelect.value = meta.currentPlayer;
-        // если точного совпадения нет (пробелы/регистр) — ищем близкий
         if (playerSelect.value !== meta.currentPlayer) {
           const found = meta.players.find(
             (p) => p.trim().toLowerCase() === String(meta.currentPlayer).trim().toLowerCase()
@@ -94,6 +91,36 @@ function fillEpisodeSelects(meta) {
       playerRow.style.display = 'none';
     }
   }
+}
+
+function fillQualitySelect(streams, currentQuality) {
+  const qualitySelect = document.getElementById('qualitySelect');
+  const qualityRow = document.getElementById('qualityRow');
+  if (!qualitySelect || !qualityRow) return;
+
+  const withQuality = (streams || []).filter((s) => s && s.url && s.quality);
+  if (withQuality.length < 2) {
+    qualityRow.style.display = 'none';
+    return;
+  }
+
+  qualityRow.style.display = 'flex';
+  qualitySelect.innerHTML = '';
+
+  // сортируем: 1080 → 720 → 480 → 360
+  const sorted = [...withQuality].sort((a, b) => {
+    return (parseInt(b.quality, 10) || 0) - (parseInt(a.quality, 10) || 0);
+  });
+
+  sorted.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s.quality;
+    opt.textContent = s.quality;
+    qualitySelect.appendChild(opt);
+  });
+
+  const preferred = currentQuality || sorted.find((s) => parseInt(s.quality, 10) === 720)?.quality || sorted[0].quality;
+  qualitySelect.value = preferred;
 }
 
 export async function onEpisodeChange() {
@@ -117,7 +144,6 @@ export async function onEpisodeChange() {
   currentMeta.currentVoice = voice;
   currentMeta.currentPlayer = player;
 
-  // сначала грузим серию / плеер
   if (onEpisodeChangeCallback) {
     try {
       await onEpisodeChangeCallback(episode, player);
@@ -126,10 +152,21 @@ export async function onEpisodeChange() {
       return;
     }
   }
-
-  // сброс playback уже делает сервер в player_capture:streams — тут не дублируем,
-  // иначе можно случайно послать pause уже после того, как хост нажал play
 }
 
-// Глобально
+export function onQualityChange() {
+  const qualitySelect = document.getElementById('qualitySelect');
+  if (!qualitySelect || !onQualityChangeCallback) return;
+
+  const quality = qualitySelect.value;
+  if (currentMeta) currentMeta.currentQuality = quality;
+
+  try {
+    onQualityChangeCallback(quality);
+  } catch (e) {
+    console.error('[playerCapture] ошибка смены качества:', e.message);
+  }
+}
+
 window.onEpisodeChange = onEpisodeChange;
+window.onQualityChange = onQualityChange;

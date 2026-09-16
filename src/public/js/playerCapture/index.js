@@ -4,6 +4,19 @@ import { createIframePlayer } from './iframeManager.js';
 import { detectMeta } from './detector.js';
 import { showEpisodeControls, hideEpisodeControls } from './controls.js';
 
+/** Выбрать поток: 720p → 1080p → лучшее из оставшихся */
+function pickBestStream(streams) {
+  if (!streams?.length) return null;
+  const clean = streams.filter((s) => {
+    const u = (s.url || '').toLowerCase();
+    return s.url && !u.includes('.svg') && !u.includes('prem-icon') && !u.includes('/images/');
+  });
+  if (!clean.length) return streams[0];
+
+  const byQ = (q) => clean.find((s) => String(s.quality || '').startsWith(String(q)));
+  return byQ(720) || byQ(1080) || byQ(480) || byQ(360) || clean[0];
+}
+
 export async function renderPlayerCapture(video, { isOwner, container }) {
   container.innerHTML = `
     <div style="
@@ -100,10 +113,13 @@ try {
         });
       }
       if (data.streams?.length) {
-        return renderNativePlayer(data.streams[0], data.meta || meta, {
+        const best = pickBestStream(data.streams);
+        const m = { ...(data.meta || meta), currentQuality: best?.quality || null };
+        return renderNativePlayer(best, m, {
           isOwner,
           container,
           videoUrl: video.url,
+          allStreams: data.streams,
         });
       }
       if (data.playerIframes?.length) {
@@ -237,7 +253,7 @@ function loadHlsScript() {
   });
 }
 
-function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
+function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStreams }) {
   container.innerHTML = '';
   const videoEl = document.createElement('video');
   videoEl.id = 'captureVideo';
@@ -254,41 +270,41 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     console.error('[capture] video error', videoEl.error);
   });
 
-  const streamUrl = stream.url;
-  const isHls = stream.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl);
-
-  // через relay — чтобы обойти CORS у vkvideo.cloud
-  const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}`;
-
+  let currentStream = stream;
+  const streamsList = allStreams || [stream];
   let hlsInstance = null;
 
-  const setupSource = async () => {
+  const setupSource = async (streamToPlay) => {
+    const streamUrl = streamToPlay.url;
+    const isHls = streamToPlay.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl);
+    const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}`;
+
     try {
+      if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (_) {}
+        hlsInstance = null;
+      }
+
       if (isHls) {
         const Hls = await loadHlsScript();
         if (Hls.isSupported()) {
           hlsInstance = new Hls({
             enableWorker: true,
-            xhrSetup: (xhr) => {
-              // сегменты тоже через тот же origin при необходимости
-            },
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
           });
           hlsInstance.loadSource(playUrl);
           hlsInstance.attachMedia(videoEl);
           hlsInstance.on(Hls.Events.ERROR, (event, data) => {
             console.error('[capture] hls error', data);
             if (data.fatal) {
-              // fallback: пробуем прямой URL без relay
-              try {
-                hlsInstance.destroy();
-              } catch (_) {}
+              try { hlsInstance.destroy(); } catch (_) {}
               hlsInstance = new Hls();
               hlsInstance.loadSource(streamUrl);
               hlsInstance.attachMedia(videoEl);
             }
           });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-          // Safari
           videoEl.src = playUrl;
         } else {
           videoEl.src = playUrl;
@@ -302,7 +318,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     }
   };
 
-  setupSource();
+  setupSource(currentStream);
 
   if (isOwner) {
     videoEl.addEventListener('play', () => {
@@ -325,7 +341,25 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     });
   }
 
-  // перезагрузка видео при смене серии / плеера
+  const switchQuality = (quality) => {
+    const next = streamsList.find((s) => String(s.quality) === String(quality));
+    if (!next || next.url === currentStream.url) return;
+
+    const wasPlaying = !videoEl.paused;
+    const pos = videoEl.currentTime || 0;
+    currentStream = next;
+    if (meta) meta.currentQuality = quality;
+
+    setupSource(next).then(() => {
+      const resume = () => {
+        try { videoEl.currentTime = pos; } catch (_) {}
+        if (wasPlaying) videoEl.play().catch(() => {});
+      };
+      if (videoEl.readyState >= 2) resume();
+      else videoEl.addEventListener('loadeddata', resume, { once: true });
+    });
+  };
+
   const reloadWithEpisode = async (episode, playerLabel) => {
     container.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
@@ -334,15 +368,15 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     `;
 
     const res = await fetch('/api/player-capture/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          url: videoUrl,
-          episode,
-          player: playerLabel || null,
-          roomCode: window.code,
-        }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        url: videoUrl,
+        episode,
+        player: playerLabel || null,
+        roomCode: window.code,
+      }),
     });
     const data = await res.json();
 
@@ -358,8 +392,14 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
           meta: data.meta,
         });
       }
-      const player = renderNativePlayer(data.streams[0], data.meta || meta, { isOwner, container, videoUrl });
-      // важно: room.js должен знать новый videoEl
+      const best = pickBestStream(data.streams);
+      const m = { ...(data.meta || meta), currentQuality: best?.quality || null };
+      const player = renderNativePlayer(best, m, {
+        isOwner,
+        container,
+        videoUrl,
+        allStreams: data.streams,
+      });
       if (typeof window.__onCapturePlayerReload === 'function') {
         window.__onCapturePlayerReload(player);
       }
@@ -384,25 +424,31 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl }) {
     }
   };
 
-  if (isOwner && (meta.seasons?.length > 1 || meta.totalEpisodes > 1 || meta.voices?.length || (meta.players && meta.players.length > 1))) {
-    showEpisodeControls(meta, reloadWithEpisode);
+  const hasControls =
+    isOwner &&
+    (meta.seasons?.length > 1 ||
+      meta.totalEpisodes > 1 ||
+      meta.voices?.length ||
+      (meta.players && meta.players.length > 1) ||
+      streamsList.filter((s) => s.quality).length > 1);
+
+  if (hasControls) {
+    showEpisodeControls(meta, reloadWithEpisode, streamsList, switchQuality);
   } else {
     hideEpisodeControls();
   }
 
-    return {
-  type: 'player_capture',
+  return {
+    type: 'player_capture',
     videoEl,
     meta,
     hls: () => hlsInstance,
     getCurrentPosition: () => videoEl.currentTime || 0,
     getIsPlayingNow: () => !videoEl.paused,
-    doPlayPause: (play) => play ? videoEl.play().catch(() => {}) : videoEl.pause(),
+    doPlayPause: (play) => (play ? videoEl.play().catch(() => {}) : videoEl.pause()),
     seekTo: (sec) => { videoEl.currentTime = sec; },
     destroy: () => {
-      try {
-        if (hlsInstance) hlsInstance.destroy();
-      } catch (_) {}
+      try { if (hlsInstance) hlsInstance.destroy(); } catch (_) {}
       hlsInstance = null;
     },
   };
@@ -417,7 +463,9 @@ export function renderFromStreams(streams, meta, { isOwner, container, videoUrl 
       videoUrl,
     });
   }
-  return renderNativePlayer(streams[0], meta || {}, { isOwner, container, videoUrl });
+  const best = pickBestStream(streams);
+  const m = { ...(meta || {}), currentQuality: best?.quality || null };
+  return renderNativePlayer(best, m, { isOwner, container, videoUrl, allStreams: streams });
 }
 
 function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl }) {

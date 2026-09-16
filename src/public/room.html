@@ -60,7 +60,6 @@
       <button id="btnShowVideo" onclick="setViewMode('video')">Видео</button>
     </div>
 
-    <!-- Панель управления сериями (только хост + только во вкладке Видео) -->
     <div id="hostControls" class="host-controls hidden">
       <div class="episode-row">
         <label>Сезон</label>
@@ -77,6 +76,10 @@
       <div class="episode-row" id="playerRow" style="display:none;">
         <label>Плеер</label>
         <select id="playerSelect" onchange="onEpisodeChange()"></select>
+      </div>
+      <div class="episode-row" id="qualityRow" style="display:none;">
+        <label>Качество</label>
+        <select id="qualitySelect" onchange="onQualityChange()"></select>
       </div>
     </div>
 
