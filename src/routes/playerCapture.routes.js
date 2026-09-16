@@ -724,9 +724,20 @@ router.post('/extract', auth, async (req, res) => {
     }
 
     const requestedPlayer = (req.body.player || '').trim();
-    if (requestedPlayer && playersFound.length) {
+    let playerToUse = requestedPlayer;
+
+    // kinogo: если плеер не указан и streams пока пустые — сразу пробуем «4К Качество»
+    if (!playerToUse && siteName === 'kinogo' && playersFound.length > 1) {
+      const fourK = playersFound.find((p) => /4к|4k|качество/i.test(p.label));
+      if (fourK) {
+        playerToUse = fourK.label;
+        console.log('[player-capture] kinogo: автоматически беру плеер', playerToUse);
+      }
+    }
+
+    if (playerToUse && playersFound.length) {
       const target = playersFound.find(
-        (p) => p.label.toLowerCase() === requestedPlayer.toLowerCase()
+        (p) => p.label.toLowerCase() === playerToUse.toLowerCase()
       );
       if (target) {
         console.log('[player-capture] переключаю на плеер:', target.label);
@@ -734,35 +745,34 @@ router.post('/extract', auth, async (req, res) => {
         playerApiData = null;
         try {
           await page.evaluate((label) => {
-          const lis = Array.from(document.querySelectorAll('ul.tabs li[data-src]'));
-          const li = lis.find((el) => (el.textContent || '').trim() === label);
-          if (li) li.click();
-        }, target.label);
+            const lis = Array.from(document.querySelectorAll('ul.tabs li[data-src]'));
+            const li = lis.find((el) => (el.textContent || '').trim() === label);
+            if (li) li.click();
+          }, target.label);
 
-        // ждём появления JSON плеера или iframe до 12 сек
-        {
-          const maxWait = 12000;
-          const step = 400;
-          let t = 0;
-          while (t < maxWait && !playerApiData) {
-            await new Promise((r) => setTimeout(r, step));
-            t += step;
-            const hasPlayerFrame = page.frames().some((f) =>
-              f.url().includes('stravers.live') || f.url().includes('ortified.ws')
-            );
-            if (hasPlayerFrame && t > 3000) {
-              // iframe уже есть — даём ещё немного на JSON
-              await new Promise((r) => setTimeout(r, 2000));
-              break;
+          // ждём JSON / iframe до 12 сек
+          {
+            const maxWait = 12000;
+            const step = 400;
+            let t = 0;
+            while (t < maxWait && !playerApiData) {
+              await new Promise((r) => setTimeout(r, step));
+              t += step;
+              const hasPlayerFrame = page.frames().some((f) =>
+                f.url().includes('stravers.live') || f.url().includes('ortified.ws')
+              );
+              if (hasPlayerFrame && t > 2500) {
+                await new Promise((r) => setTimeout(r, 2500));
+                break;
+              }
             }
+            console.log('[player-capture] после переключения плеера ждали', t, 'мс, playerApiData:', !!playerApiData);
           }
-          console.log('[player-capture] после переключения плеера ждали', t, 'мс, playerApiData:', !!playerApiData);
-        }
         } catch (e) {
           console.error('[player-capture] ошибка клика по вкладке плеера:', e.message);
         }
       } else {
-        console.warn('[player-capture] запрошенный плеер не найден:', requestedPlayer);
+        console.warn('[player-capture] запрошенный плеер не найден:', playerToUse);
       }
     }
 
@@ -1338,7 +1348,7 @@ router.post('/extract', auth, async (req, res) => {
       totalEpisodes,
       voices: [],
       players: playersFound.map((p) => p.label),
-      currentPlayer: requestedPlayer || (playersFound[0]?.label || null),
+      currentPlayer: playerToUse || requestedPlayer || (playersFound[0]?.label || null),
     };
 
     const success = uniqueStreams.length > 0 || uniqueIframes.length > 0;
@@ -1353,8 +1363,8 @@ router.post('/extract', auth, async (req, res) => {
         : 'Ничего не найдено',
     };
 
-    // кэшируем только успешный результат — ошибку нет смысла хранить, вдруг в следующий раз получится
-    if (roomCode && success && (uniqueStreams.length > 0 || uniqueIframes.length > 0)) {
+    // кэшируем ТОЛЬКО если есть реальные потоки (iframe без streams — не кэшируем)
+    if (roomCode && uniqueStreams.length > 0) {
       playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
     }
 
