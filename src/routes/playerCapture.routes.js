@@ -583,15 +583,12 @@ router.post('/extract', auth, async (req, res) => {
         }
       }
 
-      // --- 2) fallback для native CDN-player (rezka-ua.tv и похожие) ---
+        // --- 2) fallback для native CDN-player (rezka-ua.tv и похожие) ---
       if (!episodeSwitched) {
         console.log('[player-capture] iframe не найден — пробую native клик по серии на основной странице');
 
-        playerApiData = null;
-        foundStreams.length = 0;
-
-        const clicked = await page.evaluate((ep) => {
-          // самые частые селекторы на Rezka
+        // проверяем, не является ли запрошенная серия уже активной
+        const alreadyActive = await page.evaluate((ep) => {
           const selectors = [
             `li.b-simple_episode_item[data-episode_id="${ep}"]`,
             `li.b-simple_episode_item[data-id][data-episode_id="${ep}"]`,
@@ -599,42 +596,102 @@ router.post('/extract', auth, async (req, res) => {
             `#simple-episodes-list-1 li[data-episode_id="${ep}"]`,
             `.b-simple_episodes__list li[data-episode_id="${ep}"]`,
           ];
-
           for (const sel of selectors) {
             const li = document.querySelector(sel);
-            if (li) {
-              li.click();
-              return sel;
+            if (li && (li.classList.contains('active') || li.classList.contains('b-simple_episode_item_active'))) {
+              return true;
             }
           }
-          return null;
+          // запасной вариант — если активный элемент вообще есть и его номер совпадает
+          const active = document.querySelector('li.b-simple_episode_item.active, li.b-simple_episode_item.b-simple_episode_item_active');
+          if (active) {
+            const activeEp = Number(active.getAttribute('data-episode_id') || 0);
+            return activeEp === Number(ep);
+          }
+          return false;
         }, requestedEpisode);
 
-        if (clicked) {
-          console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен (native), селектор:', clicked);
+        if (alreadyActive) {
+          console.log('[player-capture] серия', requestedEpisode, 'уже активна — клик не нужен, ждём поток от текущего плеера');
           episodeSwitched = true;
+          // НЕ чистим foundStreams — то, что уже поймали при открытии плеера, оставляем
         } else {
-          console.warn('[player-capture] native кнопка серии не найдена для', requestedEpisode);
+          // серия другая — чистим старые потоки и кликаем
+          playerApiData = null;
+          foundStreams.length = 0;
 
-          // для отладки — что вообще есть на странице
-          const debugList = await page.evaluate(() => {
-            return Array.from(document.querySelectorAll('li.b-simple_episode_item, .b-simple_episodes_list li'))
-              .slice(0, 15)
-              .map((li) => ({
-                text: (li.textContent || '').trim().slice(0, 40),
-                episodeId: li.getAttribute('data-episode_id'),
-                seasonId: li.getAttribute('data-season_id'),
-                className: li.className,
-              }));
-          }).catch(() => []);
-          console.log('[player-capture] найденные элементы серий на странице:', JSON.stringify(debugList, null, 2));
+          const clicked = await page.evaluate((ep) => {
+            const selectors = [
+              `li.b-simple_episode_item[data-episode_id="${ep}"]`,
+              `li.b-simple_episode_item[data-id][data-episode_id="${ep}"]`,
+              `.b-simple_episodes_list li[data-episode_id="${ep}"]`,
+              `#simple-episodes-list-1 li[data-episode_id="${ep}"]`,
+              `.b-simple_episodes__list li[data-episode_id="${ep}"]`,
+            ];
+
+            for (const sel of selectors) {
+              const li = document.querySelector(sel);
+              if (li) {
+                li.click();
+                return sel;
+              }
+            }
+            return null;
+          }, requestedEpisode);
+
+          if (clicked) {
+            console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен (native), селектор:', clicked);
+            episodeSwitched = true;
+          } else {
+            console.warn('[player-capture] native кнопка серии не найдена для', requestedEpisode);
+
+            const debugList = await page.evaluate(() => {
+              return Array.from(document.querySelectorAll('li.b-simple_episode_item, .b-simple_episodes_list li'))
+                .slice(0, 15)
+                .map((li) => ({
+                  text: (li.textContent || '').trim().slice(0, 40),
+                  episodeId: li.getAttribute('data-episode_id'),
+                  seasonId: li.getAttribute('data-season_id'),
+                  className: li.className,
+                }));
+            }).catch(() => []);
+            console.log('[player-capture] найденные элементы серий на странице:', JSON.stringify(debugList, null, 2));
+          }
         }
       }
 
-      // ждём, пока сеть отдаст новый поток
+      // ждём, пока сеть отдаст поток (для активной серии он мог прийти раньше, для новой — после клика)
       await new Promise(r => setTimeout(r, 6000));
 
+      // если поток всё ещё пустой — пробуем вытащить src напрямую из <video>
+      if (foundStreams.length === 0) {
+        const videoSrc = await page.evaluate(() => {
+          const v =
+            document.querySelector('#oframecdnplayer video') ||
+            document.querySelector('#cdnplayer video') ||
+            document.querySelector('#cdnplayer-container video') ||
+            document.querySelector('.b-player video') ||
+            document.querySelector('video');
+          if (!v) return null;
+          // currentSrc — то, что реально играет; src — атрибут
+          return v.currentSrc || v.src || null;
+        }).catch(() => null);
+
+        if (videoSrc && (videoSrc.includes('.m3u8') || videoSrc.includes('.mp4'))) {
+          console.log('[player-capture] поток взят напрямую из <video>:', videoSrc.slice(0, 180));
+          foundStreams.push({
+            type: videoSrc.includes('.m3u8') ? 'hls' : 'mp4',
+            url: videoSrc,
+          });
+        } else if (videoSrc) {
+          console.log('[player-capture] у <video> есть src, но это не m3u8/mp4:', String(videoSrc).slice(0, 120));
+        } else {
+          console.warn('[player-capture] у <video> нет usable src');
+        }
+      }
+
       console.log('[player-capture] playerApiData после клика получен:', !!playerApiData);
+      console.log('[player-capture] foundStreams после ожидания:', foundStreams.length);
       if (!playerApiData && foundStreams.length === 0) {
         console.warn('[player-capture] после клика новый поток так и не пришёл — переключение, скорее всего, не сработало');
       }
