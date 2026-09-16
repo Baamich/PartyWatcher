@@ -34,25 +34,18 @@ module.exports = {
     `,
   },
 
-  // Плеер "allplay" — контейнер класса .allplay, дропдауны
-  // data-select="seasonType1" / "episodeType1" / "translationType1".
-  // Судя по HTML (Vue + виртуальный скролл baron_*), номер сезона/серии
-  // определяется только по тексту пункта ("Серия 2"), data-id не видно.
   kinogo: {
     mode: 'dropdown',
-    markerSelector: '.allplay, [data-select="episodeType1"]',
-    seasonDropdownTrigger: 'div[data-select="seasonType1"] .select__item',
-    seasonListContainer: 'div[data-select="seasonType1"] .select__drop',
-    episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item',
-    episodeListContainer: 'div[data-select="episodeType1"] .select__drop',
+    markerSelector: '.allplay, [data-select="episodeType1"], [data-select="seasonType1"], .select__item',
+    seasonDropdownTrigger: 'div[data-select="seasonType1"] .select__item, [data-select="seasonType1"]',
+    seasonListContainer: 'div[data-select="seasonType1"] .select__drop, [data-select="seasonType1"] .select__drop',
+    episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item, [data-select="episodeType1"]',
+    episodeListContainer: 'div[data-select="episodeType1"] .select__drop, [data-select="episodeType1"] .select__drop',
     playerTabsSelector: 'ul.tabs li[data-src]',
+    dropdownTimeoutMs: 4000,
   },
 
-  // lordfilm пока не трогаем — договорились сначала полностью закрыть kinogo.
-  // Если у lordfilm окажется тот же плеер "allplay" — можно будет просто
-  // сделать lordfilm: module.exports.kinogo (тот же объект).
   lordfilm: null,
-
 
   yandex: {
     mode: null,

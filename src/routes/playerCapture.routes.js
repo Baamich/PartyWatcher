@@ -277,19 +277,18 @@ router.post('/extract', auth, async (req, res) => {
     // сами рекламные/трекинговые скрипты по сигнатурам, а не по домену,
     // так что клик по плееру доходит до реального контента, а не до рекламы
     const blocker = await getAdblocker();
-    if (blocker) {
+    if (blocker && siteName !== 'kinogo') {
       await blocker.enableBlockingInPage(page);
       console.log('[player-capture] adblocker подключен к странице');
 
-      // логируем каждый заблокированный запрос — нужно увидеть, действительно ли
-      // adblocker режет рекламный редирект (или, наоборот, случайно блокирует
-      // что-то из настоящего плеера balabolka)
       blocker.on('request-blocked', (request) => {
         console.log('[adblock] заблокирован запрос:', request.url);
       });
       blocker.on('request-redirected', (request) => {
         console.log('[adblock] редирект запроса (например анти-трекинг):', request.url);
       });
+    } else if (siteName === 'kinogo') {
+      console.log('[player-capture] kinogo — adblocker выключен (иначе режет s.myangular.life и плеер не поднимается)');
     } else {
       console.warn('[player-capture] adblocker недоступен — работаем без него');
     }
@@ -739,7 +738,7 @@ router.post('/extract', auth, async (req, res) => {
             const li = lis.find((el) => (el.textContent || '').trim() === label);
             if (li) li.click();
           }, target.label);
-          await new Promise((r) => setTimeout(r, 2500));
+          await new Promise((r) => setTimeout(r, 4000));
         } catch (e) {
           console.error('[player-capture] ошибка клика по вкладке плеера:', e.message);
         }
@@ -1309,7 +1308,7 @@ router.post('/extract', auth, async (req, res) => {
     };
 
     // кэшируем только успешный результат — ошибку нет смысла хранить, вдруг в следующий раз получится
-    if (roomCode && success) {
+    if (roomCode && success && (uniqueStreams.length > 0 || uniqueIframes.length > 0)) {
       playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
     }
 

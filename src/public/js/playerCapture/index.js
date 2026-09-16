@@ -296,14 +296,18 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
           hlsInstance.loadSource(playUrl);
           hlsInstance.attachMedia(videoEl);
           hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-            console.error('[capture] hls error', data);
-            if (data.fatal) {
-              try { hlsInstance.destroy(); } catch (_) {}
-              hlsInstance = new Hls();
-              hlsInstance.loadSource(streamUrl);
-              hlsInstance.attachMedia(videoEl);
-            }
-          });
+          console.error('[capture] hls error', data);
+          if (data.fatal) {
+            try { hlsInstance.destroy(); } catch (_) {}
+            hlsInstance = new Hls({
+              enableWorker: true,
+              maxBufferLength: 30,
+              maxMaxBufferLength: 60,
+            });
+            hlsInstance.loadSource(playUrl); // обязательно через relay, не голый streamUrl
+            hlsInstance.attachMedia(videoEl);
+          }
+        });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
           videoEl.src = playUrl;
         } else {
