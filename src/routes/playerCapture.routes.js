@@ -623,53 +623,56 @@ router.post('/extract', auth, async (req, res) => {
           return false;
         }, requestedEpisode);
 
-      // всегда чистим старые потоки перед выбором серии —
-      // иначе можно случайно отдать поток от другой серии
-      playerApiData = null;
-      foundStreams.length = 0;
+        // чистим старые потоки в начале — потом ещё раз перед ФИНАЛЬНЫМ кликом
+        playerApiData = null;
+        foundStreams.length = 0;
 
-      if (alreadyActive) {
-        // серия уже активна → get_cdn_series сам не придёт.
-        // Трюк: кликаем любую ДРУГУЮ серию, потом обратно нужную.
-        console.log('[player-capture] серия', requestedEpisode, 'уже активна — делаю принудительное переключение туда-обратно');
+        if (alreadyActive) {
+          // серия уже активна → get_cdn_series сам не придёт.
+          // Трюк: кликаем любую ДРУГУЮ серию, потом обратно нужную.
+          console.log('[player-capture] серия', requestedEpisode, 'уже активна — делаю принудительное переключение туда-обратно');
 
-        const otherEp = await page.evaluate((ep) => {
-          const items = Array.from(document.querySelectorAll(
-            'li.b-simple_episode_item[data-episode_id], #simple-episodes-list-1 li[data-episode_id]'
-          ));
-          for (const li of items) {
-            const id = Number(li.getAttribute('data-episode_id'));
-            if (id && id !== Number(ep)) return id;
-          }
-          return null;
-        }, requestedEpisode);
-
-        if (otherEp) {
-          // 1) клик по другой серии
-          await page.evaluate((ep) => {
-            const li = document.querySelector(
-              `li.b-simple_episode_item[data-episode_id="${ep}"], #simple-episodes-list-1 li[data-episode_id="${ep}"]`
-            );
-            if (li) li.click();
-          }, otherEp);
-          console.log('[player-capture] временно кликнул серию', otherEp);
-          await new Promise((r) => setTimeout(r, 1500));
-
-          // 2) клик обратно на нужную
-          await page.evaluate((ep) => {
-            const li = document.querySelector(
-              `li.b-simple_episode_item[data-episode_id="${ep}"], #simple-episodes-list-1 li[data-episode_id="${ep}"]`
-            );
-            if (li) li.click();
+          const otherEp = await page.evaluate((ep) => {
+            const items = Array.from(document.querySelectorAll(
+              'li.b-simple_episode_item[data-episode_id], #simple-episodes-list-1 li[data-episode_id]'
+            ));
+            for (const li of items) {
+              const id = Number(li.getAttribute('data-episode_id'));
+              if (id && id !== Number(ep)) return id;
+            }
+            return null;
           }, requestedEpisode);
-          console.log('[player-capture] клик обратно на серию', requestedEpisode);
-          episodeSwitched = true;
+
+          if (otherEp) {
+            // 1) клик по другой серии (этот поток нам НЕ нужен)
+            await page.evaluate((ep) => {
+              const li = document.querySelector(
+                `li.b-simple_episode_item[data-episode_id="${ep}"], #simple-episodes-list-1 li[data-episode_id="${ep}"]`
+              );
+              if (li) li.click();
+            }, otherEp);
+            console.log('[player-capture] временно кликнул серию', otherEp);
+            await new Promise((r) => setTimeout(r, 2000));
+
+            // ВАЖНО: выкидываем всё, что пришло от чужой серии
+            playerApiData = null;
+            foundStreams.length = 0;
+            console.log('[player-capture] потоки от временной серии очищены, кликаю целевую');
+
+            // 2) клик обратно на нужную — ТОЛЬКО её потоки должны остаться
+            await page.evaluate((ep) => {
+              const li = document.querySelector(
+                `li.b-simple_episode_item[data-episode_id="${ep}"], #simple-episodes-list-1 li[data-episode_id="${ep}"]`
+              );
+              if (li) li.click();
+            }, requestedEpisode);
+            console.log('[player-capture] клик обратно на серию', requestedEpisode);
+            episodeSwitched = true;
+          } else {
+            console.log('[player-capture] других серий нет, жду поток от уже активного плеера');
+            episodeSwitched = true;
+          }
         } else {
-          // других серий нет (фильм?) — просто ждём поток от текущего плеера
-          console.log('[player-capture] других серий нет, жду поток от уже активного плеера');
-          episodeSwitched = true;
-        }
-      } else {
         // серия другая — просто кликаем
         const clicked = await page.evaluate((ep) => {
           const selectors = [
@@ -711,8 +714,20 @@ router.post('/extract', auth, async (req, res) => {
       }
       }
 
-      // ждём, пока сеть отдаст поток (для активной серии он мог прийти раньше, для новой — после клика)
+       // ждём, пока сеть отдаст поток (для активной серии он мог прийти раньше, для новой — после клика)
       await new Promise(r => setTimeout(r, 6000));
+
+      // на Rezka после туда-обратно в foundStreams могут остаться куски от чужой серии.
+      // Берём только потоки voidboost / m3u8, которые пришли ПОСЛЕДНИМИ
+      // (обычно последние 4–8 записей — это качества одной серии).
+      if (foundStreams.length > 8) {
+        const before = foundStreams.length;
+        // оставляем хвост — самые свежие
+        const tail = foundStreams.slice(-8);
+        foundStreams.length = 0;
+        foundStreams.push(...tail);
+        console.log('[player-capture] обрезал foundStreams с', before, 'до', foundStreams.length, '(оставил свежие)');
+      }
 
       // если поток всё ещё пустой — пробуем вытащить src напрямую из <video>
       if (foundStreams.length === 0) {
