@@ -5,9 +5,13 @@ const auth = require('../middleware/auth');
 
 let puppeteer = null;
 try {
-  puppeteer = require('puppeteer-core');
+  const puppeteerCore = require('puppeteer-core');
+  const { addExtra } = require('puppeteer-extra');
+  const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+  puppeteer = addExtra(puppeteerCore);
+  puppeteer.use(StealthPlugin());
 } catch (e) {
-  console.warn('[player-capture] puppeteer-core не установлен');
+  console.warn('[player-capture] puppeteer-core/stealth не установлены:', e.message);
 }
 
 const playerCaptureCache = require('../services/playerCaptureCache');
@@ -41,12 +45,17 @@ function detectSite(url) {
  * @returns {Promise<boolean>} true если фрейм плеера найден после кликов
  */
 async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5) {
+  // Реальное колесо мыши вместо scrollIntoView() — некоторые сайты отличают
+  // программный скролл от настоящего и используют это как сигнал для антибота.
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel({ deltaY: 300 });
+    await new Promise((r) => setTimeout(r, 200 + Math.random() * 200));
+  }
+  await new Promise((r) => setTimeout(r, 500));
+
   const box = await page.evaluate(() => {
     const el = document.querySelector('#cdnplayer-container');
     if (!el) return null;
-    // скроллим в видимую область — иначе getBoundingClientRect может вернуть
-    // координаты за пределами viewport, и клик попадёт в пустоту
-    el.scrollIntoView({ block: 'center' });
     const r = el.getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
   });
@@ -55,6 +64,14 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
     console.warn(`[player-capture] (${logLabel}) #cdnplayer-container не найден на странице`);
     return false;
   }
+
+  // движение мыши по нескольким промежуточным точкам вместо телепортации курсора —
+  // резкий прыжок координат без движения является явным признаком автоматизации
+  const startX = 100 + Math.random() * 200;
+  const startY = 100 + Math.random() * 200;
+  await page.mouse.move(startX, startY);
+  await page.mouse.move(box.x, box.y, { steps: 25 });
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 300));
 
   const popupCloser = (popup) => {
     console.log(`[player-capture] (${logLabel}) обнаружен рекламный попап, закрываю:`, popup.url());
