@@ -424,14 +424,38 @@ router.post('/extract', auth, async (req, res) => {
     // сама себя обычно редиректит через несколько секунд после JS-проверки —
     // ждём и пробуем перечитать страницу ещё раз
     try {
-      const initialTitle = await page.title();
-      if (/^не бот|checking your browser|just a moment|attention required/i.test(initialTitle.trim())) {
-        console.warn('[player-capture] похоже на антибот-заглушку, жду 8 сек и перезахожу...');
-        await new Promise(r => setTimeout(r, 4000));
+      const isAntibot = async () => {
+        const t = (await page.title().catch(() => '')).toLowerCase();
+        const len = await page.evaluate(() => document.body?.innerHTML?.length || 0).catch(() => 0);
+        return (
+          len < 15000 ||
+          /не бот|проверяем|checking your browser|just a moment|attention required|cloudflare|captcha/i.test(t)
+        );
+      };
+
+      if (await isAntibot()) {
+        console.warn('[player-capture] антибот-заглушка (title/body), жду и перезахожу...');
+        // даём JS антибота отработать
+        await new Promise((r) => setTimeout(r, 6000));
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch((e) => {
           console.error('[player-capture] повторный заход не удался:', e.message);
         });
-        console.log('[player-capture] заголовок после повторного захода:', await page.title().catch(() => '?'));
+        await new Promise((r) => setTimeout(r, 2000));
+
+        // второй шанс
+        if (await isAntibot()) {
+          console.warn('[player-capture] всё ещё антибот, ещё 5 сек...');
+          await new Promise((r) => setTimeout(r, 5000));
+          await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {});
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+
+        console.log(
+          '[player-capture] после антибота:',
+          await page.title().catch(() => '?'),
+          'body:',
+          await page.evaluate(() => document.body?.innerHTML?.length || 0).catch(() => 0)
+        );
       }
     } catch (e) {
       console.warn('[player-capture] ошибка проверки антибот-заглушки:', e.message);
