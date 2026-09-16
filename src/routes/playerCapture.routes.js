@@ -325,6 +325,8 @@ router.post('/extract', auth, async (req, res) => {
 
     const foundStreams = [];
     const foundIframes = [];
+    // потоки ТОЛЬКО из get_cdn_series — им доверяем больше, чем случайным .m3u8 из сети
+    const cdnSeriesStreams = [];
 
     let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
 
@@ -356,26 +358,36 @@ router.post('/extract', auth, async (req, res) => {
       } catch (e) {}
     }
 
-    // === НОВОЕ: ловим ответ Rezka CDN ===
+        // === ловим ответ Rezka CDN — это ГЛАВНЫЙ источник потоков ===
     if (reqUrl.includes('/ajax/get_cdn_series') || reqUrl.includes('get_cdn_series')) {
       try {
         const json = await response.json();
         if (json && json.url) {
-          console.log('[player-capture] найден get_cdn_series:', String(json.url).slice(0, 180));
+          console.log('[player-capture] найден get_cdn_series:', String(json.url).slice(0, 200));
 
-          // формат обычно: [1080p]https://...m3u8,[720p]https://...m3u8,...
+          // формат: [1080p]https://...m3u8 or https://...mp4,[720p]https://...
+          // сначала режем по запятой (качества), потом внутри берём первую http-ссылку
           const parts = String(json.url).split(',');
           for (const part of parts) {
-            const m = part.match(/\[(\d+p?)\](https?:\/\/\S+)/i) || part.match(/(https?:\/\/\S+\.m3u8\S*)/i);
-            if (m) {
-              const quality = m[1] && m[1].includes('p') ? m[1] : undefined;
-              const streamUrl = m[2] || m[1];
-              if (streamUrl && streamUrl.includes('http')) {
-                foundStreams.push({
-                  type: 'hls',
-                  url: streamUrl.trim(),
+            const qualityMatch = part.match(/\[(\d+p?)\]/i);
+            const quality = qualityMatch ? qualityMatch[1] : undefined;
+
+            // берём первую https-ссылку в куске (до " or " / пробела, если есть)
+            const urlMatch = part.match(/https?:\/\/[^\s,]+/i);
+            if (urlMatch) {
+              let streamUrl = urlMatch[0].trim();
+              // иногда в конце лишняя скобка/кавычка
+              streamUrl = streamUrl.replace(/["')]+$/, '');
+
+              if (streamUrl.startsWith('http')) {
+                const entry = {
+                  type: streamUrl.includes('.mp4') ? 'mp4' : 'hls',
+                  url: streamUrl,
                   quality: quality || undefined,
-                });
+                };
+                cdnSeriesStreams.push(entry);
+                foundStreams.push(entry);
+                console.log('[player-capture] CDN stream:', quality || '?', streamUrl.slice(0, 100));
               }
             }
           }
@@ -626,6 +638,7 @@ router.post('/extract', auth, async (req, res) => {
         // чистим старые потоки в начале — потом ещё раз перед ФИНАЛЬНЫМ кликом
         playerApiData = null;
         foundStreams.length = 0;
+        cdnSeriesStreams.length = 0;
 
         if (alreadyActive) {
           // серия уже активна → get_cdn_series сам не придёт.
@@ -654,9 +667,9 @@ router.post('/extract', auth, async (req, res) => {
             console.log('[player-capture] временно кликнул серию', otherEp);
             await new Promise((r) => setTimeout(r, 2000));
 
-            // ВАЖНО: выкидываем всё, что пришло от чужой серии
             playerApiData = null;
             foundStreams.length = 0;
+            cdnSeriesStreams.length = 0;
             console.log('[player-capture] потоки от временной серии очищены, кликаю целевую');
 
             // 2) клик обратно на нужную — ТОЛЬКО её потоки должны остаться
@@ -717,16 +730,18 @@ router.post('/extract', auth, async (req, res) => {
        // ждём, пока сеть отдаст поток (для активной серии он мог прийти раньше, для новой — после клика)
       await new Promise(r => setTimeout(r, 6000));
 
-      // на Rezka после туда-обратно в foundStreams могут остаться куски от чужой серии.
-      // Берём только потоки voidboost / m3u8, которые пришли ПОСЛЕДНИМИ
-      // (обычно последние 4–8 записей — это качества одной серии).
-      if (foundStreams.length > 8) {
+    // если есть потоки именно из get_cdn_series — оставляем ТОЛЬКО их
+      // (сетевые .m3u8-сегменты часто битые и дают MediaError на фронте)
+      if (cdnSeriesStreams.length > 0) {
         const before = foundStreams.length;
-        // оставляем хвост — самые свежие
-        const tail = foundStreams.slice(-8);
         foundStreams.length = 0;
-        foundStreams.push(...tail);
-        console.log('[player-capture] обрезал foundStreams с', before, 'до', foundStreams.length, '(оставил свежие)');
+        // уникальные по url
+        const uniq = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()];
+        foundStreams.push(...uniq);
+        console.log('[player-capture] оставил только CDN-потоки:', foundStreams.length, '(было всего', before, ')');
+        foundStreams.forEach((s) => {
+          console.log('[player-capture]   →', s.quality || '?', s.url.slice(0, 120));
+        });
       }
 
       // если поток всё ещё пустой — пробуем вытащить src напрямую из <video>
@@ -980,7 +995,7 @@ router.post('/extract', auth, async (req, res) => {
       foundIframes.push(...relevantIframes.filter((src) => !src.startsWith('about:blank')));
     }
 
-    let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
+        let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
 
     // если нашли богатый JSON от плеера — строим streams из него, это надёжнее
     if (playerApiData?.hlsSource?.length) {
@@ -995,6 +1010,16 @@ router.post('/extract', auth, async (req, res) => {
             .map(([q, u]) => ({ type: 'hls', url: u, quality: q })),
         ];
       }
+    } else if (cdnSeriesStreams.length > 0) {
+      // Rezka native: только то, что пришло из get_cdn_series
+      uniqueStreams = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()];
+      // лучшее качество первым
+      uniqueStreams.sort((a, b) => {
+        const qa = parseInt(a.quality, 10) || 0;
+        const qb = parseInt(b.quality, 10) || 0;
+        return qb - qa;
+      });
+      console.log('[player-capture] uniqueStreams из CDN:', uniqueStreams.map((s) => s.quality || s.url.slice(0, 60)));
     } else {
       // приоритет master.m3u8 — это основной манифест, а не отдельный сегмент/заглушка
       const master = uniqueStreams.find((s) => s.url.includes('master.m3u8'));
@@ -1002,6 +1027,7 @@ router.post('/extract', auth, async (req, res) => {
         uniqueStreams = [master, ...uniqueStreams.filter((s) => s !== master)];
       }
     }
+    
     const uniqueIframes = [...new Set(foundIframes)];
 
     const meta = {
