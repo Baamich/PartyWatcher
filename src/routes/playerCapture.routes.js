@@ -87,19 +87,21 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
   await new Promise((r) => setTimeout(r, 500));
 
   const box = await page.evaluate(() => {
-    const el = document.querySelector('#cdnplayer-container');
+    const el = document.querySelector('#cdnplayer-container') ||
+               document.querySelector('#cdnplayer') ||
+               document.querySelector('.b-player__holder_cdn') ||
+               document.querySelector('.b-player');
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
   });
 
   if (!box) {
-    console.warn(`[player-capture] (${logLabel}) #cdnplayer-container не найден на странице`);
+    console.warn(`[player-capture] (${logLabel}) контейнер плеера не найден на странице`);
     return false;
   }
 
-  // движение мыши по нескольким промежуточным точкам вместо телепортации курсора —
-  // резкий прыжок координат без движения является явным признаком автоматизации
+  // движение мыши по нескольким промежуточным точкам вместо телепортации курсора
   const startX = 100 + Math.random() * 200;
   const startY = 100 + Math.random() * 200;
   await page.mouse.move(startX, startY);
@@ -113,11 +115,8 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
   page.on('popup', popupCloser);
 
   try {
-    // С adblocker'ом рекламный скрипт не должен успевать перехватить клик —
-    // ждём короче, но оставляем возможность повторного клика на случай,
-    // если что-то всё же проскочило мимо фильтров.
     await page.mouse.click(box.x, box.y);
-    console.log(`[player-capture] (${logLabel}) первый клик по #cdnplayer-container выполнен, жду...`);
+    console.log(`[player-capture] (${logLabel}) первый клик по контейнеру плеера выполнен, жду...`);
 
     const totalWaitMs = 10000;
     const pollEveryMs = 1000;
@@ -127,34 +126,65 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
       await new Promise((r) => setTimeout(r, pollEveryMs));
       waited += pollEveryMs;
 
-      if (page.frames().some((f) => adapter.playerFrameMatch(f.url()))) {
-        console.log(`[player-capture] (${logLabel}) balabolka найдена после ${waited}мс ожидания`);
+      // 1) старый способ — iframe balabolka
+      const hasIframe = adapter?.playerFrameMatch
+        ? page.frames().some((f) => adapter.playerFrameMatch(f.url()))
+        : false;
+
+      // 2) новый способ — native CDN-player на основной странице
+      const hasNativeVideo = await page.evaluate(() => {
+        return !!(
+          document.querySelector('#oframecdnplayer video') ||
+          document.querySelector('#cdnplayer video') ||
+          document.querySelector('#cdnplayer-container video') ||
+          document.querySelector('.b-player video')
+        );
+      });
+
+      if (hasIframe) {
+        console.log(`[player-capture] (${logLabel}) balabolka iframe найдена после ${waited}мс`);
+        return true;
+      }
+      if (hasNativeVideo) {
+        console.log(`[player-capture] (${logLabel}) native <video> найден после ${waited}мс`);
         return true;
       }
     }
 
-    // если за долгое ожидание ничего не произошло — пробуем ещё один клик
-    // (реклама могла зависнуть и не закрыться сама, второй клик иногда её пропускает)
+    // повторный клик
     console.warn(`[player-capture] (${logLabel}) плеер не появился за ${totalWaitMs}мс, пробую повторный клик`);
     await page.mouse.click(box.x, box.y);
     await new Promise((r) => setTimeout(r, 5000));
 
-    const foundAfterRetry = page.frames().some((f) => adapter.playerFrameMatch(f.url()));
-    if (foundAfterRetry) {
-      console.log(`[player-capture] (${logLabel}) balabolka найдена после повторного клика`);
+    const foundAfterRetryIframe = adapter?.playerFrameMatch
+      ? page.frames().some((f) => adapter.playerFrameMatch(f.url()))
+      : false;
+
+    const foundAfterRetryNative = await page.evaluate(() => {
+      return !!(
+        document.querySelector('#oframecdnplayer video') ||
+        document.querySelector('#cdnplayer video') ||
+        document.querySelector('#cdnplayer-container video') ||
+        document.querySelector('.b-player video')
+      );
+    });
+
+    if (foundAfterRetryIframe) {
+      console.log(`[player-capture] (${logLabel}) balabolka iframe найдена после повторного клика`);
+    } else if (foundAfterRetryNative) {
+      console.log(`[player-capture] (${logLabel}) native <video> найден после повторного клика`);
     } else {
       console.warn(`[player-capture] (${logLabel}) плеер так и не появился`);
-            // делаем скриншот именно в момент провала — чтобы увидеть, что реально
-      // отрисовано в #cdnplayer-container (реклама зависла? чёрный экран? заглушка?)
       try {
         const failFile = `failed-${logLabel}.png`;
         await page.screenshot({ path: path.join(debugScreenshotsDir, failFile) });
         console.log(`[player-capture] (${logLabel}) скриншот провала сохранён: debug-screenshots/${failFile}`);
       } catch (e) {}
     }
-    return foundAfterRetry;
+
+    return foundAfterRetryIframe || foundAfterRetryNative;
   } catch (e) {
-    console.error(`[player-capture] (${logLabel}) ошибка клика по #cdnplayer-container:`, e.message);
+    console.error(`[player-capture] (${logLabel}) ошибка клика по контейнеру плеера:`, e.message);
     return false;
   } finally {
     page.off('popup', popupCloser);
@@ -287,32 +317,62 @@ router.post('/extract', auth, async (req, res) => {
     let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
 
     page.on('response', async (response) => {
-      const reqUrl = response.url();
-      const contentType = response.headers()['content-type'] || '';
+    const reqUrl = response.url();
+    const contentType = response.headers()['content-type'] || '';
 
-      if (reqUrl.includes('.m3u8') || contentType.includes('mpegurl')) {
-        foundStreams.push({ type: 'hls', url: reqUrl });
-      }
-      if (
-        reqUrl.includes('.mp4') &&
-        contentType.includes('video') &&
-        !reqUrl.includes('blank.mp4') &&
-        !AD_STREAM_HOSTS.some((h) => reqUrl.includes(h))
-      ) {
-        foundStreams.push({ type: 'mp4', url: reqUrl });
-      }
+    if (reqUrl.includes('.m3u8') || contentType.includes('mpegurl')) {
+      foundStreams.push({ type: 'hls', url: reqUrl });
+    }
 
-      // ловим ответ балаболки конкретно по пути /bnsi/movies/<id>
-      if (reqUrl.includes('/bnsi/movies/') && contentType.includes('application/json')) {
-        try {
-          const json = await response.json();
-          if (json && json.hlsSource) {
-            console.log('[player-capture] найден JSON плеера balabolka:', reqUrl);
-            playerApiData = json;
+    if (
+      reqUrl.includes('.mp4') &&
+      contentType.includes('video') &&
+      !reqUrl.includes('blank.mp4') &&
+      !AD_STREAM_HOSTS.some((h) => reqUrl.includes(h))
+    ) {
+      foundStreams.push({ type: 'mp4', url: reqUrl });
+    }
+
+    // ловим JSON от balabolka
+    if (reqUrl.includes('/bnsi/movies/') && contentType.includes('application/json')) {
+      try {
+        const json = await response.json();
+        if (json && json.hlsSource) {
+          console.log('[player-capture] найден JSON плеера balabolka:', reqUrl);
+          playerApiData = json;
+        }
+      } catch (e) {}
+    }
+
+    // === НОВОЕ: ловим ответ Rezka CDN ===
+    if (reqUrl.includes('/ajax/get_cdn_series') || reqUrl.includes('get_cdn_series')) {
+      try {
+        const json = await response.json();
+        if (json && json.url) {
+          console.log('[player-capture] найден get_cdn_series:', String(json.url).slice(0, 180));
+
+          // формат обычно: [1080p]https://...m3u8,[720p]https://...m3u8,...
+          const parts = String(json.url).split(',');
+          for (const part of parts) {
+            const m = part.match(/\[(\d+p?)\](https?:\/\/\S+)/i) || part.match(/(https?:\/\/\S+\.m3u8\S*)/i);
+            if (m) {
+              const quality = m[1] && m[1].includes('p') ? m[1] : undefined;
+              const streamUrl = m[2] || m[1];
+              if (streamUrl && streamUrl.includes('http')) {
+                foundStreams.push({
+                  type: 'hls',
+                  url: streamUrl.trim(),
+                  quality: quality || undefined,
+                });
+              }
+            }
           }
-        } catch (e) {}
+        }
+      } catch (e) {
+        // бывает, что ответ не json — игнорируем
       }
-    });
+    }
+  });
 
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -471,28 +531,31 @@ router.post('/extract', auth, async (req, res) => {
 
       // ждём, пока новый .m3u8 для выбранной серии успеет засветиться в сети
       await new Promise(r => setTimeout(r, 5000));
-    } else if (requestedEpisode && adapter?.playerFrameMatch) {
-      // плеер лениво грузится только по клику по #cdnplayer-container — без этого
-      // фрейм balabolka никогда не появится, сколько его ни жди.
+    } else if (requestedEpisode && (adapter?.playerFrameMatch || siteName === 'rezka')) {
+      // сначала пытаемся разбудить плеер
       await clickPlayerAndWaitFrame(page, adapter, 'серия');
 
-      // режим rezka: фрейм по домену + дропдаун с data-id
+      // --- 1) пробуем старый способ (iframe balabolka) ---
       let targetFrame = null;
-      for (let i = 0; i < 20; i++) {
-        targetFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
-        if (targetFrame) break;
-        if (i === 9) {
-          console.log('[player-capture] плеер ещё не найден на середине ожидания, текущие фреймы:', page.frames().map((f) => f.url()));
+      if (adapter?.playerFrameMatch) {
+        for (let i = 0; i < 10; i++) {
+          targetFrame = page.frames().find((f) => adapter.playerFrameMatch(f.url()));
+          if (targetFrame) break;
+          if (i === 4) {
+            console.log('[player-capture] плеер ещё не найден на середине ожидания, текущие фреймы:', page.frames().map((f) => f.url()));
+          }
+          await new Promise(r => setTimeout(r, 800));
         }
-        await new Promise(r => setTimeout(r, 1000));
       }
 
       console.log('[player-capture] найден фрейм плеера:', !!targetFrame, targetFrame?.url());
 
+      let episodeSwitched = false;
+
       if (targetFrame) {
         try {
           try {
-            await targetFrame.waitForSelector(adapter.episodeDropdownTrigger, { timeout: 10000 });
+            await targetFrame.waitForSelector(adapter.episodeDropdownTrigger, { timeout: 8000 });
             console.log('[player-capture] дропдаун серий появился');
           } catch (waitErr) {
             console.warn('[player-capture] дропдаун не появился, дампим HTML iframe:', waitErr.message);
@@ -510,22 +573,70 @@ router.post('/extract', auth, async (req, res) => {
           const episodeBtn = await targetFrame.$(adapter.episodeButtonSelector(requestedEpisode));
           if (episodeBtn) {
             await episodeBtn.click();
-            console.log('[player-capture] клик по кнопке серии', requestedEpisode, 'выполнен');
+            console.log('[player-capture] клик по кнопке серии', requestedEpisode, 'выполнен (iframe)');
+            episodeSwitched = true;
           } else {
             console.warn('[player-capture] кнопка серии не найдена для id', requestedEpisode);
           }
         } catch (e) {
-          console.error('[player-capture] ошибка переключения серии:', e.message);
+          console.error('[player-capture] ошибка переключения серии в iframe:', e.message);
         }
-      } else {
-        console.warn('[player-capture] фрейм плеера не найден для переключения серии');
       }
 
-      await new Promise(r => setTimeout(r, 5000));
+      // --- 2) fallback для native CDN-player (rezka-ua.tv и похожие) ---
+      if (!episodeSwitched) {
+        console.log('[player-capture] iframe не найден — пробую native клик по серии на основной странице');
+
+        playerApiData = null;
+        foundStreams.length = 0;
+
+        const clicked = await page.evaluate((ep) => {
+          // самые частые селекторы на Rezka
+          const selectors = [
+            `li.b-simple_episode_item[data-episode_id="${ep}"]`,
+            `li.b-simple_episode_item[data-id][data-episode_id="${ep}"]`,
+            `.b-simple_episodes_list li[data-episode_id="${ep}"]`,
+            `#simple-episodes-list-1 li[data-episode_id="${ep}"]`,
+            `.b-simple_episodes__list li[data-episode_id="${ep}"]`,
+          ];
+
+          for (const sel of selectors) {
+            const li = document.querySelector(sel);
+            if (li) {
+              li.click();
+              return sel;
+            }
+          }
+          return null;
+        }, requestedEpisode);
+
+        if (clicked) {
+          console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен (native), селектор:', clicked);
+          episodeSwitched = true;
+        } else {
+          console.warn('[player-capture] native кнопка серии не найдена для', requestedEpisode);
+
+          // для отладки — что вообще есть на странице
+          const debugList = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('li.b-simple_episode_item, .b-simple_episodes_list li'))
+              .slice(0, 15)
+              .map((li) => ({
+                text: (li.textContent || '').trim().slice(0, 40),
+                episodeId: li.getAttribute('data-episode_id'),
+                seasonId: li.getAttribute('data-season_id'),
+                className: li.className,
+              }));
+          }).catch(() => []);
+          console.log('[player-capture] найденные элементы серий на странице:', JSON.stringify(debugList, null, 2));
+        }
+      }
+
+      // ждём, пока сеть отдаст новый поток
+      await new Promise(r => setTimeout(r, 6000));
 
       console.log('[player-capture] playerApiData после клика получен:', !!playerApiData);
-      if (!playerApiData) {
-        console.warn('[player-capture] после клика новый JSON так и не пришёл — переключение не сработало');
+      if (!playerApiData && foundStreams.length === 0) {
+        console.warn('[player-capture] после клика новый поток так и не пришёл — переключение, скорее всего, не сработало');
       }
     } else {
       if (requestedEpisode) {
@@ -659,25 +770,56 @@ router.post('/extract', auth, async (req, res) => {
           console.error('[player-capture] ошибка чтения дропдаунов сезон/серия:', e.message);
         }
       }
-    } else if (adapter?.scheduleRowSelector) {
-      // rezka: расписание берём из таблицы на странице
-      const episodesData = await page.$$eval(
-        adapter.scheduleRowSelector,
-        (rows, parserBody) => {
-          const parser = new Function('row', parserBody);
-          return rows.map(parser).filter((e) => e && e.episode !== null);
-        },
-        adapter.scheduleRowParserBody
-      ).catch((e) => {
-        console.error('[player-capture] ошибка парсинга расписания:', e.message);
-        return [];
-      });
+    } else if (adapter?.scheduleRowSelector || siteName === 'rezka') {
+      // rezka: сначала пробуем таблицу из адаптера, потом native список серий
+      let episodesData = [];
+
+      if (adapter?.scheduleRowSelector) {
+        episodesData = await page.$$eval(
+          adapter.scheduleRowSelector,
+          (rows, parserBody) => {
+            const parser = new Function('row', parserBody);
+            return rows.map(parser).filter((e) => e && e.episode !== null);
+          },
+          adapter.scheduleRowParserBody
+        ).catch((e) => {
+          console.error('[player-capture] ошибка парсинга расписания (адаптер):', e.message);
+          return [];
+        });
+      }
+
+      // fallback — native список серий на странице (rezka-ua.tv и зеркала)
+      if (!episodesData.length) {
+        episodesData = await page.$$eval(
+          'li.b-simple_episode_item, .b-simple_episodes_list li[data-episode_id], #simple-episodes-list-1 li',
+          (items) => {
+            return items
+              .map((li) => {
+                const episode = Number(li.getAttribute('data-episode_id') || li.getAttribute('data-id') || 0);
+                const season = Number(li.getAttribute('data-season_id') || 1);
+                if (!episode) return null;
+                return {
+                  season,
+                  episode,
+                  released: !li.classList.contains('disabled') && !li.classList.contains('b-simple_episode_item_disabled'),
+                };
+              })
+              .filter(Boolean);
+          }
+        ).catch((e) => {
+          console.error('[player-capture] ошибка парсинга native списка серий:', e.message);
+          return [];
+        });
+      }
 
       console.log('[player-capture] распарсенные серии:', episodesData);
 
-      const releasedEpisodes = episodesData.filter((e) => e.released);
-      seasonsFound = [...new Set(episodesData.map((e) => e.season))];
-      totalEpisodes = releasedEpisodes.length ? Math.max(...releasedEpisodes.map((e) => e.episode)) : 1;
+      const releasedEpisodes = episodesData.filter((e) => e.released !== false);
+      seasonsFound = [...new Set(episodesData.map((e) => e.season).filter(Boolean))];
+      if (!seasonsFound.length) seasonsFound = [1];
+      totalEpisodes = releasedEpisodes.length
+        ? Math.max(...releasedEpisodes.map((e) => e.episode))
+        : 1;
     } else if (!adapter) {
       // нет адаптера под этот сайт вообще — дампим кандидатов для будущего адаптера
       const candidateRows = await page.evaluate(() => {
