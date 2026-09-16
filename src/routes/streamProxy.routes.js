@@ -16,6 +16,22 @@ function buildDispatcher() {
 function guessReferer(targetUrl) {
   try {
     const u = new URL(targetUrl);
+
+    if (
+      u.hostname.includes('vkvideo') ||
+      u.hostname.includes('vk.com') ||
+      u.hostname.includes('userapi.com') ||
+      u.hostname.includes('vkuservideo') ||
+      u.hostname.includes('vk-cdn') ||
+      u.hostname.includes('vkcs') 
+    ) {
+      // поток приходит из плеера stravers — пробуем его referer
+      return {
+        referer: 'https://kinogomy.stravers.live/',
+        origin: 'https://kinogomy.stravers.live',
+      };
+    }
+
     if (u.hostname.includes('stravers.live') || u.hostname.includes('balabolka')) {
       return { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' };
     }
@@ -25,10 +41,7 @@ function guessReferer(targetUrl) {
     if (u.hostname.includes('stiven-king.com')) {
       return { referer: 'https://api.stiven-king.com/', origin: 'https://api.stiven-king.com' };
     }
-    if (u.hostname.includes('vkvideo') || u.hostname.includes('vk.com') || u.hostname.includes('userapi.com')) {
-      return { referer: 'https://vk.com/', origin: 'https://vk.com' };
-    }
-    // fallback — сам хост потока
+
     return { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
   } catch {
     return { referer: 'https://kinogomy.net/', origin: 'https://kinogomy.net' };
@@ -46,18 +59,19 @@ router.get('/relay', auth, async (req, res) => {
     const { referer, origin } = guessReferer(targetUrl);
 
     const response = await fetch(targetUrl, {
-      dispatcher,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': referer,
-        'Origin': origin,
-        'Accept': '*/*',
-        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-      },
-    });
+    dispatcher,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': referer,
+      'Origin': origin,
+      'Accept': '*/*',
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'cross-site',
+      'Connection': 'keep-alive',
+    },
+  });
 
     if (!response.ok) {
       const bodyText = await response.text().catch(() => '');

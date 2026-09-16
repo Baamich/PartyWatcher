@@ -752,39 +752,38 @@ router.post('/extract', auth, async (req, res) => {
     const alreadyHaveCdn = cdnSeriesStreams.length > 0;
 
     if (requestedEpisode && adapter?.mode === 'dropdown') {
-      // режим kinogo/allplay: серия переключается через дропдаун по тексту
+      const dropdownTimeout = adapter.dropdownTimeoutMs || 4000;
+      const isLikelyMovie = !requestedEpisode || Number(requestedEpisode) === 1;
+
       const playerContext = await findPlayerContext(page, adapter.markerSelector);
       console.log('[player-capture] контекст плеера (dropdown) найден:', !!playerContext);
 
-      if (playerContext) {
-        // сбрасываем старые потоки — иначе после смены серии в ответе
-        // может остаться master.m3u8 от предыдущей серии
+      if (playerContext && !isLikelyMovie) {
+        // сбрасываем старые потоки только если реально переключаем серию
         foundStreams.length = 0;
         try {
           const clicked = await selectDropdownOptionByNumber(
             playerContext,
             adapter.episodeDropdownTrigger,
             adapter.episodeListContainer,
-            requestedEpisode
+            requestedEpisode,
+            dropdownTimeout
           );
           console.log('[player-capture] клик по серии', requestedEpisode, 'выполнен:', clicked);
           if (!clicked) {
             console.warn('[player-capture] пункт серии', requestedEpisode, 'не найден в дропдауне');
-            const listHtml = await playerContext
-              .evaluate((sel) => document.querySelector(sel)?.outerHTML?.slice(0, 2000) || '(пусто)', adapter.episodeListContainer)
-              .catch(() => '(не удалось получить HTML)');
-            console.log('[player-capture] HTML списка серий для отладки:', listHtml);
           }
         } catch (e) {
           console.error('[player-capture] ошибка переключения серии (dropdown):', e.message);
         }
+        await new Promise(r => setTimeout(r, 3000));
+      } else if (playerContext && isLikelyMovie) {
+        console.log('[player-capture] фильм / 1 серия — dropdown пропускаем, ждём потоки от плеера');
+        await new Promise(r => setTimeout(r, 2500));
       } else {
         console.warn('[player-capture] не найден контекст плеера (markerSelector не сработал)');
       }
-
-      // ждём, пока новый .m3u8 для выбранной серии успеет засветиться в сети
-      await new Promise(r => setTimeout(r, 5000));
-    } else if (requestedEpisode && (adapter?.playerFrameMatch || siteName === 'rezka')) {
+    }else if (requestedEpisode && (adapter?.playerFrameMatch || siteName === 'rezka')) {
       if (alreadyHaveCdn) {
         console.log('[player-capture] CDN уже есть из AJAX, skip клики/переключение серии');
       } else {
@@ -1130,21 +1129,33 @@ router.post('/extract', auth, async (req, res) => {
     let seasonsFound = [1];
     let totalEpisodes = 1;
 
-    if (adapter?.mode === 'dropdown') {
+        if (adapter?.mode === 'dropdown') {
       // kinogo/allplay: считаем количество пунктов прямо в дропдаунах плеера
       const playerContext = await findPlayerContext(page, adapter.markerSelector);
       console.log('[player-capture] контекст плеера для чтения meta найден:', !!playerContext);
 
       if (playerContext) {
         try {
+          const dropdownTimeout = adapter.dropdownTimeoutMs || 4000;
+
           if (adapter.seasonDropdownTrigger) {
-            const seasonTexts = await readDropdownTexts(playerContext, adapter.seasonDropdownTrigger, adapter.seasonListContainer);
+            const seasonTexts = await readDropdownTexts(
+              playerContext,
+              adapter.seasonDropdownTrigger,
+              adapter.seasonListContainer,
+              dropdownTimeout
+            );
             console.log('[player-capture] пункты сезонов:', seasonTexts);
             const seasonNums = seasonTexts.map((t) => Number((t.match(/\d+/) || [])[0])).filter((n) => !Number.isNaN(n));
             if (seasonNums.length) seasonsFound = seasonNums;
           }
 
-          const episodeTexts = await readDropdownTexts(playerContext, adapter.episodeDropdownTrigger, adapter.episodeListContainer);
+          const episodeTexts = await readDropdownTexts(
+            playerContext,
+            adapter.episodeDropdownTrigger,
+            adapter.episodeListContainer,
+            dropdownTimeout
+          );
           console.log('[player-capture] пункты серий:', episodeTexts);
           const episodeNums = episodeTexts.map((t) => Number((t.match(/\d+/) || [])[0])).filter((n) => !Number.isNaN(n));
           if (episodeNums.length) totalEpisodes = Math.max(...episodeNums);
@@ -1152,7 +1163,7 @@ router.post('/extract', auth, async (req, res) => {
           console.error('[player-capture] ошибка чтения дропдаунов сезон/серия:', e.message);
         }
       }
-    } else if (adapter?.scheduleRowSelector || siteName === 'rezka') {
+    }else if (adapter?.scheduleRowSelector || siteName === 'rezka') {
       // rezka: сначала пробуем таблицу из адаптера, потом native список серий
       let episodesData = [];
 
@@ -1239,8 +1250,13 @@ router.post('/extract', auth, async (req, res) => {
       foundIframes.push(...relevantIframes.filter((src) => !src.startsWith('about:blank')));
     }
 
-        let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
-
+    let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
+    if (playerApiData) {
+      console.log('[player-capture] playerApiData keys:', Object.keys(playerApiData));
+      try {
+        console.log('[player-capture] hlsSource sample:', JSON.stringify(playerApiData.hlsSource || null).slice(0, 600));
+      } catch (_) {}
+    }
     // если нашли богатый JSON от плеера — строим streams из него, это надёжнее
     if (playerApiData?.hlsSource?.length) {
       const qualities = playerApiData.hlsSource[0].quality || {};
