@@ -502,11 +502,163 @@ router.post('/extract', auth, async (req, res) => {
       } catch (e) {}
     }
 
-        // ждём контейнер плеера или просто 1.5с
-    try {
+        try {
       await page.waitForSelector('#cdnplayer-container, #cdnplayer, .b-player', { timeout: 2500 });
     } catch (_) {}
     await new Promise(r => setTimeout(r, 800));
+
+    // ============================================================
+    // REZKA: прямой AJAX get_cdn_series (фильм + сериал)
+    // ============================================================
+    if (siteName === 'rezka') {
+      try {
+        const pageMeta = await page.evaluate(() => {
+          const postId =
+            document.querySelector('#post_id')?.value ||
+            document.querySelector('[name="post_id"]')?.value ||
+            document.querySelector('[data-id]')?.getAttribute('data-id') ||
+            (location.pathname.match(/\/(\d+)-/) || [])[1] ||
+            null;
+
+          const translators = Array.from(
+            document.querySelectorAll('.b-translator__item[data-translator_id], [data-translator_id]')
+          )
+            .map((el) => ({
+              id: el.getAttribute('data-translator_id'),
+              name: (el.textContent || '').trim().replace(/\s+/g, ' '),
+              active: el.classList.contains('active'),
+              premium: /prem|premium|pro/i.test(el.className || '') || !!el.querySelector('.prem, .b-prem'),
+            }))
+            .filter((t) => t.id);
+
+          let sofId = null;
+          let sofTranslator = null;
+          for (const s of Array.from(document.scripts)) {
+            const txt = s.textContent || '';
+            const m = txt.match(/sof\.tv\.initCDN(?:Movies|Series)Events\(\s*(\d+)\s*,\s*(\d+)/);
+            if (m) {
+              sofId = m[1];
+              sofTranslator = m[2];
+              break;
+            }
+          }
+
+          const activeSeason =
+            document.querySelector('.b-simple_season__item.active, .b-simple_seasons__list .active')?.getAttribute('data-tab_id') ||
+            document.querySelector('[data-season_id].active')?.getAttribute('data-season_id') ||
+            '1';
+
+          const activeEpisode =
+            document.querySelector('li.b-simple_episode_item.active, li.b-simple_episode_item.b-simple_episode_item_active')?.getAttribute('data-episode_id') ||
+            null;
+
+          return {
+            postId: postId || sofId,
+            translators,
+            sofTranslator,
+            activeSeason: Number(activeSeason) || 1,
+            activeEpisode: activeEpisode ? Number(activeEpisode) : null,
+            isSeries: /\/series\//.test(location.pathname) || !!document.querySelector('li.b-simple_episode_item, .b-simple_episodes_list'),
+          };
+        });
+
+        console.log('[player-capture] rezka pageMeta:', JSON.stringify({
+          postId: pageMeta.postId,
+          translators: pageMeta.translators.map((t) => `${t.id}:${t.name}${t.active ? '*' : ''}`),
+          sofTranslator: pageMeta.sofTranslator,
+          activeSeason: pageMeta.activeSeason,
+          activeEpisode: pageMeta.activeEpisode,
+          isSeries: pageMeta.isSeries,
+        }));
+
+        if (pageMeta.postId) {
+          const preferred =
+            pageMeta.translators.find((t) => t.active && !t.premium) ||
+            pageMeta.translators.find((t) => !t.premium) ||
+            pageMeta.translators.find((t) => t.active) ||
+            pageMeta.translators[0];
+
+          const translatorId = preferred?.id || pageMeta.sofTranslator;
+
+          if (translatorId) {
+            const isSeries = pageMeta.isSeries;
+            const season = pageMeta.activeSeason || 1;
+            const episode = requestedEpisodeForCache || pageMeta.activeEpisode || 1;
+
+            const form = new URLSearchParams();
+            form.set('id', String(pageMeta.postId));
+            form.set('translator_id', String(translatorId));
+            if (isSeries) {
+              form.set('season', String(season));
+              form.set('episode', String(episode));
+              form.set('action', 'get_stream');
+            } else {
+              form.set('action', 'get_movie');
+            }
+
+            console.log('[player-capture] AJAX get_cdn_series body:', form.toString());
+
+            const cdnJson = await page.evaluate(async (bodyStr) => {
+              const res = await fetch('/ajax/get_cdn_series/?t=' + Date.now(), {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                  'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: bodyStr,
+                credentials: 'same-origin',
+              });
+              const text = await res.text();
+              try {
+                return JSON.parse(text);
+              } catch {
+                return { _raw: text.slice(0, 300) };
+              }
+            }, form.toString());
+
+            if (cdnJson?.url) {
+              console.log('[player-capture] AJAX CDN OK, url slice:', String(cdnJson.url).slice(0, 180));
+
+              const parts = String(cdnJson.url).split(',');
+              for (const part of parts) {
+                const qualityMatch = part.match(/\[(\d+p?)\]/i);
+                const quality = qualityMatch ? qualityMatch[1] : undefined;
+                const urlMatch = part.match(/https?:\/\/[^\s,]+/i);
+                if (!urlMatch) continue;
+
+                let streamUrl = urlMatch[0].trim().replace(/["')]+$/, '');
+                const lower = streamUrl.toLowerCase();
+                if (
+                  lower.includes('.svg') || lower.includes('.png') || lower.includes('.jpg') ||
+                  lower.includes('.jpeg') || lower.includes('.gif') || lower.includes('.webp') ||
+                  lower.includes('.css') || lower.includes('.js') || lower.includes('prem-icon') ||
+                  lower.includes('/images/')
+                ) continue;
+
+                if (streamUrl.startsWith('http')) {
+                  const entry = {
+                    type: streamUrl.includes('.mp4') ? 'mp4' : 'hls',
+                    url: streamUrl,
+                    quality: quality || undefined,
+                  };
+                  cdnSeriesStreams.push(entry);
+                  foundStreams.push(entry);
+                  console.log('[player-capture] AJAX CDN stream:', quality || '?', streamUrl.slice(0, 100));
+                }
+              }
+            } else {
+              console.warn('[player-capture] AJAX без url:', JSON.stringify(cdnJson).slice(0, 400));
+            }
+          } else {
+            console.warn('[player-capture] translator_id не найден');
+          }
+        } else {
+          console.warn('[player-capture] post_id не найден на странице');
+        }
+      } catch (e) {
+        console.error('[player-capture] AJAX CDN ошибка:', e.message);
+      }
+    }
 
     // --- вкладки плееров (Kinogo и похожие: Смотреть онлайн / 4K Качество / ...) ---
     let playersFound = [];
@@ -551,8 +703,9 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
-        // используем то же значение, что и для кэша (body или хеш)
+    // используем то же значение, что и для кэша (body или хеш)
     const requestedEpisode = requestedEpisodeForCache;
+    const alreadyHaveCdn = cdnSeriesStreams.length > 0;
 
     if (requestedEpisode && adapter?.mode === 'dropdown') {
       // режим kinogo/allplay: серия переключается через дропдаун по тексту
@@ -588,8 +741,13 @@ router.post('/extract', auth, async (req, res) => {
       // ждём, пока новый .m3u8 для выбранной серии успеет засветиться в сети
       await new Promise(r => setTimeout(r, 5000));
     } else if (requestedEpisode && (adapter?.playerFrameMatch || siteName === 'rezka')) {
+      if (alreadyHaveCdn) {
+        console.log('[player-capture] CDN уже есть из AJAX, skip клики/переключение серии');
+      } else {
       // сначала пытаемся разбудить плеер
       await clickPlayerAndWaitFrame(page, adapter, 'серия');
+      // ... весь код этой ветки до её закрывающей }
+      } // закрыть else от alreadyHaveCdn
 
       // --- 1) пробуем старый способ (iframe balabolka) ---
       let targetFrame = null;
@@ -859,92 +1017,6 @@ router.post('/extract', auth, async (req, res) => {
 
         if (!clickedPlaySelector && adapter?.playerFrameMatch) {
           await clickPlayerAndWaitFrame(page, adapter, 'фильм-fallback');
-        }
-      }
-
-      // --- Rezka FILM: native CDN ---
-      if (siteName === 'rezka') {
-        // закрыть/спрятать премиум-кнопку, если мешает
-        await page.evaluate(() => {
-          document.querySelectorAll('.b-prem-button, #prem-modal, .b-prem-content, [class*="prem"]').forEach((el) => {
-            try { el.style.pointerEvents = 'none'; } catch (_) {}
-          });
-        }).catch(() => {});
-
-        // клик именно по play / оверлею плеера
-        const clickedPlay = await page.evaluate(() => {
-          const candidates = [
-            '#cdnplayer-container .play',
-            '#cdnplayer .play',
-            '.b-player .play',
-            '#oframecdnplayer .play',
-            '.b-player__holder_cdn',
-            '#cdnplayer-container',
-            '#cdnplayer',
-          ];
-          for (const sel of candidates) {
-            const el = document.querySelector(sel);
-            if (!el) continue;
-            // не кликаем premium
-            if (/prem|premium|support/i.test(el.className || '') || /prem|premium/i.test(el.id || '')) continue;
-            el.click();
-            return sel;
-          }
-          return null;
-        }).catch(() => null);
-
-        console.log('[player-capture] (фильм) клик play:', clickedPlay);
-
-        // второй клик мышкой по центру контейнера плеера (не по низу, где Premium)
-        try {
-          const box = await page.evaluate(() => {
-            const el = document.querySelector('#cdnplayer-container') || document.querySelector('.b-player');
-            if (!el) return null;
-            const r = el.getBoundingClientRect();
-            // чуть выше центра — меньше шанс попасть в кнопку Premium
-            return { x: r.x + r.width / 2, y: r.y + r.height * 0.35 };
-          });
-          if (box) {
-            await page.mouse.click(box.x, box.y);
-            console.log('[player-capture] (фильм) mouse click upper-center player');
-          }
-        } catch (_) {}
-
-        {
-          const maxWait = 6000;
-          const step = 300;
-          let t = 0;
-          while (t < maxWait && cdnSeriesStreams.length === 0) {
-            await new Promise((r) => setTimeout(r, step));
-            t += step;
-          }
-          console.log('[player-capture] (фильм) ожидание CDN:', t, 'мс, потоков:', cdnSeriesStreams.length);
-        }
-
-        if (cdnSeriesStreams.length > 0) {
-          foundStreams.length = 0;
-          foundStreams.push(...[...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]);
-          console.log('[player-capture] (фильм) CDN-потоки:', foundStreams.map((s) => s.quality || s.url.slice(0, 60)));
-        } else {
-          const videoSrc = await page.evaluate(() => {
-            const v =
-              document.querySelector('#oframecdnplayer video') ||
-              document.querySelector('#cdnplayer video') ||
-              document.querySelector('#cdnplayer-container video') ||
-              document.querySelector('.b-player video') ||
-              document.querySelector('video');
-            return v ? (v.currentSrc || v.src || null) : null;
-          }).catch(() => null);
-
-          if (videoSrc && (videoSrc.includes('.m3u8') || videoSrc.includes('.mp4'))) {
-            console.log('[player-capture] (фильм) поток из <video>:', videoSrc.slice(0, 120));
-            foundStreams.push({
-              type: videoSrc.includes('.m3u8') ? 'hls' : 'mp4',
-              url: videoSrc,
-            });
-          } else {
-            console.warn('[player-capture] (фильм) нет CDN и нет video src');
-          }
         }
       }
 
