@@ -67,6 +67,20 @@ function detectSite(url) {
   return 'unknown';
 }
 
+function pickPlayerOrigin(page) {
+  const frames = page.frames().map((f) => f.url()).filter(Boolean);
+  const hit = frames.find((u) =>
+    /stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc|cinemap\.cc/i.test(u)
+  );
+  if (!hit) return null;
+  try {
+    const u = new URL(hit);
+    return `${u.protocol}//${u.hostname}/`;
+  } catch {
+    return null;
+  }
+}
+
 // защита от дублей: если для одной комнаты+серии уже выполняется /extract,
 // повторный запрос просто ждёт результат первого, вместо запуска второго
 // Puppeteer+прокси параллельно (что удваивает нагрузку и путает логи)
@@ -831,7 +845,9 @@ router.post('/extract', auth, async (req, res) => {
               await new Promise((r) => setTimeout(r, step));
               t += step;
               const hasPlayerFrame = page.frames().some((f) =>
-                f.url().includes('stravers.live') || f.url().includes('ortified.ws')
+                f.url().includes('stloadi.live') ||
+                f.url().includes('stravers.live') ||
+                f.url().includes('ortified.ws')
               );
               if (hasPlayerFrame && t > 2500) {
                 await new Promise((r) => setTimeout(r, 2500));
@@ -1488,9 +1504,8 @@ router.post('/extract', auth, async (req, res) => {
         // 1) из фрейма stravers / balabolka
         try {
           const playerFrame =
-            page.frames().find((f) => f.url().includes('stravers.live')) ||
-            page.frames().find((f) => f.url().includes('balabolka')) ||
-            page.frames().find((f) => f.url().includes('ortified'));
+            page.frames().find((f) => /stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc/i.test(f.url())) ||
+            null;
           const ctx = playerFrame || page;
 
           const playlistText = await ctx.evaluate(async (u) => {
@@ -1515,12 +1530,14 @@ router.post('/extract', auth, async (req, res) => {
 
         // 2) fallback — то, что уже перехватили в handleResponse
         if (!downloadedPlaylist) {
-          const withRaw = foundStreams.find(
-            (s) => s.playlistRaw && s.url && (s.url === masterUrl || masterUrl.includes(s.url.slice(0, 40)))
-          );
+          // URL в hlsSource и в сети часто отличаются токеном — берём любой перехваченный m3u8
+          const withRaw =
+            foundStreams.find((s) => s.playlistRaw && s.url === masterUrl) ||
+            foundStreams.find((s) => s.playlistRaw && /vkvideo\.cloud|vkuservideo/i.test(s.url || '')) ||
+            foundStreams.find((s) => s.playlistRaw);
           if (withRaw?.playlistRaw) {
             downloadedPlaylist = withRaw.playlistRaw;
-            console.log('[player-capture] master из перехвата сети, длина:', downloadedPlaylist.length);
+            console.log('[player-capture] master из перехвата сети, длина:', downloadedPlaylist.length, 'url:', (withRaw.url || '').slice(0, 60));
           }
         }
 
@@ -1668,6 +1685,15 @@ router.post('/extract', auth, async (req, res) => {
     }
 
     const uniqueIframes = [...new Set(foundIframes)];
+
+    const playerOrigin = pickPlayerOrigin(page);
+    if (playerOrigin && uniqueStreams.length > 0) {
+      uniqueStreams = uniqueStreams.map((s) => ({
+        ...s,
+        referer: s.referer || playerOrigin,
+      }));
+      console.log('[player-capture] playerOrigin для relay:', playerOrigin);
+    }
 
     const meta = {
       site: detectSite(url),

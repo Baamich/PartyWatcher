@@ -277,21 +277,31 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     const setupSource = async (streamToPlay) => {
     const streamUrl = streamToPlay.url;
     const isHls = streamToPlay.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl) || /cinemap\.cc|cinemar\.cc|cfnd\./i.test(streamUrl);
-    const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}`;
+    const refQ = streamToPlay.referer
+      ? `&referer=${encodeURIComponent(streamToPlay.referer)}`
+      : '';
+    const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}${refQ}`;
 
     const toAbsolutePlaylist = (text) => {
       const origin = window.location.origin;
+      const refSuffix = streamToPlay.referer
+        ? `&referer=${encodeURIComponent(streamToPlay.referer)}`
+        : '';
+      const addRef = (path) => {
+        if (!refSuffix || path.includes('referer=')) return path;
+        return path + refSuffix;
+      };
       return text
         .split('\n')
         .map((line) => {
           if (line.startsWith('#EXT-X-MAP') || line.startsWith('#EXT-X-KEY')) {
             return line.replace(
               /URI="(\/api\/stream\/relay\?url=[^"]+)"/,
-              (_, path) => `URI="${origin}${path}"`
+              (_, path) => `URI="${origin}${addRef(path)}"`
             );
           }
           if (line.startsWith('/api/stream/relay?url=')) {
-            return origin + line;
+            return origin + addRef(line);
           }
           return line;
         })

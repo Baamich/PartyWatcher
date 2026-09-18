@@ -24,12 +24,16 @@ function guessReferer(targetUrl) {
       u.hostname.includes('vk-cdn') ||
       u.hostname.includes('vkcs')
     ) {
+      // актуальный embed kinogomy — stloadi; stravers оставляем запасным
       return {
-        referer: 'https://kinogomy.stravers.live/',
-        origin: 'https://kinogomy.stravers.live',
+        referer: 'https://kinogomy.stloadi.live/',
+        origin: 'https://kinogomy.stloadi.live',
       };
     }
 
+    if (u.hostname.includes('stloadi.live')) {
+      return { referer: 'https://kinogomy.stloadi.live/', origin: 'https://kinogomy.stloadi.live' };
+    }
     if (u.hostname.includes('stravers.live') || u.hostname.includes('balabolka')) {
       return { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' };
     }
@@ -73,19 +77,40 @@ router.get('/relay', auth, async (req, res) => {
     const isDirectCdn = /cinemap\.cc|cinemar\.cc/i.test(targetUrl);
     const dispatcher = (isVk || isDirectCdn) ? null : buildDispatcher();
     console.log('[stream-relay] proxy:', dispatcher ? 'ON' : 'OFF', 'vk:', isVk, 'directCdn:', isDirectCdn, 'url:', targetUrl.slice(0, 80));
+
     const primary = guessReferer(targetUrl);
 
-    // пробуем несколько referer по очереди (VK + cinemar/cinemap)
+    // 1) referer с extract/фронта (реальный origin iframe)
+    // 2) guessReferer
+    // 3) известные домены
+    // 4) origin самого CDN-хоста
+    const fromQuery = (req.query.referer || '').toString();
+    let queryCandidate = null;
+    if (fromQuery.startsWith('http')) {
+      try {
+        const u = new URL(fromQuery);
+        queryCandidate = { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
+      } catch (_) {}
+    }
+
+    let hostCandidate = null;
+    try {
+      const u = new URL(targetUrl);
+      hostCandidate = { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
+    } catch (_) {}
+
     const refererCandidates = [
+      queryCandidate,
       primary,
-      { referer: 'https://cinemar.cc/', origin: 'https://cinemar.cc' },
-      { referer: 'https://cinemar.cc/embed/', origin: 'https://cinemar.cc' },
-      { referer: 'https://kinogo2026.com/', origin: 'https://kinogo2026.com' },
+      { referer: 'https://kinogomy.stloadi.live/', origin: 'https://kinogomy.stloadi.live' },
       { referer: 'https://kinogomy.stravers.live/', origin: 'https://kinogomy.stravers.live' },
       { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' },
+      { referer: 'https://cinemar.cc/', origin: 'https://cinemar.cc' },
+      { referer: 'https://kinogo2026.com/', origin: 'https://kinogo2026.com' },
       { referer: 'https://vk.com/', origin: 'https://vk.com' },
       { referer: 'https://kinogomy.net/', origin: 'https://kinogomy.net' },
-    ];
+      hostCandidate,
+    ].filter(Boolean);
 
     // убираем дубли
     const seen = new Set();
@@ -159,7 +184,10 @@ router.get('/relay', auth, async (req, res) => {
             absoluteUrl = baseUrl + relOrAbsUrl;
           }
         }
-        return `/api/stream/relay?url=${encodeURIComponent(absoluteUrl)}`;
+        const ref = fromQuery && fromQuery.startsWith('http')
+          ? `&referer=${encodeURIComponent(fromQuery)}`
+          : '';
+        return `/api/stream/relay?url=${encodeURIComponent(absoluteUrl)}${ref}`;
       };
 
       const rewritten = text.split('\n').map((line) => {
