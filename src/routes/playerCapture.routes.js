@@ -1305,7 +1305,7 @@ router.post('/extract', auth, async (req, res) => {
           attempts: 15,
           delayMs: 500,
         });
-        if (epFrame) {f
+        if (epFrame) {
           const episodeTexts = await listEpisodesByVisibleText(epFrame, '^Серия\\s*\\d+$');
           console.log('[player-capture] (kinogo2026) пункты серий по тексту:', episodeTexts);
           const episodeNums = episodeTexts
