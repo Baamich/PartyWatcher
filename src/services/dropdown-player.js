@@ -160,10 +160,43 @@ async function listEpisodesByVisibleText(context, patternSource = '^Серия\\
   return [...new Set(texts)];
 }
 
+// Диагностика: когда текстовый поиск "Серия N" не находит ничего, эта функция
+// находит ЛЮБЫЕ элементы (не обязательно leaf), чей текст содержит "Серия" или
+// "Сезон" (без требования точного совпадения), и дампит их class/tag/HTML —
+// чтобы увидеть реальную структуру кастомного виджета без ручного Inspect.
+async function dumpEpisodeCandidates(context, keyword = 'Серия') {
+  return context.evaluate((kw) => {
+    const all = Array.from(document.querySelectorAll('body *'));
+    const matches = all.filter((el) => {
+      // берём только собственный текст узла (без текста детей), чтобы не ловить
+      // огромные обёртки-контейнеры, где keyword просто где-то внутри
+      const ownText = Array.from(el.childNodes)
+        .filter((n) => n.nodeType === Node.TEXT_NODE)
+        .map((n) => n.textContent)
+        .join('')
+        .trim();
+      return ownText.includes(kw);
+    });
+    return matches.slice(0, 20).map((el) => ({
+      tag: el.tagName,
+      className: el.className,
+      childrenCount: el.children.length,
+      ownText: Array.from(el.childNodes)
+        .filter((n) => n.nodeType === Node.TEXT_NODE)
+        .map((n) => n.textContent)
+        .join('')
+        .trim(),
+      outerHTMLSnippet: el.outerHTML.slice(0, 300),
+      parentClassName: el.parentElement?.className || null,
+    }));
+  }, keyword);
+}
+
 module.exports = {
   findPlayerContext,
   readDropdownTexts,
   selectDropdownOptionByNumber,
   clickByVisibleText,
   listEpisodesByVisibleText,
+  dumpEpisodeCandidates,
 };

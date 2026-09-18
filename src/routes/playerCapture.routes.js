@@ -29,6 +29,7 @@ const {
   selectDropdownOptionByNumber,
   clickByVisibleText,
   listEpisodesByVisibleText,
+  dumpEpisodeCandidates,
 } = require('../services/dropdown-player');
 
 const fetch = require('cross-fetch');
@@ -858,6 +859,8 @@ router.post('/extract', auth, async (req, res) => {
           console.log('[player-capture] (kinogo2026) клик по "Серия', requestedEpisode, '":', clicked);
           if (!clicked) {
             console.warn('[player-capture] (kinogo2026) пункт "Серия', requestedEpisode, '" не найден по тексту');
+            const candidates = await dumpEpisodeCandidates(page, 'Серия');
+            console.log('[player-capture] (kinogo2026) DEBUG кандидаты "Серия" (при клике):', JSON.stringify(candidates, null, 2));
           }
         } catch (e) {
           console.error('[player-capture] (kinogo2026) ошибка клика по серии:', e.message);
@@ -1263,7 +1266,14 @@ router.post('/extract', auth, async (req, res) => {
         const episodeNums = episodeTexts
           .map((t) => Number((t.match(/\d+/) || [])[0]))
           .filter((n) => !Number.isNaN(n));
-        if (episodeNums.length) totalEpisodes = Math.max(...episodeNums);
+        if (episodeNums.length) {
+          totalEpisodes = Math.max(...episodeNums);
+        } else {
+          // диагностика: точный текстовый поиск ничего не нашёл — смотрим,
+          // что реально лежит в DOM рядом со словом "Серия"
+          const candidates = await dumpEpisodeCandidates(page, 'Серия');
+          console.log('[player-capture] (kinogo2026) DEBUG кандидаты "Серия":', JSON.stringify(candidates, null, 2));
+        }
       } catch (e) {
         console.error('[player-capture] (kinogo2026) ошибка подсчёта серий:', e.message);
       }
