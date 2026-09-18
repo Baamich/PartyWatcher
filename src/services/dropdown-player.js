@@ -112,7 +112,10 @@ async function clickByVisibleText(context, targetText, { waitAfterMs = 600 } = {
     const leaves = Array.from(document.querySelectorAll('body *')).filter((el) => el.children.length === 0);
     const target = leaves.find((el) => el.textContent.trim() === text);
     if (target) {
-      target.click();
+      // сайт может кидать собственное JS-исключение прямо в обработчике клика
+      // (наблюдалось "f is not defined" на kinogo2026) — гасим его здесь,
+      // внутри браузерного контекста, чтобы оно не улетало наружу через evaluate
+      try { target.click(); } catch (e) { /* игнорируем баг стороннего JS */ }
       return true;
     }
     return false;
@@ -121,24 +124,12 @@ async function clickByVisibleText(context, targetText, { waitAfterMs = 600 } = {
   return clicked;
 }
 
-// Пытается открыть дропдаун (клик по любому листу, чей текст матчит паттерн —
-// обычно это сам триггер вида "Серия 1") и затем собирает ВСЕ листья, чей текст
-// матчит тот же паттерн — после открытия там должны появиться "Серия 1".."Серия N".
-// Возвращает уникальные найденные тексты.
 async function listEpisodesByVisibleText(context, patternSource = '^Серия\\s*\\d+$') {
-  const opened = await context.evaluate((src) => {
-    const pattern = new RegExp(src, 'i');
-    const leaves = Array.from(document.querySelectorAll('body *')).filter((el) => el.children.length === 0);
-    const trigger = leaves.find((el) => pattern.test(el.textContent.trim()));
-    if (trigger) {
-      trigger.click();
-      return true;
-    }
-    return false;
-  }, patternSource);
-
-  if (opened) await new Promise((r) => setTimeout(r, 500));
-
+  // на kinogo2026 (и, вероятно, похожих виджетах) кнопки серий уже лежат в DOM
+  // без необходимости что-либо "открывать" — они просто скрыты через CSS.
+  // Клик по случайной кнопке ради "открытия" не нужен и опасен: задевает
+  // обработчики самого сайта, где может быть собственный баг (например,
+  // "f is not defined" на kinogo2026). Поэтому просто читаем текст, без кликов.
   const texts = await context.evaluate((src) => {
     const pattern = new RegExp(src, 'i');
     return Array.from(document.querySelectorAll('body *'))
@@ -146,16 +137,6 @@ async function listEpisodesByVisibleText(context, patternSource = '^Серия\\
       .map((el) => el.textContent.trim())
       .filter((t) => pattern.test(t));
   }, patternSource);
-
-  // закрываем обратно кликом по тому же триггеру, если получится (не критично, если нет)
-  if (opened) {
-    await context.evaluate((src) => {
-      const pattern = new RegExp(src, 'i');
-      const leaves = Array.from(document.querySelectorAll('body *')).filter((el) => el.children.length === 0);
-      const trigger = leaves.find((el) => pattern.test(el.textContent.trim()));
-      if (trigger) trigger.click();
-    }, patternSource).catch(() => {});
-  }
 
   return [...new Set(texts)];
 }
