@@ -845,7 +845,7 @@ router.post('/extract', auth, async (req, res) => {
     const requestedEpisode = requestedEpisodeForCache;
     const alreadyHaveCdn = cdnSeriesStreams.length > 0;
 
-    if (requestedEpisode && siteName === 'kinogo2026') {    if (requestedEpisode && siteName === 'kinogo2026') {
+    if (requestedEpisode && siteName === 'kinogo2026') {
       // kinogo2026: дропдаун сезон/серия/озвучка живёт в СОБСТВЕННОМ iframe
       // плеер-контролов (не в основном документе и не в cinemar.cc embed) —
       // разметка простая: <div class="playlist-dropdown"><button>Серия N</button>...
@@ -854,7 +854,39 @@ router.post('/extract', auth, async (req, res) => {
       // JSON от cinemar.cc/api/playlist/load (см. handleResponse выше).
       const isLikelyMovie = Number(requestedEpisode) === 1;
 
-      const controlFrame = await findPlayerContext(page, '.playlist-dropdown button');
+      // без клика по плееру он не запускается, а значит не создаётся ни его
+      // iframe, ни вложенный ad-wrapper iframe (cvt-s1.agl010.pro и т.п.), где
+      // реально лежит .playlist-dropdown — поэтому сначала будим плеер кликом,
+      // как в старом общем fallback-коде, и только потом ищем дропдаун
+      const playSelectors = [
+        '.play-btn', '.player-play', '.play', '#play',
+        '[class*="play"]', '.video-play-button',
+        '#cdnplayer-container', '.b-post__player', '#player',
+      ];
+      let kinogoPlayClicked = false;
+      for (const sel of playSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el) {
+            await el.click({ delay: 100 }).catch(() => {});
+            console.log('[player-capture] (kinogo2026) клик по селектору плеера:', sel);
+            kinogoPlayClicked = true;
+            break;
+          }
+        } catch (e) {}
+      }
+      if (!kinogoPlayClicked) {
+        console.warn('[player-capture] (kinogo2026) не нашёл ни одного play-селектора для клика');
+      }
+      // даём время плееру и его вложенным iframe'ам (в т.ч. ad-wrapper) прогрузиться
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // фрейм с дропдауном может быть вложен в ad-wrapper iframe и грузиться
+      // не сразу — даём больше попыток/времени, чем стандартные 8×400мс
+      const controlFrame = await findPlayerContext(page, '.playlist-dropdown button', {
+        attempts: 15,
+        delayMs: 500,
+      });
       console.log('[player-capture] (kinogo2026) control-фрейм с playlist-dropdown найден:', !!controlFrame);
 
       if (!isLikelyMovie && controlFrame) {
@@ -1269,8 +1301,11 @@ router.post('/extract', auth, async (req, res) => {
       // kinogo2026: дропдаун серий — в отдельном control-фрейме (см. выше),
       // ищем там же, простым текстовым совпадением "Серия N"
       try {
-        const epFrame = await findPlayerContext(page, '.playlist-dropdown button');
-        if (epFrame) {
+        const epFrame = await findPlayerContext(page, '.playlist-dropdown button', {
+          attempts: 15,
+          delayMs: 500,
+        });
+        if (epFrame) {f
           const episodeTexts = await listEpisodesByVisibleText(epFrame, '^Серия\\s*\\d+$');
           console.log('[player-capture] (kinogo2026) пункты серий по тексту:', episodeTexts);
           const episodeNums = episodeTexts
