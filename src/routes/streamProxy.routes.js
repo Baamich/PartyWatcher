@@ -117,7 +117,9 @@ router.get('/relay', auth, async (req, res) => {
     // на последней попытке Origin не ставим — VK иногда из‑за него отдаёт 403
     if (!isLast) headers['Origin'] = origin;
 
-    response = await fetch(targetUrl, { dispatcher, headers });
+  const fetchOpts = { headers };
+    if (dispatcher) fetchOpts.dispatcher = dispatcher;
+    response = await fetch(targetUrl, fetchOpts);
 
       if (response.ok) {
         console.log('[stream-relay] OK с referer:', referer, 'status:', response.status);
@@ -187,8 +189,11 @@ router.get('/relay', auth, async (req, res) => {
       if (!res.headersSent) res.status(500).end();
     });
   } catch (err) {
-    console.error('[stream-relay]', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[stream-relay] EXCEPTION:', err && err.message);
+    console.error(err && err.stack);
+    if (!res.headersSent) {
+      res.status(500).json({ error: (err && err.message) || 'relay error' });
+    }
   }
 });
 
