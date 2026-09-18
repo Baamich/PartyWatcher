@@ -360,10 +360,17 @@ router.post('/extract', auth, async (req, res) => {
       } catch (e) {}
     }
 
-    // ловим реальный m3u8, который качает сам плеер (не наш goto)
+        // ловим реальный m3u8, который качает сам плеер (не наш goto)
+    // cinemap/cfnd — без .m3u8 в path, но content-type/mpegurl или тело #EXTM3U
     if (
-      (reqUrl.includes('vkvideo.cloud') || reqUrl.includes('.m3u8')) &&
-      (contentType.includes('mpegurl') || contentType.includes('application/vnd.apple') || reqUrl.includes('.m3u8'))
+      (
+        reqUrl.includes('vkvideo.cloud') ||
+        reqUrl.includes('.m3u8') ||
+        reqUrl.includes('cinemap.cc') ||
+        reqUrl.includes('cinemar.cc') ||
+        reqUrl.includes('cfnd.')
+      ) &&
+      (contentType.includes('mpegurl') || contentType.includes('application/vnd.apple') || reqUrl.includes('.m3u8') || reqUrl.includes('cinemap.cc') || reqUrl.includes('cfnd.'))
     ) {
       try {
         const status = response.status();
@@ -1597,14 +1604,14 @@ router.post('/extract', auth, async (req, res) => {
         }
       }
     } else if (cdnSeriesStreams.length > 0) {
-      // Rezka native: только то, что пришло из get_cdn_series
+      // Rezka / cinemap: только то, что пришло из get_cdn_series / playlist/load
       uniqueStreams = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]
         .filter((s) => {
           const u = (s.url || '').toLowerCase();
           return !u.includes('.svg') && !u.includes('prem-icon') && !u.includes('/images/');
         });
 
-      // сортировка: 720p → 1080p → 480p → 360p (720 стабильнее для HLS через voidboost)
+      // сортировка: 720p → 1080p → 480p → 360p
       const rank = (q) => {
         const n = parseInt(q, 10) || 0;
         if (n === 720) return 1000;
@@ -1614,6 +1621,49 @@ router.post('/extract', auth, async (req, res) => {
         return n;
       };
       uniqueStreams.sort((a, b) => rank(b.quality) - rank(a.quality));
+
+      // kinogo2026 / cinemap: если перехватили сырой m3u8 — приклеиваем rewritten playlist,
+      // чтобы фронт не ходил за master через relay (часто 403 без cookie/сессии плеера)
+      const withRaw = foundStreams.find(
+        (s) => s.playlistRaw && s.url && uniqueStreams.some((u) => u.url === s.url || s.url.startsWith(u.url.slice(0, 60)))
+      );
+      if (withRaw?.playlistRaw && uniqueStreams.length > 0) {
+        try {
+          const masterUrl = uniqueStreams[0].url;
+          const raw = withRaw.playlistRaw;
+          const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+          const rewritten = raw.split('\n').map((line) => {
+            if (line.startsWith('#EXT-X-MAP')) {
+              return line.replace(/URI="([^"]+)"/, (_, uri) => {
+                const abs = uri.startsWith('http') ? uri : baseUrl + uri;
+                return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
+              });
+            }
+            if (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line)) {
+              return line.replace(/URI="([^"]+)"/, (_, uri) => {
+                const abs = uri.startsWith('http') ? uri : baseUrl + uri;
+                return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
+              });
+            }
+            if (line.startsWith('#') || !line.trim()) return line;
+            const abs = line.trim().startsWith('http') ? line.trim() : baseUrl + line.trim();
+            return `/api/stream/relay?url=${encodeURIComponent(abs)}`;
+          }).join('\n');
+
+          uniqueStreams = [
+            {
+              type: 'hls',
+              url: masterUrl,
+              quality: uniqueStreams[0].quality,
+              playlist: rewritten,
+            },
+            ...uniqueStreams.slice(1),
+          ];
+          console.log('[player-capture] cinemap playlist приклеен, длина:', rewritten.length);
+        } catch (e) {
+          console.warn('[player-capture] не удалось приклеить cinemap playlist:', e.message);
+        }
+      }
 
       console.log('[player-capture] uniqueStreams из CDN:', uniqueStreams.map((s) => s.quality || s.url.slice(0, 60)));
     } else {

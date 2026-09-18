@@ -75,9 +75,12 @@ router.get('/relay', auth, async (req, res) => {
     console.log('[stream-relay] proxy:', dispatcher ? 'ON' : 'OFF', 'vk:', isVk, 'directCdn:', isDirectCdn, 'url:', targetUrl.slice(0, 80));
     const primary = guessReferer(targetUrl);
 
-    // для VK CDN пробуем несколько referer по очереди
+    // пробуем несколько referer по очереди (VK + cinemar/cinemap)
     const refererCandidates = [
       primary,
+      { referer: 'https://cinemar.cc/', origin: 'https://cinemar.cc' },
+      { referer: 'https://cinemar.cc/embed/', origin: 'https://cinemar.cc' },
+      { referer: 'https://kinogo2026.com/', origin: 'https://kinogo2026.com' },
       { referer: 'https://kinogomy.stravers.live/', origin: 'https://kinogomy.stravers.live' },
       { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' },
       { referer: 'https://vk.com/', origin: 'https://vk.com' },
@@ -117,13 +120,13 @@ router.get('/relay', auth, async (req, res) => {
     response = await fetch(targetUrl, { dispatcher, headers });
 
       if (response.ok) {
-        console.log('[stream-relay] OK с referer:', referer);
+        console.log('[stream-relay] OK с referer:', referer, 'status:', response.status);
         break;
       }
 
       lastStatus = response.status;
       lastBody = await response.text().catch(() => '');
-      console.warn('[stream-relay] отказ', response.status, 'referer:', referer, targetUrl.slice(0, 80));
+      console.warn('[stream-relay] отказ', response.status, 'referer:', referer, targetUrl.slice(0, 80), lastBody.slice(0, 80));
       response = null;
     }
 
