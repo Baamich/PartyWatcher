@@ -49,6 +49,10 @@ function getAdblocker() {
 function detectSite(url) {
   const lower = url.toLowerCase();
   if (lower.includes('rezka') || lower.includes('hdrezka')) return 'rezka';
+  // kinogo2026.com — отдельное зеркало, проверяем ДО общего kinogo,
+  // чтобы у него была своя логика (proxy/antibot) и не смешивалась
+  // с остальными доменами kinogo
+  if (lower.includes('kinogo2026')) return 'kinogo2026';
   if (lower.includes('kinogo')) return 'kinogo';
   if (lower.includes('lordfilm') || lower.includes('lordserial')) return 'lordfilm';
   if (lower.includes('yandex.ru/video')) return 'yandex';
@@ -257,8 +261,10 @@ router.post('/extract', auth, async (req, res) => {
       '--single-process',
     ];
 
-    // kinogo: прокси ломает доступ к vkvideo.cloud (ERR_TUNNEL_CONNECTION_FAILED)
-    const useProxy = PROXY_SERVER && siteName !== 'kinogo';
+    // kinogo: прокси ломает доступ к vkvideo.cloud (ERR_TUNNEL_CONNECTION_FAILED).
+    // kinogo2026 — наоборот, БЕЗ прокси сервер банит наш IP (503),
+    // поэтому явно берём флаг useProxy из адаптера, не трогая ветку kinogo
+    const useProxy = PROXY_SERVER && (adapter?.useProxy || siteName !== 'kinogo');
 
     if (useProxy) {
       launchArgs.push(`--proxy-server=${PROXY_SERVER}`);
@@ -278,11 +284,9 @@ router.post('/extract', auth, async (req, res) => {
 
     console.log('[player-capture] proxy:', useProxy ? 'ON' : 'OFF (kinogo без прокси)');
 
-    // подключаем настоящий adblock-движок (см. getAdblocker выше) — блокирует
-    // сами рекламные/трекинговые скрипты по сигнатурам, а не по домену,
-    // так что клик по плееру доходит до реального контента, а не до рекламы
     const blocker = await getAdblocker();
-    if (blocker && siteName !== 'kinogo') {
+    const isKinogoFamily = siteName === 'kinogo' || siteName === 'kinogo2026';
+    if (blocker && !isKinogoFamily) {
       await blocker.enableBlockingInPage(page);
       console.log('[player-capture] adblocker подключен к странице');
 
@@ -292,8 +296,8 @@ router.post('/extract', auth, async (req, res) => {
       blocker.on('request-redirected', (request) => {
         console.log('[adblock] редирект запроса (например анти-трекинг):', request.url);
       });
-    } else if (siteName === 'kinogo') {
-      console.log('[player-capture] kinogo — adblocker выключен (иначе режет s.myangular.life и плеер не поднимается)');
+    } else if (isKinogoFamily) {
+      console.log(`[player-capture] ${siteName} — adblocker выключен (иначе режет s.myangular.life и плеер не поднимается)`);
     } else {
       console.warn('[player-capture] adblocker недоступен — работаем без него');
     }
@@ -309,11 +313,12 @@ router.post('/extract', auth, async (req, res) => {
     const cdnSeriesStreams = [];
 
     let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
-
+    let interceptedPlaylist = null;
+    
     page.on('response', async (response) => {
     const reqUrl = response.url();
     const contentType = response.headers()['content-type'] || '';
-
+      interceptedPlaylist = { url: reqUrl, text };
     // DEBUG: все ajax rezka
     if (reqUrl.includes('/ajax/') || reqUrl.includes('get_cdn') || reqUrl.includes('voidboost')) {
       console.log('[player-capture] NET:', response.status(), reqUrl.slice(0, 180));
@@ -332,13 +337,32 @@ router.post('/extract', auth, async (req, res) => {
       foundStreams.push({ type: 'mp4', url: reqUrl });
     }
 
-    // ловим JSON от balabolka
+        // ловим JSON от balabolka
     if (reqUrl.includes('/bnsi/movies/') && contentType.includes('application/json')) {
       try {
         const json = await response.json();
         if (json && json.hlsSource) {
           console.log('[player-capture] найден JSON плеера balabolka:', reqUrl);
           playerApiData = json;
+        }
+      } catch (e) {}
+    }
+
+    // ловим реальный m3u8, который качает сам плеер (не наш goto)
+    if (
+      (reqUrl.includes('vkvideo.cloud') || reqUrl.includes('.m3u8')) &&
+      (contentType.includes('mpegurl') || contentType.includes('application/vnd.apple') || reqUrl.includes('.m3u8'))
+    ) {
+      try {
+        const status = response.status();
+        if (status >= 200 && status < 400) {
+          const text = await response.text();
+          if (text && text.includes('#EXTM3U')) {
+            console.log('[player-capture] перехвачен m3u8 из сети плеера:', status, reqUrl.slice(0, 100));
+            foundStreams.push({ type: 'hls', url: reqUrl, quality: 'auto', playlistRaw: text });
+          }
+        } else {
+          console.log('[player-capture] m3u8 из сети плеера статус:', status, reqUrl.slice(0, 80));
         }
       } catch (e) {}
     }
@@ -442,21 +466,31 @@ router.post('/extract', auth, async (req, res) => {
         );
       };
 
-      if (await isAntibot()) {
-        console.warn('[player-capture] антибот-заглушка (title/body), жду и перезахожу...');
-        // даём JS антибота отработать
-        await new Promise((r) => setTimeout(r, 6000));
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch((e) => {
-          console.error('[player-capture] повторный заход не удался:', e.message);
-        });
-        await new Promise((r) => setTimeout(r, 2000));
+      // у kinogo2026 это часто реальный 503 от сервера, а не JS-челлендж —
+      // без прокси не отвалится вообще, сколько ни жди. Даём ему больше
+      // попыток через adapter.antibotRetries/antibotWaitMs, остальным сайтам
+      // оставляем старое поведение (2 попытки по умолчанию)
+      const antibotRetries = adapter?.antibotRetries ?? 2;
+      const antibotWaitMs = adapter?.antibotWaitMs ?? 6000;
 
-        // второй шанс
-        if (await isAntibot()) {
-          console.warn('[player-capture] всё ещё антибот, ещё 5 сек...');
-          await new Promise((r) => setTimeout(r, 5000));
-          await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {});
+      if (await isAntibot()) {
+        console.warn(`[player-capture] антибот-заглушка/503 (title/body), жду и перезахожу (до ${antibotRetries} попыток)...`);
+
+        for (let attempt = 1; attempt <= antibotRetries; attempt++) {
+          await new Promise((r) => setTimeout(r, antibotWaitMs));
+          await page.goto(url, {
+            waitUntil: attempt === antibotRetries ? 'networkidle2' : 'domcontentloaded',
+            timeout: 45000,
+          }).catch((e) => {
+            console.error(`[player-capture] повторный заход №${attempt} не удался:`, e.message);
+          });
           await new Promise((r) => setTimeout(r, 1500));
+
+          if (!(await isAntibot())) {
+            console.log(`[player-capture] антибот пройден на попытке №${attempt}`);
+            break;
+          }
+          console.warn(`[player-capture] попытка №${attempt} — всё ещё антибот/503`);
         }
 
         console.log(
@@ -731,15 +765,7 @@ router.post('/extract', auth, async (req, res) => {
     const requestedPlayer = (req.body.player || '').trim();
     let playerToUse = requestedPlayer;
 
-    // kinogo: если плеер не указан и streams пока пустые — сразу пробуем «4К Качество»
-    if (!playerToUse && siteName === 'kinogo' && playersFound.length > 1) {
-      const fourK = playersFound.find((p) => /4к|4k|качество/i.test(p.label));
-      if (fourK) {
-        playerToUse = fourK.label;
-        console.log('[player-capture] kinogo: автоматически беру плеер', playerToUse);
-      }
-    }
-
+    // без авто-переключения: только если фронт явно прислал player
     if (playerToUse && playersFound.length) {
       const target = playersFound.find(
         (p) => p.label.toLowerCase() === playerToUse.toLowerCase()

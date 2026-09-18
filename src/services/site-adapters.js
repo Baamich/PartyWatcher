@@ -34,6 +34,24 @@ module.exports = {
     `,
   },
 
+    // kinogo2026.com — отдельное зеркало. Без прокси сервер отдаёт честный 503
+  // (бан/лимит по IP), поэтому держим его отдельным объектом: свой useProxy,
+  // свои таймауты антибота, и потом можно точечно поправить селекторы,
+  // не трогая обычный kinogo
+  kinogo2026: {
+    mode: 'dropdown',
+    markerSelector: '.allplay, [data-select="episodeType1"], [data-select="seasonType1"], .select__item',
+    seasonDropdownTrigger: 'div[data-select="seasonType1"] .select__item, [data-select="seasonType1"]',
+    seasonListContainer: 'div[data-select="seasonType1"] .select__drop, [data-select="seasonType1"] .select__drop',
+    episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item, [data-select="episodeType1"]',
+    episodeListContainer: 'div[data-select="episodeType1"] .select__drop, [data-select="episodeType1"] .select__drop',
+    playerTabsSelector: 'ul.tabs li[data-src]',
+    dropdownTimeoutMs: 4000,
+    useProxy: true,
+    antibotRetries: 3,
+    antibotWaitMs: 8000,
+  },
+
   kinogo: {
     mode: 'dropdown',
     markerSelector: '.allplay, [data-select="episodeType1"], [data-select="seasonType1"], .select__item',
