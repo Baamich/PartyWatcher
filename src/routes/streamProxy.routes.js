@@ -54,13 +54,15 @@ router.get('/relay', auth, async (req, res) => {
     return res.status(400).json({ error: 'Нужен валидный url' });
   }
 
-  console.log('[stream-relay] proxy:', PROXY_SERVER ? 'ON' : 'OFF', 'url:', targetUrl.slice(0, 80));
-
   try {
-     // VK CDN часто недоступен через Webshare-прокси
+     // VK CDN часто недоступен через Webshare-прокси — для него прокси не используем.
+    // cinemap.cc/cinemar.cc (плеер kinogo2026) — обычный видео-CDN, ему прокси не
+    // нужен вообще: он не банит по IP так, как страница-обёртка kinogo2026.com,
+    // а через прокси только сжигаем лимит трафика на КАЖДЫЙ HLS-сегмент.
     const isVk = /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn/i.test(targetUrl);
-    const dispatcher = isVk ? null : buildDispatcher();
-    console.log('[stream-relay] proxy:', dispatcher ? 'ON' : 'OFF', 'vk:', isVk, 'url:', targetUrl.slice(0, 80));
+    const isDirectCdn = /cinemap\.cc|cinemar\.cc/i.test(targetUrl);
+    const dispatcher = (isVk || isDirectCdn) ? null : buildDispatcher();
+    console.log('[stream-relay] proxy:', dispatcher ? 'ON' : 'OFF', 'vk:', isVk, 'directCdn:', isDirectCdn, 'url:', targetUrl.slice(0, 80));
     const primary = guessReferer(targetUrl);
 
     // для VK CDN пробуем несколько referer по очереди

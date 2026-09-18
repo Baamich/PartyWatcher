@@ -845,21 +845,27 @@ router.post('/extract', auth, async (req, res) => {
     const requestedEpisode = requestedEpisodeForCache;
     const alreadyHaveCdn = cdnSeriesStreams.length > 0;
 
-        if (requestedEpisode && siteName === 'kinogo2026') {
-      // kinogo2026: дропдаун сезон/серия — на родительской странице, не в iframe,
-      // и без стабильных CSS-классов. Кликаем по видимому тексту "Серия N" и
-      // ждём JSON от cinemar.cc/api/playlist/load (см. handleResponse выше).
+    if (requestedEpisode && siteName === 'kinogo2026') {    if (requestedEpisode && siteName === 'kinogo2026') {
+      // kinogo2026: дропдаун сезон/серия/озвучка живёт в СОБСТВЕННОМ iframe
+      // плеер-контролов (не в основном документе и не в cinemar.cc embed) —
+      // разметка простая: <div class="playlist-dropdown"><button>Серия N</button>...
+      // Ищем фрейм по markerSelector '.playlist-dropdown button', кликаем прямо
+      // через JS (.click() программно, видимость дропдауна не важна) и ждём
+      // JSON от cinemar.cc/api/playlist/load (см. handleResponse выше).
       const isLikelyMovie = Number(requestedEpisode) === 1;
 
-      if (!isLikelyMovie) {
+      const controlFrame = await findPlayerContext(page, '.playlist-dropdown button');
+      console.log('[player-capture] (kinogo2026) control-фрейм с playlist-dropdown найден:', !!controlFrame);
+
+      if (!isLikelyMovie && controlFrame) {
         foundStreams.length = 0;
         cdnSeriesStreams.length = 0;
         try {
-          const clicked = await clickByVisibleText(page, `Серия ${requestedEpisode}`);
+          const clicked = await clickByVisibleText(controlFrame, `Серия ${requestedEpisode}`);
           console.log('[player-capture] (kinogo2026) клик по "Серия', requestedEpisode, '":', clicked);
           if (!clicked) {
             console.warn('[player-capture] (kinogo2026) пункт "Серия', requestedEpisode, '" не найден по тексту');
-            const candidates = await dumpEpisodeCandidates(page, 'Серия');
+            const candidates = await dumpEpisodeCandidates(controlFrame, 'Серия');
             console.log('[player-capture] (kinogo2026) DEBUG кандидаты "Серия" (при клике):', JSON.stringify(candidates, null, 2));
           }
         } catch (e) {
@@ -875,6 +881,8 @@ router.post('/extract', auth, async (req, res) => {
           waited += step;
         }
         console.log('[player-capture] (kinogo2026) ожидание playlist/load:', waited, 'мс, потоков:', cdnSeriesStreams.length);
+      } else if (!controlFrame) {
+        console.warn('[player-capture] (kinogo2026) control-фрейм не найден — переключение серии невозможно');
       } else {
         console.log('[player-capture] (kinogo2026) серия 1 — ждём поток от плеера без клика');
         await new Promise((r) => setTimeout(r, 2500));
@@ -1257,22 +1265,20 @@ router.post('/extract', auth, async (req, res) => {
     let seasonsFound = [1];
     let totalEpisodes = 1;
 
-        if (siteName === 'kinogo2026') {
-      // kinogo2026: считаем серии по видимому тексту "Серия N" на родительской
-      // странице, без опоры на CSS-классы (см. п.4 выше)
+    if (siteName === 'kinogo2026') {
+      // kinogo2026: дропдаун серий — в отдельном control-фрейме (см. выше),
+      // ищем там же, простым текстовым совпадением "Серия N"
       try {
-        const episodeTexts = await listEpisodesByVisibleText(page, '^Серия\\s*\\d+$');
-        console.log('[player-capture] (kinogo2026) пункты серий по тексту:', episodeTexts);
-        const episodeNums = episodeTexts
-          .map((t) => Number((t.match(/\d+/) || [])[0]))
-          .filter((n) => !Number.isNaN(n));
-        if (episodeNums.length) {
-          totalEpisodes = Math.max(...episodeNums);
+        const epFrame = await findPlayerContext(page, '.playlist-dropdown button');
+        if (epFrame) {
+          const episodeTexts = await listEpisodesByVisibleText(epFrame, '^Серия\\s*\\d+$');
+          console.log('[player-capture] (kinogo2026) пункты серий по тексту:', episodeTexts);
+          const episodeNums = episodeTexts
+            .map((t) => Number((t.match(/\d+/) || [])[0]))
+            .filter((n) => !Number.isNaN(n));
+          if (episodeNums.length) totalEpisodes = Math.max(...episodeNums);
         } else {
-          // диагностика: точный текстовый поиск ничего не нашёл — смотрим,
-          // что реально лежит в DOM рядом со словом "Серия"
-          const candidates = await dumpEpisodeCandidates(page, 'Серия');
-          console.log('[player-capture] (kinogo2026) DEBUG кандидаты "Серия":', JSON.stringify(candidates, null, 2));
+          console.warn('[player-capture] (kinogo2026) control-фрейм для подсчёта серий не найден');
         }
       } catch (e) {
         console.error('[player-capture] (kinogo2026) ошибка подсчёта серий:', e.message);
@@ -1555,7 +1561,8 @@ router.post('/extract', auth, async (req, res) => {
           console.warn('[player-capture] не удалось скачать master через browser:', e.message);
         }
       }
-    }else if (cdnSeriesStreams.length > 0) {
+      }
+    } else if (cdnSeriesStreams.length > 0) {
       // Rezka native: только то, что пришло из get_cdn_series
       uniqueStreams = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]
         .filter((s) => {
