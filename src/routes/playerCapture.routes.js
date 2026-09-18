@@ -1596,7 +1596,6 @@ router.post('/extract', auth, async (req, res) => {
           console.warn('[player-capture] не удалось скачать master через browser:', e.message);
         }
       }
-      }
     } else if (cdnSeriesStreams.length > 0) {
       // Rezka native: только то, что пришло из get_cdn_series
       uniqueStreams = [...new Map(cdnSeriesStreams.map((s) => [s.url, s])).values()]
