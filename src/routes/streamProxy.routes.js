@@ -12,7 +12,6 @@ function buildDispatcher() {
   return new ProxyAgent(`http://${PROXY_USER}:${PROXY_PASS}@${PROXY_SERVER}`);
 }
 
-/** По URL потока/плеера угадываем нормальный Referer/Origin — без хардкода balabolka */
 function guessReferer(targetUrl) {
   try {
     const u = new URL(targetUrl);
@@ -23,9 +22,8 @@ function guessReferer(targetUrl) {
       u.hostname.includes('userapi.com') ||
       u.hostname.includes('vkuservideo') ||
       u.hostname.includes('vk-cdn') ||
-      u.hostname.includes('vkcs') 
+      u.hostname.includes('vkcs')
     ) {
-      // поток приходит из плеера stravers — пробуем его referer
       return {
         referer: 'https://kinogomy.stravers.live/',
         origin: 'https://kinogomy.stravers.live',
@@ -40,6 +38,18 @@ function guessReferer(targetUrl) {
     }
     if (u.hostname.includes('stiven-king.com')) {
       return { referer: 'https://api.stiven-king.com/', origin: 'https://api.stiven-king.com' };
+    }
+
+    // kinogo2026 / cinemar embed → CDN cfnd.cinemap.cc
+    if (
+      u.hostname.includes('cinemap.cc') ||
+      u.hostname.includes('cinemar.cc') ||
+      u.hostname.includes('cfnd.')
+    ) {
+      return {
+        referer: 'https://cinemar.cc/',
+        origin: 'https://cinemar.cc',
+      };
     }
 
     return { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
@@ -122,10 +132,17 @@ router.get('/relay', auth, async (req, res) => {
       return res.status(lastStatus || 502).json({ error: `CDN вернул ${lastStatus}` });
     }
 
-    const contentType = response.headers.get('content-type') || '';
+        const contentType = response.headers.get('content-type') || '';
+    const looksLikeUrlM3u8 = targetUrl.includes('.m3u8');
+    const looksLikeType = contentType.includes('mpegurl') || contentType.includes('application/vnd.apple');
 
-    if (contentType.includes('mpegurl') || targetUrl.includes('.m3u8')) {
-      const text = await response.text();
+    // читаем тело один раз
+    const buf = Buffer.from(await response.arrayBuffer());
+    const head = buf.slice(0, 16).toString('utf8');
+    const isM3u8Body = head.startsWith('#EXTM3U');
+
+    if (looksLikeUrlM3u8 || looksLikeType || isM3u8Body) {
+      const text = buf.toString('utf8');
       const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
 
       const toRelay = (relOrAbsUrl) => {
@@ -156,10 +173,11 @@ router.get('/relay', auth, async (req, res) => {
       return res.send(rewritten);
     }
 
+    // не m3u8 — отдаём как бинарь (сегменты .ts / .m4s)
     const { Readable } = require('stream');
     res.setHeader('Content-Type', contentType || 'application/octet-stream');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const nodeStream = Readable.fromWeb(response.body);
+    const nodeStream = Readable.from(buf);
     nodeStream.pipe(res);
     nodeStream.on('error', (streamErr) => {
       console.error('[stream-relay] ошибка потока:', streamErr.message);
