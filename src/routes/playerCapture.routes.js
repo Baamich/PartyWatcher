@@ -315,10 +315,15 @@ router.post('/extract', auth, async (req, res) => {
     let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
     let interceptedPlaylist = null;
     
-    page.on('response', async (response) => {
+    page.on('response', (response) => {
+      handleResponse(response).catch((e) => {
+        console.warn('[player-capture] ошибка в обработчике response:', e.message);
+      });
+    });
+
+    async function handleResponse(response) {
     const reqUrl = response.url();
     const contentType = response.headers()['content-type'] || '';
-      interceptedPlaylist = { url: reqUrl, text };
     // DEBUG: все ajax rezka
     if (reqUrl.includes('/ajax/') || reqUrl.includes('get_cdn') || reqUrl.includes('voidboost')) {
       console.log('[player-capture] NET:', response.status(), reqUrl.slice(0, 180));
@@ -424,11 +429,11 @@ router.post('/extract', auth, async (req, res) => {
             }
           }
         }
-      } catch (e) {
+          } catch (e) {
         // бывает, что ответ не json — игнорируем
       }
     }
-  });
+  }
 
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
