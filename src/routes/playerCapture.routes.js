@@ -1476,109 +1476,96 @@ router.post('/extract', auth, async (req, res) => {
         ];
       }
 
-      // проверка: открывается ли поток из того же браузера (прокси)
-            // проверка потока: сначала из фрейма плеера, потом с основной страницы
-            let streamOk = false;
+      // VK / balabolka: goto с чужой вкладки часто 403.
+      // Качаем master из фрейма плеера (правильный referer/cookies),
+      // иначе берём уже перехваченный playlistRaw. Streams НЕ сбрасываем.
       let downloadedPlaylist = null;
 
       if (uniqueStreams.length > 0) {
-        const testUrl = uniqueStreams[0].url;
-        let checkPage = null;
+        const masterUrl = uniqueStreams[0].url;
+        const isVk = /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn/i.test(masterUrl);
+
+        // 1) из фрейма stravers / balabolka
         try {
-          // качаем m3u8 через отдельную вкладку — без CORS
-          checkPage = await browser.newPage();
-          if (useProxy && PROXY_USER && PROXY_PASS) {
-            await checkPage.authenticate({ username: PROXY_USER, password: PROXY_PASS });
-          }
-          await checkPage.setUserAgent(
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          );
-          await checkPage.setExtraHTTPHeaders({
-            'Referer': 'https://kinogomy.stravers.live/',
-            'Accept': '*/*',
-          });
-
-          const resp = await checkPage.goto(testUrl, {
-            waitUntil: 'domcontentloaded',
-            timeout: 20000,
-          });
-          const status = resp ? resp.status() : 0;
-          const text = resp ? await resp.text() : '';
-          const ok = status >= 200 && status < 400 && text.includes('#EXTM3U');
-
-          console.log('[player-capture] проверка потока (goto):', status, ok, text.slice(0, 120));
-          streamOk = ok;
-          if (ok) downloadedPlaylist = text;
-        } catch (e) {
-          console.warn('[player-capture] не удалось проверить поток (goto):', e.message);
-          streamOk = false;
-        } finally {
-          if (checkPage) await checkPage.close().catch(() => {});
-        }
-      }
-
-      // если поток недоступен — сбрасываем streams (iframe всё равно 404 у зрителя)
-      if (!streamOk && uniqueStreams.length > 0) {
-        console.warn('[player-capture] потоки недоступны — сбрасываю streams');
-        uniqueStreams = [];
-      }
-
-      // если скачали master — переписываем на relay и кладём playlist
-      if (streamOk && downloadedPlaylist && uniqueStreams.length > 0) {
-        try {
-          const masterUrl = uniqueStreams[0].url;
-          console.log('[player-capture] master.m3u8 скачан, длина:', downloadedPlaylist.length);
-          const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
-          const rewritten = downloadedPlaylist.split('\n').map((line) => {
-            if (line.startsWith('#EXT-X-MAP')) {
-              return line.replace(/URI="([^"]+)"/, (_, uri) => {
-                const abs = uri.startsWith('http') ? uri : baseUrl + uri;
-                return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
-              });
-            }
-            if (line.startsWith('#') || !line.trim()) return line;
-            const abs = line.trim().startsWith('http') ? line.trim() : baseUrl + line.trim();
-            return `/api/stream/relay?url=${encodeURIComponent(abs)}`;
-          }).join('\n');
-
-          uniqueStreams = [
-            {
-              type: 'hls',
-              url: masterUrl,
-              quality: uniqueStreams[0].quality,
-              playlist: rewritten,
-            },
-            ...uniqueStreams.slice(1),
-          ];
-        } catch (e) {
-          console.warn('[player-capture] не удалось переписать playlist:', e.message);
-        }
-      }
-
-      // если поток недоступен (403 / Failed to fetch) — не отдаём битые streams, оставляем только iframe
-      if (!streamOk && uniqueStreams.length > 0) {
-        console.warn('[player-capture] потоки недоступны из браузера — сбрасываю streams, оставляю iframe');
-        uniqueStreams = [];
-      }
-
-      // если поток ОК — пробуем скачать master и положить playlist
-      if (streamOk && uniqueStreams.length > 0 && uniqueStreams[0].url.includes('vkvideo.cloud')) {
-        try {
-          const masterUrl = uniqueStreams[0].url;
-          const playerFrame = page.frames().find((f) => f.url().includes('stravers.live'));
+          const playerFrame =
+            page.frames().find((f) => f.url().includes('stravers.live')) ||
+            page.frames().find((f) => f.url().includes('balabolka')) ||
+            page.frames().find((f) => f.url().includes('ortified'));
           const ctx = playerFrame || page;
 
           const playlistText = await ctx.evaluate(async (u) => {
-            const r = await fetch(u, { credentials: 'omit' });
-            if (!r.ok) return null;
-            return await r.text();
+            try {
+              const r = await fetch(u, { credentials: 'omit' });
+              if (!r.ok) return null;
+              return await r.text();
+            } catch (_) {
+              return null;
+            }
           }, masterUrl);
 
           if (playlistText && playlistText.includes('#EXTM3U')) {
-            console.log('[player-capture] master.m3u8 скачан через browser, длина:', playlistText.length);
+            downloadedPlaylist = playlistText;
+            console.log('[player-capture] master скачан из фрейма плеера, длина:', playlistText.length);
+          } else {
+            console.warn('[player-capture] фрейм не отдал m3u8 для', masterUrl.slice(0, 80));
+          }
+        } catch (e) {
+          console.warn('[player-capture] ошибка fetch из фрейма:', e.message);
+        }
+
+        // 2) fallback — то, что уже перехватили в handleResponse
+        if (!downloadedPlaylist) {
+          const withRaw = foundStreams.find(
+            (s) => s.playlistRaw && s.url && (s.url === masterUrl || masterUrl.includes(s.url.slice(0, 40)))
+          );
+          if (withRaw?.playlistRaw) {
+            downloadedPlaylist = withRaw.playlistRaw;
+            console.log('[player-capture] master из перехвата сети, длина:', downloadedPlaylist.length);
+          }
+        }
+
+        // 3) для НЕ-VK ещё пробуем отдельную вкладку (старое поведение)
+        if (!downloadedPlaylist && !isVk) {
+          let checkPage = null;
+          try {
+            checkPage = await browser.newPage();
+            if (useProxy && PROXY_USER && PROXY_PASS) {
+              await checkPage.authenticate({ username: PROXY_USER, password: PROXY_PASS });
+            }
+            await checkPage.setUserAgent(
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            );
+            await checkPage.setExtraHTTPHeaders({
+              Referer: 'https://kinogomy.stravers.live/',
+              Accept: '*/*',
+            });
+            const resp = await checkPage.goto(masterUrl, {
+              waitUntil: 'domcontentloaded',
+              timeout: 20000,
+            });
+            const status = resp ? resp.status() : 0;
+            const text = resp ? await resp.text() : '';
+            const ok = status >= 200 && status < 400 && text.includes('#EXTM3U');
+            console.log('[player-capture] проверка потока (goto):', status, ok, text.slice(0, 120));
+            if (ok) downloadedPlaylist = text;
+          } catch (e) {
+            console.warn('[player-capture] goto-проверка не удалась:', e.message);
+          } finally {
+            if (checkPage) await checkPage.close().catch(() => {});
+          }
+        }
+
+        if (downloadedPlaylist && uniqueStreams.length > 0) {
+          try {
             const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
-            const rewritten = playlistText.split('\n').map((line) => {
+            const rewritten = downloadedPlaylist.split('\n').map((line) => {
               if (line.startsWith('#EXT-X-MAP')) {
+                return line.replace(/URI="([^"]+)"/, (_, uri) => {
+                  const abs = uri.startsWith('http') ? uri : baseUrl + uri;
+                  return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
+                });
+              }
+              if (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line)) {
                 return line.replace(/URI="([^"]+)"/, (_, uri) => {
                   const abs = uri.startsWith('http') ? uri : baseUrl + uri;
                   return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
@@ -1598,9 +1585,15 @@ router.post('/extract', auth, async (req, res) => {
               },
               ...uniqueStreams.slice(1),
             ];
+            console.log('[player-capture] playlist приклеен к stream, длина:', rewritten.length);
+          } catch (e) {
+            console.warn('[player-capture] не удалось переписать playlist:', e.message);
           }
-        } catch (e) {
-          console.warn('[player-capture] не удалось скачать master через browser:', e.message);
+        } else if (isVk) {
+          // VK: даже без playlist отдаём URL — relay сам сходит с правильным referer
+          console.warn('[player-capture] VK playlist не скачан, оставляю raw streams для relay');
+        } else {
+          console.warn('[player-capture] playlist не получен — оставляю streams как есть');
         }
       }
     } else if (cdnSeriesStreams.length > 0) {
