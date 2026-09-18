@@ -23,7 +23,13 @@ try {
 
 const playerCaptureCache = require('../services/playerCaptureCache');
 const siteAdapters = require('../services/site-adapters');
-const { findPlayerContext, readDropdownTexts, selectDropdownOptionByNumber } = require('../services/dropdown-player');
+const {
+  findPlayerContext,
+  readDropdownTexts,
+  selectDropdownOptionByNumber,
+  clickByVisibleText,
+  listEpisodesByVisibleText,
+} = require('../services/dropdown-player');
 
 const fetch = require('cross-fetch');
 const { PuppeteerBlocker } = require('@cliqz/adblocker-puppeteer');
@@ -429,8 +435,30 @@ router.post('/extract', auth, async (req, res) => {
             }
           }
         }
-          } catch (e) {
+      } catch (e) {
         // бывает, что ответ не json — игнорируем
+      }
+    }
+
+    // === cinemar.cc (плеер на kinogo2026 и, возможно, других зеркалах) —
+    // при переключении серии дергает POST на /api/playlist/load и отдаёт
+    // готовый JSON вида {"file": "https://.../hls.m3u8", "duration": ..., ...}.
+    // Это намного проще get_cdn_series — просто берём поле file как есть.
+    if (reqUrl.includes('/playlist/load') || reqUrl.includes('/api/playlist')) {
+      try {
+        const json = await response.json();
+        if (json && json.file && String(json.file).length > 10) {
+          const streamUrl = String(json.file);
+          console.log('[player-capture] найден playlist/load file:', streamUrl.slice(0, 160));
+          const entry = {
+            type: streamUrl.includes('.m3u8') ? 'hls' : (streamUrl.includes('.mp4') ? 'mp4' : 'hls'),
+            url: streamUrl,
+          };
+          cdnSeriesStreams.push(entry);
+          foundStreams.push(entry);
+        }
+      } catch (e) {
+        // не json / не тот ответ — игнорируем
       }
     }
   }
@@ -816,7 +844,39 @@ router.post('/extract', auth, async (req, res) => {
     const requestedEpisode = requestedEpisodeForCache;
     const alreadyHaveCdn = cdnSeriesStreams.length > 0;
 
-    if (requestedEpisode && adapter?.mode === 'dropdown') {
+        if (requestedEpisode && siteName === 'kinogo2026') {
+      // kinogo2026: дропдаун сезон/серия — на родительской странице, не в iframe,
+      // и без стабильных CSS-классов. Кликаем по видимому тексту "Серия N" и
+      // ждём JSON от cinemar.cc/api/playlist/load (см. handleResponse выше).
+      const isLikelyMovie = Number(requestedEpisode) === 1;
+
+      if (!isLikelyMovie) {
+        foundStreams.length = 0;
+        cdnSeriesStreams.length = 0;
+        try {
+          const clicked = await clickByVisibleText(page, `Серия ${requestedEpisode}`);
+          console.log('[player-capture] (kinogo2026) клик по "Серия', requestedEpisode, '":', clicked);
+          if (!clicked) {
+            console.warn('[player-capture] (kinogo2026) пункт "Серия', requestedEpisode, '" не найден по тексту');
+          }
+        } catch (e) {
+          console.error('[player-capture] (kinogo2026) ошибка клика по серии:', e.message);
+        }
+
+        // ждём playlist/load до 5с, выходим раньше если уже поймали поток
+        const maxWait = 5000;
+        const step = 300;
+        let waited = 0;
+        while (waited < maxWait && cdnSeriesStreams.length === 0) {
+          await new Promise((r) => setTimeout(r, step));
+          waited += step;
+        }
+        console.log('[player-capture] (kinogo2026) ожидание playlist/load:', waited, 'мс, потоков:', cdnSeriesStreams.length);
+      } else {
+        console.log('[player-capture] (kinogo2026) серия 1 — ждём поток от плеера без клика');
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    } else if (requestedEpisode && adapter?.mode === 'dropdown') {
       const dropdownTimeout = adapter.dropdownTimeoutMs || 4000;
       const isLikelyMovie = !requestedEpisode || Number(requestedEpisode) === 1;
 
@@ -1194,7 +1254,20 @@ router.post('/extract', auth, async (req, res) => {
     let seasonsFound = [1];
     let totalEpisodes = 1;
 
-        if (adapter?.mode === 'dropdown') {
+        if (siteName === 'kinogo2026') {
+      // kinogo2026: считаем серии по видимому тексту "Серия N" на родительской
+      // странице, без опоры на CSS-классы (см. п.4 выше)
+      try {
+        const episodeTexts = await listEpisodesByVisibleText(page, '^Серия\\s*\\d+$');
+        console.log('[player-capture] (kinogo2026) пункты серий по тексту:', episodeTexts);
+        const episodeNums = episodeTexts
+          .map((t) => Number((t.match(/\d+/) || [])[0]))
+          .filter((n) => !Number.isNaN(n));
+        if (episodeNums.length) totalEpisodes = Math.max(...episodeNums);
+      } catch (e) {
+        console.error('[player-capture] (kinogo2026) ошибка подсчёта серий:', e.message);
+      }
+    } else if (adapter?.mode === 'dropdown') {
       // kinogo/allplay: считаем количество пунктов прямо в дропдаунах плеера
       const playerContext = await findPlayerContext(page, adapter.markerSelector);
       console.log('[player-capture] контекст плеера для чтения meta найден:', !!playerContext);

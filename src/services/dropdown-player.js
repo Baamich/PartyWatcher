@@ -103,4 +103,67 @@ async function selectDropdownOptionByNumber(context, triggerSelector, listContai
   return clicked;
 }
 
-module.exports = { findPlayerContext, readDropdownTexts, selectDropdownOptionByNumber };
+// Клик по элементу ТОЛЬКО по видимому тексту, без опоры на CSS-классы/data-атрибуты —
+// нужно для kinogo2026, где дропдаун сезон/серия сделан кастомным виджетом без
+// стабильных селекторов. Ищет лист (элемент без детей), чей trim()-текст точно
+// совпадает с targetText, и кликает по нему.
+async function clickByVisibleText(context, targetText, { waitAfterMs = 600 } = {}) {
+  const clicked = await context.evaluate((text) => {
+    const leaves = Array.from(document.querySelectorAll('body *')).filter((el) => el.children.length === 0);
+    const target = leaves.find((el) => el.textContent.trim() === text);
+    if (target) {
+      target.click();
+      return true;
+    }
+    return false;
+  }, targetText);
+  if (clicked) await new Promise((r) => setTimeout(r, waitAfterMs));
+  return clicked;
+}
+
+// Пытается открыть дропдаун (клик по любому листу, чей текст матчит паттерн —
+// обычно это сам триггер вида "Серия 1") и затем собирает ВСЕ листья, чей текст
+// матчит тот же паттерн — после открытия там должны появиться "Серия 1".."Серия N".
+// Возвращает уникальные найденные тексты.
+async function listEpisodesByVisibleText(context, patternSource = '^Серия\\s*\\d+$') {
+  const opened = await context.evaluate((src) => {
+    const pattern = new RegExp(src, 'i');
+    const leaves = Array.from(document.querySelectorAll('body *')).filter((el) => el.children.length === 0);
+    const trigger = leaves.find((el) => pattern.test(el.textContent.trim()));
+    if (trigger) {
+      trigger.click();
+      return true;
+    }
+    return false;
+  }, patternSource);
+
+  if (opened) await new Promise((r) => setTimeout(r, 500));
+
+  const texts = await context.evaluate((src) => {
+    const pattern = new RegExp(src, 'i');
+    return Array.from(document.querySelectorAll('body *'))
+      .filter((el) => el.children.length === 0)
+      .map((el) => el.textContent.trim())
+      .filter((t) => pattern.test(t));
+  }, patternSource);
+
+  // закрываем обратно кликом по тому же триггеру, если получится (не критично, если нет)
+  if (opened) {
+    await context.evaluate((src) => {
+      const pattern = new RegExp(src, 'i');
+      const leaves = Array.from(document.querySelectorAll('body *')).filter((el) => el.children.length === 0);
+      const trigger = leaves.find((el) => pattern.test(el.textContent.trim()));
+      if (trigger) trigger.click();
+    }, patternSource).catch(() => {});
+  }
+
+  return [...new Set(texts)];
+}
+
+module.exports = {
+  findPlayerContext,
+  readDropdownTexts,
+  selectDropdownOptionByNumber,
+  clickByVisibleText,
+  listEpisodesByVisibleText,
+};
