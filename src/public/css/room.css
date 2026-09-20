@@ -562,26 +562,3 @@ body.view-video-only #chat {
 video::-webkit-media-controls-fullscreen-button {
   display: none !important;
 }
-
-.room-thumb,
-.room-thumb-placeholder {
-  height: 90px; /* было 140px */
-}
-
-#roomList,
-#publicRoomList {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.room-card {
-  margin: 0; /* раньше был margin: 12px 0, теперь отступы даёт gap грида */
-}
-
-@media (max-width: 480px) {
-  #roomList,
-  #publicRoomList {
-    grid-template-columns: 1fr;
-  }
-}

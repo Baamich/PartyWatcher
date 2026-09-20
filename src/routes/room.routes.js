@@ -52,8 +52,8 @@ router.post('/', auth, async (req, res) => {
 router.get('/public', auth, async (req, res) => {
   const io = req.app.get('io');
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-  const limit = 50;
-  const sort = req.query.sort || 'newest';          // newest | oldest | most | least
+  const limit = 52;
+  const sort = req.query.sort || 'newest';
   const onlyWithPeople = req.query.onlyWithPeople === '1';
 
   const filter = {
