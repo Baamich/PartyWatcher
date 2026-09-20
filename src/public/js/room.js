@@ -51,25 +51,8 @@ function loadTwitchAPI() {
   });
 }
 
-function renderPlayer(video) {
-  currentVideoType = video.type;
-  const container = document.getElementById('player');
 
-  if (video.type === 'player_capture') {
-    window.__captureVideoUrl = video.url; // нужен зрителям при смене серии
-    return import('/js/playerCapture/index.js').then(mod => {
-      return mod.renderPlayerCapture(video, {
-        isOwner,
-        container: document.getElementById('player'),
-      }).then(player => {
-        capturePlayer = player;
-        playerReady = true;
-        return player;
-      });
-    });
-  }
-
-  function isAgeConfirmedLocally() {
+function isAgeConfirmedLocally() {
     return localStorage.getItem('pw_age18') === '1';
   }
 
@@ -121,8 +104,8 @@ function renderPlayer(video) {
     }
   }
 
-  async function handleYoutubeError(code) {
-    if (![100, 101, 150].includes(code)) return;
+  async function handleYoutubeError(errorCode) {
+    if (![100, 101, 150].includes(errorCode)) return;
 
     if (!isOwner) {
       setOverlay('Видео заблокировано YouTube — жду, пока хост подтвердит возраст 18+', false);
@@ -130,16 +113,16 @@ function renderPlayer(video) {
     }
 
     const confirmed = await askAgeGate();
-      if (!confirmed) {
-        setOverlay('Без подтверждения возраста это видео недоступно', false);
-        return;
-      }
+    if (!confirmed) {
+      setOverlay('Без подтверждения возраста это видео недоступно', false);
+      return;
+    }
 
     setOverlay('Получаю поток через yt-dlp...', false);
     try {
       const data = await api('/youtube-capture/age-restricted-extract', {
         method: 'POST',
-        body: { code },
+        body: { code }, // теперь это глобальный код комнаты, не код ошибки
       });
       renderDirectVideoUrl(data.url);
       socket.emit('youtube:age-restricted-stream', { code, url: data.url });
@@ -147,6 +130,24 @@ function renderPlayer(video) {
     } catch (err) {
       setOverlay('Не удалось получить видео: ' + (err.message || ''), false);
     }
+  }
+
+  function renderPlayer(video) {
+  currentVideoType = video.type;
+  const container = document.getElementById('player');
+
+  if (video.type === 'player_capture') {
+    window.__captureVideoUrl = video.url;
+    return import('/js/playerCapture/index.js').then(mod => {
+      return mod.renderPlayerCapture(video, {
+        isOwner,
+        container: document.getElementById('player'),
+      }).then(player => {
+        capturePlayer = player;
+        playerReady = true;
+        return player;
+      });
+    });
   }
 
   if (video.type === 'direct') {
@@ -171,9 +172,6 @@ function renderPlayer(video) {
       return Promise.resolve();
     }
 
-    // не файл, а страница/embed чужого плеера — вставляем как iframe.
-    // Синк play/pause здесь технически невозможен (чужой домен) — так же,
-    // как и в fallback-режиме player_capture с playerIframes.
     videoEl = null;
     container.innerHTML = '';
     const iframe = document.createElement('iframe');
@@ -661,6 +659,16 @@ async function init() {
     list.forEach(({ username, text }) => addHistoryMessage({ username, text }));
   });
 
+  socket.on('youtube:age-restricted-stream', async ({ url }) => {
+    if (isOwner) return;
+    const confirmed = await askAgeGate();
+    if (!confirmed) {
+      setOverlay('Хост включил контент 18+. Обнови страницу, если готов подтвердить возраст.', false);
+      return;
+    }
+    renderDirectVideoUrl(url);
+  });
+
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name }) => {
     isOwner = ownerFlag;
     lastState = playback;
@@ -808,15 +816,7 @@ window.__onCapturePlayerReload = (player) => {
   initViewMode();
 }
 
-socket.on('youtube:age-restricted-stream', async ({ url }) => {
-  if (isOwner) return;
-  const confirmed = await askAgeGate();
-  if (!confirmed) {
-    setOverlay('Хост включил контент 18+. Обнови страницу, если готов подтвердить возраст.', false);
-    return;
-  }
-  renderDirectVideoUrl(url);
-});
+
 
 document.addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || !isOwner || !started) return;
