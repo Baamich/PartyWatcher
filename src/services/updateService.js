@@ -50,10 +50,10 @@ async function performUpdate(targetHash) {
 
     status.log.push('pip install/upgrade yt-dlp...');
     try {
-      status.log.push(await run('pip3 install --upgrade yt-dlp --break-system-packages'));
-    } catch (e) {
-      status.log.push('--break-system-packages не сработал (' + e.message.slice(0, 100) + '), пробую без флага...');
       status.log.push(await run('pip3 install --upgrade yt-dlp'));
+    } catch (e) {
+      status.log.push('обычный pip install не сработал (' + e.message.slice(0, 150) + '), пробую --break-system-packages...');
+      status.log.push(await run('pip3 install --upgrade yt-dlp --break-system-packages'));
     }
 
     status.log.push('pm2 reload partywatcher...');
