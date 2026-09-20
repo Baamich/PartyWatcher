@@ -92,7 +92,7 @@ function isAgeConfirmedLocally() {
     ytPlayer = null;
     }
     const container = document.getElementById('player');
-    container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${url}"></video>`;
+    container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${url}"></video>`;
     videoEl = document.getElementById('videoEl');
     videoEl.volume = 0.3;
     currentVideoType = 'direct';
@@ -169,7 +169,7 @@ function isAgeConfirmedLocally() {
     const isRawVideoFile = /\.(mp4|webm|ogg|m3u8)(\?|$)/i.test(video.url);
 
     if (isRawVideoFile) {
-      container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${video.url}"></video>`;
+      container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${video.url}"></video>`;
       videoEl = document.getElementById('videoEl');
       videoEl.volume = 0.3;
       playerReady = true;
@@ -269,7 +269,7 @@ function isAgeConfirmedLocally() {
   }
 
   const videoSrc = video.type === 'drive' ? `/api/drive/stream/${video.url}` : video.url;
-  container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${videoSrc}"></video>`;
+  container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${videoSrc}"></video>`;
   videoEl = document.getElementById('videoEl');
   videoEl.volume = 0.3;
   playerReady = true;

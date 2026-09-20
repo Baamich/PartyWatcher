@@ -558,3 +558,7 @@ body.view-video-only #chat {
   color: var(--text);
   border: 1px solid var(--border);
 }
+
+video::-webkit-media-controls-fullscreen-button {
+  display: none !important;
+}
