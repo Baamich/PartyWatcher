@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
 
-const COOKIES_PATH = path.join(__dirname, '..', 'yt-cookies.txt'); // корень проекта, а не cwd процесса
+const COOKIES_PATH = process.env.YT_COOKIES_PATH || '/home/ubuntu/PartyWatcher/yt-cookies.txt';
 
 function extractYoutubeDirect(videoUrl) {
   return new Promise((resolve, reject) => {
@@ -30,9 +30,13 @@ function extractYoutubeDirect(videoUrl) {
       (err, stdout, stderr) => {
         if (err) {
           const msg = stderr?.slice(0, 300) || err.message;
-          if (/sign in to confirm your age/i.test(msg)) {
-            return reject(new Error('YouTube требует подтверждения возраста — нужны свежие куки залогиненного аккаунта (yt-cookies.txt)'));
-          }
+          if (err) {
+            const msg = (stderr || err.message || '').slice(0, 800);
+            console.error('[ytdlpAgeGate] yt-dlp stderr:\n', msg);
+            console.log('[ytdlpAgeGate] COOKIES_PATH =', COOKIES_PATH);
+            console.log('[ytdlpAgeGate] exists =', fs.existsSync(COOKIES_PATH));
+        return reject(new Error(msg));
+        }
           return reject(new Error(msg));
         }
         try {
