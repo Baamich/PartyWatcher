@@ -15,6 +15,50 @@ let playerFocused = false;
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 
+
+let thumbnailTimer = null;
+
+function getThumbnailSourceEl() {
+  // снять кадр можно только с реального <video> (не с iframe youtube/twitch)
+  if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) return capturePlayer.videoEl;
+  if (videoEl) return videoEl;
+  return null;
+}
+
+function captureAndSendThumbnail() {
+  if (!isOwner) return;
+  const v = getThumbnailSourceEl();
+  if (!v || v.readyState < 2 || !v.videoWidth) return;
+
+  try {
+    const targetW = 320;
+    const targetH = Math.round((v.videoHeight / v.videoWidth) * targetW) || 180;
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    canvas.getContext('2d').drawImage(v, 0, 0, targetW, targetH);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+    socket.emit('room:thumbnail', { code, dataUrl });
+  } catch (e) {
+    // источник с чужого домена без CORS — кадр снять нельзя, просто пропускаем
+    console.warn('[thumbnail] не удалось снять кадр:', e.message);
+  }
+}
+
+function startThumbnailCapture() {
+  if (thumbnailTimer) return;
+  setTimeout(captureAndSendThumbnail, 5000);       // первый кадр пораньше
+  thumbnailTimer = setInterval(captureAndSendThumbnail, 60000); // потом раз в минуту
+}
+
+function stopThumbnailCapture() {
+  if (thumbnailTimer) {
+    clearInterval(thumbnailTimer);
+    thumbnailTimer = null;
+  }
+}
+
+
 function setOverlay(text, showStartBtn) {
   document.getElementById('overlayText').textContent = text;
   document.getElementById('startBtn').classList.toggle('hidden', !showStartBtn);
@@ -546,6 +590,7 @@ function startWatching() {
       videoEl.play().catch(() => {});
     }
     startHeartbeat();
+    startThumbnailCapture();
   } else {
     if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) {
       const v = capturePlayer.videoEl;
@@ -1172,6 +1217,7 @@ function leaveRoom() {
       heartbeatTimer = null;
     }
   } catch (_) {}
+  stopThumbnailCapture();
   try {
     if (capturePlayer?.destroy) capturePlayer.destroy();
   } catch (_) {}

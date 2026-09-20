@@ -1,9 +1,14 @@
 // roomSocket.js 
+const fs = require('fs');
+const path = require('path');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const Room = require('../models/Room');
 const ChatMessage = require('../models/ChatMessage');
 const SupportTicket = require('../models/SupportTicket');
+
+const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
+if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
 
 async function updateRoomActivity(io, code) {
   const size = io.sockets.adapter.rooms.get(code)?.size || 0;
@@ -60,6 +65,24 @@ function registerRoomSocket(io) {
         })
         .catch(() => {});
     }
+
+    socket.on('room:thumbnail', async ({ code, dataUrl }) => {
+    if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+    if (!dataUrl || !dataUrl.startsWith('data:image/jpeg;base64,')) return;
+
+    try {
+      const base64 = dataUrl.slice('data:image/jpeg;base64,'.length);
+      const buffer = Buffer.from(base64, 'base64');
+      if (buffer.length > 300 * 1024) return; // защита от слишком тяжёлых кадров
+
+      fs.writeFileSync(path.join(THUMB_DIR, `${code}.jpg`), buffer);
+
+      const thumbnailUrl = `/media/thumbnails/${code}.jpg?v=${Date.now()}`;
+      await Room.findOneAndUpdate({ code }, { thumbnailUrl });
+    } catch (e) {
+      console.warn('[room:thumbnail] ошибка сохранения:', e.message);
+    }
+  });
 
     // все, кто на главной странице, сидят в lobby
     socket.on('lobby:join', () => {

@@ -364,6 +364,7 @@ async function joinByCode() {
 // ---- отрисовка списков комнат ----
 
 function roomThumbnail(room) {
+  if (room.thumbnailUrl) return room.thumbnailUrl;
   if (room.video.type === 'youtube') {
     const idMatch = room.video.url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     if (idMatch) return `https://img.youtube.com/vi/${idMatch[1]}/hqdefault.jpg`;

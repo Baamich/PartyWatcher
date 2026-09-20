@@ -6,6 +6,11 @@ const Room = require('../models/Room');
 const auth = require('../middleware/auth');
 const ChatMessage = require('../models/ChatMessage');
 
+const fs = require('fs');
+const path = require('path');
+const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
+
+
 function generateCode() {
   return crypto.randomBytes(3).toString('hex');
 }
@@ -127,7 +132,7 @@ router.delete('/:code', auth, async (req, res) => {
 
   const playerCaptureCache = require('../services/playerCaptureCache');
   playerCaptureCache.clearRoom(room.code);
-
+  try { fs.unlinkSync(path.join(THUMB_DIR, `${room.code}.jpg`)); } catch (_) {}
   res.json({ status: 'ok' });
 });
 

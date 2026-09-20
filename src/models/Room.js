@@ -23,7 +23,8 @@ const roomSchema = new mongoose.Schema(
       },
       ageConfirmed: { type: Boolean, default: false }, 
     },
-    isPublic: { type: Boolean, default: false }, // по умолчанию приватная (закрытый замок)
+    isPublic: { type: Boolean, default: false },
+    thumbnailUrl: { type: String, default: null },
     playback: {
       isPlaying: { type: Boolean, default: false },
       positionSeconds: { type: Number, default: 0 },

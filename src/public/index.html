@@ -126,34 +126,34 @@
         <h2>Войти по ключу</h2>
         <input id="joinCodeInput" placeholder="Ключ комнаты" />
         <button onclick="joinByCode()">Войти</button>
+
+        <h2>Публичные комнаты</h2>
+
+        <div class="public-controls">
+          <div class="public-filters">
+            <select id="publicSort" onchange="onPublicFilterChange()">
+              <option value="newest">Новые</option>
+              <option value="oldest">Старые</option>
+              <option value="most">Больше людей</option>
+              <option value="least">Меньше людей</option>
+            </select>
+
+            <label class="filter-check">
+              <input type="checkbox" id="onlyWithPeople" onchange="onPublicFilterChange()" />
+              С людьми
+            </label>
+          </div>
+        </div>
+
+        <div id="publicRoomList"></div>
+
+        <div id="publicPagination" class="pagination hidden"></div>
       </div>
 
       <div class="col-right">
         <h2>Мои комнаты</h2>
         <input id="searchInput" placeholder="Фильтр по названию" oninput="loadMyRooms()" />
         <div id="roomList"></div>
-
-        <h2>Публичные комнаты</h2>
-
-      <div class="public-controls">
-        <div class="public-filters">
-          <select id="publicSort" onchange="onPublicFilterChange()">
-            <option value="newest">Новые</option>
-            <option value="oldest">Старые</option>
-            <option value="most">Больше людей</option>
-            <option value="least">Меньше людей</option>
-          </select>
-
-          <label class="filter-check">
-            <input type="checkbox" id="onlyWithPeople" onchange="onPublicFilterChange()" />
-            С людьми
-          </label>
-        </div>
-      </div>
-
-      <div id="publicRoomList"></div>
-
-      <div id="publicPagination" class="pagination hidden"></div>
       </div>
     </div>
   </div><!-- /appBox -->

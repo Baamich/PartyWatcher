@@ -9,6 +9,8 @@ const ChatMessage = require('../models/ChatMessage');
 const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 const YT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // сутки
 
+const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
+
 console.log('[cleanup] крон автоочистки комнат запущен');
 
 cron.schedule('0 * * * *', async () => {
@@ -20,6 +22,13 @@ cron.schedule('0 * * * *', async () => {
       const ids = expired.map((r) => r._id);
       await ChatMessage.deleteMany({ room: { $in: ids } });
       await Room.deleteMany({ _id: { $in: ids } });
+
+      // чистим превью удалённых комнат (при явном удалении через кнопку это
+      // уже делает room.routes.js, а тут — для комнат, умерших по таймауту)
+      for (const room of expired) {
+        try { fs.unlinkSync(path.join(THUMB_DIR, `${room.code}.jpg`)); } catch (_) {}
+      }
+
       console.log(`[cleanup] удалено неактивных комнат: ${expired.length}`);
     }
   } catch (err) {
