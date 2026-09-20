@@ -1068,7 +1068,11 @@ function makeDraggable(el, storageKey) {
   el.addEventListener('pointerup', endDrag);
   el.addEventListener('pointercancel', endDrag);
 
-  document.addEventListener('fullscreenchange', applySavedPosition);
+   document.addEventListener('fullscreenchange', () => {
+    // даём браузеру дорисовать полноэкранный размер, потом проверяем границы
+    requestAnimationFrame(applySavedPosition);
+  });
+  window.addEventListener('resize', applySavedPosition);
   applySavedPosition();
 }
 
@@ -1286,22 +1290,43 @@ function makeFsChatPanelDraggable() {
     panel.style.bottom = 'auto';
   }
 
-  function applySavedPosition() {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    const parentRect = container.getBoundingClientRect();
-    const panelW = panel.offsetWidth || 320;
-    const panelH = panel.offsetHeight || 400;
+    function resetPosition() {
+    el.style.left = '';
+    el.style.top = '';
+    el.style.right = '';
+    el.style.bottom = '';
+  }
 
-    if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
-      const left = clamp(saved.left, 8, Math.max(8, parentRect.width - panelW - 8));
-      const top = clamp(saved.top, 8, Math.max(8, parentRect.height - panelH - 8));
-      panel.style.left = left + 'px';
-      panel.style.top = top + 'px';
-      panel.style.right = 'auto';
-      panel.style.bottom = 'auto';
-    } else {
-      positionNearChatBtn();
+  function applySavedPosition() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null'); } catch (_) {}
+
+    if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') {
+      resetPosition();
+      return;
     }
+
+    const p = container.getBoundingClientRect();
+    // плеер сейчас скрыт (display:none на мобилке) — размеры нулевые, ничего не трогаем
+    if (!p.width || !p.height) return;
+
+    const w = el.offsetWidth || 40;
+    const h = el.offsetHeight || 40;
+    const outOfBounds =
+      saved.left < 0 || saved.top < 0 ||
+      saved.left > p.width - w || saved.top > p.height - h;
+
+    if (outOfBounds) {
+      // сейчас не влезает — показываем на дефолтном месте, но сохранённое НЕ стираем:
+      // вернётся, когда размер плеера снова подойдёт, или перезапишется при следующем перетаскивании
+      resetPosition();
+      return;
+    }
+
+    el.style.left = saved.left + 'px';
+    el.style.top = saved.top + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
   }
 
   function savePosition(left, top) {
