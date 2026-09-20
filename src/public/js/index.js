@@ -383,7 +383,7 @@ function deletionLabel(room) {
   const msLeft = deadline - Date.now();
   if (msLeft <= 0) return 'удаляется...';
   const h = Math.floor(msLeft / 3600000);
-  const m = Math.floor((msLeft % 3600000) / 15000);
+  const m = Math.floor((msLeft % 3600000) / 60000);
   return `удалится через ${h}ч ${m}м`;
 }
 
@@ -396,15 +396,21 @@ async function deleteRoom(code, ev) {
   } catch (err) { alert(err.message); }
 }
 
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function renderRoomCard(room, { showDelete }) {
   const thumb = roomThumbnail(room);
   const card = document.createElement('div');
   card.className = 'room-card';
   card.innerHTML = `
     ${showDelete ? '<button class="delete-btn" title="Удалить комнату">🗑️</button>' : ''}
-    ${thumb ? `<img class="room-thumb" src="${thumb}" />` : `<div class="room-thumb-placeholder">🎬</div>`}
+    ${thumb ? `<img class="room-thumb" src="${escapeHtml(thumb)}" loading="lazy" />` : `<div class="room-thumb-placeholder">🎬</div>`}
     <div class="room-info">
-      <span class="room-name">${room.name}</span>
+      <span class="room-name" title="${escapeHtml(room.name)}">${escapeHtml(room.name)}</span>
       <span class="room-occupancy">👤 ${occupancyLabel(room)}</span>
     </div>
     <div class="room-actions">
@@ -419,6 +425,25 @@ function renderRoomCard(room, { showDelete }) {
   return card;
 }
 
+const lastRender = { mine: '', public: '' };
+
+function renderRoomList(list, rooms, opts, cacheKey) {
+  const sig = JSON.stringify(rooms);
+
+  // данные не изменились: карточки не трогаем, обновляем только таймеры
+  if (lastRender[cacheKey] === sig) {
+    rooms.forEach((room, i) => {
+      const el = list.children[i]?.querySelector('.countdown');
+      if (el) el.textContent = deletionLabel(room);
+    });
+    return;
+  }
+
+  lastRender[cacheKey] = sig;
+  list.innerHTML = '';
+  rooms.forEach((room) => list.appendChild(renderRoomCard(room, opts)));
+}
+
 async function loadMyRooms() {
   const input = document.getElementById('searchInput');
   const q = input?.value?.trim() || '';
@@ -428,8 +453,7 @@ async function loadMyRooms() {
     const list = document.getElementById('roomList');
     if (!list) return;
 
-    list.innerHTML = '';
-    rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: true })));
+    renderRoomList(list, rooms, { showDelete: true }, 'mine');
   } catch (err) {
     console.warn('[loadMyRooms]', err.message);
   }
@@ -465,15 +489,14 @@ async function loadPublicRooms() {
     const rooms = data.rooms || [];
     publicState.totalPages = data.totalPages || 1;
 
-    list.innerHTML = '';
-
     if (!rooms.length) {
+      lastRender.public = '';
       list.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Публичных комнат пока нет</p>';
       if (paginationEl) paginationEl.classList.add('hidden');
       return;
     }
 
-    rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: false })));
+    renderRoomList(list, rooms, { showDelete: false }, 'public');
     renderPagination();
   } catch (err) {
     console.warn('[loadPublicRooms]', err.message);
