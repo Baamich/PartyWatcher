@@ -81,11 +81,14 @@ function registerRoomSocket(io) {
       const isBanned = room.bannedUsers.some((id) => String(id) === String(socket.user.id));
       if (isBanned) return socket.emit('room:banned');
 
-      socket.join(code);
+      // обязательно ждём join, иначе размер комнаты ещё 0
+      await socket.join(code);
+
       socket.data.roomCode = code;
       socket.data.roomId = room._id;
       socket.data.isOwner = String(room.owner) === String(socket.user.id);
 
+      // сразу обновляем кэш в Mongo (viewerCount + emptySince)
       await updateRoomActivity(io, code);
 
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
