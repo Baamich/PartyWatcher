@@ -1,1 +1,0 @@
-// sync .js (playerCapture)
