@@ -13,13 +13,15 @@ const roomSchema = new mongoose.Schema(
       },
       url: { type: String, required: true },
       title: { type: String },
+      ageRestricted: { type: Boolean, default: false },
       meta: {
         seasons: { type: [Number], default: [] },
         currentSeason: { type: Number, default: null },
         currentEpisode: { type: Number, default: null },
         voices: { type: [String], default: [] },
         currentVoice: { type: String, default: null },
-      }
+      },
+      ageConfirmed: { type: Boolean, default: false }, 
     },
     isPublic: { type: Boolean, default: false }, // по умолчанию приватная (закрытый замок)
     playback: {

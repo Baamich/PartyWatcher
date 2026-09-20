@@ -518,7 +518,6 @@ body.view-video-only #chat {
    transition: opacity 0.35s ease;
  }
 
-/* прозрачный перехватчик тапов: живёт только в фулскрине и только пока кнопки спрятаны */
 #fsActivityCatcher {
   position: absolute;
   inset: 0;
@@ -529,4 +528,33 @@ body.view-video-only #chat {
 
 #playerWrap.in-fullscreen.fs-controls-hidden #fsActivityCatcher {
   display: block;
+}
+
+.age-gate-content {
+  max-width: 380px;
+  text-align: center;
+}
+
+.age-gate-icon {
+  font-size: 42px;
+  margin-bottom: 6px;
+}
+
+.age-gate-text {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 6px 0 18px;
+}
+
+.age-gate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#ageGateCancelBtn {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
 }

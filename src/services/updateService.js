@@ -48,6 +48,14 @@ async function performUpdate(targetHash) {
     status.log.push('npm install...');
     status.log.push(await run('npm install --omit=dev'));
 
+    status.log.push('pip install/upgrade yt-dlp...');
+    try {
+      status.log.push(await run('pip3 install --upgrade yt-dlp --break-system-packages'));
+    } catch (e) {
+      status.log.push('--break-system-packages не сработал (' + e.message.slice(0, 100) + '), пробую без флага...');
+      status.log.push(await run('pip3 install --upgrade yt-dlp'));
+    }
+
     status.log.push('pm2 reload partywatcher...');
     status.log.push(await run('pm2 reload partywatcher'));
 

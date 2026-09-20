@@ -181,6 +181,11 @@ function registerRoomSocket(io) {
       });
     });
 
+    socket.on('youtube:age-restricted-stream', ({ code, url }) => {
+      if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+      socket.to(code).emit('youtube:age-restricted-stream', { url });
+    });
+
     socket.on('playback:update', async ({ code, isPlaying, positionSeconds }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
 

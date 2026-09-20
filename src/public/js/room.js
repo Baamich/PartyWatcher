@@ -69,6 +69,86 @@ function renderPlayer(video) {
     });
   }
 
+  function isAgeConfirmedLocally() {
+    return localStorage.getItem('pw_age18') === '1';
+  }
+
+  function askAgeGate() {
+    if (isAgeConfirmedLocally()) return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      const modal = document.getElementById('ageGateModal');
+      const confirmBtn = document.getElementById('ageGateConfirmBtn');
+      const cancelBtn = document.getElementById('ageGateCancelBtn');
+
+      modal.classList.remove('hidden');
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+      };
+      const onConfirm = () => {
+        localStorage.setItem('pw_age18', '1');
+        cleanup();
+        resolve(true);
+      };
+      const onCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
+  function renderDirectVideoUrl(url) {
+    const container = document.getElementById('player');
+    container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${url}"></video>`;
+    videoEl = document.getElementById('videoEl');
+    videoEl.volume = 0.3;
+    currentVideoType = 'direct';
+    playerReady = true;
+
+    if (isOwner) {
+      videoEl.addEventListener('play', () => emitPlayback(true));
+      videoEl.addEventListener('pause', () => emitPlayback(false));
+      videoEl.addEventListener('seeked', () => emitPlayback(!videoEl.paused));
+    } else {
+      videoEl.addEventListener('play', () => { if (!suppressEvents) enforceHostState(); });
+      videoEl.addEventListener('seeking', () => { if (!suppressEvents) enforceHostState(); });
+    }
+  }
+
+  async function handleYoutubeError(code) {
+    if (![100, 101, 150].includes(code)) return;
+
+    if (!isOwner) {
+      setOverlay('Видео заблокировано YouTube — жду, пока хост подтвердит возраст 18+', false);
+      return;
+    }
+
+    const confirmed = await askAgeGate();
+      if (!confirmed) {
+        setOverlay('Без подтверждения возраста это видео недоступно', false);
+        return;
+      }
+
+    setOverlay('Получаю поток через yt-dlp...', false);
+    try {
+      const data = await api('/youtube-capture/age-restricted-extract', {
+        method: 'POST',
+        body: { code },
+      });
+      renderDirectVideoUrl(data.url);
+      socket.emit('youtube:age-restricted-stream', { code, url: data.url });
+      setOverlay('Готово к просмотру', true);
+    } catch (err) {
+      setOverlay('Не удалось получить видео: ' + (err.message || ''), false);
+    }
+  }
+
   if (video.type === 'direct') {
     const isRawVideoFile = /\.(mp4|webm|ogg|m3u8)(\?|$)/i.test(video.url);
 
@@ -137,6 +217,7 @@ function renderPlayer(video) {
             if (e.data === YT.PlayerState.PLAYING) emitPlayback(true);
             else if (e.data === YT.PlayerState.PAUSED) emitPlayback(false);
           },
+          onError: (e) => handleYoutubeError(e.data),
         },
       });
     }));
@@ -726,6 +807,16 @@ window.__onCapturePlayerReload = (player) => {
   socket.on('room:error', (err) => alert(err.error));
   initViewMode();
 }
+
+socket.on('youtube:age-restricted-stream', async ({ url }) => {
+  if (isOwner) return;
+  const confirmed = await askAgeGate();
+  if (!confirmed) {
+    setOverlay('Хост включил контент 18+. Обнови страницу, если готов подтвердить возраст.', false);
+    return;
+  }
+  renderDirectVideoUrl(url);
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || !isOwner || !started) return;

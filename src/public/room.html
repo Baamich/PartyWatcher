@@ -113,6 +113,22 @@
     </div>
   </div>
 
+  <div id="ageGateModal" class="modal hidden">
+    <div class="modal-content age-gate-content">
+      <div class="age-gate-icon">🔞</div>
+      <h3>Подтверждение возраста</h3>
+      <p class="age-gate-text">
+        Это видео недоступно для встраивания без подтверждения возраста
+        (возрастные ограничения YouTube). Подтверждая, вы соглашаетесь,
+        что вам есть 18 лет.
+      </p>
+      <div class="age-gate-actions">
+        <button id="ageGateConfirmBtn">Мне есть 18, продолжить</button>
+        <button id="ageGateCancelBtn" class="icon-btn">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/room.js"></script>

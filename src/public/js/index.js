@@ -382,7 +382,7 @@ function deletionLabel(room) {
   const msLeft = deadline - Date.now();
   if (msLeft <= 0) return 'удаляется...';
   const h = Math.floor(msLeft / 3600000);
-  const m = Math.floor((msLeft % 3600000) / 60000);
+  const m = Math.floor((msLeft % 3600000) / 15000);
   return `удалится через ${h}ч ${m}м`;
 }
 

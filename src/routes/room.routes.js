@@ -54,6 +54,10 @@ router.get('/public', auth, async (req, res) => {
   const filter = {
     isPublic: true,
     owner: { $ne: req.user.id },
+    $or: [
+      { 'video.ageRestricted': { $ne: true } },
+      { ageConfirmed: true },
+    ],
   };
 
   if (onlyWithPeople) {
