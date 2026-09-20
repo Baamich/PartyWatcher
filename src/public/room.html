@@ -26,9 +26,12 @@
     <button id="fullscreenBtn" class="fs-draggable" onclick="toggleFullscreen()" title="Полноэкранный режим (зажми, чтобы передвинуть)">⛶</button>
 
     <div id="fsChatPanel" class="hidden">
+      <div id="fsChatHandle">
+        <button type="button" id="fsChatClose" aria-label="Закрыть чат">×</button>
+      </div>
       <div id="fsMessages"></div>
       <form id="fsChatForm" onsubmit="return sendMessage(event, true)">
-        <input id="fsChatInput" placeholder="Сообщение..." />
+        <input id="fsChatInput" type="text" placeholder="Сообщение..." autocomplete="off" maxlength="500">
         <button type="submit">➤</button>
       </form>
     </div>

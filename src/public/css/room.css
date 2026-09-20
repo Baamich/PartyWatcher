@@ -79,62 +79,162 @@ body {
   right: 60px;
 }
 
+/* === Fullscreen chat modal === */
 #fsChatPanel {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  max-height: 240px;
-  background: #fff;
-  border-top: 3px solid #000;
-  padding: 8px;
+  z-index: 5;
+  /* адаптивная ширина/высота — на маленьком экране сожмётся */
+  width: min(340px, calc(100% - 24px));
+  max-width: 380px;
+  height: min(520px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  min-width: 220px;
+  min-height: 200px;
   display: flex;
   flex-direction: column;
-  z-index: 5;
+  background: rgba(28, 28, 32, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  left: 16px;
+  top: 60px;
+  right: auto;
+  bottom: auto;
+  /* НЕ touch-action / user-select на всей панели — иначе ломается скролл */
+}
+
+#fsChatPanel.hidden {
+  display: none !important;
+}
+
+#fsChatHandle {
+  flex-shrink: 0;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: none;   /* только хэндл */
+  user-select: none;
+}
+
+#fsChatHandle:active,
+#fsChatPanel.dragging #fsChatHandle {
+  cursor: grabbing;
+}
+
+#fsChatHandle::before {
+  content: '';
+  width: 28px;
+  height: 6px;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.55) 1.5px, transparent 1.6px);
+  background-size: 6px 6px;
+  background-repeat: repeat-x;
+  background-position: 0 center;
+  opacity: 0.9;
+}
+
+#fsChatClose {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 1;
+}
+
+#fsChatClose:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 #fsMessages {
   flex: 1;
   overflow-y: auto;
-  color: #000;
+  -webkit-overflow-scrolling: touch; /* плавный скролл на iOS */
+  overscroll-behavior: contain;
+  padding: 10px 12px;
+  color: #fff;
   font-size: 13px;
-  max-height: 190px;
-  margin-bottom: 6px;
+  line-height: 1.4;
+  min-height: 0;
+  touch-action: pan-y; /* разрешаем вертикальный скролл пальцем */
+}
+
+#fsMessages::-webkit-scrollbar {
+  width: 5px;
+}
+#fsMessages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
 }
 
 #fsChatForm {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.25);
 }
 
 #fsChatForm input {
   flex: 1;
   margin: 0;
-  border: 1px solid #000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+#fsChatForm input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
 }
 
 #fsChatForm button {
   width: auto;
-  background: #000;
+  background: rgba(255, 255, 255, 0.15);
   color: #fff;
-  border: 1px solid #000;
-}
-
-#fsNotice {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
   padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.75);
-  color: #fff;
-  font-size: 14px;
-  z-index: 6;
-  transition: opacity 0.5s ease;
 }
 
-#fsNotice.fade-out {
-  opacity: 0;
+#fsChatForm button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+#fsChatPanel.dragging {
+  opacity: 0.85;
+  transition: none;
+}
+
+@media (max-width: 480px) {
+  #fsChatPanel {
+    width: min(300px, calc(100% - 16px));
+    height: min(420px, calc(100% - 16px));
+    min-width: 180px;
+  }
 }
 
 #chat {

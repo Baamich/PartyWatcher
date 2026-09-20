@@ -503,10 +503,6 @@ function onFullscreenChange() {
   }
 }
 
-function toggleFsChat() {
-  document.getElementById('fsChatPanel').classList.toggle('hidden');
-}
-
 document.addEventListener('fullscreenchange', onFullscreenChange);
 
 function openSettings() {
@@ -1086,6 +1082,217 @@ function leaveRoom() {
 // Делаем функции доступными из HTML
 window.setViewMode = setViewMode;
 window.closeModal = closeModal;
+
+// --- Fullscreen chat modal drag & position ---
+function makeFsChatPanelDraggable() {
+  const panel = document.getElementById('fsChatPanel');
+  const handle = document.getElementById('fsChatHandle');
+  const container = document.getElementById('playerWrap');
+  if (!panel || !handle || !container) return;
+
+  const STORAGE_KEY = 'pw-pos:fsChatPanel:fullscreen';
+
+  let dragging = false;
+  let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(val, max));
+  }
+
+  /** позиция рядом с кнопкой чата (если localStorage пустой) */
+  function positionNearChatBtn() {
+    const btn = document.getElementById('fsChatToggleBtn');
+    const parentRect = container.getBoundingClientRect();
+    const panelW = panel.offsetWidth || 320;
+    const panelH = panel.offsetHeight || 400;
+
+    let left = 16;
+    let top = 60;
+
+    if (btn) {
+      const btnRect = btn.getBoundingClientRect();
+      // под кнопкой, чуть левее/правее чтобы не уезжало
+      left = btnRect.left - parentRect.left;
+      top = btnRect.bottom - parentRect.top + 8;
+
+      // если не влезает снизу — ставим над кнопкой
+      if (top + panelH > parentRect.height - 8) {
+        top = btnRect.top - parentRect.top - panelH - 8;
+      }
+      // если не влезает справа — прижимаем вправо
+      if (left + panelW > parentRect.width - 8) {
+        left = parentRect.width - panelW - 8;
+      }
+    }
+
+    left = clamp(left, 8, Math.max(8, parentRect.width - panelW - 8));
+    top = clamp(top, 8, Math.max(8, parentRect.height - panelH - 8));
+
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  }
+
+  function applySavedPosition() {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    const parentRect = container.getBoundingClientRect();
+    const panelW = panel.offsetWidth || 320;
+    const panelH = panel.offsetHeight || 400;
+
+    if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+      const left = clamp(saved.left, 8, Math.max(8, parentRect.width - panelW - 8));
+      const top = clamp(saved.top, 8, Math.max(8, parentRect.height - panelH - 8));
+      panel.style.left = left + 'px';
+      panel.style.top = top + 'px';
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+    } else {
+      positionNearChatBtn();
+    }
+  }
+
+  function savePosition(left, top) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ left, top }));
+  }
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#fsChatClose')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = panel.getBoundingClientRect();
+    const parentRect = container.getBoundingClientRect();
+    origLeft = rect.left - parentRect.left;
+    origTop = rect.top - parentRect.top;
+    startX = e.clientX;
+    startY = e.clientY;
+
+    dragging = true;
+    panel.classList.add('dragging');
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+
+    const parentRect = container.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+
+    let newLeft = origLeft + (e.clientX - startX);
+    let newTop = origTop + (e.clientY - startY);
+
+    // жёстко внутри границ
+    newLeft = clamp(newLeft, 0, parentRect.width - panelRect.width);
+    newTop = clamp(newTop, 0, parentRect.height - panelRect.height);
+
+    panel.style.left = newLeft + 'px';
+    panel.style.top = newTop + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  });
+
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove('dragging');
+    try { handle.releasePointerCapture(e.pointerId); } catch {}
+
+    const left = parseFloat(panel.style.left) || 0;
+    const top = parseFloat(panel.style.top) || 0;
+    savePosition(left, top);
+  }
+
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+
+  // при смене фуллскрина / ресайзе — поджимаем в границы
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) {
+      // даём браузеру отрисовать размеры, потом позиционируем
+      requestAnimationFrame(() => applySavedPosition());
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    if (document.fullscreenElement && !panel.classList.contains('hidden')) {
+      applySavedPosition();
+    }
+  });
+
+  applySavedPosition();
+}
+
+function toggleFsChat() {
+  const panel = document.getElementById('fsChatPanel');
+  if (!panel) return;
+
+  const willShow = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden');
+
+  if (willShow) {
+    // после показа размеры уже известны — ставим позицию
+    requestAnimationFrame(() => {
+      const saved = JSON.parse(localStorage.getItem('pw-pos:fsChatPanel:fullscreen') || 'null');
+      if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+        const container = document.getElementById('playerWrap');
+        const parentRect = container.getBoundingClientRect();
+        const panelW = panel.offsetWidth;
+        const panelH = panel.offsetHeight;
+        const left = Math.max(0, Math.min(saved.left, parentRect.width - panelW));
+        const top = Math.max(0, Math.min(saved.top, parentRect.height - panelH));
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+      } else {
+        // пустой localStorage → рядом с кнопкой чата
+        const btn = document.getElementById('fsChatToggleBtn');
+        const container = document.getElementById('playerWrap');
+        if (btn && container) {
+          const parentRect = container.getBoundingClientRect();
+          const btnRect = btn.getBoundingClientRect();
+          const panelW = panel.offsetWidth;
+          const panelH = panel.offsetHeight;
+
+          let left = btnRect.left - parentRect.left;
+          let top = btnRect.bottom - parentRect.top + 8;
+
+          if (top + panelH > parentRect.height - 8) {
+            top = btnRect.top - parentRect.top - panelH - 8;
+          }
+          if (left + panelW > parentRect.width - 8) {
+            left = parentRect.width - panelW - 8;
+          }
+          left = Math.max(8, left);
+          top = Math.max(8, top);
+
+          panel.style.left = left + 'px';
+          panel.style.top = top + 'px';
+          panel.style.right = 'auto';
+          panel.style.bottom = 'auto';
+        }
+      }
+
+      const msgs = document.getElementById('fsMessages');
+      if (msgs) msgs.scrollTop = 1e9;
+    });
+  }
+}
+
+function closeFsChat() {
+  document.getElementById('fsChatPanel')?.classList.add('hidden');
+}
+
+makeFsChatPanelDraggable();
+
+// крестик
+document.getElementById('fsChatClose')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeFsChat();
+});
 
 makeDraggable(document.getElementById('fullscreenBtn'), 'fullscreenBtn');
 makeDraggable(document.getElementById('fsChatToggleBtn'), 'fsChatToggleBtn');
