@@ -21,6 +21,7 @@ const youtubeCaptureRoutes = require('./routes/youtubeCapture.routes');
 
 const supportRoutes = require('./routes/support.routes');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
+const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 
 async function start() {
   await connectDB();
@@ -34,6 +35,7 @@ async function start() {
   app.use(cookieParser());
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir)));
+  app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
 
   app.use('/api/auth', authRoutes);
   app.use('/api/rooms', roomRoutes);
@@ -51,7 +53,6 @@ async function start() {
 
   registerRoomSocket(io);
 
-  // обработчик ошибок — ОБЯЗАТЕЛЬНО внутри start(), после всех роутов, до listen
   app.use((err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: `Файл слишком большой (лимит: ${config.upload.maxSizeMb} MB)` });
