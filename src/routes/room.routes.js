@@ -49,15 +49,15 @@ router.get('/public', auth, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = 50;
   const sort = req.query.sort || 'newest';          // newest | oldest | most | least
-  const onlyEmpty = req.query.onlyEmpty === '1';  // только пустые
+  const onlyWithPeople = req.query.onlyWithPeople === '1';
 
   const filter = {
     isPublic: true,
     owner: { $ne: req.user.id },
   };
 
-  if (onlyEmpty) {
-    filter.viewerCount = 0;
+  if (onlyWithPeople) {
+    filter.viewerCount = { $gt: 0 };
   }
 
   let sortOption = { createdAt: -1 };

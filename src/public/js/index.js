@@ -438,14 +438,14 @@ async function loadMyRooms() {
 let publicState = {
   page: 1,
   sort: 'newest',
-  onlyEmpty: false,
+  onlyWithPeople: false,
   totalPages: 1,
 };
 
 function onPublicFilterChange() {
   publicState.page = 1;
   publicState.sort = document.getElementById('publicSort')?.value || 'newest';
-  publicState.onlyEmpty = document.getElementById('onlyEmpty')?.checked || false;
+  publicState.onlyWithPeople = document.getElementById('onlyWithPeople')?.checked || false;
   loadPublicRooms();
 }
 
@@ -457,9 +457,8 @@ async function loadPublicRooms() {
   const params = new URLSearchParams({
     page: publicState.page,
     sort: publicState.sort,
-    onlyEmpty: publicState.onlyEmpty ? '1' : '0',
+    onlyWithPeople: publicState.onlyWithPeople ? '1' : '0',
   });
-
   try {
     const data = await api('/rooms/public?' + params.toString());
     const rooms = data.rooms || [];
@@ -572,7 +571,7 @@ function initLobbySocket() {
   });
 
  lobbySocket.on('rooms:public-updated', () => {
-  if (publicState.page === 1 && publicState.sort === 'newest' && !publicState.onlyEmpty) {
+  if (publicState.page === 1 && publicState.sort === 'newest' && !publicState.onlyWithPeople) {
     loadPublicRooms();
   }
 });
