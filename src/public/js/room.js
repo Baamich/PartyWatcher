@@ -87,6 +87,10 @@ function isAgeConfirmedLocally() {
   }
 
   function renderDirectVideoUrl(url) {
+    if (ytPlayer && typeof ytPlayer.destroy === 'function') {
+      try { ytPlayer.destroy(); } catch (_) {}
+    ytPlayer = null;
+    }
     const container = document.getElementById('player');
     container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls' : ''} src="${url}"></video>`;
     videoEl = document.getElementById('videoEl');
@@ -104,17 +108,25 @@ function isAgeConfirmedLocally() {
     }
   }
 
+  let ageGateHandling = false;
+  let ageGateResolvedForVideo = false;
+
   async function handleYoutubeError(errorCode) {
     if (![100, 101, 150].includes(errorCode)) return;
+    if (ageGateHandling || ageGateResolvedForVideo) return; // <-- защита от повторных срабатываний
+
+    ageGateHandling = true;
 
     if (!isOwner) {
       setOverlay('Видео заблокировано YouTube — жду, пока хост подтвердит возраст 18+', false);
+      ageGateHandling = false;
       return;
     }
 
     const confirmed = await askAgeGate();
     if (!confirmed) {
       setOverlay('Без подтверждения возраста это видео недоступно', false);
+      ageGateHandling = false;
       return;
     }
 
@@ -122,13 +134,16 @@ function isAgeConfirmedLocally() {
     try {
       const data = await api('/youtube-capture/age-restricted-extract', {
         method: 'POST',
-        body: { code }, // теперь это глобальный код комнаты, не код ошибки
+        body: { code },
       });
+      ageGateResolvedForVideo = true; // видео решено — дальнейшие onError по этому видео игнорим
       renderDirectVideoUrl(data.url);
       socket.emit('youtube:age-restricted-stream', { code, url: data.url });
       setOverlay('Готово к просмотру', true);
     } catch (err) {
       setOverlay('Не удалось получить видео: ' + (err.message || ''), false);
+    } finally {
+      ageGateHandling = false;
     }
   }
 

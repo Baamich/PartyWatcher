@@ -29,24 +29,18 @@ function extractYoutubeDirect(videoUrl) {
       { maxBuffer: 1024 * 1024 * 20, timeout: 30000 },
       (err, stdout, stderr) => {
         if (err) {
-          const msg = stderr?.slice(0, 300) || err.message;
-          if (err) {
             const msg = (stderr || err.message || '').slice(0, 800);
             console.error('[ytdlpAgeGate] yt-dlp stderr:\n', msg);
-            console.log('[ytdlpAgeGate] COOKIES_PATH =', COOKIES_PATH);
-            console.log('[ytdlpAgeGate] exists =', fs.existsSync(COOKIES_PATH));
-        return reject(new Error(msg));
-        }
-          return reject(new Error(msg));
+            return reject(new Error(msg));
         }
         try {
-          const info = JSON.parse(stdout);
-          if (!info.url) return reject(new Error('yt-dlp не вернул прямую ссылку'));
-          resolve({ url: info.url, title: info.title || null });
+            const info = JSON.parse(stdout);
+            if (!info.url) return reject(new Error('yt-dlp не вернул прямую ссылку'));
+            resolve({ url: info.url, title: info.title || null });
         } catch (e) {
-          reject(new Error('Не удалось распарсить ответ yt-dlp'));
+            reject(new Error('Не удалось распарсить ответ yt-dlp'));
         }
-      }
+        }
     );
   });
 }
