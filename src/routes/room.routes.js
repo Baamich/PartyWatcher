@@ -28,6 +28,15 @@ router.post('/', auth, async (req, res) => {
     } while (await Room.findOne({ code }));
 
     const room = await Room.create({ name, code, owner: req.user.id, video, isPublic: !!isPublic });
+
+    // мгновенно обновляем списки у всех, кто на главной
+    const io = req.app.get('io');
+    if (room.isPublic) {
+      io.to('lobby').emit('rooms:public-updated');
+    }
+    // свои комнаты тоже можно обновить (на случай если человек остался на главной)
+    io.to(`user:${req.user.id}`).emit('rooms:mine-updated');
+
     res.status(201).json(room);
   } catch (err) {
     console.error('[rooms/create]', err);
@@ -37,13 +46,47 @@ router.post('/', auth, async (req, res) => {
 
 router.get('/public', auth, async (req, res) => {
   const io = req.app.get('io');
-  const q = req.query.q || '';
-  const rooms = await Room.find({
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 50;
+  const sort = req.query.sort || 'newest';          // newest | oldest | most | least
+  const onlyEmpty = req.query.onlyEmpty === '1';  // только пустые
+
+  const filter = {
     isPublic: true,
-    owner: { $ne: req.user.id }, // свои же публичные комнаты и так видны в "Моих комнатах"
-    name: { $regex: q, $options: 'i' },
-  }).sort({ createdAt: -1 }).limit(100);
-  res.json(rooms.map((r) => withLiveStatus(r, io)));
+    owner: { $ne: req.user.id },
+  };
+
+  if (onlyEmpty) {
+    filter.viewerCount = 0;
+  }
+
+  let sortOption = { createdAt: -1 };
+  if (sort === 'oldest') sortOption = { createdAt: 1 };
+  if (sort === 'most')   sortOption = { viewerCount: -1, createdAt: -1 };
+  if (sort === 'least')  sortOption = { viewerCount: 1, createdAt: -1 };
+
+  const total = await Room.countDocuments(filter);
+  const rooms = await Room.find(filter)
+    .sort(sortOption)
+    .skip((page - 1) * limit)
+    .limit(limit);
+
+  // подстраховка: если вдруг кэш устарел — берём актуальный из сокетов
+  const result = rooms.map((r) => {
+    const live = io.sockets.adapter.rooms.get(r.code)?.size;
+    return {
+      ...r.toObject(),
+      viewerCount: live !== undefined ? live : r.viewerCount || 0,
+    };
+  });
+
+  res.json({
+    rooms: result,
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit) || 1,
+  });
 });
 
 router.get('/mine', auth, async (req, res) => {
@@ -68,6 +111,13 @@ router.delete('/:code', auth, async (req, res) => {
 
   const io = req.app.get('io');
   io.to(room.code).emit('room:deleted');
+
+  // обновляем списки на главной
+  if (room.isPublic) {
+    io.to('lobby').emit('rooms:public-updated');
+  }
+  io.to(`user:${req.user.id}`).emit('rooms:mine-updated');
+
   await ChatMessage.deleteMany({ room: room._id });
   await room.deleteOne();
 

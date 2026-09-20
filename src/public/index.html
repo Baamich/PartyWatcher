@@ -134,7 +134,26 @@
         <div id="roomList"></div>
 
         <h2>Публичные комнаты</h2>
-        <div id="publicRoomList"></div>
+
+      <div class="public-controls">
+        <div class="public-filters">
+          <select id="publicSort" onchange="onPublicFilterChange()">
+            <option value="newest">Новые</option>
+            <option value="oldest">Старые</option>
+            <option value="most">Больше людей</option>
+            <option value="least">Меньше людей</option>
+          </select>
+
+          <label class="filter-check">
+            <input type="checkbox" id="onlyEmpty" onchange="onPublicFilterChange()" />
+            Только пустые
+          </label>
+        </div>
+      </div>
+
+      <div id="publicRoomList"></div>
+
+      <div id="publicPagination" class="pagination hidden"></div>
       </div>
     </div>
   </div><!-- /appBox -->
@@ -164,6 +183,7 @@
     </div>
   </div>
   
+  <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/index.js"></script>
 </body>

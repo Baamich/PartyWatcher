@@ -7,7 +7,13 @@ const SupportTicket = require('../models/SupportTicket');
 
 async function updateRoomActivity(io, code) {
   const size = io.sockets.adapter.rooms.get(code)?.size || 0;
-  await Room.findOneAndUpdate({ code }, { emptySince: size === 0 ? new Date() : null });
+  await Room.findOneAndUpdate(
+    { code },
+    {
+      emptySince: size === 0 ? new Date() : null,
+      viewerCount: size,
+    }
+  );
 }
 
 function getParticipants(io, code) {
@@ -54,6 +60,19 @@ function registerRoomSocket(io) {
         })
         .catch(() => {});
     }
+
+    // все, кто на главной странице, сидят в lobby
+    socket.on('lobby:join', () => {
+      socket.join('lobby');
+      // дополнительно — личная комната пользователя (для "Мои комнаты")
+      if (socket.user?.id) {
+        socket.join(`user:${socket.user.id}`);
+      }
+    });
+
+    socket.on('lobby:leave', () => {
+      socket.leave('lobby');
+    });
 
     socket.on('room:join', async ({ code }) => {
       const room = await Room.findOne({ code });

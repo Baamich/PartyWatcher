@@ -18,6 +18,7 @@ async function checkAuth() {
 
     await loadMyRooms();
     await loadPublicRooms();
+    initLobbySocket();
     startAutoRefresh();
   } catch (err) {
     console.warn('[checkAuth] не авторизован:', err?.message || err);
@@ -418,36 +419,193 @@ function renderRoomCard(room, { showDelete }) {
 }
 
 async function loadMyRooms() {
-  const q = document.getElementById('searchInput')?.value || '';
-  const rooms = await api('/rooms/search?q=' + encodeURIComponent(q));
-  const list = document.getElementById('roomList');
-  list.innerHTML = '';
-  rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: true })));
+  const input = document.getElementById('searchInput');
+  const q = input?.value?.trim() || '';
+
+  try {
+    const rooms = await api('/rooms/search?q=' + encodeURIComponent(q));
+    const list = document.getElementById('roomList');
+    if (!list) return;
+
+    list.innerHTML = '';
+    rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: true })));
+  } catch (err) {
+    console.warn('[loadMyRooms]', err.message);
+  }
+}
+
+// ===== Публичные комнаты: состояние =====
+let publicState = {
+  page: 1,
+  sort: 'newest',
+  onlyEmpty: false,
+  totalPages: 1,
+};
+
+function onPublicFilterChange() {
+  publicState.page = 1;
+  publicState.sort = document.getElementById('publicSort')?.value || 'newest';
+  publicState.onlyEmpty = document.getElementById('onlyEmpty')?.checked || false;
+  loadPublicRooms();
 }
 
 async function loadPublicRooms() {
-  const rooms = await api('/rooms/public');
   const list = document.getElementById('publicRoomList');
-  list.innerHTML = '';
+  const paginationEl = document.getElementById('publicPagination');
+  if (!list) return;
 
-  if (!rooms.length) {
-    list.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Публичных комнат пока нет</p>';
+  const params = new URLSearchParams({
+    page: publicState.page,
+    sort: publicState.sort,
+    onlyEmpty: publicState.onlyEmpty ? '1' : '0',
+  });
+
+  try {
+    const data = await api('/rooms/public?' + params.toString());
+    const rooms = data.rooms || [];
+    publicState.totalPages = data.totalPages || 1;
+
+    list.innerHTML = '';
+
+    if (!rooms.length) {
+      list.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Публичных комнат пока нет</p>';
+      if (paginationEl) paginationEl.classList.add('hidden');
+      return;
+    }
+
+    rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: false })));
+    renderPagination();
+  } catch (err) {
+    console.warn('[loadPublicRooms]', err.message);
+  }
+}
+
+function renderPagination() {
+  const el = document.getElementById('publicPagination');
+  if (!el) return;
+
+  const { page, totalPages } = publicState;
+
+  if (totalPages <= 1) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
     return;
   }
-  rooms.forEach((room) => list.appendChild(renderRoomCard(room, { showDelete: false })));
+
+  el.classList.remove('hidden');
+  el.innerHTML = '';
+
+  // стрелка влево
+  const prev = document.createElement('button');
+  prev.textContent = '‹';
+  prev.disabled = page <= 1;
+  prev.onclick = () => goToPage(page - 1);
+  el.appendChild(prev);
+
+  // страницы
+  const pages = buildPageNumbers(page, totalPages);
+  pages.forEach((p) => {
+    if (p === '...') {
+      const span = document.createElement('span');
+      span.className = 'page-ellipsis';
+      span.textContent = '…';
+      el.appendChild(span);
+    } else {
+      const btn = document.createElement('button');
+      btn.textContent = p;
+      if (p === page) btn.classList.add('active');
+      btn.onclick = () => goToPage(p);
+      el.appendChild(btn);
+    }
+  });
+
+  // стрелка вправо
+  const next = document.createElement('button');
+  next.textContent = '›';
+  next.disabled = page >= totalPages;
+  next.onclick = () => goToPage(page + 1);
+  el.appendChild(next);
 }
 
+function buildPageNumbers(current, total) {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const pages = [];
+  pages.push(1);
+
+  if (current > 3) pages.push('...');
+
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+
+  if (current < total - 2) pages.push('...');
+
+  pages.push(total);
+  return pages;
+}
+
+function goToPage(page) {
+  if (page < 1 || page > publicState.totalPages) return;
+  publicState.page = page;
+  loadPublicRooms();
+  // плавно вверх к списку
+  document.getElementById('publicRoomList')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+let lobbySocket = null;
 let refreshTimer = null;
+
+function initLobbySocket() {
+  if (lobbySocket) return;
+
+  // socket.io должен быть уже подключён на странице (как в room.html)
+  lobbySocket = io();
+
+  lobbySocket.on('connect', () => {
+    lobbySocket.emit('lobby:join');
+  });
+
+ lobbySocket.on('rooms:public-updated', () => {
+  if (publicState.page === 1 && publicState.sort === 'newest' && !publicState.onlyEmpty) {
+    loadPublicRooms();
+  }
+});
+
+  // мгновенное обновление "Мои комнаты"
+  lobbySocket.on('rooms:mine-updated', () => {
+    loadMyRooms();
+  });
+}
+
 function startAutoRefresh() {
   if (refreshTimer) return;
-  refreshTimer = setInterval(() => {
+
+  // лёгкий фоновый поллинг только для счётчиков зрителей и таймеров удаления
+  const tick = () => {
+    if (document.visibilityState !== 'visible') return;
     loadMyRooms();
     loadPublicRooms();
-  }, 5000);
+  };
+
+  refreshTimer = setInterval(tick, 40000); // раз в 40 секунд достаточно
 }
+
 function stopAutoRefresh() {
-  clearInterval(refreshTimer);
-  refreshTimer = null;
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  if (lobbySocket) {
+    lobbySocket.emit('lobby:leave');
+    lobbySocket.disconnect();
+    lobbySocket = null;
+  }
 }
 
 

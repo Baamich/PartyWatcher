@@ -28,6 +28,7 @@ const roomSchema = new mongoose.Schema(
       updatedAt: { type: Date, default: Date.now },
     },
     emptySince: { type: Date, default: null },
+    viewerCount: { type: Number, default: 0 },
     bannedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     createdAt: { type: Date, default: Date.now },
   },

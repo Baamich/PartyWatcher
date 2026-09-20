@@ -506,3 +506,96 @@ button {
   font-size: 13px;
   margin-bottom: 10px;
 }
+
+/* ===== Публичные комнаты: фильтры + пагинация ===== */
+
+.public-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0 4px;
+}
+
+.public-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.public-filters select {
+  width: auto;
+  min-width: 160px;
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Пагинация */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 20px 0 8px;
+  flex-wrap: wrap;
+}
+
+.pagination button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text);
+}
+
+.pagination button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pagination .page-ellipsis {
+  width: 28px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  user-select: none;
+}
