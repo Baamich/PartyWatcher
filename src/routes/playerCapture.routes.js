@@ -69,9 +69,13 @@ function detectSite(url) {
 
 function pickPlayerOrigin(page) {
   const frames = page.frames().map((f) => f.url()).filter(Boolean);
-  const hit = frames.find((u) =>
-    /stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc|cinemap\.cc/i.test(u)
-  );
+  // lordfilm «Плеер 2» = cdn.lordfilm*.com — приоритетнее ortified,
+  // иначе referer уходит на api.ortified.ws и VK отдаёт 403
+  const hit =
+    frames.find((u) => /cdn\.lordfilm/i.test(u)) ||
+    frames.find((u) =>
+      /stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc|cinemap\.cc/i.test(u)
+    );
   if (!hit) return null;
   try {
     const u = new URL(hit);
@@ -1547,8 +1551,9 @@ router.post('/extract', auth, async (req, res) => {
         // 1) из фрейма stravers / balabolka
         try {
           const playerFrame =
-            page.frames().find((f) => /stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc/i.test(f.url())) ||
-            null;
+            page.frames().find((f) =>
+              /cdn\.lordfilm|stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc/i.test(f.url())
+            ) || null;
           const ctx = playerFrame || page;
 
           const playlistText = await ctx.evaluate(async (u) => {

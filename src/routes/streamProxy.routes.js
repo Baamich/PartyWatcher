@@ -102,6 +102,9 @@ router.get('/relay', auth, async (req, res) => {
     const refererCandidates = [
       queryCandidate,
       primary,
+      { referer: 'https://cdn.lordfilm64.com/', origin: 'https://cdn.lordfilm64.com' },
+      { referer: 'https://mg.lordfilm.md/', origin: 'https://mg.lordfilm.md' },
+      { referer: 'https://api.ortified.ws/', origin: 'https://api.ortified.ws' },
       { referer: 'https://kinogomy.stloadi.live/', origin: 'https://kinogomy.stloadi.live' },
       { referer: 'https://kinogomy.stravers.live/', origin: 'https://kinogomy.stravers.live' },
       { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' },
