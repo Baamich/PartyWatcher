@@ -61,6 +61,9 @@ function detectSite(url) {
   // с остальными доменами kinogo
   if (lower.includes('kinogo2026')) return 'kinogo2026';
   if (lower.includes('kinogo')) return 'kinogo';
+  // lordfilm.fi / top.lordfilm.fi — отдельный движок (balancerplayer + gate)
+  if (lower.includes('lordfilm.fi') || lower.includes('top.lordfilm')) return 'lordfilm_fi';
+  // mg.lordfilm.md и прочие зеркала со старой вёрсткой tabs-sel
   if (lower.includes('lordfilm') || lower.includes('lordserial')) return 'lordfilm';
   if (lower.includes('yandex.ru/video')) return 'yandex';
   if (lower.includes('my.mail.ru')) return 'mailru';
@@ -314,7 +317,7 @@ router.post('/extract', auth, async (req, res) => {
     const isKinogoFamily = siteName === 'kinogo' || siteName === 'kinogo2026';
     // lordfilm: s.myangular.life / player scripts режутся EasyList — без них
     // iframe ortified не инициализируется (см. логи mg.lordfilm.md)
-    const isLordfilmFamily = siteName === 'lordfilm';
+    const isLordfilmFamily = siteName === 'lordfilm' || siteName === 'lordfilm_fi';
     const disableAdblock = isKinogoFamily || isLordfilmFamily;
 
     if (blocker && !disableAdblock) {
@@ -831,6 +834,107 @@ router.post('/extract', auth, async (req, res) => {
         console.log('[player-capture] найдены плееры:', playersFound.map((p) => p.label));
       } catch (e) {
         console.warn('[player-capture] не удалось прочитать вкладки плееров:', e.message);
+      }
+    }
+
+    // ============================================================
+    // lordfilm.fi: клик по gate → AJAX get_player_url → src у iframe
+    // ============================================================
+    if (siteName === 'lordfilm_fi') {
+      try {
+        // слоты: iframe_url (основной), embed (запасной)
+        const slots = await page.$$eval('.lf-player-gate', (gates) =>
+          gates.map((g) => ({
+            slot: g.getAttribute('data-player-slot') || '',
+            postId: g.getAttribute('data-post-id') || '',
+            label:
+              (g.closest('.tabs-block, .page__player')
+                ?.querySelector(`.lf-player-picker__option[data-player-slot="${g.getAttribute('data-player-slot')}"] b`)
+                ?.textContent || g.querySelector('.lf-player-on-demand')?.getAttribute('title') || g.getAttribute('data-player-slot') || ''
+              ).trim(),
+          }))
+        );
+        console.log('[player-capture] (lordfilm_fi) slots:', JSON.stringify(slots));
+
+        playersFound = slots
+          .filter((s) => s.slot && s.slot !== 'trailer')
+          .map((s) => ({
+            label: s.label || s.slot,
+            src: '',
+            tab: s.slot,
+          }));
+
+        // какой слот грузить: body.player → label/slot, иначе первый
+        let slotToLoad = slots.find((s) => s.slot === 'iframe_url') || slots[0];
+        if (requestedPlayer) {
+          const byLabel = slots.find(
+            (s) =>
+              (s.label || '').toLowerCase() === requestedPlayer.toLowerCase() ||
+              s.slot === requestedPlayer
+          );
+          if (byLabel) slotToLoad = byLabel;
+        }
+
+        if (slotToLoad?.postId && slotToLoad?.slot) {
+          console.log('[player-capture] (lordfilm_fi) грузим slot:', slotToLoad.slot, slotToLoad.label);
+
+          // 1) клик по кнопке gate (как пользователь)
+          await page.evaluate((slot) => {
+            const gate = document.querySelector(
+              `.lf-player-gate[data-player-slot="${slot}"]`
+            );
+            const btn = gate?.querySelector('.lf-player-gate__button');
+            if (btn) btn.click();
+          }, slotToLoad.slot);
+
+          // 2) ждём src у iframe до 15с
+          const maxWait = 15000;
+          const step = 400;
+          let waited = 0;
+          let iframeSrc = null;
+          while (waited < maxWait) {
+            await new Promise((r) => setTimeout(r, step));
+            waited += step;
+            iframeSrc = await page.evaluate((slot) => {
+              const gate = document.querySelector(
+                `.lf-player-gate[data-player-slot="${slot}"]`
+              );
+              const iframe = gate?.querySelector('iframe.lf-player-on-demand, iframe');
+              return iframe?.getAttribute('src') || iframe?.src || null;
+            }, slotToLoad.slot);
+            if (iframeSrc && iframeSrc.startsWith('http')) break;
+            // иногда src кладут через replace iframe — смотрим все frames
+            const anyPlayer = page.frames().find((f) => {
+              const u = f.url() || '';
+              return (
+                u.includes('http') &&
+                !u.includes('lordfilm.fi') &&
+                u !== 'about:blank'
+              );
+            });
+            if (anyPlayer) {
+              iframeSrc = anyPlayer.url();
+              break;
+            }
+          }
+          console.log(
+            '[player-capture] (lordfilm_fi) iframe src за',
+            waited,
+            'мс:',
+            iframeSrc ? iframeSrc.slice(0, 120) : null
+          );
+
+          if (iframeSrc && iframeSrc.startsWith('http')) {
+            foundIframes.push(iframeSrc);
+          }
+
+          // ещё 2с на сеть (m3u8 / bnsi / embed API)
+          await new Promise((r) => setTimeout(r, 2500));
+        } else {
+          console.warn('[player-capture] (lordfilm_fi) gate/slot не найден');
+        }
+      } catch (e) {
+        console.error('[player-capture] (lordfilm_fi) ошибка gate:', e.message);
       }
     }
 

@@ -88,6 +88,16 @@ module.exports = {
     dropdownTimeoutMs: 5000,
   },
 
+// lordfilm.fi — on-demand gate, iframe появляется только после клика
+  lordfilm_fi: {
+    mode: null, // серии/сезоны пока не трогаем, сначала поднять iframe
+    // после loadPlayer iframe обычно с чужого embed-CDN
+    playerFrameMatch: (frameUrl) =>
+      /femd\.ws|delivembed|buildplayer|embedstorage|ortified|cdn\.lordfilm|api\./i.test(
+        frameUrl || ''
+      ),
+  },
+
   yandex: {
     mode: null,
     frameMatch: (frameUrl) => frameUrl.includes('my.mail.ru/video/embed'),
