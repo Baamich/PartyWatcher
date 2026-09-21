@@ -345,7 +345,8 @@ router.post('/extract', auth, async (req, res) => {
     // потоки ТОЛЬКО из get_cdn_series — им доверяем больше, чем случайным .m3u8 из сети
     const cdnSeriesStreams = [];
 
-    let playerApiData = null; // ← сюда попадёт JSON от balabolka.stravers.live/bnsi/movies/<id>
+    let playerApiData = null; // JSON от .../bnsi/movies/<id>
+    let playerApiOrigin = null; // origin того CDN, откуда пришёл JSON (для referer)
     let interceptedPlaylist = null;
     
     page.on('response', (response) => {
@@ -382,6 +383,10 @@ router.post('/extract', auth, async (req, res) => {
         if (json && json.hlsSource) {
           console.log('[player-capture] найден JSON плеера balabolka:', reqUrl);
           playerApiData = json;
+          try {
+            const u = new URL(reqUrl);
+            playerApiOrigin = `${u.protocol}//${u.hostname}/`;
+          } catch (_) {}
         }
       } catch (e) {}
     }
@@ -849,12 +854,22 @@ router.post('/extract', auth, async (req, res) => {
           '[player-capture] (lordfilm) вкладки плееров:',
           playersFound.map((p) => `${p.label}${p.src ? ' → ' + p.src.slice(0, 60) : ''}`)
         );
-      } catch (e) {
-        console.warn('[player-capture] (lordfilm) не удалось прочитать .tabs-sel:', e.message);
-      }
-    }    
+    } catch (e) {
+      console.warn('[player-capture] (lordfilm) не удалось прочитать .tabs-sel:', e.message);
+    }
+    }
+
     const requestedPlayer = (req.body.player || '').trim();
     let playerToUse = requestedPlayer;
+
+    // lordfilm: Full HD без src — не плеер; берём первую вкладку с реальным iframe src
+    if (siteName === 'lordfilm' && !playerToUse) {
+      const withSrc = playersFound.find((p) => p.src);
+      if (withSrc) {
+        playerToUse = withSrc.label;
+        console.log('[player-capture] (lordfilm) дефолтный плеер со src:', playerToUse);
+      }
+    }
 
     // без авто-переключения: только если фронт явно прислал player
     if (playerToUse && playersFound.length) {
@@ -1550,15 +1565,20 @@ router.post('/extract', auth, async (req, res) => {
 
         // 1) из фрейма stravers / balabolka
         try {
-          const playerFrame =
+        const playerFrame =
+            page.frames().find((f) => /cdn\.lordfilm/i.test(f.url())) ||
             page.frames().find((f) =>
-              /cdn\.lordfilm|stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc/i.test(f.url())
-            ) || null;
+              /stloadi\.live|stravers\.live|balabolka|ortified|cinemar\.cc/i.test(f.url())
+            ) ||
+            null;
           const ctx = playerFrame || page;
 
           const playlistText = await ctx.evaluate(async (u) => {
             try {
-              const r = await fetch(u, { credentials: 'omit' });
+              const r = await fetch(u, {
+                credentials: 'include',
+                headers: { Accept: '*/*' },
+              });
               if (!r.ok) return null;
               return await r.text();
             } catch (_) {
@@ -1734,13 +1754,29 @@ router.post('/extract', auth, async (req, res) => {
 
     const uniqueIframes = [...new Set(foundIframes)];
 
-    const playerOrigin = pickPlayerOrigin(page);
+    // для lordfilm/VK: referer = origin JSON (/bnsi/movies/), не ortified
+    let playerOrigin = playerApiOrigin || pickPlayerOrigin(page);
+    if (
+      siteName === 'lordfilm' &&
+      !playerApiOrigin &&
+      uniqueStreams.some((s) => /vkvideo\.cloud|vkuservideo/i.test(s.url || ''))
+    ) {
+      const cdnFrame = page.frames().find((f) => /cdn\.lordfilm/i.test(f.url() || ''));
+      if (cdnFrame) {
+        try {
+          const u = new URL(cdnFrame.url());
+          playerOrigin = `${u.protocol}//${u.hostname}/`;
+        } catch (_) {}
+      }
+      if (!playerOrigin) playerOrigin = 'https://cdn.lordfilm64.com/';
+    }
+
     if (playerOrigin && uniqueStreams.length > 0) {
       uniqueStreams = uniqueStreams.map((s) => ({
         ...s,
-        referer: s.referer || playerOrigin,
+        referer: playerApiOrigin || playerOrigin || s.referer,
       }));
-      console.log('[player-capture] playerOrigin для relay:', playerOrigin);
+      console.log('[player-capture] playerOrigin для relay:', playerOrigin, 'apiOrigin:', playerApiOrigin);
     }
 
     const meta = {
@@ -1751,7 +1787,10 @@ router.post('/extract', auth, async (req, res) => {
       totalEpisodes,
       voices: [],
       players: playersFound.map((p) => p.label),
-      currentPlayer: playerToUse || requestedPlayer || (playersFound[0]?.label || null),
+      currentPlayer:
+        playerToUse ||
+        requestedPlayer ||
+        (playersFound.find((p) => p.src)?.label || playersFound[0]?.label || null),
     };
 
     const success = uniqueStreams.length > 0 || uniqueIframes.length > 0;
