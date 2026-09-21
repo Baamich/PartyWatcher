@@ -108,6 +108,8 @@ router.get('/relay', auth, async (req, res) => {
       { referer: 'https://kinogomy.stloadi.live/', origin: 'https://kinogomy.stloadi.live' },
       { referer: 'https://kinogomy.stravers.live/', origin: 'https://kinogomy.stravers.live' },
       { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' },
+      { referer: 'https://marie.as.stravers.live/', origin: 'https://marie.as.stravers.live' },
+      { referer: 'https://lordfilm.fi/', origin: 'https://lordfilm.fi' },
       { referer: 'https://cinemar.cc/', origin: 'https://cinemar.cc' },
       { referer: 'https://kinogo2026.com/', origin: 'https://kinogo2026.com' },
       { referer: 'https://vk.com/', origin: 'https://vk.com' },

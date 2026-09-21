@@ -837,21 +837,31 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
+    /// player / episode нужны УЖЕ здесь (lordfilm_fi gate + переключение вкладок)
+    const requestedPlayer = (req.body.player || '').trim();
+    let playerToUse = requestedPlayer;
+
     // ============================================================
     // lordfilm.fi: клик по gate → AJAX get_player_url → src у iframe
+    // (marie.as.stravers.live → master.m3u8, как в DevTools)
     // ============================================================
     if (siteName === 'lordfilm_fi') {
       try {
-        // слоты: iframe_url (основной), embed (запасной)
         const slots = await page.$$eval('.lf-player-gate', (gates) =>
           gates.map((g) => ({
             slot: g.getAttribute('data-player-slot') || '',
             postId: g.getAttribute('data-post-id') || '',
-            label:
-              (g.closest('.tabs-block, .page__player')
-                ?.querySelector(`.lf-player-picker__option[data-player-slot="${g.getAttribute('data-player-slot')}"] b`)
-                ?.textContent || g.querySelector('.lf-player-on-demand')?.getAttribute('title') || g.getAttribute('data-player-slot') || ''
-              ).trim(),
+            label: (
+              g
+                .closest('.tabs-block, .page__player')
+                ?.querySelector(
+                  `.lf-player-picker__option[data-player-slot="${g.getAttribute('data-player-slot')}"] b`
+                )
+                ?.textContent ||
+              g.querySelector('.lf-player-on-demand')?.getAttribute('title') ||
+              g.getAttribute('data-player-slot') ||
+              ''
+            ).trim(),
           }))
         );
         console.log('[player-capture] (lordfilm_fi) slots:', JSON.stringify(slots));
@@ -864,7 +874,7 @@ router.post('/extract', auth, async (req, res) => {
             tab: s.slot,
           }));
 
-        // какой слот грузить: body.player → label/slot, иначе первый
+        // дефолт: iframe_url («Плеер»), не embed
         let slotToLoad = slots.find((s) => s.slot === 'iframe_url') || slots[0];
         if (requestedPlayer) {
           const byLabel = slots.find(
@@ -876,18 +886,25 @@ router.post('/extract', auth, async (req, res) => {
         }
 
         if (slotToLoad?.postId && slotToLoad?.slot) {
-          console.log('[player-capture] (lordfilm_fi) грузим slot:', slotToLoad.slot, slotToLoad.label);
+          console.log(
+            '[player-capture] (lordfilm_fi) грузим slot:',
+            slotToLoad.slot,
+            slotToLoad.label
+          );
 
-          // 1) клик по кнопке gate (как пользователь)
           await page.evaluate((slot) => {
             const gate = document.querySelector(
               `.lf-player-gate[data-player-slot="${slot}"]`
             );
             const btn = gate?.querySelector('.lf-player-gate__button');
-            if (btn) btn.click();
+            if (btn) {
+              btn.disabled = false;
+              btn.hidden = false;
+              btn.click();
+            }
           }, slotToLoad.slot);
 
-          // 2) ждём src у iframe до 15с
+          // ждём src iframe / фрейм stravers до 15с
           const maxWait = 15000;
           const step = 400;
           let waited = 0;
@@ -895,21 +912,24 @@ router.post('/extract', auth, async (req, res) => {
           while (waited < maxWait) {
             await new Promise((r) => setTimeout(r, step));
             waited += step;
+
             iframeSrc = await page.evaluate((slot) => {
               const gate = document.querySelector(
                 `.lf-player-gate[data-player-slot="${slot}"]`
               );
-              const iframe = gate?.querySelector('iframe.lf-player-on-demand, iframe');
-              return iframe?.getAttribute('src') || iframe?.src || null;
+              const iframe = gate?.querySelector(
+                'iframe.lf-player-on-demand, iframe'
+              );
+              const src = iframe?.getAttribute('src') || iframe?.src || '';
+              return src && src.startsWith('http') ? src : null;
             }, slotToLoad.slot);
-            if (iframeSrc && iframeSrc.startsWith('http')) break;
-            // иногда src кладут через replace iframe — смотрим все frames
+
+            if (iframeSrc) break;
+
             const anyPlayer = page.frames().find((f) => {
               const u = f.url() || '';
               return (
-                u.includes('http') &&
-                !u.includes('lordfilm.fi') &&
-                u !== 'about:blank'
+                /stravers\.live|stloadi\.live|balabolka|ortified|femd\.ws/i.test(u)
               );
             });
             if (anyPlayer) {
@@ -917,19 +937,38 @@ router.post('/extract', auth, async (req, res) => {
               break;
             }
           }
+
           console.log(
             '[player-capture] (lordfilm_fi) iframe src за',
             waited,
             'мс:',
-            iframeSrc ? iframeSrc.slice(0, 120) : null
+            iframeSrc ? iframeSrc.slice(0, 140) : null
           );
 
           if (iframeSrc && iframeSrc.startsWith('http')) {
             foundIframes.push(iframeSrc);
           }
 
-          // ещё 2с на сеть (m3u8 / bnsi / embed API)
-          await new Promise((r) => setTimeout(r, 2500));
+          // сеть: master.m3u8 / bnsi (как в твоём Network)
+          const netWait = 8000;
+          const netStep = 400;
+          let nt = 0;
+          while (
+            nt < netWait &&
+            foundStreams.length === 0 &&
+            !playerApiData
+          ) {
+            await new Promise((r) => setTimeout(r, netStep));
+            nt += netStep;
+          }
+          console.log(
+            '[player-capture] (lordfilm_fi) после gate: streams=',
+            foundStreams.length,
+            'playerApiData=',
+            !!playerApiData,
+            'waited=',
+            nt
+          );
         } else {
           console.warn('[player-capture] (lordfilm_fi) gate/slot не найден');
         }
@@ -994,9 +1033,6 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
-    const requestedPlayer = (req.body.player || '').trim();
-    let playerToUse = requestedPlayer;
-
     // lordfilm: Full HD без src — не плеер; берём первую вкладку с реальным iframe src
     if (siteName === 'lordfilm' && !playerToUse) {
       const withSrc = playersFound.find((p) => p.src);
@@ -1006,8 +1042,8 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
-    // без авто-переключения: только если фронт явно прислал player
-    if (playerToUse && playersFound.length) {
+    // для lordfilm_fi плеер уже поднят через gate — вкладки не трогаем
+    if (siteName !== 'lordfilm_fi' && playerToUse && playersFound.length) {
       const target = playersFound.find(
         (p) => p.label.toLowerCase() === playerToUse.toLowerCase()
       );
@@ -1183,7 +1219,11 @@ router.post('/extract', auth, async (req, res) => {
       } else {
         console.warn('[player-capture] не найден контекст плеера (markerSelector не сработал)');
       }
-    }else if (requestedEpisode && (adapter?.playerFrameMatch || siteName === 'rezka')) {
+    } else if (
+      requestedEpisode &&
+      siteName !== 'lordfilm_fi' &&
+      (adapter?.playerFrameMatch || siteName === 'rezka')
+    ) {
       if (alreadyHaveCdn) {
         console.log('[player-capture] CDN уже есть из AJAX, skip клики/переключение серии');
       } else {
@@ -1436,7 +1476,10 @@ router.post('/extract', auth, async (req, res) => {
       // пропускаем кликанье по общим классам и жмём точечно по контейнеру плеера.
       const skipGenericClick = !!adapter?.playerFrameMatch;
 
-            if (skipGenericClick) {
+      if (siteName === 'lordfilm_fi') {
+        // gate уже кликнут выше — только ждём сеть
+        console.log('[player-capture] (lordfilm_fi) skip generic click, gate already done');
+      } else if (skipGenericClick) {
         await clickPlayerAndWaitFrame(page, adapter, 'фильм');
       } else {
         // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
