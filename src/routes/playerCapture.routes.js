@@ -308,7 +308,12 @@ router.post('/extract', auth, async (req, res) => {
 
     const blocker = await getAdblocker();
     const isKinogoFamily = siteName === 'kinogo' || siteName === 'kinogo2026';
-    if (blocker && !isKinogoFamily) {
+    // lordfilm: s.myangular.life / player scripts режутся EasyList — без них
+    // iframe ortified не инициализируется (см. логи mg.lordfilm.md)
+    const isLordfilmFamily = siteName === 'lordfilm';
+    const disableAdblock = isKinogoFamily || isLordfilmFamily;
+
+    if (blocker && !disableAdblock) {
       await blocker.enableBlockingInPage(page);
       console.log('[player-capture] adblocker подключен к странице');
 
@@ -318,8 +323,10 @@ router.post('/extract', auth, async (req, res) => {
       blocker.on('request-redirected', (request) => {
         console.log('[adblock] редирект запроса (например анти-трекинг):', request.url);
       });
-    } else if (isKinogoFamily) {
-      console.log(`[player-capture] ${siteName} — adblocker выключен (иначе режет s.myangular.life и плеер не поднимается)`);
+    } else if (disableAdblock) {
+      console.log(
+        `[player-capture] ${siteName} — adblocker выключен (иначе режет s.myangular.life / player CDN)`
+      );
     } else {
       console.warn('[player-capture] adblocker недоступен — работаем без него');
     }
@@ -818,6 +825,30 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
+    // lordfilm: вкладки — <div class="tabs-sel"> <span>Плеер 2</span> ...
+    // onclick вставляет iframe в #player-N; data-src нет.
+    if (siteName === 'lordfilm' && playersFound.length === 0) {
+      try {
+        playersFound = await page.$$eval('.tabs-sel span, .tabs-block span', (spans) =>
+          spans
+            .map((sp) => {
+              const label = (sp.textContent || '').trim();
+              const onclick = sp.getAttribute('onclick') || '';
+              // src=https://... из onclick="$('#player-2').html('... src=URL ...')"
+              const m = onclick.match(/src\s*=\s*(https?:\/\/[^\s"'<>]+)/i);
+              const src = m ? m[1].replace(/&amp;/g, '&') : '';
+              return { label, src, tab: '' };
+            })
+            .filter((p) => p.label && !/трейлер|trailer/i.test(p.label))
+        );
+        console.log(
+          '[player-capture] (lordfilm) вкладки плееров:',
+          playersFound.map((p) => `${p.label}${p.src ? ' → ' + p.src.slice(0, 60) : ''}`)
+        );
+      } catch (e) {
+        console.warn('[player-capture] (lordfilm) не удалось прочитать .tabs-sel:', e.message);
+      }
+    }    
     const requestedPlayer = (req.body.player || '').trim();
     let playerToUse = requestedPlayer;
 
@@ -834,7 +865,18 @@ router.post('/extract', auth, async (req, res) => {
           await page.evaluate((label) => {
             const lis = Array.from(document.querySelectorAll('ul.tabs li[data-src]'));
             const li = lis.find((el) => (el.textContent || '').trim() === label);
-            if (li) li.click();
+            if (li) {
+              li.click();
+              return;
+            }
+            // lordfilm: клик по span с текстом "Плеер 2"
+            const spans = Array.from(
+              document.querySelectorAll('.tabs-sel span, .tabs-block span')
+            );
+            const sp = spans.find(
+              (el) => (el.textContent || '').trim().toLowerCase() === label.toLowerCase()
+            );
+            if (sp) sp.click();
           }, target.label);
 
           // ждём JSON / iframe до 12 сек

@@ -63,7 +63,30 @@ module.exports = {
     dropdownTimeoutMs: 4000,
   },
 
-  lordfilm: null,
+  // mg.lordfilm.md / lordserial — плеер ortified + allplay-подобные
+  // дропдауны (data-select="episodeType1"). Adblocker ОБЯЗАТЕЛЬНО выключен
+  // (см. isLordfilmFamily в playerCapture.routes.js): иначе режет
+  // s.myangular.life и плеер/скрипты не поднимаются.
+  // Вкладки плееров — .tabs-sel span (не ul.tabs li[data-src] как на kinogo),
+  // поэтому playerTabsSelector здесь не ставим: фронт при отсутствии streams
+  // сам перебирает, а переключение серии идёт через dropdown в iframe.
+  lordfilm: {
+    mode: 'dropdown',
+    markerSelector:
+      '.allplay, [data-select="episodeType1"], [data-select="seasonType1"], .select__item, .select__drop-item',
+    seasonDropdownTrigger:
+      'div[data-select="seasonType1"] .select__item, [data-select="seasonType1"]',
+    seasonListContainer:
+      'div[data-select="seasonType1"] .select__drop, [data-select="seasonType1"] .select__drop',
+    episodeDropdownTrigger:
+      'div[data-select="episodeType1"] .select__item, [data-select="episodeType1"]',
+    episodeListContainer:
+      'div[data-select="episodeType1"] .select__drop, [data-select="episodeType1"] .select__drop',
+    // iframe плеера: api.ortified.ws / stiven-king (как в логах mg.lordfilm.md)
+    playerFrameMatch: (frameUrl) =>
+      /ortified\.ws|stiven-king\.com|cdn\.lordfilm/i.test(frameUrl || ''),
+    dropdownTimeoutMs: 5000,
+  },
 
   yandex: {
     mode: null,
