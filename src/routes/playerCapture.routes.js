@@ -394,28 +394,52 @@ router.post('/extract', auth, async (req, res) => {
       } catch (e) {}
     }
 
-        // ловим реальный m3u8, который качает сам плеер (не наш goto)
-    // cinemap/cfnd — без .m3u8 в path, но content-type/mpegurl или тело #EXTM3U
+    // VK URL часто БЕЗ .m3u8 и с content-type text/plain|octet-stream —
+    // читаем тело по хосту vkvideo и проверяем #EXTM3U
+    const isVkHost =
+      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs/i.test(reqUrl);
+    const looksPlaylist =
+      contentType.includes('mpegurl') ||
+      contentType.includes('application/vnd.apple') ||
+      reqUrl.includes('.m3u8') ||
+      reqUrl.includes('cinemap.cc') ||
+      reqUrl.includes('cinemar.cc') ||
+      reqUrl.includes('cfnd.') ||
+      isVkHost;
+
     if (
-      (
-        reqUrl.includes('vkvideo.cloud') ||
+      looksPlaylist &&
+      (isVkHost ||
         reqUrl.includes('.m3u8') ||
         reqUrl.includes('cinemap.cc') ||
         reqUrl.includes('cinemar.cc') ||
-        reqUrl.includes('cfnd.')
-      ) &&
-      (contentType.includes('mpegurl') || contentType.includes('application/vnd.apple') || reqUrl.includes('.m3u8') || reqUrl.includes('cinemap.cc') || reqUrl.includes('cfnd.'))
+        reqUrl.includes('cfnd.') ||
+        contentType.includes('mpegurl') ||
+        contentType.includes('application/vnd.apple'))
     ) {
       try {
         const status = response.status();
         if (status >= 200 && status < 400) {
           const text = await response.text();
           if (text && text.includes('#EXTM3U')) {
-            console.log('[player-capture] перехвачен m3u8 из сети плеера:', status, reqUrl.slice(0, 100));
-            foundStreams.push({ type: 'hls', url: reqUrl, quality: 'auto', playlistRaw: text });
+            console.log(
+              '[player-capture] перехвачен m3u8 из сети плеера:',
+              status,
+              reqUrl.slice(0, 100)
+            );
+            foundStreams.push({
+              type: 'hls',
+              url: reqUrl,
+              quality: 'auto',
+              playlistRaw: text,
+            });
           }
-        } else {
-          console.log('[player-capture] m3u8 из сети плеера статус:', status, reqUrl.slice(0, 80));
+        } else if (isVkHost || reqUrl.includes('.m3u8')) {
+          console.log(
+            '[player-capture] m3u8/vk из сети статус:',
+            status,
+            reqUrl.slice(0, 80)
+          );
         }
       } catch (e) {}
     }
@@ -1185,7 +1209,10 @@ router.post('/extract', auth, async (req, res) => {
     // Жмём play в фрейме stravers/stloadi и ждём перехват #EXTM3U.
     if (
       playerApiData?.hlsSource &&
-      (siteName === 'kinogo' || siteName === 'kinogo2026' || siteName === 'lordfilm')
+      (siteName === 'kinogo' ||
+        siteName === 'kinogo2026' ||
+        siteName === 'lordfilm' ||
+        siteName === 'lordfilm_fi')
     ) {
       try {
         const playerFrame =
@@ -1242,8 +1269,51 @@ router.post('/extract', auth, async (req, res) => {
             playerFrame.url().slice(0, 80)
           );
 
+          // принудительно ставим video.src = лучший quality из hlsSource,
+          // чтобы плеер/браузер СХОДИЛ за m3u8 (иначе сеть молчит, playlistRaw пуст)
+          try {
+            const qualities = playerApiData.hlsSource[0]?.quality || {};
+            const qKeys = Object.keys(qualities).sort(
+              (a, b) => Number(b) - Number(a)
+            );
+            const forceUrl = qKeys.length ? qualities[qKeys[0]] : null;
+            if (forceUrl) {
+              const loadRes = await playerFrame
+                .evaluate(async (u) => {
+                  try {
+                    let v = document.querySelector('video');
+                    if (!v) {
+                      v = document.createElement('video');
+                      v.muted = true;
+                      v.playsInline = true;
+                      v.style.cssText = 'width:1px;height:1px;opacity:0';
+                      document.body.appendChild(v);
+                    }
+                    v.muted = true;
+                    v.src = u;
+                    try {
+                      await v.play();
+                    } catch (_) {}
+                    return { ok: true, src: (v.currentSrc || v.src || '').slice(0, 80) };
+                  } catch (e) {
+                    return { ok: false, err: String(e && e.message) };
+                  }
+                }, forceUrl)
+                .catch((e) => ({ ok: false, err: e.message }));
+              console.log(
+                '[player-capture] (kinogo/vk) force video.src:',
+                JSON.stringify(loadRes)
+              );
+            }
+          } catch (e) {
+            console.warn(
+              '[player-capture] (kinogo/vk) force src ошибка:',
+              e.message
+            );
+          }
+
           // ждём реальный m3u8 в сети (handleResponse → playlistRaw)
-          const maxWait = 8000;
+          const maxWait = 12000;
           const step = 400;
           let waited = 0;
           while (waited < maxWait) {
@@ -1943,18 +2013,15 @@ router.post('/extract', auth, async (req, res) => {
           // дать плееру самому сходить за m3u8 (перехват в handleResponse → playlistRaw)
           await new Promise((r) => setTimeout(r, 3000));
 
+          // A) fetch из фрейма (часто CORS Failed to fetch)
           const playlistText = await ctx.evaluate(async (u) => {
             try {
               const r = await fetch(u, {
                 credentials: 'include',
                 mode: 'cors',
-                headers: {
-                  Accept: '*/*',
-                },
+                headers: { Accept: '*/*' },
               });
-              if (!r.ok) {
-                return { err: r.status };
-              }
+              if (!r.ok) return { err: r.status };
               const t = await r.text();
               return { text: t };
             } catch (e) {
@@ -1962,7 +2029,11 @@ router.post('/extract', auth, async (req, res) => {
             }
           }, masterUrl);
 
-          if (playlistText?.text && typeof playlistText.text === 'string' && playlistText.text.includes('#EXTM3U')) {
+          if (
+            playlistText?.text &&
+            typeof playlistText.text === 'string' &&
+            playlistText.text.includes('#EXTM3U')
+          ) {
             downloadedPlaylist = playlistText.text;
             console.log(
               '[player-capture] master скачан из фрейма плеера, длина:',
@@ -1972,8 +2043,83 @@ router.post('/extract', auth, async (req, res) => {
             console.warn(
               '[player-capture] фрейм не отдал m3u8 для',
               masterUrl.slice(0, 80),
-              playlistText?.err || (playlistText && typeof playlistText === 'object' ? JSON.stringify(playlistText).slice(0, 80) : '')
+              playlistText?.err ||
+                (playlistText && typeof playlistText === 'object'
+                  ? JSON.stringify(playlistText).slice(0, 80)
+                  : '')
             );
+          }
+
+          // B) CDP: скачать URL тем же браузером без CORS (как навигация)
+          if (!downloadedPlaylist) {
+            try {
+              const cdp = await page.target().createCDPSession();
+              await cdp.send('Network.enable').catch(() => {});
+              const ref =
+                playerApiOrigin ||
+                (playerFrame ? playerFrame.url() : '') ||
+                '';
+              let refOrigin = '';
+              try {
+                refOrigin = ref ? new URL(ref).origin + '/' : '';
+              } catch (_) {}
+
+              const result = await cdp.send('Network.loadNetworkResource', {
+                frameId: playerFrame._id || undefined,
+                url: masterUrl,
+                options: {
+                  disableCache: false,
+                  includeCredentials: true,
+                },
+              }).catch(() => null);
+
+              // fallback: через page.evaluate XHR не сработает из‑за CORS —
+              // пробуем Buffer из уже перехваченных + cookie-aware node fetch ниже
+              if (!result) {
+                const cookies = await page.cookies();
+                const cookieStr = cookies
+                  .map((c) => `${c.name}=${c.value}`)
+                  .join('; ');
+                const headers = {
+                  'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  Accept: '*/*',
+                  Referer: refOrigin || 'https://kinogomy.stravers.live/',
+                  Origin: refOrigin
+                    ? refOrigin.replace(/\/$/, '')
+                    : 'https://kinogomy.stravers.live',
+                };
+                if (cookieStr) headers['Cookie'] = cookieStr;
+
+                const r = await fetch(masterUrl, { headers });
+                if (r.ok) {
+                  const t = await r.text();
+                  if (t && t.includes('#EXTM3U')) {
+                    downloadedPlaylist = t;
+                    console.log(
+                      '[player-capture] master скачан node+cookies, длина:',
+                      t.length
+                    );
+                  } else {
+                    console.warn(
+                      '[player-capture] node+cookies не m3u8, status',
+                      r.status,
+                      t.slice(0, 80)
+                    );
+                  }
+                } else {
+                  console.warn(
+                    '[player-capture] node+cookies status',
+                    r.status
+                  );
+                }
+              }
+            } catch (e) {
+              console.warn(
+                '[player-capture] CDP/cookie download ошибка:',
+                e.message
+              );
+            }
           }
         } catch (e) {
           console.warn('[player-capture] ошибка fetch из фрейма:', e.message);

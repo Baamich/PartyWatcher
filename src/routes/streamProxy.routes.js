@@ -175,11 +175,11 @@ const cacheKey = targetUrl;
     }
 
     const FAMILY_FALLBACKS = [
-      // balabolka / stravers / stloadi — общий embed-стек
       'kinogomy.stravers.live',
       'kinogomy.stloadi.live',
       'balabolka.stravers.live',
       'marie.as.stravers.live',
+      'marie-as.stloadi.live',
       // kinogo page
       'kinogomy.net',
       // lordfilm CDN / page (на случай если query пустой)
