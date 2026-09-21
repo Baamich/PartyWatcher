@@ -885,6 +885,52 @@ router.post('/extract', auth, async (req, res) => {
           if (byLabel) slotToLoad = byLabel;
         }
 
+        // --- сериал: клик по строке расписания (data-season / data-episode) ---
+        const reqEp = requestedEpisodeForCache || Number(req.body.episode) || null;
+        const reqSeason = Number(req.body.season) || 1;
+
+        if (reqEp && reqEp > 0) {
+          const clickedEp = await page.evaluate(
+            ({ season, episode }) => {
+              // раскрыть сезон, если свёрнут
+              const block = document.getElementById('dateblock_' + season);
+              if (block && block.style.display === 'none') {
+                const bar = document.querySelector(
+                  `.lf-season__bar[onclick*="dateblock_${season}"]`
+                );
+                if (bar) bar.click();
+              }
+              const row = document.querySelector(
+                `tr.lf-episode[data-season="${season}"][data-episode="${episode}"]`
+              );
+              if (!row) return false;
+              row.click();
+              return true;
+            },
+            { season: reqSeason, episode: reqEp }
+          );
+          console.log(
+            '[player-capture] (lordfilm_fi) клик серии',
+            reqSeason,
+            'x',
+            reqEp,
+            '→',
+            clickedEp
+          );
+          if (clickedEp) {
+            await new Promise((r) => setTimeout(r, 800));
+            // после смены серии плеер мог сброситься — чистим старые потоки
+            foundStreams.length = 0;
+            playerApiData = null;
+          } else {
+            console.warn(
+              '[player-capture] (lordfilm_fi) строка серии не найдена',
+              reqSeason,
+              reqEp
+            );
+          }
+        }
+
         if (slotToLoad?.postId && slotToLoad?.slot) {
           console.log(
             '[player-capture] (lordfilm_fi) грузим slot:',
@@ -896,6 +942,10 @@ router.post('/extract', auth, async (req, res) => {
             const gate = document.querySelector(
               `.lf-player-gate[data-player-slot="${slot}"]`
             );
+            // если gate уже is-loaded после смены серии — сбросить и грузить заново
+            if (gate) {
+              gate.classList.remove('is-loaded', 'is-loading');
+            }
             const btn = gate?.querySelector('.lf-player-gate__button');
             if (btn) {
               btn.disabled = false;
@@ -1671,12 +1721,17 @@ router.post('/extract', auth, async (req, res) => {
 
       console.log('[player-capture] распарсенные серии:', episodesData);
 
-      const releasedEpisodes = episodesData.filter((e) => e.released !== false);
+            const releasedEpisodes = episodesData.filter((e) => e.released !== false);
       seasonsFound = [...new Set(episodesData.map((e) => e.season).filter(Boolean))];
       if (!seasonsFound.length) seasonsFound = [1];
-      totalEpisodes = releasedEpisodes.length
-        ? Math.max(...releasedEpisodes.map((e) => e.episode))
-        : 1;
+
+      const seasonForMeta = Number(req.body.season) || Math.max(...seasonsFound);
+      const inSeason = releasedEpisodes.filter((e) => e.season === seasonForMeta);
+      totalEpisodes = inSeason.length
+        ? Math.max(...inSeason.map((e) => e.episode))
+        : releasedEpisodes.length
+          ? Math.max(...releasedEpisodes.map((e) => e.episode))
+          : 1;
     } else if (!adapter) {
       // нет адаптера под этот сайт вообще — дампим кандидатов для будущего адаптера
       const candidateRows = await page.evaluate(() => {
@@ -1763,18 +1818,42 @@ router.post('/extract', auth, async (req, res) => {
             null;
           const ctx = playerFrame || page;
 
+          // дать плееру самому сходить за m3u8 (перехват в handleResponse → playlistRaw)
+          await new Promise((r) => setTimeout(r, 3000));
+
           const playlistText = await ctx.evaluate(async (u) => {
             try {
               const r = await fetch(u, {
                 credentials: 'include',
-                headers: { Accept: '*/*' },
+                mode: 'cors',
+                headers: {
+                  Accept: '*/*',
+                  // referer = origin этого фрейма
+                },
               });
-              if (!r.ok) return null;
-              return await r.text();
-            } catch (_) {
-              return null;
+              if (!r.ok) {
+                return { err: r.status };
+              }
+              const t = await r.text();
+              return { text: t };
+            } catch (e) {
+              return { err: String(e && e.message) };
             }
           }, masterUrl);
+
+          if (playlistText?.text && playlistText.text.includes('#EXTM3U')) {
+            downloadedPlaylist = playlistText.text;
+            console.log(
+              '[player-capture] master скачан из фрейма плеера, длина:',
+              downloadedPlaylist.length
+            );
+          } else {
+            console.warn(
+              '[player-capture] фрейм не отдал m3u8 для',
+              masterUrl.slice(0, 80),
+              playlistText?.err || ''
+            );
+          }
 
           if (playlistText && playlistText.includes('#EXTM3U')) {
             downloadedPlaylist = playlistText;

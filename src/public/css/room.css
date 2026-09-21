@@ -49,34 +49,50 @@ body {
 
 .fs-draggable {
   position: absolute;
-  z-index: 5;
+  z-index: 6; /* выше #fsActivityCatcher (3) и #overlay (4) */
   background: #000;
   color: #fff;
   border: 2px solid #fff;
   border-radius: 6px;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   font-size: 18px;
   cursor: grab;
-  touch-action: none; /* иначе браузер перехватывает жест как скролл на телефоне */
+  /* manipulation = нет 300ms delay, click не блокируется */
+  touch-action: manipulation;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  pointer-events: auto;
 }
 
 .fs-draggable.dragging {
   cursor: grabbing;
   opacity: 0.8;
   transition: none;
+  touch-action: none; /* только во время drag */
 }
 
 #fullscreenBtn {
-  top: 10px;
-  right: 10px;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(10px, env(safe-area-inset-right, 0px));
 }
 
 #fsChatToggleBtn {
-  top: 10px;
-  right: 60px;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(60px, calc(env(safe-area-inset-right, 0px) + 54px));
+}
+
+#ccBtn {
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(110px, calc(env(safe-area-inset-right, 0px) + 108px));
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.45;
 }
 
 /* === Fullscreen chat modal === */
@@ -469,8 +485,8 @@ body.view-video-only #chat {
 
 
 #ccBtn {
-  top: 10px;
-  right: 110px;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(110px, calc(env(safe-area-inset-right, 0px) + 108px));
   font-size: 12px;
   font-weight: 700;
   opacity: 0.45;

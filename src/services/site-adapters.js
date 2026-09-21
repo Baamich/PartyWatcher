@@ -88,12 +88,23 @@ module.exports = {
     dropdownTimeoutMs: 5000,
   },
 
-// lordfilm.fi — on-demand gate, iframe появляется только после клика
+// lordfilm.fi — gate + таблица серий на странице (не dropdown в iframe)
   lordfilm_fi: {
-    mode: null, // серии/сезоны пока не трогаем, сначала поднять iframe
-    // после loadPlayer iframe обычно с чужого embed-CDN
+    mode: 'schedule-table',
+    scheduleRowSelector: 'tr.lf-episode.epscape_tr, tr.lf-episode[data-episode]',
+    scheduleRowParserBody: `
+      const season = Number(row.getAttribute('data-season') || 1);
+      const episode = Number(row.getAttribute('data-episode') || 0);
+      if (!episode) return null;
+      const released = row.getAttribute('data-released') !== '0'
+        && !row.classList.contains('is-disabled');
+      return { season, episode, released };
+    `,
+    // клик по строке таблицы
+    episodeRowSelector: (season, episode) =>
+      `tr.lf-episode[data-season="${season}"][data-episode="${episode}"]`,
     playerFrameMatch: (frameUrl) =>
-      /femd\.ws|delivembed|buildplayer|embedstorage|ortified|cdn\.lordfilm|api\./i.test(
+      /stravers\.live|stloadi\.live|balabolka|femd\.ws|ortified|cdn\.lordfilm/i.test(
         frameUrl || ''
       ),
   },

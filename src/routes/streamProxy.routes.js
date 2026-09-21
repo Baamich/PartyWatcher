@@ -99,22 +99,38 @@ router.get('/relay', auth, async (req, res) => {
       hostCandidate = { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
     } catch (_) {}
 
+    // универсально: query (с extract) → guess → host CDN → запасные семейства плееров
+    // новые зеркала lordfilm/stravers/kinogo не надо дописывать вручную
+    function originOf(urlOrHost) {
+      try {
+        const u = urlOrHost.startsWith('http')
+          ? new URL(urlOrHost)
+          : new URL('https://' + urlOrHost);
+        return { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
+      } catch {
+        return null;
+      }
+    }
+
+    const FAMILY_FALLBACKS = [
+      // balabolka / stravers / stloadi — общий embed-стек
+      'kinogomy.stravers.live',
+      'kinogomy.stloadi.live',
+      'balabolka.stravers.live',
+      'marie.as.stravers.live',
+      // kinogo page
+      'kinogomy.net',
+      // lordfilm CDN / page (на случай если query пустой)
+      'cdn.lordfilm64.com',
+      'api.ortified.ws',
+      'vk.com',
+    ].map(originOf).filter(Boolean);
+
     const refererCandidates = [
-      queryCandidate,
-      primary,
-      { referer: 'https://cdn.lordfilm64.com/', origin: 'https://cdn.lordfilm64.com' },
-      { referer: 'https://mg.lordfilm.md/', origin: 'https://mg.lordfilm.md' },
-      { referer: 'https://api.ortified.ws/', origin: 'https://api.ortified.ws' },
-      { referer: 'https://kinogomy.stloadi.live/', origin: 'https://kinogomy.stloadi.live' },
-      { referer: 'https://kinogomy.stravers.live/', origin: 'https://kinogomy.stravers.live' },
-      { referer: 'https://balabolka.stravers.live/', origin: 'https://balabolka.stravers.live' },
-      { referer: 'https://marie.as.stravers.live/', origin: 'https://marie.as.stravers.live' },
-      { referer: 'https://lordfilm.fi/', origin: 'https://lordfilm.fi' },
-      { referer: 'https://cinemar.cc/', origin: 'https://cinemar.cc' },
-      { referer: 'https://kinogo2026.com/', origin: 'https://kinogo2026.com' },
-      { referer: 'https://vk.com/', origin: 'https://vk.com' },
-      { referer: 'https://kinogomy.net/', origin: 'https://kinogomy.net' },
-      hostCandidate,
+      queryCandidate,   // главный: то, что extract положил в stream.referer
+      primary,          // guessReferer по hostname CDN
+      hostCandidate,    // origin самого vkvideo/cdn хоста
+      ...FAMILY_FALLBACKS,
     ].filter(Boolean);
 
     // убираем дубли

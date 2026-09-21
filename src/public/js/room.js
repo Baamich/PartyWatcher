@@ -603,10 +603,63 @@ function startWatching() {
   }
 }
 
-function toggleFullscreen() {
+function isDocFullscreen() {
+  return !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.webkitCurrentFullScreenElement
+  );
+}
+
+function toggleFullscreen(e) {
+  e?.preventDefault?.();
+  e?.stopPropagation?.();
+
   const wrap = document.getElementById('playerWrap');
-  if (!document.fullscreenElement) wrap.requestFullscreen?.();
-  else document.exitFullscreen?.();
+  if (!wrap) return;
+
+  // уже в fullscreen — выходим
+  if (isDocFullscreen()) {
+    const exit =
+      document.exitFullscreen ||
+      document.webkitExitFullscreen ||
+      document.webkitCancelFullScreen;
+    exit?.call(document);
+    return;
+  }
+
+  // iOS Safari: у произвольного div requestFullscreen часто нет.
+  // Надёжный путь — native fullscreen у <video>.
+  const video = getActiveVideoEl?.() || document.querySelector('#player video');
+  const isIOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  if (isIOS && video && typeof video.webkitEnterFullscreen === 'function') {
+    try {
+      video.webkitEnterFullscreen();
+      return;
+    } catch (err) {
+      console.warn('[fs] webkitEnterFullscreen failed', err);
+    }
+  }
+
+  // десктоп / Android / новые iOS с поддержкой Element.requestFullscreen
+  const req =
+    wrap.requestFullscreen ||
+    wrap.webkitRequestFullscreen ||
+    wrap.webkitRequestFullScreen;
+  if (req) {
+    Promise.resolve(req.call(wrap)).catch((err) => {
+      console.warn('[fs] requestFullscreen failed', err);
+      // fallback: снова video
+      if (video && typeof video.webkitEnterFullscreen === 'function') {
+        try { video.webkitEnterFullscreen(); } catch (_) {}
+      }
+    });
+  } else if (video && typeof video.webkitEnterFullscreen === 'function') {
+    try { video.webkitEnterFullscreen(); } catch (_) {}
+  }
 }
 
 let fsControlsTimer = null;
@@ -617,17 +670,17 @@ function showFsControls() {
   wrap.classList.remove('fs-controls-hidden');
 
   clearTimeout(fsControlsTimer);
-  if (!document.fullscreenElement) return;
+  if (!isDocFullscreen()) return;
 
   fsControlsTimer = setTimeout(() => {
-    if (document.fullscreenElement) {
+    if (isDocFullscreen()) {
       wrap.classList.add('fs-controls-hidden');
     }
   }, 3000);
 }
 
 function onFullscreenChange() {
-  const inFullscreen = !!document.fullscreenElement;
+  const inFullscreen = isDocFullscreen();
   const chatBtn = document.getElementById('fsChatToggleBtn');
   if (chatBtn) chatBtn.classList.toggle('hidden', !inFullscreen);
 
@@ -643,6 +696,7 @@ function onFullscreenChange() {
 }
 
 document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
 function openSettings() {
   socket.emit('room:participants', { code });
@@ -937,7 +991,7 @@ function appendMessageTo(containerId, username, text) {
 let fsNoticeTimer = null;
 
 function showFsNotice(username, text) {
-  if (!document.fullscreenElement) return;
+  if (!isDocFullscreen()) return;
   const notice = document.getElementById('fsNotice');
   notice.textContent = `${username}: ${text}`;
   notice.classList.remove('hidden', 'fade-out');
@@ -969,7 +1023,7 @@ function showLocalSystemMessage(text) {
 
 function makeDraggable(el, storageKey) {
   const container = document.getElementById('playerWrap');
-  const LONG_PRESS_MS = 300;
+  const LONG_PRESS_MS = 450;
   const MOVE_CANCEL_THRESHOLD = 6;
 
   let longPressTimer = null;
@@ -978,7 +1032,7 @@ function makeDraggable(el, storageKey) {
   let startX = 0, startY = 0, origLeft = 0, origTop = 0;
 
   function currentMode() {
-    return document.fullscreenElement ? 'fullscreen' : 'normal';
+    return isDocFullscreen() ? 'fullscreen' : 'normal';
   }
 
   function storageFullKey() {
@@ -1021,8 +1075,13 @@ function makeDraggable(el, storageKey) {
     localStorage.setItem(storageFullKey(), JSON.stringify({ left, top }));
   }
 
+
   el.addEventListener('pointerdown', (e) => {
+    // только primary (не второй палец)
+    if (e.button != null && e.button !== 0) return;
     moved = false;
+    dragging = false;
+
     const rect = el.getBoundingClientRect();
     const parentRect = container.getBoundingClientRect();
     origLeft = rect.left - parentRect.left;
@@ -1033,6 +1092,8 @@ function makeDraggable(el, storageKey) {
     longPressTimer = setTimeout(() => {
       dragging = true;
       el.classList.add('dragging');
+      el.style.touchAction = 'none';
+      // setPointerCapture ТОЛЬКО после подтверждения long-press
       try { el.setPointerCapture(e.pointerId); } catch {}
     }, LONG_PRESS_MS);
   });
@@ -1068,6 +1129,7 @@ function makeDraggable(el, storageKey) {
 
     dragging = false;
     el.classList.remove('dragging');
+    el.style.touchAction = '';
 
     if (moved) {
       savePosition(parseFloat(el.style.left), parseFloat(el.style.top));
@@ -1085,10 +1147,9 @@ function makeDraggable(el, storageKey) {
   el.addEventListener('pointerup', endDrag);
   el.addEventListener('pointercancel', endDrag);
 
-   document.addEventListener('fullscreenchange', () => {
-    // даём браузеру дорисовать полноэкранный размер, потом проверяем границы
-    requestAnimationFrame(applySavedPosition);
-  });
+  const onFsForPos = () => requestAnimationFrame(applySavedPosition);
+  document.addEventListener('fullscreenchange', onFsForPos);
+  document.addEventListener('webkitfullscreenchange', onFsForPos);
   window.addEventListener('resize', applySavedPosition);
   applySavedPosition();
 }
@@ -1201,31 +1262,28 @@ const playerWrapEl = document.getElementById('playerWrap');
 
 playerWrapEl?.addEventListener('pointerdown', () => {
   playerFocused = true;
-  if (document.fullscreenElement) showFsControls();
-}, true); // capture — ловим до того, как событие съест внутренний элемент
+  if (isDocFullscreen()) showFsControls();
+}, true);
 
 playerWrapEl?.addEventListener('mousemove', () => {
-  if (document.fullscreenElement) showFsControls();
+  if (isDocFullscreen()) showFsControls();
 });
 
-// сам перехватчик: единственный способ поймать тап поверх iframe
 const catcherEl = document.getElementById('fsActivityCatcher');
 catcherEl?.addEventListener('pointerdown', (e) => {
   playerFocused = true;
   e.stopPropagation();
-  e.preventDefault(); // первый тап только показывает кнопки, в плеер не проваливается
+  e.preventDefault();
   showFsControls();
 });
 catcherEl?.addEventListener('pointermove', () => showFsControls());
 
-// клавиши в фулскрине (пробел/стрелки) тоже "будят" кнопки
 document.addEventListener('keydown', () => {
-  if (document.fullscreenElement) showFsControls();
+  if (isDocFullscreen()) showFsControls();
 }, true);
 
-// клик внутрь iframe (YouTube/Twitch) отбирает фокус у окна — используем это как сигнал активности
 window.addEventListener('blur', () => {
-  if (document.fullscreenElement) showFsControls();
+  if (isDocFullscreen()) showFsControls();
 });
 document.getElementById('chat')?.addEventListener('pointerdown', () => {
   playerFocused = false;
@@ -1251,10 +1309,64 @@ function leaveRoom() {
   window.location.replace('/index.html');
 }
 
+function bindTap(el, handler) {
+  if (!el) return;
 
+  let lastFire = 0;
+  const FIRE_GAP_MS = 400;
+
+  const fire = (e) => {
+    const now = Date.now();
+    if (now - lastFire < FIRE_GAP_MS) return;
+    lastFire = now;
+    e.preventDefault?.();
+    e.stopPropagation?.();
+    handler(e);
+  };
+
+  el.addEventListener('click', fire);
+  el.addEventListener(
+    'touchend',
+    (e) => {
+      if (el.dataset._tapMoved === '1') return;
+      fire(e);
+    },
+    { passive: false }
+  );
+  el.addEventListener(
+    'touchmove',
+    () => {
+      el.dataset._tapMoved = '1';
+    },
+    { passive: true }
+  );
+  el.addEventListener(
+    'touchstart',
+    () => {
+      el.dataset._tapMoved = '0';
+    },
+    { passive: true }
+  );
+}
+
+bindTap(document.getElementById('fullscreenBtn'), toggleFullscreen);
+bindTap(document.getElementById('fsChatToggleBtn'), toggleFsChat);
+bindTap(document.getElementById('ccBtn'), toggleSubtitles);
+bindTap(document.getElementById('startBtn'), startWatching);
 // Делаем функции доступными из HTML
 window.setViewMode = setViewMode;
 window.closeModal = closeModal;
+window.toggleFullscreen = toggleFullscreen;
+window.toggleFsChat = toggleFsChat;
+window.closeFsChat = closeFsChat;
+window.startWatching = startWatching;
+window.resync = resync;
+window.leaveRoom = leaveRoom;
+window.openSettings = openSettings;
+window.openBannedList = openBannedList;
+window.copyRoomLink = copyRoomLink;
+window.sendMessage = sendMessage;
+window.toggleSubtitles = toggleSubtitles;
 
 // --- Fullscreen chat modal drag & position ---
 function makeFsChatPanelDraggable() {
@@ -1386,15 +1498,16 @@ function makeFsChatPanelDraggable() {
   handle.addEventListener('pointercancel', endDrag);
 
   // при смене фуллскрина / ресайзе — поджимаем в границы
-  document.addEventListener('fullscreenchange', () => {
-    if (document.fullscreenElement) {
-      // даём браузеру отрисовать размеры, потом позиционируем
+  const repositionIfFs = () => {
+    if (isDocFullscreen()) {
       requestAnimationFrame(() => applySavedPosition());
     }
-  });
+  };
+  document.addEventListener('fullscreenchange', repositionIfFs);
+  document.addEventListener('webkitfullscreenchange', repositionIfFs);
 
   window.addEventListener('resize', () => {
-    if (document.fullscreenElement && !panel.classList.contains('hidden')) {
+    if (isDocFullscreen() && !panel.classList.contains('hidden')) {
       applySavedPosition();
     }
   });
