@@ -96,35 +96,25 @@ router.get('/relay', auth, async (req, res) => {
   }
 
   try {
-     // VK CDN часто недоступен через Webshare-прокси — для него прокси не используем.
-    // cinemap.cc/cinemar.cc (плеер kinogo2026) — обычный видео-CDN, ему прокси не
-    // нужен вообще: он не банит по IP так, как страница-обёртка kinogo2026.com,
-    // а через прокси только сжигаем лимит трафика на КАЖДЫЙ HLS-сегмент.
-    // VK CDN и родственные хосты (в т.ч. 97-65-e1-r502.vkvideo.cloud) —
-    // прокси Webshare НЕ используем: ERR/лимит + платный трафик на каждый .ts/.m4s.
-    // cinemap/cinemar — то же.
+     
+    // VPS за Cloudflare / trycloudflare — без прокси VK и многие CDN дают 403.
+    // Экономия трафика = segmentCache, НЕ отключение прокси.
     let host = '';
-    try { host = new URL(targetUrl).hostname || ''; } catch (_) {}
+    try {
+      host = new URL(targetUrl).hostname || '';
+    } catch (_) {}
     const isVk =
-      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs|vk\.com/i.test(targetUrl) ||
+      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs|vk\.com/i.test(
+        targetUrl
+      ) ||
       /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs/i.test(host);
-    const isDirectCdn =
-      /cinemap\.cc|cinemar\.cc|cfnd\./i.test(targetUrl) ||
-      /cinemap\.cc|cinemar\.cc|cfnd\./i.test(host);
-    // любой видео-сегмент с CDN плеера — без прокси
-    const isPlayerCdn =
-      /stravers\.live|stloadi\.live|balabolka|ortified|lordfilm/i.test(host);
-    const dispatcher =
-      isVk || isDirectCdn || isPlayerCdn ? null : buildDispatcher();
+
+    const dispatcher = buildDispatcher();
     console.log(
       '[stream-relay] proxy:',
-      dispatcher ? 'ON' : 'OFF',
+      dispatcher ? 'ON' : 'OFF (нет PROXY_SERVER)',
       'vk:',
       isVk,
-      'directCdn:',
-      isDirectCdn,
-      'playerCdn:',
-      isPlayerCdn,
       'host:',
       host,
       'url:',
@@ -241,8 +231,15 @@ const cacheKey = targetUrl;
     }
 
     if (!response) {
-      console.error('[stream-relay] CDN отказал всеми referer:', lastStatus, targetUrl.slice(0, 120), lastBody.slice(0, 200));
-      return res.status(lastStatus || 502).json({ error: `CDN вернул ${lastStatus}` });
+      console.error(
+        '[stream-relay] CDN отказал всеми referer:',
+        lastStatus,
+        targetUrl.slice(0, 120),
+        lastBody.slice(0, 200)
+      );
+      return res
+        .status(lastStatus || 502)
+        .json({ error: `CDN вернул ${lastStatus}` });
     }
 
     const contentType = response.headers.get('content-type') || '';

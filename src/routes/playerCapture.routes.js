@@ -2209,8 +2209,14 @@ router.post('/extract', auth, async (req, res) => {
             console.warn('[player-capture] не удалось переписать playlist:', e.message);
           }
         } else if (isVk) {
-          // VK: даже без playlist отдаём URL — relay сам сходит с правильным referer
-          console.warn('[player-capture] VK playlist не скачан, оставляю raw streams для relay');
+          // VK с VPS/Node стабильно 403 — raw URL в relay бесполезен.
+          // Чистим streams без playlist, фронт возьмёт playerIframes (stravers/stloadi).
+          console.warn(
+            '[player-capture] VK playlist не скачан — убираю raw VK streams, остаётся iframe'
+          );
+          uniqueStreams = uniqueStreams.filter(
+            (s) => s.playlist || !/vkvideo\.cloud|vkuservideo|vk-cdn/i.test(s.url || '')
+          );
         } else {
           console.warn('[player-capture] playlist не получен — оставляю streams как есть');
         }
@@ -2286,7 +2292,26 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
-    const uniqueIframes = [...new Set(foundIframes)];
+    let uniqueIframes = [...new Set(foundIframes)];
+        // balabolka/stravers iframe мог не попасть в $$eval — добираем из frames()
+    if (uniqueIframes.length === 0) {
+      const embedFrames = page
+        .frames()
+        .map((f) => f.url())
+        .filter(
+          (u) =>
+            u &&
+            /stravers\.live|stloadi\.live|balabolka|ortified|cdn\.lordfilm/i.test(u) &&
+            !u.includes('about:blank')
+        );
+      if (embedFrames.length) {
+        uniqueIframes.push(...embedFrames);
+        console.log(
+          '[player-capture] iframe из frames() для fallback:',
+          embedFrames.map((u) => u.slice(0, 80))
+        );
+      }
+    }
 
     // для lordfilm/VK: referer = origin JSON (/bnsi/movies/), не ortified
     let playerOrigin = playerApiOrigin || pickPlayerOrigin(page);
@@ -2339,8 +2364,14 @@ router.post('/extract', auth, async (req, res) => {
         : 'Ничего не найдено',
     };
 
-    // кэшируем ТОЛЬКО если есть реальные потоки (iframe без streams — не кэшируем)
-    if (roomCode && uniqueStreams.length > 0) {
+    // не кэшируем ответ, где только битые VK url без playlist — иначе комната навечно на 403
+    const hasPlayable =
+      uniqueStreams.some((s) => s.playlist || s.type === 'mp4') ||
+      uniqueIframes.length > 0;
+    if (roomCode && uniqueStreams.length > 0 && hasPlayable) {
+      playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
+    } else if (roomCode && uniqueIframes.length > 0 && uniqueStreams.length === 0) {
+      // iframe-only тоже кэшируем — чтобы зрители не гоняли puppeteer
       playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
     }
 
