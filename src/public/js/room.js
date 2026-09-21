@@ -624,6 +624,21 @@ function toggleFullscreen(e) {
   e?.stopPropagation?.();
 
   const wrap = document.getElementById('playerWrap');
+  const video =
+    getActiveVideoEl() ||
+    document.querySelector('#player video') ||
+    document.querySelector('#playerWrap video');
+
+  console.log('[fs] toggleFullscreen', {
+    isIOS: isIOSDevice(),
+    inDocFs: isDocFullscreen(),
+    hasVideo: !!video,
+    videoReady: video?.readyState,
+    paused: video?.paused,
+    type: currentVideoType,
+    webkitEnter: typeof video?.webkitEnterFullscreen,
+  });
+
   if (!wrap) return;
 
   // уже в document-fullscreen — выходим
@@ -635,13 +650,6 @@ function toggleFullscreen(e) {
     exit?.call(document);
     return;
   }
-
-  // video: native / HLS / capture
-  const video =
-    getActiveVideoEl() ||
-    document.querySelector('#player video') ||
-    document.querySelector('#playerWrap video');
-
   // iOS (Safari + Chrome/CriOS): ТОЛЬКО webkitEnterFullscreen на <video>
   // requestFullscreen на div почти всегда молча игнорируется
   if (isIOSDevice()) {
@@ -654,8 +662,10 @@ function toggleFullscreen(e) {
         video.removeAttribute('webkit-playsinline');
 
         if (typeof video.webkitEnterFullscreen === 'function') {
+          console.log('[fs] calling webkitEnterFullscreen');
           video.webkitEnterFullscreen();
         } else if (typeof video.requestFullscreen === 'function') {
+          console.log('[fs] calling video.requestFullscreen');
           video.requestFullscreen();
         } else if (typeof video.webkitRequestFullscreen === 'function') {
           video.webkitRequestFullscreen();
@@ -1365,30 +1375,46 @@ function leaveRoom() {
 function bindTap(el, handler) {
   if (!el) return;
 
+  const id = el.id || el.className || 'btn';
   let lastFire = 0;
   let startX = 0;
   let startY = 0;
   let moved = false;
-  const FIRE_GAP_MS = 450;
-  const MOVE_PX = 12;
+  let touchHandled = false;
+  const FIRE_GAP_MS = 350;
+  const MOVE_PX = 14;
 
-  const fire = (e) => {
+  const fire = (e, via) => {
     const now = Date.now();
-    if (now - lastFire < FIRE_GAP_MS) return;
+    const gap = now - lastFire;
+    if (gap < FIRE_GAP_MS) {
+      console.log('[bindTap] SKIP (debounce)', id, via, 'gap=', gap);
+      return;
+    }
     lastFire = now;
-    e.preventDefault?.();
-    e.stopPropagation?.();
-    handler(e);
+    console.log('[bindTap] FIRE', id, via, {
+      type: e?.type,
+      pointerType: e?.pointerType,
+      dragging: el.classList.contains('dragging'),
+    });
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    try {
+      handler(e);
+    } catch (err) {
+      console.error('[bindTap] handler error', id, err);
+    }
   };
 
-  // iOS: click часто не приходит после touch — опираемся на touchend
   el.addEventListener(
     'touchstart',
     (e) => {
       moved = false;
+      touchHandled = false;
       const t = e.changedTouches?.[0] || e.touches?.[0];
       startX = t?.clientX ?? 0;
       startY = t?.clientY ?? 0;
+      console.log('[bindTap] touchstart', id);
     },
     { passive: true }
   );
@@ -1411,21 +1437,28 @@ function bindTap(el, handler) {
   el.addEventListener(
     'touchend',
     (e) => {
-      if (moved) return;
-      // не гасим, если это был long-press drag (класс ставит makeDraggable)
-      if (el.classList.contains('dragging')) return;
-      fire(e);
+      console.log('[bindTap] touchend', id, { moved, dragging: el.classList.contains('dragging') });
+      if (moved || el.classList.contains('dragging')) return;
+      touchHandled = true;
+      fire(e, 'touchend');
     },
     { passive: false }
   );
 
-  // десктоп / мышь
   el.addEventListener('click', (e) => {
-    // на тач-устройствах уже сработал touchend — не дублируем
-    if (e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents) {
+    // после touchend браузер ещё шлёт click — игнорим, иначе toggle 2 раза
+    if (touchHandled) {
+      console.log('[bindTap] click ignored (after touch)', id);
+      touchHandled = false;
+      e.preventDefault?.();
+      e.stopPropagation?.();
       return;
     }
-    fire(e);
+    if (e.pointerType === 'touch') {
+      console.log('[bindTap] click ignored (pointerType=touch)', id);
+      return;
+    }
+    fire(e, 'click');
   });
 }
 
@@ -1597,9 +1630,13 @@ function makeFsChatPanelDraggable() {
 
 function toggleFsChat() {
   const panel = document.getElementById('fsChatPanel');
-  if (!panel) return;
+  if (!panel) {
+    console.warn('[fsChat] panel not found');
+    return;
+  }
 
   const willShow = panel.classList.contains('hidden');
+  console.log('[fsChat] toggle', { willShow, wasHidden: willShow, inFs: isDocFullscreen() });
   panel.classList.toggle('hidden');
 
   if (willShow) {
