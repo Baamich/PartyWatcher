@@ -834,29 +834,60 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
-    // lordfilm: вкладки — <div class="tabs-sel"> <span>Плеер 2</span> ...
-    // onclick вставляет iframe в #player-N; data-src нет.
+    // lordfilm:
+    // 1) mg.lordfilm.md — .tabs-sel span с onclick → iframe src
+    // 2) lordfilm.fi  — .lf-player-picker__option[data-player-slot]
+    // НЕ брать шаринг (ВК/Twitter/…) и «Свет» / «Поделиться…»
     if (siteName === 'lordfilm' && playersFound.length === 0) {
-      try {
-        playersFound = await page.$$eval('.tabs-sel span, .tabs-block span', (spans) =>
-          spans
-            .map((sp) => {
-              const label = (sp.textContent || '').trim();
-              const onclick = sp.getAttribute('onclick') || '';
-              // src=https://... из onclick="$('#player-2').html('... src=URL ...')"
-              const m = onclick.match(/src\s*=\s*(https?:\/\/[^\s"'<>]+)/i);
-              const src = m ? m[1].replace(/&amp;/g, '&') : '';
-              return { label, src, tab: '' };
-            })
-            .filter((p) => p.label && !/трейлер|trailer/i.test(p.label))
+      const isNoise = (label) =>
+        /трейлер|trailer|поделиться|вконтакте|одноклассники|мой\s*мир|viber|twitter|telegram|закладк|свет|facebook|whatsapp|ok\.ru|share/i.test(
+          label || ''
         );
+
+      try {
+        // --- A) mg.* : tabs-sel ---
+        playersFound = await page.$$eval('.tabs-sel span, .tabs-block span', (spans) =>
+          spans.map((sp) => {
+            const label = (sp.textContent || '').trim().replace(/\s+/g, ' ');
+            const onclick = sp.getAttribute('onclick') || '';
+            const m = onclick.match(/src\s*=\s*(https?:\/\/[^\s"'<>]+)/i);
+            const src = m ? m[1].replace(/&amp;/g, '&') : '';
+            return { label, src, tab: '' };
+          })
+        );
+        playersFound = playersFound.filter(
+          (p) =>
+            p.label &&
+            !isNoise(p.label) &&
+            (p.src || /^плеер\s*\d*$/i.test(p.label) || /full\s*hd|4k|\bhd\b/i.test(p.label))
+        );
+
+        // --- B) lordfilm.fi : lf-player-picker ---
+        if (playersFound.length === 0) {
+          playersFound = await page.$$eval(
+            '.lf-player-picker__option, [data-player-slot]',
+            (els) =>
+              els.map((el) => {
+                const label = (el.textContent || '').trim().replace(/\s+/g, ' ');
+                const slot = el.getAttribute('data-player-slot') || '';
+                const src =
+                  el.getAttribute('data-src') ||
+                  el.getAttribute('data-url') ||
+                  el.getAttribute('data-iframe') ||
+                  '';
+                return { label, src, tab: slot };
+              })
+          );
+          playersFound = playersFound.filter((p) => p.label && !isNoise(p.label));
+        }
+
         console.log(
           '[player-capture] (lordfilm) вкладки плееров:',
-          playersFound.map((p) => `${p.label}${p.src ? ' → ' + p.src.slice(0, 60) : ''}`)
+          playersFound.map((p) => `${p.label}${p.src ? ' → ' + p.src.slice(0, 60) : ''}${p.tab ? ' [' + p.tab + ']' : ''}`)
         );
-    } catch (e) {
-      console.warn('[player-capture] (lordfilm) не удалось прочитать .tabs-sel:', e.message);
-    }
+      } catch (e) {
+        console.warn('[player-capture] (lordfilm) не удалось прочитать вкладки:', e.message);
+      }
     }
 
     const requestedPlayer = (req.body.player || '').trim();
@@ -888,14 +919,26 @@ router.post('/extract', auth, async (req, res) => {
               li.click();
               return;
             }
-            // lordfilm: клик по span с текстом "Плеер 2"
+            // lordfilm mg: span в .tabs-sel
             const spans = Array.from(
               document.querySelectorAll('.tabs-sel span, .tabs-block span')
             );
             const sp = spans.find(
               (el) => (el.textContent || '').trim().toLowerCase() === label.toLowerCase()
             );
-            if (sp) sp.click();
+            if (sp) {
+              sp.click();
+              return;
+            }
+            // lordfilm.fi: .lf-player-picker__option
+            const opts = Array.from(
+              document.querySelectorAll('.lf-player-picker__option, [data-player-slot]')
+            );
+            const opt = opts.find((el) => {
+              const t = (el.textContent || '').trim().replace(/\s+/g, ' ').toLowerCase();
+              return t === label.toLowerCase() || t.includes(label.toLowerCase());
+            });
+            if (opt) opt.click();
           }, target.label);
 
           // ждём JSON / iframe до 12 сек
