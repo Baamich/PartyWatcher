@@ -580,7 +580,7 @@ function startWatching() {
     else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
       capturePlayer.doPlayPause(true);
       const v = capturePlayer.videoEl;
-      if (v && !v.dataset.captureBoundBound) {
+      if (v && !v.dataset.captureBound) {
         v.dataset.captureBound = '1';
         v.addEventListener('play', () => emitPlayback(true));
         v.addEventListener('pause', () => emitPlayback(false));
@@ -985,19 +985,36 @@ function makeDraggable(el, storageKey) {
     return `pw-pos:${storageKey}:${currentMode()}`;
   }
 
+  function resetPosition() {
+    el.style.left = '';
+    el.style.top = '';
+    el.style.right = '';
+    el.style.bottom = '';
+  }
+
   function applySavedPosition() {
-    const saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null');
-    if (saved) {
-      el.style.left = saved.left + 'px';
-      el.style.top = saved.top + 'px';
-      el.style.right = 'auto';
-      el.style.bottom = 'auto';
-    } else {
-      el.style.left = '';
-      el.style.top = '';
-      el.style.right = '';
-      el.style.bottom = '';
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null'); } catch (_) {}
+
+    if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') {
+      resetPosition();
+      return;
     }
+
+    const p = container.getBoundingClientRect();
+    if (!p.width || !p.height) return; // плеер скрыт (мобилка) — не трогаем
+
+    const w = el.offsetWidth || 40;
+    const h = el.offsetHeight || 40;
+    if (saved.left < 0 || saved.top < 0 || saved.left > p.width - w || saved.top > p.height - h) {
+      resetPosition(); // не влезает — дефолт, сохранённое не стираем
+      return;
+    }
+
+    el.style.left = saved.left + 'px';
+    el.style.top = saved.top + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
   }
 
   function savePosition(left, top) {
@@ -1290,43 +1307,26 @@ function makeFsChatPanelDraggable() {
     panel.style.bottom = 'auto';
   }
 
-    function resetPosition() {
-    el.style.left = '';
-    el.style.top = '';
-    el.style.right = '';
-    el.style.bottom = '';
-  }
-
   function applySavedPosition() {
+    // панель скрыта — размеры нулевые, позицию поставит toggleFsChat при показе
+    if (panel.classList.contains('hidden')) return;
+
     let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null'); } catch (_) {}
+    try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (_) {}
 
     if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') {
-      resetPosition();
+      positionNearChatBtn();
       return;
     }
 
     const p = container.getBoundingClientRect();
-    // плеер сейчас скрыт (display:none на мобилке) — размеры нулевые, ничего не трогаем
-    if (!p.width || !p.height) return;
+    const left = clamp(saved.left, 0, Math.max(0, p.width - panel.offsetWidth));
+    const top = clamp(saved.top, 0, Math.max(0, p.height - panel.offsetHeight));
 
-    const w = el.offsetWidth || 40;
-    const h = el.offsetHeight || 40;
-    const outOfBounds =
-      saved.left < 0 || saved.top < 0 ||
-      saved.left > p.width - w || saved.top > p.height - h;
-
-    if (outOfBounds) {
-      // сейчас не влезает — показываем на дефолтном месте, но сохранённое НЕ стираем:
-      // вернётся, когда размер плеера снова подойдёт, или перезапишется при следующем перетаскивании
-      resetPosition();
-      return;
-    }
-
-    el.style.left = saved.left + 'px';
-    el.style.top = saved.top + 'px';
-    el.style.right = 'auto';
-    el.style.bottom = 'auto';
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
   }
 
   function savePosition(left, top) {
@@ -1463,7 +1463,7 @@ function closeFsChat() {
   document.getElementById('fsChatPanel')?.classList.add('hidden');
 }
 
-makeFsChatPanelDraggable();
+try { makeFsChatPanelDraggable(); } catch (e) { console.error('[fsChatPanel]', e); }
 
 // крестик
 document.getElementById('fsChatClose')?.addEventListener('click', (e) => {
@@ -1471,8 +1471,10 @@ document.getElementById('fsChatClose')?.addEventListener('click', (e) => {
   closeFsChat();
 });
 
-makeDraggable(document.getElementById('fullscreenBtn'), 'fullscreenBtn');
-makeDraggable(document.getElementById('fsChatToggleBtn'), 'fsChatToggleBtn');
-makeDraggable(document.getElementById('ccBtn'), 'ccBtn');
+try {
+  makeDraggable(document.getElementById('fullscreenBtn'), 'fullscreenBtn');
+  makeDraggable(document.getElementById('fsChatToggleBtn'), 'fsChatToggleBtn');
+  makeDraggable(document.getElementById('ccBtn'), 'ccBtn');
+} catch (e) { console.error('[makeDraggable]', e); }
 
 init();
