@@ -611,6 +611,14 @@ function isDocFullscreen() {
   );
 }
 
+function isIOSDevice() {
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+    /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent)
+  );
+}
+
 function toggleFullscreen(e) {
   e?.preventDefault?.();
   e?.stopPropagation?.();
@@ -618,7 +626,7 @@ function toggleFullscreen(e) {
   const wrap = document.getElementById('playerWrap');
   if (!wrap) return;
 
-  // уже в fullscreen — выходим
+  // уже в document-fullscreen — выходим
   if (isDocFullscreen()) {
     const exit =
       document.exitFullscreen ||
@@ -628,23 +636,51 @@ function toggleFullscreen(e) {
     return;
   }
 
-  // iOS Safari: у произвольного div requestFullscreen часто нет.
-  // Надёжный путь — native fullscreen у <video>.
-  const video = getActiveVideoEl?.() || document.querySelector('#player video');
-  const isIOS =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // video: native / HLS / capture
+  const video =
+    getActiveVideoEl() ||
+    document.querySelector('#player video') ||
+    document.querySelector('#playerWrap video');
 
-  if (isIOS && video && typeof video.webkitEnterFullscreen === 'function') {
-    try {
-      video.webkitEnterFullscreen();
-      return;
-    } catch (err) {
-      console.warn('[fs] webkitEnterFullscreen failed', err);
+  // iOS (Safari + Chrome/CriOS): ТОЛЬКО webkitEnterFullscreen на <video>
+  // requestFullscreen на div почти всегда молча игнорируется
+  if (isIOSDevice()) {
+    if (video) {
+      try {
+        // убрать playsinline на момент FS — иначе часть WebKit не входит в FS
+        const hadPlaysinline = video.hasAttribute('playsinline');
+        const hadWebkitPI = video.hasAttribute('webkit-playsinline');
+        video.removeAttribute('playsinline');
+        video.removeAttribute('webkit-playsinline');
+
+        if (typeof video.webkitEnterFullscreen === 'function') {
+          video.webkitEnterFullscreen();
+        } else if (typeof video.requestFullscreen === 'function') {
+          video.requestFullscreen();
+        } else if (typeof video.webkitRequestFullscreen === 'function') {
+          video.webkitRequestFullscreen();
+        }
+
+        // вернуть playsinline после выхода из native FS
+        const restore = () => {
+          if (hadPlaysinline) video.setAttribute('playsinline', '');
+          if (hadWebkitPI) video.setAttribute('webkit-playsinline', '');
+          video.removeEventListener('webkitendfullscreen', restore);
+          video.removeEventListener('ended', restore);
+        };
+        video.addEventListener('webkitendfullscreen', restore);
+        video.addEventListener('ended', restore);
+        return;
+      } catch (err) {
+        console.warn('[fs] iOS video fullscreen failed', err);
+      }
     }
+    // iframe youtube/twitch на iOS — native FS кнопкой не управляется
+    console.warn('[fs] iOS: нет <video> для webkitEnterFullscreen');
+    return;
   }
 
-  // десктоп / Android / новые iOS с поддержкой Element.requestFullscreen
+  // десктоп / Android
   const req =
     wrap.requestFullscreen ||
     wrap.webkitRequestFullscreen ||
@@ -652,13 +688,20 @@ function toggleFullscreen(e) {
   if (req) {
     Promise.resolve(req.call(wrap)).catch((err) => {
       console.warn('[fs] requestFullscreen failed', err);
-      // fallback: снова video
       if (video && typeof video.webkitEnterFullscreen === 'function') {
-        try { video.webkitEnterFullscreen(); } catch (_) {}
+        try {
+          video.webkitEnterFullscreen();
+        } catch (_) {}
       }
     });
-  } else if (video && typeof video.webkitEnterFullscreen === 'function') {
-    try { video.webkitEnterFullscreen(); } catch (_) {}
+  } else if (video) {
+    if (typeof video.webkitEnterFullscreen === 'function') {
+      try {
+        video.webkitEnterFullscreen();
+      } catch (_) {}
+    } else if (typeof video.requestFullscreen === 'function') {
+      video.requestFullscreen().catch(() => {});
+    }
   }
 }
 
@@ -1077,10 +1120,19 @@ function makeDraggable(el, storageKey) {
 
 
   el.addEventListener('pointerdown', (e) => {
-    // только primary (не второй палец)
     if (e.button != null && e.button !== 0) return;
     moved = false;
     dragging = false;
+
+    // iPhone / узкий экран: drag кнопок FS отключаем —
+    // long-press + capture ломает обычный тап в Chrome/Safari
+    const isTouchUI =
+      window.matchMedia('(pointer: coarse)').matches ||
+      isIOSDevice() ||
+      window.innerWidth <= 768;
+    if (isTouchUI) {
+      return;
+    }
 
     const rect = el.getBoundingClientRect();
     const parentRect = container.getBoundingClientRect();
@@ -1093,8 +1145,9 @@ function makeDraggable(el, storageKey) {
       dragging = true;
       el.classList.add('dragging');
       el.style.touchAction = 'none';
-      // setPointerCapture ТОЛЬКО после подтверждения long-press
-      try { el.setPointerCapture(e.pointerId); } catch {}
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {}
     }, LONG_PRESS_MS);
   });
 
@@ -1313,7 +1366,11 @@ function bindTap(el, handler) {
   if (!el) return;
 
   let lastFire = 0;
-  const FIRE_GAP_MS = 400;
+  let startX = 0;
+  let startY = 0;
+  let moved = false;
+  const FIRE_GAP_MS = 450;
+  const MOVE_PX = 12;
 
   const fire = (e) => {
     const now = Date.now();
@@ -1324,29 +1381,52 @@ function bindTap(el, handler) {
     handler(e);
   };
 
-  el.addEventListener('click', fire);
+  // iOS: click часто не приходит после touch — опираемся на touchend
+  el.addEventListener(
+    'touchstart',
+    (e) => {
+      moved = false;
+      const t = e.changedTouches?.[0] || e.touches?.[0];
+      startX = t?.clientX ?? 0;
+      startY = t?.clientY ?? 0;
+    },
+    { passive: true }
+  );
+
+  el.addEventListener(
+    'touchmove',
+    (e) => {
+      const t = e.changedTouches?.[0] || e.touches?.[0];
+      if (!t) return;
+      if (
+        Math.abs(t.clientX - startX) > MOVE_PX ||
+        Math.abs(t.clientY - startY) > MOVE_PX
+      ) {
+        moved = true;
+      }
+    },
+    { passive: true }
+  );
+
   el.addEventListener(
     'touchend',
     (e) => {
-      if (el.dataset._tapMoved === '1') return;
+      if (moved) return;
+      // не гасим, если это был long-press drag (класс ставит makeDraggable)
+      if (el.classList.contains('dragging')) return;
       fire(e);
     },
     { passive: false }
   );
-  el.addEventListener(
-    'touchmove',
-    () => {
-      el.dataset._tapMoved = '1';
-    },
-    { passive: true }
-  );
-  el.addEventListener(
-    'touchstart',
-    () => {
-      el.dataset._tapMoved = '0';
-    },
-    { passive: true }
-  );
+
+  // десктоп / мышь
+  el.addEventListener('click', (e) => {
+    // на тач-устройствах уже сработал touchend — не дублируем
+    if (e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents) {
+      return;
+    }
+    fire(e);
+  });
 }
 
 bindTap(document.getElementById('fullscreenBtn'), toggleFullscreen);
