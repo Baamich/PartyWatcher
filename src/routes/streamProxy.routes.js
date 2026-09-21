@@ -12,6 +12,33 @@ function buildDispatcher() {
   return new ProxyAgent(`http://${PROXY_USER}:${PROXY_PASS}@${PROXY_SERVER}`);
 }
 
+// кэш сегментов: один и тот же .ts/.m4s не тянем с CDN повторно в течение TTL
+const segmentCache = new Map(); // key → { buf, contentType, expires }
+const SEGMENT_CACHE_TTL_MS = 90_000;
+const SEGMENT_CACHE_MAX = 80;
+
+function segmentCacheGet(key) {
+  const hit = segmentCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expires) {
+    segmentCache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function segmentCacheSet(key, buf, contentType) {
+  if (segmentCache.size >= SEGMENT_CACHE_MAX) {
+    const first = segmentCache.keys().next().value;
+    if (first) segmentCache.delete(first);
+  }
+  segmentCache.set(key, {
+    buf,
+    contentType,
+    expires: Date.now() + SEGMENT_CACHE_TTL_MS,
+  });
+}
+
 function guessReferer(targetUrl) {
   try {
     const u = new URL(targetUrl);
@@ -73,11 +100,46 @@ router.get('/relay', auth, async (req, res) => {
     // cinemap.cc/cinemar.cc (плеер kinogo2026) — обычный видео-CDN, ему прокси не
     // нужен вообще: он не банит по IP так, как страница-обёртка kinogo2026.com,
     // а через прокси только сжигаем лимит трафика на КАЖДЫЙ HLS-сегмент.
-    const isVk = /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn/i.test(targetUrl);
-    const isDirectCdn = /cinemap\.cc|cinemar\.cc/i.test(targetUrl);
-    const dispatcher = (isVk || isDirectCdn) ? null : buildDispatcher();
-    console.log('[stream-relay] proxy:', dispatcher ? 'ON' : 'OFF', 'vk:', isVk, 'directCdn:', isDirectCdn, 'url:', targetUrl.slice(0, 80));
+    // VK CDN и родственные хосты (в т.ч. 97-65-e1-r502.vkvideo.cloud) —
+    // прокси Webshare НЕ используем: ERR/лимит + платный трафик на каждый .ts/.m4s.
+    // cinemap/cinemar — то же.
+    let host = '';
+    try { host = new URL(targetUrl).hostname || ''; } catch (_) {}
+    const isVk =
+      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs|vk\.com/i.test(targetUrl) ||
+      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs/i.test(host);
+    const isDirectCdn =
+      /cinemap\.cc|cinemar\.cc|cfnd\./i.test(targetUrl) ||
+      /cinemap\.cc|cinemar\.cc|cfnd\./i.test(host);
+    // любой видео-сегмент с CDN плеера — без прокси
+    const isPlayerCdn =
+      /stravers\.live|stloadi\.live|balabolka|ortified|lordfilm/i.test(host);
+    const dispatcher =
+      isVk || isDirectCdn || isPlayerCdn ? null : buildDispatcher();
+    console.log(
+      '[stream-relay] proxy:',
+      dispatcher ? 'ON' : 'OFF',
+      'vk:',
+      isVk,
+      'directCdn:',
+      isDirectCdn,
+      'playerCdn:',
+      isPlayerCdn,
+      'host:',
+      host,
+      'url:',
+      targetUrl.slice(0, 80)
+    );
 
+const cacheKey = targetUrl;
+  const cached = segmentCacheGet(cacheKey);
+  if (cached) {
+    console.log('[stream-relay] cache HIT', targetUrl.slice(0, 80));
+    res.setHeader('Content-Type', cached.contentType || 'application/octet-stream');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    return res.send(cached.buf);
+  }
     const primary = guessReferer(targetUrl);
 
     // 1) referer с extract/фронта (реальный origin iframe)
@@ -183,7 +245,7 @@ router.get('/relay', auth, async (req, res) => {
       return res.status(lastStatus || 502).json({ error: `CDN вернул ${lastStatus}` });
     }
 
-        const contentType = response.headers.get('content-type') || '';
+    const contentType = response.headers.get('content-type') || '';
     const looksLikeUrlM3u8 = targetUrl.includes('.m3u8');
     const looksLikeType = contentType.includes('mpegurl') || contentType.includes('application/vnd.apple');
 
@@ -229,7 +291,12 @@ router.get('/relay', auth, async (req, res) => {
 
     // не m3u8 — отдаём как бинарь (сегменты .ts / .m4s)
     const { Readable } = require('stream');
-    res.setHeader('Content-Type', contentType || 'application/octet-stream');
+    const ct = contentType || 'application/octet-stream';
+    // кэшируем только сегменты, не плейлисты
+    if (!looksLikeUrlM3u8 && !looksLikeType && !isM3u8Body && buf.length > 0 && buf.length < 8_000_000) {
+      segmentCacheSet(cacheKey, buf, ct);
+    }
+    res.setHeader('Content-Type', ct);
     res.setHeader('Access-Control-Allow-Origin', '*');
     const nodeStream = Readable.from(buf);
     nodeStream.pipe(res);

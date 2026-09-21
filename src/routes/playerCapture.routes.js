@@ -1150,6 +1150,7 @@ router.post('/extract', auth, async (req, res) => {
               }
             }
             console.log('[player-capture] после переключения плеера ждали', t, 'мс, playerApiData:', !!playerApiData);
+            
           }
         } catch (e) {
           console.error('[player-capture] ошибка клика по вкладке плеера:', e.message);
@@ -1159,6 +1160,122 @@ router.post('/extract', auth, async (req, res) => {
       }
     }
 
+    // kinogo / balabolka: ждём JSON, если ещё не пришёл (без переключения вкладки)
+    if (
+      !playerApiData?.hlsSource &&
+      (siteName === 'kinogo' || siteName === 'kinogo2026' || siteName === 'lordfilm')
+    ) {
+      const waitJson = 6000;
+      const stepJson = 400;
+      let wj = 0;
+      while (wj < waitJson && !playerApiData?.hlsSource) {
+        await new Promise((r) => setTimeout(r, stepJson));
+        wj += stepJson;
+      }
+      console.log(
+        '[player-capture] (kinogo/vk) ожидание playerApiData:',
+        wj,
+        'мс, есть:',
+        !!playerApiData?.hlsSource
+      );
+    }
+
+    // kinogo / balabolka: JSON hlsSource есть, но m3u8 в сеть не уходит,
+    // пока внутри iframe не нажали play — без этого relay всегда 403.
+    // Жмём play в фрейме stravers/stloadi и ждём перехват #EXTM3U.
+    if (
+      playerApiData?.hlsSource &&
+      (siteName === 'kinogo' || siteName === 'kinogo2026' || siteName === 'lordfilm')
+    ) {
+      try {
+        const playerFrame =
+          page.frames().find((f) => /cdn\.lordfilm/i.test(f.url() || '')) ||
+          page.frames().find((f) =>
+            /stloadi\.live|stravers\.live|balabolka|ortified/i.test(f.url() || '')
+          ) ||
+          null;
+
+        if (playerFrame) {
+          const playClicked = await playerFrame.evaluate(() => {
+            const candidates = [
+              document.querySelector('video'),
+              document.querySelector('.vjs-big-play-button'),
+              document.querySelector('.play-button'),
+              document.querySelector('[class*="play"]'),
+              document.querySelector('button[aria-label*="Play" i]'),
+              document.querySelector('.jw-icon-display'),
+              document.querySelector('.plyr__control--overlaid'),
+            ].filter(Boolean);
+
+            for (const el of candidates) {
+              try {
+                el.click();
+                if (el.tagName === 'VIDEO') {
+                  el.muted = true;
+                  el.play().catch(() => {});
+                }
+                return true;
+              } catch (_) {}
+            }
+            // клик по центру контейнера плеера
+            const root =
+              document.querySelector('#player') ||
+              document.querySelector('.player') ||
+              document.querySelector('[class*="player"]') ||
+              document.body;
+            if (root) {
+              const r = root.getBoundingClientRect();
+              const x = r.left + r.width / 2;
+              const y = r.top + r.height / 2;
+              const target = document.elementFromPoint(x, y) || root;
+              target.dispatchEvent(
+                new MouseEvent('click', { bubbles: true, clientX: x, clientY: y })
+              );
+              return true;
+            }
+            return false;
+          }).catch(() => false);
+
+          console.log(
+            '[player-capture] (kinogo/vk) клик play внутри iframe:',
+            playClicked,
+            playerFrame.url().slice(0, 80)
+          );
+
+          // ждём реальный m3u8 в сети (handleResponse → playlistRaw)
+          const maxWait = 8000;
+          const step = 400;
+          let waited = 0;
+          while (waited < maxWait) {
+            await new Promise((r) => setTimeout(r, step));
+            waited += step;
+            const hasRaw = foundStreams.some(
+              (s) => s.playlistRaw && /vkvideo\.cloud|vkuservideo|\.m3u8/i.test(s.url || '')
+            );
+            if (hasRaw) {
+              console.log(
+                '[player-capture] (kinogo/vk) m3u8 перехвачен за',
+                waited,
+                'мс'
+              );
+              break;
+            }
+          }
+          if (!foundStreams.some((s) => s.playlistRaw)) {
+            console.warn(
+              '[player-capture] (kinogo/vk) после play playlistRaw всё ещё пуст, waited=',
+              waited
+            );
+          }
+        } else {
+          console.warn('[player-capture] (kinogo/vk) iframe плеера для play не найден');
+        }
+      } catch (e) {
+        console.warn('[player-capture] (kinogo/vk) ошибка play в iframe:', e.message);
+      }
+    }
+
+    
     // используем то же значение, что и для кэша (body или хеш)
     const requestedEpisode = requestedEpisodeForCache;
     const alreadyHaveCdn = cdnSeriesStreams.length > 0;
@@ -1531,6 +1648,11 @@ router.post('/extract', auth, async (req, res) => {
         console.log('[player-capture] (lordfilm_fi) skip generic click, gate already done');
       } else if (skipGenericClick) {
         await clickPlayerAndWaitFrame(page, adapter, 'фильм');
+      } else if (siteName === 'kinogo' || siteName === 'kinogo2026') {
+        // play внутри iframe уже сделан блоком (kinogo/vk) выше —
+        // generic page.$ по ".play" часто бьёт по рекламе и убивает плеер
+        console.log('[player-capture] (kinogo) skip generic page play, iframe play уже выполнен');
+        await new Promise((r) => setTimeout(r, 1500));
       } else {
         // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
         const playSelectors = [
@@ -1828,7 +1950,6 @@ router.post('/extract', auth, async (req, res) => {
                 mode: 'cors',
                 headers: {
                   Accept: '*/*',
-                  // referer = origin этого фрейма
                 },
               });
               if (!r.ok) {
@@ -1841,7 +1962,7 @@ router.post('/extract', auth, async (req, res) => {
             }
           }, masterUrl);
 
-          if (playlistText?.text && playlistText.text.includes('#EXTM3U')) {
+          if (playlistText?.text && typeof playlistText.text === 'string' && playlistText.text.includes('#EXTM3U')) {
             downloadedPlaylist = playlistText.text;
             console.log(
               '[player-capture] master скачан из фрейма плеера, длина:',
@@ -1851,15 +1972,8 @@ router.post('/extract', auth, async (req, res) => {
             console.warn(
               '[player-capture] фрейм не отдал m3u8 для',
               masterUrl.slice(0, 80),
-              playlistText?.err || ''
+              playlistText?.err || (playlistText && typeof playlistText === 'object' ? JSON.stringify(playlistText).slice(0, 80) : '')
             );
-          }
-
-          if (playlistText && playlistText.includes('#EXTM3U')) {
-            downloadedPlaylist = playlistText;
-            console.log('[player-capture] master скачан из фрейма плеера, длина:', playlistText.length);
-          } else {
-            console.warn('[player-capture] фрейм не отдал m3u8 для', masterUrl.slice(0, 80));
           }
         } catch (e) {
           console.warn('[player-capture] ошибка fetch из фрейма:', e.message);
@@ -1911,23 +2025,28 @@ router.post('/extract', auth, async (req, res) => {
 
         if (downloadedPlaylist && uniqueStreams.length > 0) {
           try {
-            const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+          const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
+            const refOrigin = playerApiOrigin || pickPlayerOrigin(page) || '';
+            const refQ =
+              refOrigin && refOrigin.startsWith('http')
+                ? `&referer=${encodeURIComponent(refOrigin)}`
+                : '';
             const rewritten = downloadedPlaylist.split('\n').map((line) => {
               if (line.startsWith('#EXT-X-MAP')) {
                 return line.replace(/URI="([^"]+)"/, (_, uri) => {
                   const abs = uri.startsWith('http') ? uri : baseUrl + uri;
-                  return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
+                  return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}${refQ}"`;
                 });
               }
               if (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line)) {
                 return line.replace(/URI="([^"]+)"/, (_, uri) => {
                   const abs = uri.startsWith('http') ? uri : baseUrl + uri;
-                  return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}"`;
+                  return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}${refQ}"`;
                 });
               }
               if (line.startsWith('#') || !line.trim()) return line;
               const abs = line.trim().startsWith('http') ? line.trim() : baseUrl + line.trim();
-              return `/api/stream/relay?url=${encodeURIComponent(abs)}`;
+              return `/api/stream/relay?url=${encodeURIComponent(abs)}${refQ}`;
             }).join('\n');
 
             uniqueStreams = [
