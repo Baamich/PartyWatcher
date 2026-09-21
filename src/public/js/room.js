@@ -603,12 +603,23 @@ function startWatching() {
   }
 }
 
+let cssFullscreenActive = false;
+
 function isDocFullscreen() {
   return !!(
     document.fullscreenElement ||
     document.webkitFullscreenElement ||
-    document.webkitCurrentFullScreenElement
+    document.webkitCurrentFullScreenElement ||
+    cssFullscreenActive
   );
+}
+
+function setCssFullscreen(active) {
+  const wrap = document.getElementById('playerWrap');
+  if (!wrap) return;
+  cssFullscreenActive = active;
+  wrap.classList.toggle('css-fullscreen', active);
+  onFullscreenChange();
 }
 
 function isIOSDevice() {
@@ -641,8 +652,12 @@ function toggleFullscreen(e) {
 
   if (!wrap) return;
 
-  // уже в document-fullscreen — выходим
+  // уже в fullscreen (реальном или CSS-фейковом) — выходим
   if (isDocFullscreen()) {
+    if (cssFullscreenActive) {
+      setCssFullscreen(false);
+      return;
+    }
     const exit =
       document.exitFullscreen ||
       document.webkitExitFullscreen ||
@@ -650,43 +665,14 @@ function toggleFullscreen(e) {
     exit?.call(document);
     return;
   }
-  // iOS (Safari + Chrome/CriOS): ТОЛЬКО webkitEnterFullscreen на <video>
-  // requestFullscreen на div почти всегда молча игнорируется
+
+  // iOS: native webkitEnterFullscreen уводит видео в системный плеер —
+  // вне DOM страницы, поэтому чат/кнопки поверх него не отрисовать никак.
+  // Вместо этого растягиваем #playerWrap на весь экран через CSS —
+  // работает одинаково для <video> (player_capture) и iframe (YouTube/Twitch),
+  // а DOM остаётся нашим, так что чат-панель по-прежнему рендерится сверху.
   if (isIOSDevice()) {
-    if (video) {
-      try {
-        // убрать playsinline на момент FS — иначе часть WebKit не входит в FS
-        const hadPlaysinline = video.hasAttribute('playsinline');
-        const hadWebkitPI = video.hasAttribute('webkit-playsinline');
-        video.removeAttribute('playsinline');
-        video.removeAttribute('webkit-playsinline');
-
-        if (typeof video.webkitEnterFullscreen === 'function') {
-          console.log('[fs] calling webkitEnterFullscreen');
-          video.webkitEnterFullscreen();
-        } else if (typeof video.requestFullscreen === 'function') {
-          console.log('[fs] calling video.requestFullscreen');
-          video.requestFullscreen();
-        } else if (typeof video.webkitRequestFullscreen === 'function') {
-          video.webkitRequestFullscreen();
-        }
-
-        // вернуть playsinline после выхода из native FS
-        const restore = () => {
-          if (hadPlaysinline) video.setAttribute('playsinline', '');
-          if (hadWebkitPI) video.setAttribute('webkit-playsinline', '');
-          video.removeEventListener('webkitendfullscreen', restore);
-          video.removeEventListener('ended', restore);
-        };
-        video.addEventListener('webkitendfullscreen', restore);
-        video.addEventListener('ended', restore);
-        return;
-      } catch (err) {
-        console.warn('[fs] iOS video fullscreen failed', err);
-      }
-    }
-    // iframe youtube/twitch на iOS — native FS кнопкой не управляется
-    console.warn('[fs] iOS: нет <video> для webkitEnterFullscreen');
+    setCssFullscreen(true);
     return;
   }
 

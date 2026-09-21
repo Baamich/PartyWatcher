@@ -96,6 +96,15 @@ body {
   opacity: 0.45;
 }
 
+#playerWrap.css-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 9999;
+}
+
+
 /* === Fullscreen chat modal === */
 #fsChatPanel {
   position: absolute;
