@@ -178,7 +178,7 @@ function isAgeConfirmedLocally() {
     const container = document.getElementById('player');
     container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${url}"></video>`;
     videoEl = document.getElementById('videoEl');
-    videoEl.volume = 0.3;
+    videoEl.volume = getSavedVolume() / 100;
     currentVideoType = 'direct';
     playerReady = true;
 
@@ -255,7 +255,7 @@ function isAgeConfirmedLocally() {
     if (isRawVideoFile) {
       container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${video.url}"></video>`;
       videoEl = document.getElementById('videoEl');
-      videoEl.volume = 0.3;
+      videoEl.volume = getSavedVolume() / 100;
       playerReady = true;
 
       if (isOwner) {
@@ -304,7 +304,7 @@ function isAgeConfirmedLocally() {
         events: {
           onReady: (e) => {
             playerReady = true;
-            e.target.setVolume(30);
+            e.target.setVolume(getSavedVolume());
             if (!subtitlesOn) {
               try {
                 e.target.unloadModule('captions');
@@ -355,7 +355,7 @@ function isAgeConfirmedLocally() {
 
       twitchPlayer.addEventListener(Twitch.Player.READY, () => {
         playerReady = true;
-        twitchPlayer.setVolume(0.3);
+        twitchPlayer.setVolume(getSavedVolume() / 100);
         if (lastState.positionSeconds > 1) {
           try {
             twitchPlayer.seek(lastState.positionSeconds);
@@ -378,7 +378,7 @@ function isAgeConfirmedLocally() {
   const videoSrc = video.type === 'drive' ? `/api/drive/stream/${video.url}` : video.url;
   container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${videoSrc}"></video>`;
   videoEl = document.getElementById('videoEl');
-  videoEl.volume = 0.3;
+  videoEl.volume = getSavedVolume() / 100;
   playerReady = true;
 
   if (isOwner) {
@@ -782,6 +782,8 @@ function showFsControls() {
   fsControlsTimer = setTimeout(() => {
     if (isDocFullscreen()) {
       wrap.classList.add('fs-controls-hidden');
+      // кнопки прячутся — попап громкости без видимой кнопки не нужен, закрываем вместе с ними
+      document.getElementById('volumePopup')?.classList.add('hidden');
     }
   }, 3000);
 }
@@ -795,6 +797,7 @@ function onFullscreenChange() {
 
   if (!inFullscreen) {
     document.getElementById('fsChatPanel')?.classList.add('hidden');
+    document.getElementById('volumePopup')?.classList.add('hidden');
     document.getElementById('playerWrap')?.classList.remove('fs-controls-hidden');
     clearTimeout(fsControlsTimer);
   } else {
@@ -862,6 +865,16 @@ function renderBannedList(list) {
   });
 }
 
+function initChatInputPlaceholder() {
+  const chatInputEl = document.getElementById('chatInput');
+  if (!chatInputEl) return;
+  const originalPlaceholder = chatInputEl.placeholder;
+  chatInputEl.addEventListener('focus', () => { chatInputEl.placeholder = ''; });
+  chatInputEl.addEventListener('blur', () => {
+    if (!chatInputEl.value) chatInputEl.placeholder = originalPlaceholder;
+  });
+}
+
 async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/index.html');
@@ -869,6 +882,11 @@ async function init() {
   document.getElementById('roomCodeValue').textContent = code;
   document.getElementById('roomCodeValue').onclick = () => copyText(code, 'Код');
   setOverlay('Загрузка комнаты...', false);
+
+  const volumeSliderEl = document.getElementById('volumeSlider');
+  if (volumeSliderEl) volumeSliderEl.value = getSavedVolume();
+  initChatInputPlaceholder();
+  initLockButtonsControl();
 
   socket = io();
   socket.on('connect', () => socket.emit('room:join', { code }));
@@ -939,6 +957,10 @@ window.__onCapturePlayerReload = (player) => {
   capturePlayer = player;
   currentVideoType = 'player_capture';
   playerReady = true;
+
+  if (player?.videoEl) {
+    player.videoEl.volume = getSavedVolume() / 100;
+  }
 
   // хост: слушатели на НОВОМ video
   if (isOwner && player?.videoEl && !player.videoEl.dataset.captureBound) {
@@ -1099,11 +1121,20 @@ function escapeHTML(str) {
   }[c]));
 }
 
+function usernameColor(username) {
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) {
+    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 65%)`;
+}
+
 function formatMessageHTML(username, text) {
   const isSystem = username === 'Система';
   const nameHTML = isSystem
     ? `<span style="color:var(--danger); font-weight:600;">Система</span>`
-    : `<b>${escapeHTML(username)}</b>`;
+    : `<b style="color:${usernameColor(username)}">${escapeHTML(username)}</b>`;
   return `${nameHTML}: ${escapeHTML(text)}`;
 }
 
@@ -1147,6 +1178,64 @@ function showLocalSystemMessage(text) {
   // видно только этому зрителю локально, не рассылается остальным по сокету
   appendMessageTo('messages', 'Система', text);
   appendMessageTo('fsMessages', 'Система', text);
+}
+
+const BUTTONS_LOCK_KEY = 'pw_buttons_locked';
+
+function areButtonsLocked() {
+  return localStorage.getItem(BUTTONS_LOCK_KEY) === '1';
+}
+
+function setButtonsLocked(locked) {
+  localStorage.setItem(BUTTONS_LOCK_KEY, locked ? '1' : '0');
+  const btn = document.getElementById('lockButtonsBtn');
+  if (btn) btn.firstChild ? (btn.childNodes[0].textContent = locked ? '🔒' : '🔓') : (btn.textContent = locked ? '🔒' : '🔓');
+}
+
+function initLockButtonsControl() {
+  const btn = document.getElementById('lockButtonsBtn');
+  if (!btn) return;
+  btn.textContent = areButtonsLocked() ? '🔒' : '🔓';
+
+  let pressTimer = null;
+  let tooltipEl = null;
+
+  function showTooltip(text) {
+    hideTooltip();
+    tooltipEl = document.createElement('div');
+    tooltipEl.className = 'lock-btn-tooltip';
+    tooltipEl.textContent = text;
+    btn.appendChild(tooltipEl);
+    setTimeout(hideTooltip, 2000);
+  }
+
+  function hideTooltip() {
+    if (tooltipEl) {
+      tooltipEl.remove();
+      tooltipEl = null;
+    }
+  }
+
+  function startPress() {
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      const newLocked = !areButtonsLocked();
+      setButtonsLocked(newLocked);
+      showTooltip(newLocked
+        ? 'Кнопки заблокированы — передвижение отключено'
+        : 'Кнопки разблокированы');
+    }, 3000);
+  }
+
+  function cancelPress() {
+    clearTimeout(pressTimer);
+  }
+
+  btn.addEventListener('pointerdown', startPress);
+  btn.addEventListener('pointerup', cancelPress);
+  btn.addEventListener('pointerleave', cancelPress);
+  btn.addEventListener('pointercancel', cancelPress);
+  btn.addEventListener('click', (e) => e.preventDefault());
 }
 
 function makeDraggable(el, storageKey) {
@@ -1208,6 +1297,12 @@ function makeDraggable(el, storageKey) {
     if (e.button != null && e.button !== 0) return;
     moved = false;
     dragging = false;
+
+    // кнопки заблокированы через замочек в чате — long-press не запускаем,
+    // pointerdown → pointerup засчитается как обычный клик
+    if (areButtonsLocked()) {
+      return;
+    }
 
     // iPhone / узкий экран: drag кнопок FS отключаем —
     // long-press + capture ломает обычный тап в Chrome/Safari
@@ -1376,6 +1471,100 @@ function refreshCcButton() {
   btn.classList.remove('hidden-cc');
   btn.classList.toggle('active', subtitlesOn);
 }
+
+const VOLUME_STORAGE_KEY = 'pw_volume';
+
+function getSavedVolume() {
+  const v = parseInt(localStorage.getItem(VOLUME_STORAGE_KEY), 10);
+  return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 30;
+}
+
+function saveVolume(v) {
+  localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+}
+
+function applyVolumeToActivePlayer(v) {
+  const frac = v / 100;
+  if (currentVideoType === 'youtube' && ytPlayer) {
+    try { ytPlayer.setVolume(v); } catch (_) {}
+  } else if (currentVideoType === 'twitch' && twitchPlayer) {
+    try { twitchPlayer.setVolume(frac); } catch (_) {}
+  } else {
+    const v_el = getActiveVideoEl();
+    if (v_el) v_el.volume = frac;
+  }
+}
+
+function positionVolumePopup() {
+  const popup = document.getElementById('volumePopup');
+  const btn = document.getElementById('volumeBtn');
+  const container = document.getElementById('playerWrap');
+  if (!popup || !btn || !container) return;
+
+  const parentRect = container.getBoundingClientRect();
+  const btnRect = btn.getBoundingClientRect();
+  const popupW = popup.offsetWidth || 140;
+  const popupH = popup.offsetHeight || 50;
+
+  let left = btnRect.left - parentRect.left;
+  let top = btnRect.bottom - parentRect.top + 8;
+
+  // не влезает справа — прижимаем правым краем попапа к правому краю кнопки
+  if (left + popupW > parentRect.width - 8) {
+    left = btnRect.right - parentRect.left - popupW;
+  }
+  if (left < 8) left = 8;
+
+  // не влезает снизу — открываем над кнопкой
+  if (top + popupH > parentRect.height - 8) {
+    top = btnRect.top - parentRect.top - popupH - 8;
+  }
+  if (top < 8) top = 8;
+
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+  popup.style.right = 'auto';
+  popup.style.bottom = 'auto';
+}
+
+function toggleVolumePopup(e) {
+  e?.stopPropagation?.();
+  const popup = document.getElementById('volumePopup');
+  if (!popup) return;
+  const willShow = popup.classList.contains('hidden');
+  popup.classList.toggle('hidden');
+  if (willShow) {
+    requestAnimationFrame(positionVolumePopup);
+  }
+}
+window.toggleVolumePopup = toggleVolumePopup;
+
+document.getElementById('volumeSlider')?.addEventListener('input', (e) => {
+  const v = parseInt(e.target.value, 10);
+  saveVolume(v);
+  applyVolumeToActivePlayer(v);
+});
+
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('volumePopup');
+  if (!popup || popup.classList.contains('hidden')) return;
+  if (!popup.contains(e.target) && e.target.id !== 'volumeBtn') {
+    popup.classList.add('hidden');
+  }
+});
+
+window.addEventListener('resize', () => {
+  const popup = document.getElementById('volumePopup');
+  if (popup && !popup.classList.contains('hidden')) positionVolumePopup();
+});
+document.addEventListener('fullscreenchange', () => {
+  const popup = document.getElementById('volumePopup');
+  if (popup && !popup.classList.contains('hidden')) requestAnimationFrame(positionVolumePopup);
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  const popup = document.getElementById('volumePopup');
+  if (popup && !popup.classList.contains('hidden')) requestAnimationFrame(positionVolumePopup);
+});
 
 function applySubtitlesState() {
   if (currentVideoType === 'youtube' && ytPlayer) {
@@ -1564,6 +1753,7 @@ function bindTap(el, handler) {
 bindTap(document.getElementById('fullscreenBtn'), toggleFullscreen);
 bindTap(document.getElementById('fsChatToggleBtn'), toggleFsChat);
 bindTap(document.getElementById('ccBtn'), toggleSubtitles);
+bindTap(document.getElementById('volumeBtn'), toggleVolumePopup);
 bindTap(document.getElementById('startBtn'), startWatching);
 // Делаем функции доступными из HTML
 window.setViewMode = setViewMode;
@@ -1804,6 +1994,7 @@ try {
   makeDraggable(document.getElementById('fullscreenBtn'), 'fullscreenBtn');
   makeDraggable(document.getElementById('fsChatToggleBtn'), 'fsChatToggleBtn');
   makeDraggable(document.getElementById('ccBtn'), 'ccBtn');
+  makeDraggable(document.getElementById('volumeBtn'), 'volumeBtn');
 } catch (e) { console.error('[makeDraggable]', e); }
 
 init();

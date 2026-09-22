@@ -23,6 +23,10 @@
 
     <button id="fsChatToggleBtn" class="fs-draggable hidden" type="button" title="Чат (зажми, чтобы передвинуть)">💬</button>
     <button id="ccBtn" class="fs-draggable" onclick="toggleSubtitles()" title="Субтитры">CC</button>
+    <button id="volumeBtn" class="fs-draggable" title="Громкость (зажми, чтобы передвинуть)">🔊</button>
+    <div id="volumePopup" class="hidden">
+      <input id="volumeSlider" type="range" min="0" max="100" value="30">
+    </div>
     <button id="fullscreenBtn" class="fs-draggable" onclick="toggleFullscreen()" title="Полноэкранный режим (зажми, чтобы передвинуть)">⛶</button>
 
     <div id="fsChatPanel" class="hidden">
@@ -90,6 +94,7 @@
 
     <div id="messages"></div>
     <form id="chatForm" onsubmit="return sendMessage(event)">
+      <button type="button" id="lockButtonsBtn" title="Зажми на 3 сек, чтобы заблокировать/разблокировать кнопки">🔓</button>
       <input id="chatInput" placeholder="Сообщение..." />
       <button type="submit">➤</button>
     </form>

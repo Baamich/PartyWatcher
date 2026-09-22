@@ -96,6 +96,30 @@ body {
   opacity: 0.45;
 }
 
+#volumeBtn {
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(154px, calc(env(safe-area-inset-right, 0px) + 148px));
+  font-size: 16px;
+}
+
+#volumePopup {
+  position: absolute;
+  z-index: 21;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  /* left/top ставит JS относительно текущей позиции кнопки — фиксированных top/right больше нет */
+}
+
+#volumePopup.hidden {
+  display: none;
+}
+
+#volumePopup input[type="range"] {
+  width: 100px;
+}
+
 #playerWrap.css-fullscreen {
   position: fixed;
   inset: 0;
@@ -311,6 +335,27 @@ body {
 #chatForm button {
   width: auto;
   padding: 8px 14px;
+}
+
+#lockButtonsBtn {
+  padding: 8px 10px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.lock-btn-tooltip {
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 30;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
