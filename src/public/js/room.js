@@ -1186,27 +1186,34 @@ function areButtonsLocked() {
   return localStorage.getItem(BUTTONS_LOCK_KEY) === '1';
 }
 
+function updateLockButtonAppearance() {
+  const btn = document.getElementById('lockButtonsBtn');
+  if (!btn) return;
+  const locked = areButtonsLocked();
+  btn.textContent = locked ? '🔒' : '🔓';
+  btn.classList.toggle('lock-state-locked', locked);
+  btn.classList.toggle('lock-state-unlocked', !locked);
+}
+
 function setButtonsLocked(locked) {
   localStorage.setItem(BUTTONS_LOCK_KEY, locked ? '1' : '0');
-  const btn = document.getElementById('lockButtonsBtn');
-  if (btn) btn.firstChild ? (btn.childNodes[0].textContent = locked ? '🔒' : '🔓') : (btn.textContent = locked ? '🔒' : '🔓');
+  updateLockButtonAppearance();
 }
 
 function initLockButtonsControl() {
   const btn = document.getElementById('lockButtonsBtn');
   if (!btn) return;
-  btn.textContent = areButtonsLocked() ? '🔒' : '🔓';
+  updateLockButtonAppearance();
 
-  let pressTimer = null;
+  let hoverTimer = null;
   let tooltipEl = null;
 
-  function showTooltip(text) {
+  function showTooltip() {
     hideTooltip();
     tooltipEl = document.createElement('div');
     tooltipEl.className = 'lock-btn-tooltip';
-    tooltipEl.textContent = text;
+    tooltipEl.textContent = 'Заблокировать/разблокировать движение кнопок плеера';
     btn.appendChild(tooltipEl);
-    setTimeout(hideTooltip, 2000);
   }
 
   function hideTooltip() {
@@ -1216,26 +1223,25 @@ function initLockButtonsControl() {
     }
   }
 
-  function startPress() {
-    clearTimeout(pressTimer);
-    pressTimer = setTimeout(() => {
-      const newLocked = !areButtonsLocked();
-      setButtonsLocked(newLocked);
-      showTooltip(newLocked
-        ? 'Кнопки заблокированы — передвижение отключено'
-        : 'Кнопки разблокированы');
-    }, 3000);
+  function startHover() {
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(showTooltip, 3000);
   }
 
-  function cancelPress() {
-    clearTimeout(pressTimer);
+  function cancelHover() {
+    clearTimeout(hoverTimer);
+    hideTooltip();
   }
 
-  btn.addEventListener('pointerdown', startPress);
-  btn.addEventListener('pointerup', cancelPress);
-  btn.addEventListener('pointerleave', cancelPress);
-  btn.addEventListener('pointercancel', cancelPress);
-  btn.addEventListener('click', (e) => e.preventDefault());
+  // клик — сразу переключает состояние, без задержки
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    setButtonsLocked(!areButtonsLocked());
+  });
+
+  // 3 сек наведения (десктоп) — просто подсказка, ничего не переключает
+  btn.addEventListener('mouseenter', startHover);
+  btn.addEventListener('mouseleave', cancelHover);
 }
 
 function makeDraggable(el, storageKey) {
