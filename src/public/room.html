@@ -31,13 +31,33 @@
 
     <div id="fsChatPanel" class="hidden">
       <div id="fsChatHandle">
+        <button type="button" id="fsSettingsBtn" aria-label="Участники комнаты" title="Участники комнаты">⚙️</button>
         <button type="button" id="fsChatClose" aria-label="Закрыть чат">×</button>
       </div>
+
+      <div id="fsParticipantsPanel" class="hidden">
+        <div id="fsParticipantsHeader">
+          <span>Участники: <b id="fsParticipantCount">0</b></span>
+          <button type="button" id="fsBannedListBtn" class="hidden">Заблокированные</button>
+          <button type="button" id="fsParticipantsClose" aria-label="Закрыть">×</button>
+        </div>
+        <div id="fsParticipantsList"></div>
+
+        <div id="fsBannedView" class="hidden">
+          <div id="fsBannedHeader">
+            <button type="button" id="fsBannedBackBtn">← Назад к участникам</button>
+          </div>
+          <div id="fsBannedList"></div>
+        </div>
+      </div>
+
       <div id="fsMessages"></div>
       <form id="fsChatForm" onsubmit="return sendMessage(event, true)">
         <input id="fsChatInput" type="text" placeholder="Сообщение..." autocomplete="off" maxlength="500">
         <button type="submit">➤</button>
       </form>
+
+      <div id="fsChatResizeHandle" title="Потяни, чтобы изменить размер"></div>
     </div>
 
     <div id="fsNotice" class="hidden"></div>

@@ -822,9 +822,8 @@ function openBannedList() {
   document.getElementById('bannedModal').classList.remove('hidden');
 }
 
-function renderParticipants(list) {
-  document.getElementById('participantCount').textContent = list.length;
-  const container = document.getElementById('participantsList');
+function renderParticipantRowsInto(container, list) {
+  if (!container) return;
   container.innerHTML = '';
 
   list.forEach((p) => {
@@ -838,17 +837,35 @@ function renderParticipants(list) {
       row.querySelector('.kick-btn').onclick = () => {
         if (confirm(`Кикнуть и заблокировать ${p.username} в этой комнате?`)) {
           socket.emit('room:kick', { code, targetUsername: p.username });
+
+          // если у хоста в этот момент открыт список заблокированных —
+          // подтягиваем его свежим, т.к. сервер сам такую рассылку не делает
+          const normalBannedOpen = !document.getElementById('bannedModal')?.classList.contains('hidden');
+          const fsBannedOpen = !document.getElementById('fsBannedView')?.classList.contains('hidden');
+          if (normalBannedOpen || fsBannedOpen) {
+            socket.emit('room:banned-list', { code });
+          }
         }
       };
     }
     container.appendChild(row);
   });
-
-  document.getElementById('bannedListBtn').classList.toggle('hidden', !isOwner);
 }
 
-function renderBannedList(list) {
-  const container = document.getElementById('bannedList');
+function renderParticipants(list) {
+  document.getElementById('participantCount').textContent = list.length;
+  renderParticipantRowsInto(document.getElementById('participantsList'), list);
+  document.getElementById('bannedListBtn').classList.toggle('hidden', !isOwner);
+
+  // та же логика, но для панели участников внутри fullscreen-чата
+  const fsCountEl = document.getElementById('fsParticipantCount');
+  if (fsCountEl) fsCountEl.textContent = list.length;
+  renderParticipantRowsInto(document.getElementById('fsParticipantsList'), list);
+  document.getElementById('fsBannedListBtn')?.classList.toggle('hidden', !isOwner);
+}
+
+function renderBannedRowsInto(container, list) {
+  if (!container) return;
   container.innerHTML = '';
 
   if (!list.length) {
@@ -863,6 +880,40 @@ function renderBannedList(list) {
     row.querySelector('.unban-btn').onclick = () => socket.emit('room:unban', { code, userId: u.id });
     container.appendChild(row);
   });
+}
+
+function renderBannedList(list) {
+  renderBannedRowsInto(document.getElementById('bannedList'), list);
+  renderBannedRowsInto(document.getElementById('fsBannedList'), list);
+}
+
+function openFsParticipants() {
+  socket.emit('room:participants', { code });
+  document.getElementById('fsParticipantsPanel')?.classList.remove('hidden');
+  hideFsBannedView();
+}
+
+function closeFsParticipants() {
+  document.getElementById('fsParticipantsPanel')?.classList.add('hidden');
+}
+
+function toggleFsParticipants() {
+  const panel = document.getElementById('fsParticipantsPanel');
+  if (!panel) return;
+  panel.classList.contains('hidden') ? openFsParticipants() : closeFsParticipants();
+}
+
+function showFsBannedView() {
+  socket.emit('room:banned-list', { code });
+  document.getElementById('fsParticipantsList')?.classList.add('hidden');
+  document.getElementById('fsBannedListBtn')?.classList.add('hidden');
+  document.getElementById('fsBannedView')?.classList.remove('hidden');
+}
+
+function hideFsBannedView() {
+  document.getElementById('fsBannedView')?.classList.add('hidden');
+  document.getElementById('fsParticipantsList')?.classList.remove('hidden');
+  if (isOwner) document.getElementById('fsBannedListBtn')?.classList.remove('hidden');
 }
 
 function initChatInputPlaceholder() {
@@ -1776,6 +1827,43 @@ window.copyRoomLink = copyRoomLink;
 window.sendMessage = sendMessage;
 window.toggleSubtitles = toggleSubtitles;
 
+
+// --- Сохранённый размер fs-чата (ресайз за угол) ---
+const FS_CHAT_SIZE_KEY = 'pw-size:fsChatPanel:fullscreen';
+const FS_CHAT_MIN_W = 220;
+const FS_CHAT_MIN_H = 200;
+
+function getFsChatSavedSize() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FS_CHAT_SIZE_KEY) || 'null');
+    if (saved && typeof saved.width === 'number' && typeof saved.height === 'number') return saved;
+  } catch (_) {}
+  return null;
+}
+
+function saveFsChatSize(width, height) {
+  localStorage.setItem(FS_CHAT_SIZE_KEY, JSON.stringify({ width, height }));
+}
+
+function applyFsChatPanelSize() {
+  const panel = document.getElementById('fsChatPanel');
+  const container = document.getElementById('playerWrap');
+  if (!panel || !container || panel.classList.contains('hidden')) return;
+
+  const saved = getFsChatSavedSize();
+  if (!saved) return;
+
+  const p = container.getBoundingClientRect();
+  const maxW = Math.max(FS_CHAT_MIN_W, p.width - 16);
+  const maxH = Math.max(FS_CHAT_MIN_H, p.height - 16);
+  const width = Math.max(FS_CHAT_MIN_W, Math.min(saved.width, maxW));
+  const height = Math.max(FS_CHAT_MIN_H, Math.min(saved.height, maxH));
+
+  panel.style.width = width + 'px';
+  panel.style.height = height + 'px';
+}
+
+
 // --- Fullscreen chat modal drag & position ---
 function makeFsChatPanelDraggable() {
   const panel = document.getElementById('fsChatPanel');
@@ -1854,7 +1942,7 @@ function makeFsChatPanelDraggable() {
   }
 
   handle.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#fsChatClose')) return;
+    if (e.target.closest('#fsChatClose') || e.target.closest('#fsSettingsBtn')) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -1908,7 +1996,10 @@ function makeFsChatPanelDraggable() {
   // при смене фуллскрина / ресайзе — поджимаем в границы
   const repositionIfFs = () => {
     if (isDocFullscreen()) {
-      requestAnimationFrame(() => applySavedPosition());
+      requestAnimationFrame(() => {
+        applyFsChatPanelSize();
+        applySavedPosition();
+      });
     }
   };
   document.addEventListener('fullscreenchange', repositionIfFs);
@@ -1916,10 +2007,65 @@ function makeFsChatPanelDraggable() {
 
   window.addEventListener('resize', () => {
     if (isDocFullscreen() && !panel.classList.contains('hidden')) {
+      applyFsChatPanelSize();
       applySavedPosition();
     }
   });
 
+  // --- ресайз панели за угол ---
+  const resizeHandleEl = document.getElementById('fsChatResizeHandle');
+  let resizing = false;
+  let startXR = 0, startYR = 0, startW = 0, startH = 0;
+
+  resizeHandleEl?.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = panel.getBoundingClientRect();
+    startW = rect.width;
+    startH = rect.height;
+    startXR = e.clientX;
+    startYR = e.clientY;
+    resizing = true;
+    panel.classList.add('resizing');
+    try { resizeHandleEl.setPointerCapture(e.pointerId); } catch {}
+  });
+
+  resizeHandleEl?.addEventListener('pointermove', (e) => {
+    if (!resizing) return;
+    e.preventDefault();
+
+    const parentRect = container.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const leftOffset = panelRect.left - parentRect.left;
+    const topOffset = panelRect.top - parentRect.top;
+
+    const maxW = Math.max(FS_CHAT_MIN_W, parentRect.width - leftOffset - 8);
+    const maxH = Math.max(FS_CHAT_MIN_H, parentRect.height - topOffset - 8);
+
+    let newW = startW + (e.clientX - startXR);
+    let newH = startH + (e.clientY - startYR);
+
+    newW = Math.max(FS_CHAT_MIN_W, Math.min(newW, maxW));
+    newH = Math.max(FS_CHAT_MIN_H, Math.min(newH, maxH));
+
+    panel.style.width = newW + 'px';
+    panel.style.height = newH + 'px';
+  });
+
+  function endResize(e) {
+    if (!resizing) return;
+    resizing = false;
+    panel.classList.remove('resizing');
+    try { resizeHandleEl.releasePointerCapture(e.pointerId); } catch {}
+
+    const rect = panel.getBoundingClientRect();
+    saveFsChatSize(rect.width, rect.height);
+  }
+
+  resizeHandleEl?.addEventListener('pointerup', endResize);
+  resizeHandleEl?.addEventListener('pointercancel', endResize);
+
+  applyFsChatPanelSize();
   applySavedPosition();
 }
 
@@ -1935,8 +2081,9 @@ function toggleFsChat() {
   panel.classList.toggle('hidden');
 
   if (willShow) {
-    // после показа размеры уже известны — ставим позицию
+    // после показа размеры уже известны — сначала применяем сохранённый размер, потом позицию
     requestAnimationFrame(() => {
+      applyFsChatPanelSize();
       const saved = JSON.parse(localStorage.getItem('pw-pos:fsChatPanel:fullscreen') || 'null');
       if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
         const container = document.getElementById('playerWrap');
@@ -1994,6 +2141,24 @@ try { makeFsChatPanelDraggable(); } catch (e) { console.error('[fsChatPanel]', e
 document.getElementById('fsChatClose')?.addEventListener('click', (e) => {
   e.stopPropagation();
   closeFsChat();
+});
+
+// шестерёнка + участники внутри fullscreen-чата
+document.getElementById('fsSettingsBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleFsParticipants();
+});
+document.getElementById('fsParticipantsClose')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeFsParticipants();
+});
+document.getElementById('fsBannedListBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  showFsBannedView();
+});
+document.getElementById('fsBannedBackBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  hideFsBannedView();
 });
 
 try {
