@@ -15,6 +15,46 @@ let playerFocused = false;
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 
+const PLAYBACK_CACHE_TTL_MS = 30 * 60 * 1000;
+
+function playbackCacheKey() {
+  return `pw_playback:${code}`;
+}
+
+function savePlaybackCache({ isPlaying, positionSeconds }) {
+  if (!code) return;
+  try {
+    localStorage.setItem(playbackCacheKey(), JSON.stringify({
+      isPlaying: !!isPlaying,
+      positionSeconds: Number(positionSeconds) || 0,
+      videoType: currentVideoType,
+      videoUrl: window.__lastVideoUrl || null,
+      savedAt: Date.now(),
+    }));
+  } catch (_) {}
+}
+
+function loadPlaybackCache() {
+  try {
+    const raw = localStorage.getItem(playbackCacheKey());
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || Date.now() - (data.savedAt || 0) > PLAYBACK_CACHE_TTL_MS) {
+      localStorage.removeItem(playbackCacheKey());
+      return null;
+    }
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearPlaybackCache() {
+  try {
+    localStorage.removeItem(playbackCacheKey());
+  } catch (_) {}
+}
+
 
 let thumbnailTimer = null;
 
@@ -265,14 +305,32 @@ function isAgeConfirmedLocally() {
           onReady: (e) => {
             playerReady = true;
             e.target.setVolume(30);
-            e.target.unloadModule('captions'); // жёстко гасит субтитры, даже если в аккаунте зрителя стоит "всегда показывать"
+            if (!subtitlesOn) {
+              try {
+                e.target.unloadModule('captions');
+                e.target.unloadModule('cc');
+              } catch (_) {}
+            } else {
+              applySubtitlesState();
+            }
+            if (lastState.positionSeconds > 1) {
+              try {
+                e.target.seekTo(lastState.positionSeconds, true);
+              } catch (_) {}
+            }
             resolve();
           },
           onStateChange: (e) => {
+            if (!subtitlesOn && (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.PAUSED)) {
+              forceYoutubeCaptionsOff();
+            }
             if (suppressEvents) return;
             if (!isOwner) return;
             if (e.data === YT.PlayerState.PLAYING) emitPlayback(true);
             else if (e.data === YT.PlayerState.PAUSED) emitPlayback(false);
+          },
+          onApiChange: () => {
+            if (!subtitlesOn) forceYoutubeCaptionsOff();
           },
           onError: (e) => handleYoutubeError(e.data),
         },
@@ -298,6 +356,11 @@ function isAgeConfirmedLocally() {
       twitchPlayer.addEventListener(Twitch.Player.READY, () => {
         playerReady = true;
         twitchPlayer.setVolume(0.3);
+        if (lastState.positionSeconds > 1) {
+          try {
+            twitchPlayer.seek(lastState.positionSeconds);
+          } catch (_) {}
+        }
         resolve();
       });
 
@@ -367,6 +430,7 @@ function doPlayPause(isPlaying) {
 
 function applyPlaybackState({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
+  savePlaybackCache(lastState);
   if (!playerReady) return;
 
   suppressEvents = true;
@@ -379,7 +443,7 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
     setTimeout(() => (suppressEvents = false), 800);
-      } else if (currentVideoType === 'player_capture' && capturePlayer) {
+  } else if (currentVideoType === 'player_capture' && capturePlayer) {
     const v = capturePlayer.videoEl;
     const run = () => {
       if (!v) {
@@ -506,7 +570,10 @@ function enforceHostState() {
 
 function emitPlayback(isPlaying) {
   if (suppressEvents || !isOwner) return;
-  socket.emit('playback:update', { code, isPlaying, positionSeconds: getCurrentPosition() });
+  const positionSeconds = getCurrentPosition();
+  lastState = { isPlaying, positionSeconds };
+  savePlaybackCache(lastState);
+  socket.emit('playback:update', { code, isPlaying, positionSeconds });
 }
 
 function startHeartbeat() {
@@ -519,6 +586,7 @@ function startHeartbeat() {
 
 function softSync({ isPlaying, positionSeconds }) {
   lastState = { isPlaying, positionSeconds };
+  savePlaybackCache(lastState);
   if (!playerReady) return;
 
   const playingNow = getIsPlayingNow();
@@ -824,8 +892,28 @@ async function init() {
 
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name }) => {
     isOwner = ownerFlag;
-    lastState = playback;
     window.__captureVideoUrl = video?.url || window.__captureVideoUrl || null;
+    window.__lastVideoUrl = video?.url || null;
+
+    const cached = loadPlaybackCache();
+    const serverPos = playback?.positionSeconds || 0;
+    if (
+      cached &&
+      cached.videoUrl === (video?.url || null) &&
+      serverPos < 2 &&
+      cached.positionSeconds > 5
+    ) {
+      lastState = {
+        isPlaying: cached.isPlaying,
+        positionSeconds: cached.positionSeconds,
+      };
+    } else {
+      lastState = playback || { isPlaying: false, positionSeconds: 0 };
+    }
+
+    if (lastState && typeof lastState.positionSeconds === 'number') {
+      savePlaybackCache(lastState);
+    }
 
     const nameEl = document.getElementById('roomNameValue');
     if (nameEl) {
@@ -865,6 +953,7 @@ window.__onCapturePlayerReload = (player) => {
 
   socket.on('playback:update', (state) => {
     lastState = state;
+    savePlaybackCache(state);
 
     if (!started) {
       updateWaitingOverlayText();
@@ -1247,7 +1336,20 @@ function initViewMode() {
   setViewMode('chat');
 }
 
-let subtitlesOn = false;
+const CC_STORAGE_KEY = 'pw_subtitles_on';
+let subtitlesOn = localStorage.getItem(CC_STORAGE_KEY) === '1';
+
+function persistSubtitlesPref() {
+  localStorage.setItem(CC_STORAGE_KEY, subtitlesOn ? '1' : '0');
+}
+
+function forceYoutubeCaptionsOff() {
+  if (!ytPlayer || subtitlesOn) return;
+  try {
+    ytPlayer.unloadModule('captions');
+    ytPlayer.unloadModule('cc');
+  } catch (_) {}
+}
 
 function getActiveVideoEl() {
   if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) return capturePlayer.videoEl;
@@ -1275,16 +1377,16 @@ function refreshCcButton() {
   btn.classList.toggle('active', subtitlesOn);
 }
 
-function toggleSubtitles() {
-  subtitlesOn = !subtitlesOn;
-
+function applySubtitlesState() {
   if (currentVideoType === 'youtube' && ytPlayer) {
     try {
       if (subtitlesOn) {
         ytPlayer.loadModule('captions');
-        ytPlayer.setOption('captions', 'track', { languageCode: 'ru' });
+        try {
+          ytPlayer.setOption('captions', 'track', { languageCode: 'ru' });
+        } catch (_) {}
       } else {
-        ytPlayer.unloadModule('captions');
+        forceYoutubeCaptionsOff();
       }
     } catch (_) {}
     refreshCcButton();
@@ -1293,7 +1395,6 @@ function toggleSubtitles() {
 
   const v = getActiveVideoEl();
   if (!v?.textTracks) {
-    subtitlesOn = false;
     refreshCcButton();
     return;
   }
@@ -1304,7 +1405,19 @@ function toggleSubtitles() {
   refreshCcButton();
 }
 
+function toggleSubtitles() {
+  subtitlesOn = !subtitlesOn;
+  persistSubtitlesPref();
+  applySubtitlesState();
+}
+
 window.toggleSubtitles = toggleSubtitles;
+
+setInterval(() => {
+  if (currentVideoType === 'youtube' && ytPlayer && !subtitlesOn && playerReady) {
+    forceYoutubeCaptionsOff();
+  }
+}, 4000);
 
 
 const playerWrapEl = document.getElementById('playerWrap');

@@ -588,3 +588,38 @@ body.view-video-only #chat {
 video::-webkit-media-controls-fullscreen-button {
   display: none !important;
 }
+
+
+/* === Fullscreen toast сообщений (сверху, не сбоку) === */
+#fsNotice {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  max-width: min(92%, 520px);
+  width: max-content;
+  padding: 10px 18px;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+  border-radius: 12px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: opacity 0.4s ease;
+  word-break: break-word;
+}
+
+#fsNotice.hidden {
+  display: none !important;
+  opacity: 0;
+}
+
+#fsNotice.fade-out {
+  opacity: 0;
+}
