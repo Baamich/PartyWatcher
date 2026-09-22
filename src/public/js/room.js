@@ -862,6 +862,13 @@ function renderParticipants(list) {
   if (fsCountEl) fsCountEl.textContent = list.length;
   renderParticipantRowsInto(document.getElementById('fsParticipantsList'), list);
   document.getElementById('fsBannedListBtn')?.classList.toggle('hidden', !isOwner);
+
+  // бэйдж с числом участников прямо на кнопке ⚙️ во fullscreen
+  const badge = document.getElementById('fsSettingsBadge');
+  if (badge) {
+    badge.textContent = list.length;
+    badge.classList.toggle('hidden', list.length === 0);
+  }
 }
 
 function renderBannedRowsInto(container, list) {

@@ -156,6 +156,26 @@ body {
   /* НЕ touch-action / user-select на всей панели — иначе ломается скролл */
 }
 
+.fs-settings-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--accent, #7c3aed);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.fs-settings-badge.hidden {
+  display: none;
+}
+
 #fsChatPanel.hidden {
   display: none !important;
 }
