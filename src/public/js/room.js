@@ -18,9 +18,103 @@ let inVoiceCall = false;
 let localStream = null;
 let peerConnections = {};
 let remoteAudioEls = {};
+let voiceAudioCtx = null;
+let rawLocalStream = null;
 
 const MAX_VOICE_PARTICIPANTS = 15; // mesh: каждый держит N-1 P2P-соединений, больше — начинает тормозить
 const VOICE_WARN_THRESHOLD = 8;
+
+function voiceVolKey(username) {
+  return `pw_voice_vol:${username}`;
+}
+
+function getUserVoiceVolume(username) {
+  const v = parseInt(localStorage.getItem(voiceVolKey(username)), 10);
+  return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 100;
+}
+
+function setUserVoiceVolume(username, vol) {
+  const clamped = Math.max(0, Math.min(100, Number(vol) || 0));
+  localStorage.setItem(voiceVolKey(username), String(clamped));
+  voiceParticipants.forEach((p) => {
+    if (p.username === username && remoteAudioEls[p.socketId]) {
+      remoteAudioEls[p.socketId].volume = clamped / 100;
+    }
+  });
+}
+
+async function createProcessedLocalStream() {
+  const raw = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+      // Chrome: доп. изоляция голоса, если поддерживается
+      voiceIsolation: true,
+    },
+    video: false,
+  });
+
+  rawLocalStream = raw;
+
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();
+  voiceAudioCtx = ctx;
+
+  const source = ctx.createMediaStreamSource(raw);
+
+  // срезаем гул/дыхание/низкий шум
+  const highpass = ctx.createBiquadFilter();
+  highpass.type = 'highpass';
+  highpass.frequency.value = 100;
+  highpass.Q.value = 0.7;
+
+  // чуть приглушаем очень тихие шумы, усиливает речь
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -45;
+  compressor.knee.value = 30;
+  compressor.ratio.value = 10;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.2;
+
+  // мягкий noise gate: тише порога — почти mute
+  const gate = ctx.createGain();
+  gate.gain.value = 1;
+
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  const data = new Uint8Array(analyser.fftSize);
+
+  const dest = ctx.createMediaStreamDestination();
+
+  source.connect(highpass);
+  highpass.connect(compressor);
+  compressor.connect(analyser);
+  analyser.connect(gate);
+  gate.connect(dest);
+
+  const GATE_THRESHOLD = 12; // 0–255, ниже = глушим (подстрой при необходимости)
+  const GATE_FLOOR = 0.02;
+
+  function tickGate() {
+    if (!voiceAudioCtx) return;
+    analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = data[i] - 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / data.length);
+    const target = rms < GATE_THRESHOLD ? GATE_FLOOR : 1;
+    const current = gate.gain.value;
+    gate.gain.value = current + (target - current) * 0.15;
+    requestAnimationFrame(tickGate);
+  }
+  tickGate();
+
+  return dest.stream;
+}
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 
@@ -835,20 +929,33 @@ function renderParticipantRowsInto(container, list) {
   if (!container) return;
   container.innerHTML = '';
 
+  const myName = socket?.user?.username || null;
+
   list.forEach((p) => {
     const row = document.createElement('div');
     row.className = 'participant-row';
+
+    const isMe = myName && p.username === myName;
+    const vol = getUserVoiceVolume(p.username);
+
     row.innerHTML = `
-      <span>${p.username}${p.isOwner ? ' (Хост)' : ''}</span>
-      ${isOwner && !p.isOwner ? '<button class="kick-btn">Кикнуть</button>' : ''}`;
+      <div class="participant-row-main">
+        <span>${p.username}${p.isOwner ? ' (Хост)' : ''}${isMe ? ' (вы)' : ''}</span>
+        ${isOwner && !p.isOwner ? '<button type="button" class="kick-btn">Кикнуть</button>' : ''}
+      </div>
+      ${!isMe ? `
+        <div class="participant-vol">
+          <span class="participant-vol-label">🔊</span>
+          <input type="range" class="participant-vol-slider" min="0" max="100" value="${vol}" data-username="${p.username}">
+          <span class="participant-vol-value">${vol}%</span>
+        </div>
+      ` : ''}`;
 
     if (isOwner && !p.isOwner) {
       row.querySelector('.kick-btn').onclick = () => {
         if (confirm(`Кикнуть и заблокировать ${p.username} в этой комнате?`)) {
           socket.emit('room:kick', { code, targetUsername: p.username });
 
-          // если у хоста в этот момент открыт список заблокированных —
-          // подтягиваем его свежим, т.к. сервер сам такую рассылку не делает
           const normalBannedOpen = !document.getElementById('bannedModal')?.classList.contains('hidden');
           const fsBannedOpen = !document.getElementById('fsBannedView')?.classList.contains('hidden');
           if (normalBannedOpen || fsBannedOpen) {
@@ -857,6 +964,17 @@ function renderParticipantRowsInto(container, list) {
         }
       };
     }
+
+    const slider = row.querySelector('.participant-vol-slider');
+    const valueEl = row.querySelector('.participant-vol-value');
+    if (slider) {
+      slider.addEventListener('input', () => {
+        const v = parseInt(slider.value, 10);
+        if (valueEl) valueEl.textContent = v + '%';
+        setUserVoiceVolume(p.username, v);
+      });
+    }
+
     container.appendChild(row);
   });
 }
@@ -1814,18 +1932,25 @@ async function startVoiceCall() {
   }
 
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-      },
-      video: false,
-    });
+    localStream = await createProcessedLocalStream();
   } catch (e) {
-    alert('Не удалось получить доступ к микрофону: ' + (e.message || e));
-    return;
+    // voiceIsolation может не поддерживаться — пробуем без него
+    try {
+      const raw = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+        video: false,
+      });
+      rawLocalStream = raw;
+      localStream = raw;
+    } catch (e2) {
+      alert('Не удалось получить доступ к микрофону: ' + (e2.message || e2));
+      return;
+    }
   }
 
   await getIceServers(); // прогреваем кэш заранее, до прихода первого offer/answer
@@ -1852,6 +1977,14 @@ function leaveVoiceCall() {
   if (localStream) {
     localStream.getTracks().forEach((t) => t.stop());
     localStream = null;
+  }
+  if (rawLocalStream) {
+    rawLocalStream.getTracks().forEach((t) => t.stop());
+    rawLocalStream = null;
+  }
+  if (voiceAudioCtx) {
+    try { voiceAudioCtx.close(); } catch (_) {}
+    voiceAudioCtx = null;
   }
   stopAllPeerConnections();
   renderVoicePanel();
@@ -1903,6 +2036,10 @@ function getOrCreatePeerConnection(remoteSocketId, iceServers) {
       remoteAudioEls[remoteSocketId] = audioEl;
     }
     audioEl.srcObject = e.streams[0];
+    const peer = voiceParticipants.find((p) => p.socketId === remoteSocketId);
+    if (peer) {
+      audioEl.volume = getUserVoiceVolume(peer.username) / 100;
+    }
   };
 
   pc.onconnectionstatechange = () => {
@@ -1953,6 +2090,14 @@ function leaveRoom() {
     if (localStream) {
       localStream.getTracks().forEach((t) => t.stop());
       localStream = null;
+    }
+    if (rawLocalStream) {
+      rawLocalStream.getTracks().forEach((t) => t.stop());
+      rawLocalStream = null;
+    }
+    if (voiceAudioCtx) {
+      try { voiceAudioCtx.close(); } catch (_) {}
+      voiceAudioCtx = null;
     }
     stopAllPeerConnections();
   } catch (_) {}

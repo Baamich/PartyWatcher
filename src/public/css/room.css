@@ -1008,3 +1008,49 @@ video::-webkit-media-controls-fullscreen-button {
 .voice-hangup-btn.hidden {
   display: none !important;
 } 
+
+.participant-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.participant-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.participant-vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 2px;
+}
+
+.participant-vol-label {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.participant-vol-slider {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  cursor: pointer;
+}
+
+.participant-vol-value {
+  font-size: 12px;
+  color: var(--text-muted);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+#fsParticipantsList .participant-vol-value {
+  color: rgba(255, 255, 255, 0.7);
+}
