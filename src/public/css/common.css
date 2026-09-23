@@ -19,6 +19,14 @@
   --danger: #f87171;
   --shadow: 0 4px 22px rgba(0, 0, 0, 0.55);
   --logo-alt: #f0ebe6;
+
+  /* фирменный цвет кнопок для тёмной темы — тёплый янтарь/оранжевый, под тон общей "тёплой" тёмной палитры */
+  --btn-grad-start: #ff9d3d;
+  --btn-grad-end: #ff5f6d;
+  --btn-grad-start-hover: #ffb35c;
+  --btn-grad-end-hover: #ff7a86;
+  --btn-glow: 0 4px 16px rgba(255, 130, 70, 0.35);
+  --btn-glow-hover: 0 6px 22px rgba(255, 130, 70, 0.5);
 }
 
 /* =========================================
@@ -37,6 +45,14 @@
   --danger: #cf5559;
   --shadow: 0 2px 10px rgba(35, 40, 65, 0.10);
   --logo-alt: #272c3a;
+
+  /* фирменный цвет кнопок для светлой темы — свежий изумрудно-бирюзовый */
+  --btn-grad-start: #0fb37f;
+  --btn-grad-end: #17c9a8;
+  --btn-grad-start-hover: #0c9c6e;
+  --btn-grad-end-hover: #13b596;
+  --btn-glow: 0 3px 12px rgba(15, 179, 127, 0.28);
+  --btn-glow-hover: 0 5px 18px rgba(15, 179, 127, 0.4);
 }
 
 /* =========================================
@@ -91,21 +107,24 @@ button {
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--btn-grad-start), var(--btn-grad-end));
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease;
+  box-shadow: var(--btn-glow);
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
 }
 
 button:hover {
-  background: var(--accent-hover);
+  background: linear-gradient(135deg, var(--btn-grad-start-hover), var(--btn-grad-end-hover));
+  box-shadow: var(--btn-glow-hover);
 }
 
 button:active {
   transform: scale(0.98);
+  box-shadow: var(--btn-glow);
 }
 
 .hidden {
