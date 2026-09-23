@@ -147,4 +147,91 @@ router.get('/:code', auth, async (req, res) => {
   res.json(room);
 });
 
+router.post('/:code/change-video', auth, async (req, res) => {
+  try {
+    const room = await Room.findOne({ code: req.params.code });
+    if (!room) return res.status(404).json({ error: 'Комната не найдена' });
+    if (String(room.owner) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'Только хост может сменить видео' });
+    }
+
+    let rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) return res.status(400).json({ error: 'Нужна ссылка' });
+
+    const type = room.video.type;
+    let url = rawUrl;
+
+    if (type === 'youtube') {
+      if (!/youtube\.com|youtu\.be/.test(rawUrl)) {
+        return res.status(400).json({ error: 'Нужна ссылка YouTube (режим комнаты — youtube)' });
+      }
+    } else if (type === 'twitch') {
+      if (!/twitch\.tv\/videos\//.test(rawUrl)) {
+        return res.status(400).json({ error: 'Нужна ссылка на VOD Twitch (twitch.tv/videos/...)' });
+      }
+    } else if (type === 'drive') {
+      const match = rawUrl.match(/\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (!match && !/^[a-zA-Z0-9_-]+$/.test(rawUrl)) {
+        return res.status(400).json({ error: 'Не удалось распознать ссылку Google Диска' });
+      }
+      url = match ? match[1] : rawUrl;
+    } else if (type === 'player_capture' || type === 'direct') {
+      if (!rawUrl.startsWith('http')) {
+        return res.status(400).json({ error: 'Нужна полная ссылка (http/https)' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Смена ссылки для этого режима не поддерживается' });
+    }
+
+    room.video.url = url;
+    room.video.title = undefined;
+    room.video.ageRestricted = false;
+    room.ageConfirmed = false;
+    if (room.video.meta) {
+      room.video.meta.currentSeason = null;
+      room.video.meta.currentEpisode = null;
+      room.video.meta.currentVoice = null;
+      room.video.meta.seasons = [];
+      room.video.meta.voices = [];
+    }
+    room.playback = { isPlaying: false, positionSeconds: 0, updatedAt: new Date() };
+    room.thumbnailUrl = null;
+    room.markModified('video');
+    room.markModified('playback');
+    await room.save();
+
+    if (type === 'player_capture') {
+      try {
+        const playerCaptureCache = require('../services/playerCaptureCache');
+        playerCaptureCache.clearRoom(room.code);
+      } catch (_) {}
+    }
+
+    try {
+      fs.unlinkSync(path.join(THUMB_DIR, `${room.code}.jpg`));
+    } catch (_) {}
+
+    const io = req.app.get('io');
+    io.to(room.code).emit('room:video-changed', {
+      video: room.video,
+      playback: room.playback,
+      by: req.user.username,
+    });
+    io.to(room.code).emit('chat:message', {
+      username: 'Система',
+      text: `Хост сменил видео`,
+      at: Date.now(),
+    });
+
+    if (room.isPublic) {
+      io.to('lobby').emit('rooms:public-updated');
+    }
+
+    res.json({ status: 'ok', video: room.video, playback: room.playback });
+  } catch (err) {
+    console.error('[rooms/change-video]', err);
+    res.status(500).json({ error: err.message || 'Не удалось сменить видео' });
+  }
+});
+
 module.exports = router;

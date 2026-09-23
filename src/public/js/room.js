@@ -94,7 +94,7 @@ async function createProcessedLocalStream() {
   analyser.connect(gate);
   gate.connect(dest);
 
-  const GATE_THRESHOLD = 12; // 0–255, ниже = глушим (подстрой при необходимости)
+  const GATE_THRESHOLD = 18; // 18–25 (глушит сильнее, но может глотать тихую речь).
   const GATE_FLOOR = 0.02;
 
   function tickGate() {
@@ -1060,6 +1060,104 @@ function initChatInputPlaceholder() {
   });
 }
 
+const VIDEO_TYPE_LABELS = {
+  youtube: 'YouTube',
+  twitch: 'Twitch',
+  drive: 'Google Диск',
+  player_capture: 'Захват плеера',
+  direct: 'Прямая ссылка',
+  vk: 'VK',
+};
+
+function updateVideoChangeModeLabel(type) {
+  const el = document.getElementById('videoChangeModeLabel');
+  if (!el) return;
+  el.textContent = VIDEO_TYPE_LABELS[type] || type || '—';
+}
+
+function destroyCurrentPlayer() {
+  try {
+    if (ytPlayer && typeof ytPlayer.destroy === 'function') {
+      ytPlayer.destroy();
+    }
+  } catch (_) {}
+  ytPlayer = null;
+
+  try {
+    if (twitchPlayer && typeof twitchPlayer.destroy === 'function') {
+      twitchPlayer.destroy();
+    }
+  } catch (_) {}
+  twitchPlayer = null;
+
+  try {
+    if (capturePlayer?.destroy) capturePlayer.destroy();
+  } catch (_) {}
+  capturePlayer = null;
+
+  videoEl = null;
+  playerReady = false;
+  started = false;
+  ageGateResolvedForVideo = false;
+  ageGateHandling = false;
+
+  const container = document.getElementById('player');
+  if (container) container.innerHTML = '';
+}
+
+async function applyNewVideo(video, playback) {
+  destroyCurrentPlayer();
+  clearPlaybackCache();
+
+  window.__captureVideoUrl = video?.url || null;
+  window.__lastVideoUrl = video?.url || null;
+  currentVideoType = video?.type || null;
+  lastState = playback || { isPlaying: false, positionSeconds: 0 };
+  updateVideoChangeModeLabel(video?.type);
+
+  await renderPlayer(video);
+  setTimeout(refreshCcButton, 800);
+
+  if (isOwner) {
+    setOverlay('Готово к просмотру', true);
+  } else {
+    setOverlay('Хост сменил видео — нажми, чтобы продолжить', true);
+  }
+}
+
+async function changeVideoUrl() {
+  if (!isOwner) return;
+  const input = document.getElementById('videoChangeUrl');
+  const btn = document.getElementById('videoChangeBtn');
+  const url = (input?.value || '').trim();
+  if (!url) {
+    alert('Вставь новую ссылку');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Меняем...';
+  }
+
+  try {
+    const data = await api(`/rooms/${code}/change-video`, {
+      method: 'POST',
+      body: { url },
+    });
+    if (input) input.value = '';
+    await applyNewVideo(data.video, data.playback);
+  } catch (err) {
+    alert(err.message || 'Не удалось сменить видео');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Сменить';
+    }
+  }
+}
+window.changeVideoUrl = changeVideoUrl;
+
 async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/index.html');
@@ -1097,6 +1195,7 @@ async function init() {
     isOwner = ownerFlag;
     window.__captureVideoUrl = video?.url || window.__captureVideoUrl || null;
     window.__lastVideoUrl = video?.url || null;
+    updateVideoChangeModeLabel(video?.type);
 
     const cached = loadPlaybackCache();
     const serverPos = playback?.positionSeconds || 0;
@@ -1203,6 +1302,10 @@ window.__onCapturePlayerReload = (player) => {
   socket.on('room:deleted', () => {
     alert('Комната удалена владельцем');
     location.href = '/index.html';
+  });
+
+  socket.on('room:video-changed', async ({ video, playback, by }) => {
+    await applyNewVideo(video, playback);
   });
 
   socket.on('player_capture:streams', async ({ season, episode, voice, streams, meta, by }) => {
@@ -1630,15 +1733,7 @@ function setViewMode(mode) {
     document.body.classList.add('view-video-only');
     btnVideo.classList.add('active');
     btnChat.classList.remove('active');
-    // показываем только если селекты уже заполнены (есть опции)
-    if (hostControls) {
-      const hasOptions =
-        document.querySelectorAll('#seasonSelect option').length > 0 ||
-        document.querySelectorAll('#playerSelect option').length > 0;
-      if (hasOptions) {
-        hostControls.classList.remove('hidden');
-      }
-    }
+    if (hostControls) hostControls.classList.remove('hidden');
   }
 }
 

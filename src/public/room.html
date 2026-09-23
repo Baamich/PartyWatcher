@@ -125,6 +125,13 @@
         <label>Качество</label>
         <select id="qualitySelect" onchange="onQualityChange()"></select>
       </div>
+
+      <div class="video-change-block">
+        <div class="video-change-title">Смена ссылки</div>
+        <div class="video-change-mode">Режим: <b id="videoChangeModeLabel">—</b></div>
+        <input id="videoChangeUrl" type="url" placeholder="Новая ссылка на видео" autocomplete="off" />
+        <button type="button" id="videoChangeBtn" onclick="changeVideoUrl()">Сменить</button>
+      </div>
     </div>
 
     <button onclick="resync()">🔄 Синхронизировать</button>
@@ -170,7 +177,7 @@
       </div>
     </div>
   </div>
-  
+
  <div id="voiceCallConfirmModal" class="modal hidden">
     <div class="modal-content age-gate-content">
       <div class="age-gate-icon">📞</div>
