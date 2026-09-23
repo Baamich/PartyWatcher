@@ -55,6 +55,7 @@ router.get('/public', auth, async (req, res) => {
   const limit = 52;
   const sort = req.query.sort || 'newest';
   const onlyWithPeople = req.query.onlyWithPeople === '1';
+  const q = (req.query.q || '').trim();
 
   const filter = {
     isPublic: true,
@@ -67,6 +68,10 @@ router.get('/public', auth, async (req, res) => {
 
   if (onlyWithPeople) {
     filter.viewerCount = { $gt: 0 };
+  }
+
+  if (q) {
+    filter.name = { $regex: q, $options: 'i' };
   }
 
   let sortOption = { createdAt: -1 };

@@ -130,7 +130,6 @@
 
         <div class="col-right">
           <h2>Мои комнаты</h2>
-          <input id="searchInput" placeholder="Фильтр по названию" oninput="loadMyRooms()" />
           <div id="roomList"></div>
         </div>
       </div>
@@ -138,6 +137,11 @@
       <!-- Публичные комнаты — на всю ширину -->
       <section class="public-section">
         <h2>Публичные комнаты</h2>
+
+        <div class="public-search-wrap">
+          <input id="publicSearchInput" type="text" placeholder="Поиск по названию" onkeydown="handlePublicSearchKey(event)" />
+          <button type="button" class="search-icon-btn" onclick="onPublicFilterChange()" aria-label="Искать">🔍</button>
+        </div>
 
         <div class="public-controls">
           <div class="public-filters">

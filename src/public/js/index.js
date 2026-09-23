@@ -445,13 +445,16 @@ function renderRoomList(list, rooms, opts, cacheKey) {
 }
 
 async function loadMyRooms() {
-  const input = document.getElementById('searchInput');
-  const q = input?.value?.trim() || '';
-
   try {
-    const rooms = await api('/rooms/search?q=' + encodeURIComponent(q));
+    const rooms = await api('/rooms/mine');
     const list = document.getElementById('roomList');
     if (!list) return;
+
+    if (!rooms.length) {
+      lastRender.mine = '';
+      list.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Комнат нет</p>';
+      return;
+    }
 
     renderRoomList(list, rooms, { showDelete: true }, 'mine');
   } catch (err) {
@@ -464,6 +467,7 @@ let publicState = {
   page: 1,
   sort: 'newest',
   onlyWithPeople: false,
+  query: '',
   totalPages: 1,
 };
 
@@ -471,7 +475,15 @@ function onPublicFilterChange() {
   publicState.page = 1;
   publicState.sort = document.getElementById('publicSort')?.value || 'newest';
   publicState.onlyWithPeople = document.getElementById('onlyWithPeople')?.checked || false;
+  publicState.query = document.getElementById('publicSearchInput')?.value.trim() || '';
   loadPublicRooms();
+}
+
+function handlePublicSearchKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    onPublicFilterChange();
+  }
 }
 
 async function loadPublicRooms() {
@@ -484,6 +496,8 @@ async function loadPublicRooms() {
     sort: publicState.sort,
     onlyWithPeople: publicState.onlyWithPeople ? '1' : '0',
   });
+  if (publicState.query) params.set('q', publicState.query);
+
   try {
     const data = await api('/rooms/public?' + params.toString());
     const rooms = data.rooms || [];
@@ -491,7 +505,7 @@ async function loadPublicRooms() {
 
     if (!rooms.length) {
       lastRender.public = '';
-      list.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Публичных комнат пока нет</p>';
+      list.innerHTML = `<p style="color:var(--text-muted); font-size:14px;">${publicState.query ? 'Ничего не найдено' : 'Публичных комнат пока нет'}</p>`;
       if (paginationEl) paginationEl.classList.add('hidden');
       return;
     }
@@ -595,7 +609,7 @@ function initLobbySocket() {
   });
 
  lobbySocket.on('rooms:public-updated', () => {
-  if (publicState.page === 1 && publicState.sort === 'newest' && !publicState.onlyWithPeople) {
+  if (publicState.page === 1 && publicState.sort === 'newest' && !publicState.onlyWithPeople && !publicState.query) {
     loadPublicRooms();
   }
 });

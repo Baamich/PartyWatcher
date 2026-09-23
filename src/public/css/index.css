@@ -600,13 +600,34 @@ button {
   user-select: none;
 }
 
+#roomList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
 #roomList .room-card {
-  margin: 0 0 12px 0;
+  margin: 0;
 }
 
 #roomList .room-thumb,
 #roomList .room-thumb-placeholder {
-  height: 140px;
+  height: 130px;
+}
+
+#roomList .room-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  #roomList { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  #roomList { grid-template-columns: 1fr; }
 }
 
 /* ===== Публичные комнаты — сетка 2 в ряд ===== */
@@ -655,4 +676,39 @@ button {
   #publicRoomList .room-thumb-placeholder {
     height: 140px;
   }
+}
+
+.public-search-wrap {
+  position: relative;
+  margin: 8px 0 10px;
+  max-width: 420px;
+}
+
+.public-search-wrap input {
+  width: 100%;
+  margin: 0;
+  padding-right: 42px;
+}
+
+.search-icon-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.search-icon-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text);
 }
