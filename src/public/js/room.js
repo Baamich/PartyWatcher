@@ -1814,7 +1814,15 @@ async function startVoiceCall() {
   }
 
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+      video: false,
+    });
   } catch (e) {
     alert('Не удалось получить доступ к микрофону: ' + (e.message || e));
     return;
