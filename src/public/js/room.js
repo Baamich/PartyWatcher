@@ -13,6 +13,15 @@ let heartbeatTimer = null;
 let capturePlayer = null;
 let playerFocused = false;
 
+let voiceParticipants = [];
+let inVoiceCall = false;
+let localStream = null;
+let peerConnections = {};
+let remoteAudioEls = {};
+
+const MAX_VOICE_PARTICIPANTS = 15; // mesh: каждый держит N-1 P2P-соединений, больше — начинает тормозить
+const VOICE_WARN_THRESHOLD = 8;
+
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 
 const PLAYBACK_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -1135,6 +1144,31 @@ window.__onCapturePlayerReload = (player) => {
 
   socket.on('chat:message', addMessage);
   socket.on('room:error', (err) => alert(err.error));
+
+  socket.on('voice:participants', (list) => {
+    voiceParticipants = list;
+    renderVoicePanel();
+  });
+
+  socket.on('voice:existing-participants', (list) => {
+    // я только что зашёл в звонок — сам звоню каждому, кто уже там
+    list.forEach((p) => callPeer(p.socketId));
+  });
+
+  socket.on('voice:user-left', ({ socketId }) => {
+    const pc = peerConnections[socketId];
+    if (pc) {
+      try { pc.close(); } catch (_) {}
+      delete peerConnections[socketId];
+    }
+    remoteAudioEls[socketId]?.remove();
+    delete remoteAudioEls[socketId];
+  });
+
+  socket.on('voice:signal', (payload) => {
+    handleVoiceSignal(payload).catch((e) => console.warn('[voice] signal error', e));
+  });
+
   initViewMode();
 }
 
@@ -1704,6 +1738,201 @@ document.getElementById('chat')?.addEventListener('pointerdown', () => {
   playerFocused = false;
 });
 
+function usernameInitial(username) {
+  return (username || '?').trim().charAt(0).toUpperCase();
+}
+
+function renderVoicePanel() {
+  const panel = document.getElementById('voiceCallPanel');
+  const text = document.getElementById('voiceCallPanelText');
+  const avatarsEl = document.getElementById('voiceAvatars');
+  const countEl = document.getElementById('voiceCountText');
+  const hangupBtn = document.getElementById('voiceHangupBtn');
+  const callBtn = document.getElementById('voiceCallBtn');
+  if (!panel) return;
+
+  const count = voiceParticipants.length;
+  panel.classList.toggle('hidden', count === 0);
+  panel.classList.toggle('joined', inVoiceCall);
+  callBtn?.classList.toggle('in-call', inVoiceCall);
+
+  if (count === 0) return;
+
+  text.textContent = inVoiceCall ? 'Вы в звонке' : 'Присоединиться к звонку';
+  countEl.textContent = count >= VOICE_WARN_THRESHOLD
+    ? `В звонке: ${count} (может тормозить)`
+    : `В звонке: ${count}`;
+  hangupBtn.classList.toggle('hidden', !inVoiceCall);
+
+  avatarsEl.innerHTML = '';
+  voiceParticipants.slice(0, 5).forEach((p) => {
+    const av = document.createElement('div');
+    av.className = 'voice-avatar';
+    av.style.background = usernameColor(p.username);
+    av.textContent = usernameInitial(p.username);
+    av.title = p.username;
+    if (p.isOwner) {
+      const crown = document.createElement('span');
+      crown.className = 'voice-avatar-crown';
+      crown.textContent = '👑';
+      av.appendChild(crown);
+    }
+    avatarsEl.appendChild(av);
+  });
+  if (voiceParticipants.length > 5) {
+    const more = document.createElement('div');
+    more.className = 'voice-avatar';
+    more.style.background = 'var(--surface)';
+    more.textContent = `+${voiceParticipants.length - 5}`;
+    avatarsEl.appendChild(more);
+  }
+}
+
+function openVoiceConfirmModal() {
+  document.getElementById('voiceCallConfirmModal')?.classList.remove('hidden');
+}
+function closeVoiceConfirmModal() {
+  document.getElementById('voiceCallConfirmModal')?.classList.add('hidden');
+}
+
+function onVoiceCallBtnClick() {
+  if (inVoiceCall) {
+    leaveVoiceCall();
+  } else {
+    openVoiceConfirmModal();
+  }
+}
+window.onVoiceCallBtnClick = onVoiceCallBtnClick;
+
+async function startVoiceCall() {
+  closeVoiceConfirmModal();
+  if (inVoiceCall) return;
+
+  if (voiceParticipants.length >= MAX_VOICE_PARTICIPANTS) {
+    alert(`Звонок уже заполнен (максимум ${MAX_VOICE_PARTICIPANTS} человек) — попробуй позже.`);
+    return;
+  }
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    alert('Не удалось получить доступ к микрофону: ' + (e.message || e));
+    return;
+  }
+
+  await getIceServers(); // прогреваем кэш заранее, до прихода первого offer/answer
+  inVoiceCall = true;
+  socket.emit('voice:join', { code });
+  renderVoicePanel();
+}
+
+function stopAllPeerConnections() {
+  Object.keys(peerConnections).forEach((id) => {
+    try { peerConnections[id].close(); } catch (_) {}
+    delete peerConnections[id];
+  });
+  Object.keys(remoteAudioEls).forEach((id) => {
+    remoteAudioEls[id]?.remove();
+    delete remoteAudioEls[id];
+  });
+}
+
+function leaveVoiceCall() {
+  if (!inVoiceCall) return;
+  inVoiceCall = false;
+  socket.emit('voice:leave', { code });
+  if (localStream) {
+    localStream.getTracks().forEach((t) => t.stop());
+    localStream = null;
+  }
+  stopAllPeerConnections();
+  renderVoicePanel();
+}
+window.leaveVoiceCall = leaveVoiceCall;
+
+let cachedIceServers = null;
+let cachedIceServersExpiry = 0;
+
+async function getIceServers() {
+  const now = Date.now();
+  if (cachedIceServers && now < cachedIceServersExpiry) return cachedIceServers;
+
+  try {
+    const data = await api('/voice/ice-servers');
+    cachedIceServers = data.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }];
+    // обновляем креды заранее, за минуту до истечения TTL, а не впритык
+    cachedIceServersExpiry = now + Math.max(30, (data.ttlSeconds || 3600) - 60) * 1000;
+  } catch (e) {
+    console.warn('[voice] не удалось получить ICE-серверы, использую только STUN', e);
+    cachedIceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+    cachedIceServersExpiry = now + 60 * 1000; // короткий кэш ошибки, чтобы не долбить сервер
+  }
+  return cachedIceServers;
+}
+
+function getOrCreatePeerConnection(remoteSocketId, iceServers) {
+  if (peerConnections[remoteSocketId]) return peerConnections[remoteSocketId];
+
+  const pc = new RTCPeerConnection({ iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
+  peerConnections[remoteSocketId] = pc;
+
+  if (localStream) {
+    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+  }
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      socket.emit('voice:signal', { code, to: remoteSocketId, data: { type: 'ice-candidate', candidate: e.candidate } });
+    }
+  };
+
+  pc.ontrack = (e) => {
+    let audioEl = remoteAudioEls[remoteSocketId];
+    if (!audioEl) {
+      audioEl = document.createElement('audio');
+      audioEl.autoplay = true;
+      document.getElementById('voiceAudioContainer')?.appendChild(audioEl);
+      remoteAudioEls[remoteSocketId] = audioEl;
+    }
+    audioEl.srcObject = e.streams[0];
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (['closed', 'failed', 'disconnected'].includes(pc.connectionState)) {
+      try { pc.close(); } catch (_) {}
+      delete peerConnections[remoteSocketId];
+      remoteAudioEls[remoteSocketId]?.remove();
+      delete remoteAudioEls[remoteSocketId];
+    }
+  };
+
+  return pc;
+}
+
+async function callPeer(remoteSocketId) {
+  const iceServers = await getIceServers();
+  const pc = getOrCreatePeerConnection(remoteSocketId, iceServers);
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  socket.emit('voice:signal', { code, to: remoteSocketId, data: { type: 'offer', sdp: offer } });
+}
+
+async function handleVoiceSignal({ from, data }) {
+  const iceServers = await getIceServers();
+  const pc = getOrCreatePeerConnection(from, iceServers);
+
+  if (data.type === 'offer') {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('voice:signal', { code, to: from, data: { type: 'answer', sdp: answer } });
+  } else if (data.type === 'answer') {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  } else if (data.type === 'ice-candidate' && data.candidate) {
+    try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (_) {}
+  }
+}
+
 function leaveRoom() {
   try {
     if (heartbeatTimer) {
@@ -1712,6 +1941,13 @@ function leaveRoom() {
     }
   } catch (_) {}
   stopThumbnailCapture();
+  try {
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+      localStream = null;
+    }
+    stopAllPeerConnections();
+  } catch (_) {}
   try {
     if (capturePlayer?.destroy) capturePlayer.destroy();
   } catch (_) {}
@@ -2143,6 +2379,16 @@ function closeFsChat() {
 }
 
 try { makeFsChatPanelDraggable(); } catch (e) { console.error('[fsChatPanel]', e); }
+
+document.getElementById('voiceCallConfirmBtn')?.addEventListener('click', startVoiceCall);
+document.getElementById('voiceCallCancelBtn')?.addEventListener('click', closeVoiceConfirmModal);
+document.getElementById('voiceHangupBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  leaveVoiceCall();
+});
+document.getElementById('voiceCallJoinArea')?.addEventListener('click', () => {
+  if (!inVoiceCall) startVoiceCall();
+});
 
 // крестик
 document.getElementById('fsChatClose')?.addEventListener('click', (e) => {

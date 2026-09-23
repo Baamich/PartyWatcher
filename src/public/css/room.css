@@ -454,12 +454,20 @@ body {
 
 .view-toggle {
   display: flex;
-  gap: 0;
+  gap: 8px;
   padding: 8px 10px 4px 10px;
   flex-shrink: 0;
+  align-items: stretch;
 }
 
-.view-toggle button {
+.view-toggle-tabs {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.view-toggle-tabs button {
   flex: 1;
   padding: 9px 0;
   font-size: 14px;
@@ -467,20 +475,43 @@ body {
   color: var(--text-muted);
   border: 1px solid var(--border);
   cursor: pointer;
+  margin: 0;
 }
 
-.view-toggle button:first-child {
+.view-toggle-tabs button:first-child {
   border-radius: 6px 0 0 6px;
 }
 
-.view-toggle button:last-child {
+.view-toggle-tabs button:last-child {
   border-radius: 0 6px 6px 0;
 }
 
-.view-toggle button.active {
+.view-toggle-tabs button.active {
   background: var(--accent, #7c3aed);
   color: #fff;
   border-color: var(--accent, #7c3aed);
+}
+
+.voice-call-btn {
+  width: 42px;
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 17px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--btn-grad-start), var(--btn-grad-end));
+  color: #fff;
+  border: none;
+  box-shadow: var(--btn-glow);
+}
+
+.voice-call-btn:hover {
+  background: linear-gradient(135deg, var(--btn-grad-start-hover), var(--btn-grad-end-hover));
+  box-shadow: var(--btn-glow-hover);
+}
+
+.voice-call-btn.in-call {
+  background: linear-gradient(135deg, #e0455f, #ff6b6b);
 }
 
 .host-controls {
@@ -528,9 +559,21 @@ body.view-video-only #chat {
   display: flex !important; /* оставляем как есть */
 }
 
-/* Только на мобилках включаем реальное скрытие */
+/* На мобилках вкладка "Чат" больше не прячет видео полностью —
+   сжимаем плеер в мини-превью, чтобы хост всегда видел, что идёт */
 @media (max-width: 768px) {
-  body.view-chat-only #playerWrap {
+  body.view-chat-only #playerWrap:not(.in-fullscreen):not(.css-fullscreen) {
+    display: block !important;
+    flex: none;
+    width: 100%;
+    height: 96px;
+    aspect-ratio: auto;
+  }
+
+  body.view-chat-only #playerWrap:not(.in-fullscreen):not(.css-fullscreen) .fs-draggable,
+  body.view-chat-only #playerWrap:not(.in-fullscreen):not(.css-fullscreen) #fsActivityCatcher,
+  body.view-chat-only #playerWrap:not(.in-fullscreen):not(.css-fullscreen) #fsNotice,
+  body.view-chat-only #playerWrap:not(.in-fullscreen):not(.css-fullscreen) #overlay {
     display: none !important;
   }
 
@@ -859,3 +902,109 @@ video::-webkit-media-controls-fullscreen-button {
   transition: none;
   opacity: 0.9;
 }
+
+/* === Панель голосового звонка === */
+.voice-call-panel {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 8px 10px 4px 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  min-height: 52px;
+}
+
+.voice-call-panel.hidden {
+  display: none !important;
+}
+
+.voice-call-gradient {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  background: linear-gradient(120deg, var(--btn-grad-start), var(--btn-grad-end), var(--btn-grad-start-hover), var(--btn-grad-end-hover));
+  background-size: 300% 300%;
+  animation: voiceGradientShift 6s ease infinite;
+}
+
+@keyframes voiceGradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.voice-call-panel.joined .voice-call-gradient {
+  cursor: default;
+}
+
+.voice-call-side {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-alt);
+}
+
+.voice-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.voice-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid var(--surface-alt);
+  margin-left: -10px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.voice-avatar:first-child {
+  margin-left: 0;
+}
+
+.voice-avatar-crown {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.voice-count-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.voice-hangup-btn {
+  width: auto;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 15px;
+  background: var(--danger);
+  color: #fff;
+  border-radius: 6px;
+}
+
+.voice-hangup-btn.hidden {
+  display: none !important;
+} 

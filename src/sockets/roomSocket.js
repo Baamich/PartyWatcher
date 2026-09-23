@@ -10,6 +10,32 @@ const SupportTicket = require('../models/SupportTicket');
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
 if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
 
+// code -> Map(socketId -> { username, isOwner }) — кто сейчас в голосовом звонке этой комнаты
+const voiceRooms = new Map();
+
+function getVoiceParticipants(code) {
+  const map = voiceRooms.get(code);
+  if (!map) return [];
+  return [...map.entries()].map(([socketId, info]) => ({
+    socketId,
+    username: info.username,
+    isOwner: info.isOwner,
+  }));
+}
+
+function broadcastVoiceParticipants(io, code) {
+  io.to(code).emit('voice:participants', getVoiceParticipants(code));
+}
+
+function removeFromVoice(io, socket, code) {
+  const map = voiceRooms.get(code);
+  if (!map || !map.has(socket.id)) return;
+  map.delete(socket.id);
+  if (map.size === 0) voiceRooms.delete(code);
+  socket.to(code).emit('voice:user-left', { socketId: socket.id });
+  broadcastVoiceParticipants(io, code);
+}
+
 async function updateRoomActivity(io, code) {
   const size = io.sockets.adapter.rooms.get(code)?.size || 0;
   await Room.findOneAndUpdate(
@@ -128,6 +154,42 @@ function registerRoomSocket(io) {
       });
       socket.to(code).emit('room:user-joined', { username: socket.user.username });
       broadcastParticipants(io, code);
+
+      // если в комнате уже идёт звонок — новый участник сразу видит панель
+      socket.emit('voice:participants', getVoiceParticipants(code));
+    });
+
+    const MAX_VOICE_PARTICIPANTS = 15;
+
+    socket.on('voice:join', ({ code }) => {
+      if (socket.data.roomCode !== code) return;
+
+      let map = voiceRooms.get(code);
+      if (!map) {
+        map = new Map();
+        voiceRooms.set(code, map);
+      }
+      if (map.has(socket.id)) return; // уже в звонке
+
+      if (map.size >= MAX_VOICE_PARTICIPANTS) {
+        socket.emit('voice:join-rejected', { reason: 'full', max: MAX_VOICE_PARTICIPANTS });
+        return;
+      }
+
+      const existing = getVoiceParticipants(code); // список ДО добавления себя — кому звонить первым
+      map.set(socket.id, { username: socket.user.username, isOwner: !!socket.data.isOwner });
+
+      socket.emit('voice:existing-participants', existing);
+      broadcastVoiceParticipants(io, code);
+    });
+
+    socket.on('voice:leave', ({ code }) => {
+      removeFromVoice(io, socket, code);
+    });
+
+    socket.on('voice:signal', ({ code, to, data }) => {
+      if (socket.data.roomCode !== code || !to) return;
+      io.to(to).emit('voice:signal', { from: socket.id, data });
     });
 
     socket.on('room:participants', ({ code }) => {
@@ -245,6 +307,7 @@ function registerRoomSocket(io) {
     socket.on('disconnect', async () => {
       const code = socket.data.roomCode;
       if (code) {
+        removeFromVoice(io, socket, code);
         socket.to(code).emit('room:user-left', { username: socket.user?.username });
         await updateRoomActivity(io, code);
         broadcastParticipants(io, code);

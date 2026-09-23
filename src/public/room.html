@@ -86,8 +86,22 @@
 
     <!-- Вкладки -->
     <div id="viewToggle" class="view-toggle">
-      <button id="btnShowChat" class="active" onclick="setViewMode('chat')">Чат</button>
-      <button id="btnShowVideo" onclick="setViewMode('video')">Видео</button>
+      <div class="view-toggle-tabs">
+        <button id="btnShowChat" class="active" onclick="setViewMode('chat')">Чат</button>
+        <button id="btnShowVideo" onclick="setViewMode('video')">Видео</button>
+      </div>
+      <button type="button" id="voiceCallBtn" class="voice-call-btn" title="Голосовая связь" onclick="onVoiceCallBtnClick()">📞</button>
+    </div>
+
+    <div id="voiceCallPanel" class="voice-call-panel hidden">
+      <div class="voice-call-gradient" id="voiceCallJoinArea">
+        <span id="voiceCallPanelText">Присоединиться к звонку</span>
+      </div>
+      <div class="voice-call-side">
+        <div id="voiceAvatars" class="voice-avatars"></div>
+        <span id="voiceCountText" class="voice-count-text">В звонке: 0</span>
+        <button type="button" id="voiceHangupBtn" class="voice-hangup-btn hidden" title="Выйти из звонка">📴</button>
+      </div>
     </div>
 
     <div id="hostControls" class="host-controls hidden">
@@ -156,6 +170,22 @@
       </div>
     </div>
   </div>
+  
+ <div id="voiceCallConfirmModal" class="modal hidden">
+    <div class="modal-content age-gate-content">
+      <div class="age-gate-icon">📞</div>
+      <h3>Голосовая связь</h3>
+      <p class="age-gate-text">
+        Вы действительно хотите начать голосовую связь? Браузер запросит доступ к микрофону.
+      </p>
+      <div class="age-gate-actions">
+        <button type="button" id="voiceCallConfirmBtn">Да, начать</button>
+        <button type="button" id="voiceCallCancelBtn" class="icon-btn">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="voiceAudioContainer" style="display:none"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>

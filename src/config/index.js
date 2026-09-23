@@ -27,6 +27,18 @@ module.exports = {
     ttlDays: parseInt(process.env.UPLOAD_TTL_DAYS || '30', 10),
   },
 
+  turn: {
+    // Вариант 1 — свой coturn (HMAC-креды по времени, безопаснее и без лимитов)
+    turnUrl: process.env.TURN_URL || null,           // например "turn.mydomain.com:3478"
+    turnSecret: process.env.TURN_SECRET || null,      // static-auth-secret из turnserver.conf
+    turnTtlSeconds: parseInt(process.env.TURN_TTL_SECONDS, 10) || 3600,
+
+    // Вариант 2 — публичный/статичный TURN (например Open Relay Project) для быстрого старта
+    staticTurnUrls: (process.env.TURN_STATIC_URLS || '').split(',').map((s) => s.trim()).filter(Boolean),
+    staticTurnUsername: process.env.TURN_STATIC_USERNAME || null,
+    staticTurnCredential: process.env.TURN_STATIC_CREDENTIAL || null,
+  },
+
   update: {
     repoUrl: process.env.GITHUB_REPO_URL,
     branch: process.env.GITHUB_BRANCH || 'main',

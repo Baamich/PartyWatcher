@@ -18,6 +18,7 @@ const driveRoutes = require('./routes/drive.routes');
 const playerCaptureRoutes = require('./routes/playerCapture.routes');
 const streamProxyRoutes = require('./routes/streamProxy.routes');
 const youtubeCaptureRoutes = require('./routes/youtubeCapture.routes');
+const voiceRoutes = require('./routes/voice.routes');
 
 const supportRoutes = require('./routes/support.routes');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
@@ -47,6 +48,7 @@ async function start() {
   app.use('/api/player-capture', playerCaptureRoutes);
   app.use('/api/stream', streamProxyRoutes);
   app.use('/api/youtube-capture', youtubeCaptureRoutes);
+  app.use('/api/voice',  voiceRoutes);
 
   app.use('/debug-screenshots', express.static(debugScreenshotsDir));
   app.use('/api/support', supportRoutes);
