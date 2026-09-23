@@ -57,7 +57,7 @@ async function performUpdate(targetHash) {
     }
 
     status.log.push('pm2 reload partywatcher...');
-    status.log.push(await run('pm2 reload partywatcher'));
+    status.log.push(await run('pm2 reload partywatcher --force'));
 
     status.state = 'done';
   } catch (err) {
