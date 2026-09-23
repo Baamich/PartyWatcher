@@ -284,6 +284,23 @@ function registerRoomSocket(io) {
       socket.to(code).emit('playback:update', { isPlaying, positionSeconds });
     });
 
+    socket.on('playback:force-sync', async ({ code, isPlaying, positionSeconds }) => {
+      if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+
+      const pos = Number(positionSeconds) || 0;
+      const playing = !!isPlaying;
+
+      await Room.findOneAndUpdate(
+        { code },
+        { playback: { isPlaying: playing, positionSeconds: pos, updatedAt: new Date() } }
+      );
+
+      socket.to(code).emit('playback:force-sync', {
+        isPlaying: playing,
+        positionSeconds: pos,
+      });
+    });
+
     socket.on('room:resync', async ({ code }) => {
       const room = await Room.findOne({ code });
       if (!room) return;

@@ -94,7 +94,7 @@ async function createProcessedLocalStream() {
   analyser.connect(gate);
   gate.connect(dest);
 
-  const GATE_THRESHOLD = 18; // 18–25 (глушит сильнее, но может глотать тихую речь).
+  const GATE_THRESHOLD = 15; // 18–25 (глушит сильнее, но может глотать тихую речь).
   const GATE_FLOOR = 0.02;
 
   function tickGate() {
@@ -702,7 +702,11 @@ function softSync({ isPlaying, positionSeconds }) {
 
 function resync() {
   if (isOwner) {
-    emitPlayback(getIsPlayingNow());
+    const isPlaying = getIsPlayingNow();
+    const positionSeconds = getCurrentPosition();
+    lastState = { isPlaying, positionSeconds };
+    savePlaybackCache(lastState);
+    socket.emit('playback:force-sync', { code, isPlaying, positionSeconds });
   } else {
     manualResyncViewer();
     socket.emit('room:resync', { code });
@@ -1280,6 +1284,19 @@ window.__onCapturePlayerReload = (player) => {
     }
 
     softSync(state);
+  });
+
+  socket.on('playback:force-sync', ({ isPlaying, positionSeconds }) => {
+    if (isOwner) return;
+    lastState = { isPlaying: !!isPlaying, positionSeconds: Number(positionSeconds) || 0 };
+    savePlaybackCache(lastState);
+
+    if (!started) {
+      updateWaitingOverlayText();
+      return;
+    }
+
+    applyPlaybackState(lastState);
   });
 
   socket.on('room:user-joined', ({ username }) => {
