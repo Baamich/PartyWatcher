@@ -7,6 +7,7 @@ import { ServeStaticModule } from '@nestjs/serve-static'
 import { AppController } from './app.controller.js'
 import { AppService } from './app.service.js'
 import { ConfigValidationService } from './config/config-validation.service.js'
+import { DatabaseModule } from './database/database.module.js'
 import { EventsModule } from './events/events.module.js'
 import { LoggerModule } from './logger/logger.module.js'
 import { EnvParam } from './shared/enums/env.enum.js'
@@ -51,6 +52,7 @@ import { EnvParam } from './shared/enums/env.enum.js'
     }),
     EventsModule,
     LoggerModule,
+    DatabaseModule,
   ],
   controllers: [AppController],
   providers: [AppService],
