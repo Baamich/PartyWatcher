@@ -93,6 +93,20 @@ function guessReferer(targetUrl) {
       };
     }
 
+    // Rezka / voidboost / collaps — CDN ждёт referer именно с самой Rezka,
+    // а не с себя (origin CDN-хоста даёт 404)
+    if (
+      u.hostname.includes('voidboost') ||
+      u.hostname.includes('collaps') ||
+      u.hostname.includes('cdnmovies') ||
+      u.hostname.includes('ashdi')
+    ) {
+      return {
+        referer: 'https://rezka-ua.tv/',
+        origin: 'https://rezka-ua.tv',
+      };
+    }
+
     return { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
   } catch {
     return { referer: 'https://kinogomy.net/', origin: 'https://kinogomy.net' };
@@ -174,6 +188,9 @@ router.get('/relay', auth, async (req, res) => {
         'cdn.lordfilm64.com',
         'api.ortified.ws',
         'vk.com',
+        'rezka-ua.tv',
+        'hdrezka.tv',
+        'rezka.ag',
       ]
         .map(originOf)
         .filter(Boolean);
