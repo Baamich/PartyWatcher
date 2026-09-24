@@ -1,4 +1,3 @@
-// admin-server.js — независимый процесс: живёт и когда partywatcher упал
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -24,15 +23,17 @@ async function start() {
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
 
-  // Статика (css, js, img) — нужна админке
-  app.use(express.static(path.join(__dirname, 'public')));
+  // Статика БЕЗ автоматической отдачи index.html
+  app.use(express.static(path.join(__dirname, 'public'), {
+    index: false,   // ← важно!
+  }));
 
   // Главная страница админки
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
   });
 
-  // Всё остальное — 404
+  // Всё остальное
   app.use((req, res) => {
     res.status(404).send('Not found');
   });
