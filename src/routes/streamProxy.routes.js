@@ -12,10 +12,10 @@ function buildDispatcher() {
   return new ProxyAgent(`http://${PROXY_USER}:${PROXY_PASS}@${PROXY_SERVER}`);
 }
 
-// кэш сегментов: один и тот же .ts/.m4s не тянем с CDN повторно в течение TTL
+// кэш сегментов
 const segmentCache = new Map(); // key → { buf, contentType, expires }
-const SEGMENT_CACHE_TTL_MS = 90_000;
-const SEGMENT_CACHE_MAX = 80;
+const SEGMENT_CACHE_TTL_MS = 5 * 60_000; // 5 минут
+const SEGMENT_CACHE_MAX = 200;
 
 function segmentCacheGet(key) {
   const hit = segmentCache.get(key);
@@ -39,6 +39,18 @@ function segmentCacheSet(key, buf, contentType) {
   });
 }
 
+// если один URL запросили 10 раз одновременно — качаем один раз
+const inFlightRelay = new Map();
+
+function fetchOnce(key, fn) {
+  if (inFlightRelay.has(key)) return inFlightRelay.get(key);
+  const p = Promise.resolve()
+    .then(fn)
+    .finally(() => inFlightRelay.delete(key));
+  inFlightRelay.set(key, p);
+  return p;
+}
+
 function guessReferer(targetUrl) {
   try {
     const u = new URL(targetUrl);
@@ -51,7 +63,6 @@ function guessReferer(targetUrl) {
       u.hostname.includes('vk-cdn') ||
       u.hostname.includes('vkcs')
     ) {
-      // актуальный embed kinogomy — stloadi; stravers оставляем запасным
       return {
         referer: 'https://kinogomy.stloadi.live/',
         origin: 'https://kinogomy.stloadi.live',
@@ -71,7 +82,6 @@ function guessReferer(targetUrl) {
       return { referer: 'https://api.stiven-king.com/', origin: 'https://api.stiven-king.com' };
     }
 
-    // kinogo2026 / cinemar embed → CDN cfnd.cinemap.cc
     if (
       u.hostname.includes('cinemap.cc') ||
       u.hostname.includes('cinemar.cc') ||
@@ -96,160 +106,223 @@ router.get('/relay', auth, async (req, res) => {
   }
 
   try {
-     
-    // VPS за Cloudflare / trycloudflare — без прокси VK и многие CDN дают 403.
-    // Экономия трафика = segmentCache, НЕ отключение прокси.
     let host = '';
     try {
       host = new URL(targetUrl).hostname || '';
     } catch (_) {}
+
     const isVk =
-      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs|vk\.com/i.test(
-        targetUrl
-      ) ||
+      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs|vk\.com/i.test(targetUrl) ||
       /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs/i.test(host);
 
-    const dispatcher = buildDispatcher();
-    console.log(
-      '[stream-relay] proxy:',
-      dispatcher ? 'ON' : 'OFF (нет PROXY_SERVER)',
-      'vk:',
-      isVk,
-      'host:',
-      host,
-      'url:',
-      targetUrl.slice(0, 80)
-    );
-
-const cacheKey = targetUrl;
-  const cached = segmentCacheGet(cacheKey);
-  if (cached) {
-    console.log('[stream-relay] cache HIT', targetUrl.slice(0, 80));
-    res.setHeader('Content-Type', cached.contentType || 'application/octet-stream');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=60');
-    return res.send(cached.buf);
-  }
-    const primary = guessReferer(targetUrl);
-
-    // 1) referer с extract/фронта (реальный origin iframe)
-    // 2) guessReferer
-    // 3) известные домены
-    // 4) origin самого CDN-хоста
-    const fromQuery = (req.query.referer || '').toString();
-    let queryCandidate = null;
-    if (fromQuery.startsWith('http')) {
-      try {
-        const u = new URL(fromQuery);
-        queryCandidate = { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
-      } catch (_) {}
+    const cacheKey = targetUrl;
+    const cached = segmentCacheGet(cacheKey);
+    if (cached) {
+      console.log('[stream-relay] cache HIT', targetUrl.slice(0, 80));
+      res.setHeader('Content-Type', cached.contentType || 'application/octet-stream');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      return res.send(cached.buf);
     }
 
-    let hostCandidate = null;
-    try {
-      const u = new URL(targetUrl);
-      hostCandidate = { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
-    } catch (_) {}
+    // один раз качаем на URL, остальные ждут
+    const downloadResult = await fetchOnce(cacheKey, async () => {
+      const primary = guessReferer(targetUrl);
+      const fromQuery = (req.query.referer || '').toString();
 
-    // универсально: query (с extract) → guess → host CDN → запасные семейства плееров
-    // новые зеркала lordfilm/stravers/kinogo не надо дописывать вручную
-    function originOf(urlOrHost) {
-      try {
-        const u = urlOrHost.startsWith('http')
-          ? new URL(urlOrHost)
-          : new URL('https://' + urlOrHost);
-        return { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
-      } catch {
-        return null;
+      let queryCandidate = null;
+      if (fromQuery.startsWith('http')) {
+        try {
+          const u = new URL(fromQuery);
+          queryCandidate = {
+            referer: `${u.protocol}//${u.hostname}/`,
+            origin: `${u.protocol}//${u.hostname}`,
+          };
+        } catch (_) {}
       }
-    }
 
-    const FAMILY_FALLBACKS = [
-      'kinogomy.stravers.live',
-      'kinogomy.stloadi.live',
-      'balabolka.stravers.live',
-      'marie.as.stravers.live',
-      'marie-as.stloadi.live',
-      // kinogo page
-      'kinogomy.net',
-      // lordfilm CDN / page (на случай если query пустой)
-      'cdn.lordfilm64.com',
-      'api.ortified.ws',
-      'vk.com',
-    ].map(originOf).filter(Boolean);
+      let hostCandidate = null;
+      try {
+        const u = new URL(targetUrl);
+        hostCandidate = {
+          referer: `${u.protocol}//${u.hostname}/`,
+          origin: `${u.protocol}//${u.hostname}`,
+        };
+      } catch (_) {}
 
-    const refererCandidates = [
-      queryCandidate,   // главный: то, что extract положил в stream.referer
-      primary,          // guessReferer по hostname CDN
-      hostCandidate,    // origin самого vkvideo/cdn хоста
-      ...FAMILY_FALLBACKS,
-    ].filter(Boolean);
+      function originOf(urlOrHost) {
+        try {
+          const u = urlOrHost.startsWith('http')
+            ? new URL(urlOrHost)
+            : new URL('https://' + urlOrHost);
+          return {
+            referer: `${u.protocol}//${u.hostname}/`,
+            origin: `${u.protocol}//${u.hostname}`,
+          };
+        } catch {
+          return null;
+        }
+      }
 
-    // убираем дубли
-    const seen = new Set();
-    const uniqueCandidates = refererCandidates.filter((c) => {
-      const key = c.referer + '|' + c.origin;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+      const FAMILY_FALLBACKS = [
+        'kinogomy.stravers.live',
+        'kinogomy.stloadi.live',
+        'balabolka.stravers.live',
+        'marie.as.stravers.live',
+        'marie-as.stloadi.live',
+        'kinogomy.net',
+        'cdn.lordfilm64.com',
+        'api.ortified.ws',
+        'vk.com',
+      ]
+        .map(originOf)
+        .filter(Boolean);
+
+      const refererCandidates = [
+        queryCandidate,
+        primary,
+        hostCandidate,
+        ...FAMILY_FALLBACKS,
+      ].filter(Boolean);
+
+      const seen = new Set();
+      const uniqueCandidates = refererCandidates.filter((c) => {
+        const key = c.referer + '|' + c.origin;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      let response = null;
+      let lastStatus = 0;
+      let lastBody = '';
+      let usedProxy = false;
+
+      for (let i = 0; i < uniqueCandidates.length; i++) {
+        const { referer, origin } = uniqueCandidates[i];
+        const isLast = i === uniqueCandidates.length - 1;
+
+        const headers = {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Referer: referer,
+          Accept: '*/*',
+          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Sec-Fetch-Dest': 'empty',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Site': 'cross-site',
+          Connection: 'keep-alive',
+        };
+        if (!isLast) headers['Origin'] = origin;
+
+        // 1) сначала БЕЗ прокси
+        try {
+          response = await fetch(targetUrl, { headers });
+        } catch (e) {
+          response = null;
+          lastBody = e.message || 'fetch failed';
+        }
+
+        // 2) если не ок и есть PROXY — пробуем С прокси
+        if ((!response || !response.ok) && PROXY_SERVER) {
+          const dispatcher = buildDispatcher();
+          const fetchOpts = { headers };
+          if (dispatcher) fetchOpts.dispatcher = dispatcher;
+          try {
+            console.log(
+              '[stream-relay] retry WITH proxy, was:',
+              response?.status || 'fail',
+              'host:',
+              host
+            );
+            response = await fetch(targetUrl, fetchOpts);
+            usedProxy = true;
+          } catch (e) {
+            response = null;
+            lastBody = e.message || 'fetch failed';
+          }
+        }
+
+        if (response && response.ok) {
+          console.log(
+            '[stream-relay] OK',
+            usedProxy ? 'proxy:ON' : 'proxy:OFF',
+            'referer:',
+            referer,
+            'status:',
+            response.status,
+            'vk:',
+            isVk,
+            'url:',
+            targetUrl.slice(0, 80)
+          );
+          break;
+        }
+
+        lastStatus = response ? response.status : 0;
+        if (response) {
+          lastBody = await response.text().catch(() => '');
+        }
+        console.warn(
+          '[stream-relay] отказ',
+          lastStatus || 'net',
+          'referer:',
+          referer,
+          targetUrl.slice(0, 80),
+          String(lastBody).slice(0, 80)
+        );
+        response = null;
+      }
+
+      if (!response) {
+        return {
+          ok: false,
+          status: lastStatus || 502,
+          body: lastBody,
+        };
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      const looksLikeUrlM3u8 = targetUrl.includes('.m3u8');
+      const looksLikeType =
+        contentType.includes('mpegurl') ||
+        contentType.includes('application/vnd.apple');
+
+      const buf = Buffer.from(await response.arrayBuffer());
+      const head = buf.slice(0, 16).toString('utf8');
+      const isM3u8Body = head.startsWith('#EXTM3U');
+
+      return {
+        ok: true,
+        buf,
+        contentType,
+        looksLikeUrlM3u8,
+        looksLikeType,
+        isM3u8Body,
+        fromQuery,
+      };
     });
 
-    let response = null;
-    let lastStatus = 0;
-    let lastBody = '';
-
-    for (let i = 0; i < uniqueCandidates.length; i++) {
-    const { referer, origin } = uniqueCandidates[i];
-    const isLast = i === uniqueCandidates.length - 1;
-
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Referer': referer,
-      'Accept': '*/*',
-      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Sec-Fetch-Dest': 'empty',
-      'Sec-Fetch-Mode': 'cors',
-      'Sec-Fetch-Site': 'cross-site',
-      'Connection': 'keep-alive',
-    };
-    // на последней попытке Origin не ставим — VK иногда из‑за него отдаёт 403
-    if (!isLast) headers['Origin'] = origin;
-
-  const fetchOpts = { headers };
-    if (dispatcher) fetchOpts.dispatcher = dispatcher;
-    response = await fetch(targetUrl, fetchOpts);
-
-      if (response.ok) {
-        console.log('[stream-relay] OK с referer:', referer, 'status:', response.status);
-        break;
-      }
-
-      lastStatus = response.status;
-      lastBody = await response.text().catch(() => '');
-      console.warn('[stream-relay] отказ', response.status, 'referer:', referer, targetUrl.slice(0, 80), lastBody.slice(0, 80));
-      response = null;
-    }
-
-    if (!response) {
+    if (!downloadResult.ok) {
       console.error(
-        '[stream-relay] CDN отказал всеми referer:',
-        lastStatus,
+        '[stream-relay] CDN отказал:',
+        downloadResult.status,
         targetUrl.slice(0, 120),
-        lastBody.slice(0, 200)
+        String(downloadResult.body || '').slice(0, 200)
       );
       return res
-        .status(lastStatus || 502)
-        .json({ error: `CDN вернул ${lastStatus}` });
+        .status(downloadResult.status || 502)
+        .json({ error: `CDN вернул ${downloadResult.status}` });
     }
 
-    const contentType = response.headers.get('content-type') || '';
-    const looksLikeUrlM3u8 = targetUrl.includes('.m3u8');
-    const looksLikeType = contentType.includes('mpegurl') || contentType.includes('application/vnd.apple');
-
-    // читаем тело один раз
-    const buf = Buffer.from(await response.arrayBuffer());
-    const head = buf.slice(0, 16).toString('utf8');
-    const isM3u8Body = head.startsWith('#EXTM3U');
+    const {
+      buf,
+      contentType,
+      looksLikeUrlM3u8,
+      looksLikeType,
+      isM3u8Body,
+      fromQuery,
+    } = downloadResult;
 
     if (looksLikeUrlM3u8 || looksLikeType || isM3u8Body) {
       const text = buf.toString('utf8');
@@ -264,37 +337,47 @@ const cacheKey = targetUrl;
             absoluteUrl = baseUrl + relOrAbsUrl;
           }
         }
-        const ref = fromQuery && fromQuery.startsWith('http')
-          ? `&referer=${encodeURIComponent(fromQuery)}`
-          : '';
+        const ref =
+          fromQuery && fromQuery.startsWith('http')
+            ? `&referer=${encodeURIComponent(fromQuery)}`
+            : '';
         return `/api/stream/relay?url=${encodeURIComponent(absoluteUrl)}${ref}`;
       };
 
-      const rewritten = text.split('\n').map((line) => {
-        if (line.startsWith('#EXT-X-MAP')) {
-          return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
-        }
-        if (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line)) {
-          return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
-        }
-        if (line.startsWith('#') || !line.trim()) return line;
-        return toRelay(line.trim());
-      }).join('\n');
+      const rewritten = text
+        .split('\n')
+        .map((line) => {
+          if (line.startsWith('#EXT-X-MAP')) {
+            return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
+          }
+          if (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line)) {
+            return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
+          }
+          if (line.startsWith('#') || !line.trim()) return line;
+          return toRelay(line.trim());
+        })
+        .join('\n');
 
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       res.setHeader('Access-Control-Allow-Origin', '*');
       return res.send(rewritten);
     }
 
-    // не m3u8 — отдаём как бинарь (сегменты .ts / .m4s)
-    const { Readable } = require('stream');
+    // бинарь (сегменты)
     const ct = contentType || 'application/octet-stream';
-    // кэшируем только сегменты, не плейлисты
-    if (!looksLikeUrlM3u8 && !looksLikeType && !isM3u8Body && buf.length > 0 && buf.length < 8_000_000) {
+    if (
+      !looksLikeUrlM3u8 &&
+      !looksLikeType &&
+      !isM3u8Body &&
+      buf.length > 0 &&
+      buf.length < 8_000_000
+    ) {
       segmentCacheSet(cacheKey, buf, ct);
     }
+
     res.setHeader('Content-Type', ct);
     res.setHeader('Access-Control-Allow-Origin', '*');
+    const { Readable } = require('stream');
     const nodeStream = Readable.from(buf);
     nodeStream.pipe(res);
     nodeStream.on('error', (streamErr) => {
