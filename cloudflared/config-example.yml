@@ -1,0 +1,9 @@
+tunnel: a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx   # твой UUID
+credentials-file: /home/ТВОЙ_ЮЗЕР/.cloudflared/a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx.json
+
+ingress:
+  - hostname: partywatcher.de
+    service: http://localhost:3000
+  - hostname: www.partywatcher.de
+    service: http://localhost:3000
+  - service: http_status:404

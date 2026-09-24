@@ -266,7 +266,6 @@ router.post('/extract', auth, async (req, res) => {
     }
   }
 
-  let browser = null;
   let resolveInFlight, rejectInFlight;
   if (inFlightKey) {
     const promise = new Promise((resolve, reject) => {
@@ -276,44 +275,48 @@ router.post('/extract', auth, async (req, res) => {
     inFlightExtracts.set(inFlightKey, promise);
   }
 
-  try {
-    // прокси Webshare — вынесено в переменные окружения, см. .env
-    const PROXY_SERVER = process.env.PROXY_SERVER;   // например "31.58.9.4:6077"
-    const PROXY_USER = process.env.PROXY_USER;        // "ksiyitlp"
-    const PROXY_PASS = process.env.PROXY_PASS;        // "oiv7evgr7rk3"
+  // прокси Webshare — вынесено в переменные окружения, см. .env
+  const PROXY_SERVER = process.env.PROXY_SERVER;   // например "31.58.9.4:6077"
+  const PROXY_USER = process.env.PROXY_USER;        // "ksiyitlp"
+  const PROXY_PASS = process.env.PROXY_PASS;        // "oiv7evgr7rk3"
 
-        const launchArgs = [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--single-process',
-    ];
+  /**
+   * Одна попытка извлечения потоков — с прокси или без.
+   * Внутри — ВЕСЬ прежний код скрапинга без единого изменения:
+   * adblocker, перехват сетевых ответов, антибот-обход, rezka AJAX,
+   * kinogo2026/lordfilm-ветки, парсинг серий, сборка uniqueStreams/uniqueIframes.
+   * Бросает исключение при ошибке — решение "пробовать ли прокси" принимает вызывающий код.
+   */
+  async function attemptExtract(useProxy) {
+    let browser = null;
+    try {
+      const launchArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+      ];
 
-    // kinogo: прокси ломает доступ к vkvideo.cloud (ERR_TUNNEL_CONNECTION_FAILED).
-    // kinogo2026 — наоборот, БЕЗ прокси сервер банит наш IP (503),
-    // поэтому явно берём флаг useProxy из адаптера, не трогая ветку kinogo
-    const useProxy = PROXY_SERVER && (adapter?.useProxy || siteName !== 'kinogo');
+      if (useProxy) {
+        launchArgs.push(`--proxy-server=${PROXY_SERVER}`);
+      }
 
-    if (useProxy) {
-      launchArgs.push(`--proxy-server=${PROXY_SERVER}`);
-    }
+      browser = await puppeteer.launch({
+        headless: 'new',
+        executablePath: '/usr/bin/chromium-browser',
+        args: launchArgs,
+      });
 
-    browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: '/usr/bin/chromium-browser',
-      args: launchArgs,
-    });
+      const page = await browser.newPage();
 
-    const page = await browser.newPage();
+      if (useProxy && PROXY_USER && PROXY_PASS) {
+        await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
+      }
 
-    if (useProxy && PROXY_USER && PROXY_PASS) {
-      await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
-    }
+      console.log('[player-capture] proxy:', useProxy ? 'ON' : 'OFF', '| сайт:', siteName);
 
-    console.log('[player-capture] proxy:', useProxy ? 'ON' : 'OFF (kinogo без прокси)');
-
-    const blocker = await getAdblocker();
+      const blocker = await getAdblocker();
     const isKinogoFamily = siteName === 'kinogo' || siteName === 'kinogo2026';
     // lordfilm: s.myangular.life / player scripts режутся EasyList — без них
     // iframe ortified не инициализируется (см. логи mg.lordfilm.md)
@@ -609,13 +612,13 @@ router.post('/extract', auth, async (req, res) => {
     // с невнятным "Execution context was destroyed".
     if (!response) {
       console.warn('[player-capture] навигация провалилась, страница пуста — прерываю');
-      return res.json({
+      return {
         success: false,
         error: 'Не удалось открыть страницу (сайт недоступен через прокси или ссылка битая). Проверь прокси/URL.',
         streams: [],
         playerIframes: [],
         meta: null,
-      });
+      };
     }
 
     let pageTitle = '(не удалось получить)';
@@ -2364,18 +2367,66 @@ router.post('/extract', auth, async (req, res) => {
         : 'Ничего не найдено',
     };
 
+      return responseData;
+    } finally {
+      if (browser) await browser.close();
+    }
+  }
+
+  try {
+    // kinogo2026 без прокси получает честный 503 (бан IP) — без прокси даже
+    // пробовать не стоит, только тратим время на антибот-ретраи
+    const forceProxy = !!(PROXY_SERVER && adapter?.useProxy);
+    // kinogo: прокси ломает доступ к vkvideo.cloud — для него прокси не пробуем вообще;
+    // также если прокси в .env не настроен — пробовать его бессмысленно для любого сайта
+    const forceNoProxy = siteName === 'kinogo' || !PROXY_SERVER;
+
+    let responseData;
+    let usedProxy = forceProxy;
+
+    if (forceProxy) {
+      responseData = await attemptExtract(true);
+    } else if (forceNoProxy) {
+      responseData = await attemptExtract(false);
+    } else {
+      // общий случай: сначала без прокси, при пустом результате или ошибке — с прокси
+      try {
+        responseData = await attemptExtract(false);
+        const hasResult =
+          responseData.success &&
+          ((responseData.streams?.length || 0) > 0 || (responseData.playerIframes?.length || 0) > 0);
+
+        if (!hasResult) {
+          console.log('[player-capture] без прокси результата нет — пробую с прокси');
+          responseData = await attemptExtract(true);
+          usedProxy = true;
+        }
+      } catch (e) {
+        console.warn('[player-capture] без прокси упало с ошибкой — пробую с прокси:', e.message);
+        responseData = await attemptExtract(true);
+        usedProxy = true;
+      }
+    }
+
+    console.log('[player-capture] итоговый режим для', siteName, ':', usedProxy ? 'PROXY' : 'NO PROXY');
+
     // не кэшируем ответ, где только битые VK url без playlist — иначе комната навечно на 403
     const hasPlayable =
-      uniqueStreams.some((s) => s.playlist || s.type === 'mp4') ||
-      uniqueIframes.length > 0;
-    if (roomCode && uniqueStreams.length > 0 && hasPlayable) {
+      responseData.streams?.some((s) => s.playlist || s.type === 'mp4') ||
+      (responseData.playerIframes?.length || 0) > 0;
+
+    if (roomCode && (responseData.streams?.length || 0) > 0 && hasPlayable) {
       playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
-    } else if (roomCode && uniqueIframes.length > 0 && uniqueStreams.length === 0) {
+    } else if (
+      roomCode &&
+      (responseData.playerIframes?.length || 0) > 0 &&
+      (responseData.streams?.length || 0) === 0
+    ) {
       // iframe-only тоже кэшируем — чтобы зрители не гоняли puppeteer
       playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
     }
 
-      res.json(responseData);
+    res.json(responseData);
     if (inFlightKey) resolveInFlight(responseData);
   } catch (err) {
     console.error('[player-capture puppeteer]', err.message);
@@ -2389,7 +2440,6 @@ router.post('/extract', auth, async (req, res) => {
     res.json(errorData);
     if (inFlightKey) resolveInFlight(errorData); // резолвим (не реджектим), чтобы ждущие запросы получили тот же ответ с ошибкой
   } finally {
-    if (browser) await browser.close();
     if (inFlightKey) inFlightExtracts.delete(inFlightKey);
   }
 });

@@ -6,3 +6,4 @@ logs/
 *.log
 debug-screenshots/*
 *yt-cookies.txt
+cloudflared/config.yml
