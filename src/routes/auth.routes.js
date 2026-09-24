@@ -15,7 +15,6 @@ function signToken(user) {
 }
 
 function setTokenCookie(res, token) {
-  // secure только если реально HTTPS (cloudflare tunnel / prod)
   const isHttps =
     config.publicUrl?.startsWith('https://') ||
     process.env.FORCE_SECURE_COOKIE === '1';
@@ -24,6 +23,7 @@ function setTokenCookie(res, token) {
     httpOnly: true,
     secure: isHttps,
     sameSite: 'lax',
+    domain: '.partywatcher.de',   // ← вот это ключевое
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/',
   });
@@ -112,7 +112,10 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('token');
+  res.clearCookie('token', {
+    domain: '.partywatcher.de',
+    path: '/',
+  });
   res.json({ status: 'ok' });
 });
 
