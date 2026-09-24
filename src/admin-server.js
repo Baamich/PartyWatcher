@@ -11,25 +11,30 @@ const adminRoutes = require('./routes/admin.routes');
 const supportRoutes = require('./routes/support.routes');
 
 async function start() {
-  await connectDB(); // отдельное подключение к той же базе, не зависит от основного процесса
+  await connectDB();
 
   const app = express();
 
   app.use(cors());
   app.use(express.json());
   app.use(cookieParser());
+
+  // API
   app.use('/api/support', supportRoutes);
-
-  // отдаём только то, что нужно админке — не поднимаем весь public целиком без разбора,
-  // но проще всего отдать всю папку, там нет ничего секретного
-  app.use(express.static(path.join(__dirname, 'public')));
-
-  app.use('/api/auth', authRoutes); // логин нужен и тут, вдруг сессия истекла
+  app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
 
-  app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  // Статика (css, js, img) — нужна админке
+  app.use(express.static(path.join(__dirname, 'public')));
+
+  // Главная страница админки
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  });
+
+  // Всё остальное — 404
+  app.use((req, res) => {
+    res.status(404).send('Not found');
   });
 
   app.listen(config.adminPort, () => {
