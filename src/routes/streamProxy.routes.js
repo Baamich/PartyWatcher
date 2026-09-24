@@ -7,9 +7,15 @@ const PROXY_USER = process.env.PROXY_USER;
 const PROXY_PASS = process.env.PROXY_PASS;
 const { ProxyAgent } = require('undici');
 
+let cachedDispatcher = null;
 function buildDispatcher() {
   if (!PROXY_SERVER) return null;
-  return new ProxyAgent(`http://${PROXY_USER}:${PROXY_PASS}@${PROXY_SERVER}`);
+  // переиспользуем один ProxyAgent вместо нового на каждый запрос —
+  // экономит handshake и даёт keep-alive пулу реально работать
+  if (!cachedDispatcher) {
+    cachedDispatcher = new ProxyAgent(`http://${PROXY_USER}:${PROXY_PASS}@${PROXY_SERVER}`);
+  }
+  return cachedDispatcher;
 }
 
 // кэш сегментов
@@ -26,6 +32,60 @@ function segmentCacheGet(key) {
   }
   return hit;
 }
+
+// память "какой referer сработал для этого хоста в последний раз" —
+// избавляет от полного перебора кандидатов на каждый сегмент, и сам
+// подстраивается, если CDN сменит требования (просто перезапишется)
+const workingRefererByHost = new Map(); // hostname → { referer, origin }
+const WORKING_REFERER_TTL_MS = 30 * 60_000; // 30 минут доверия одному варианту
+const WORKING_REFERER_MAX_HOSTS = 200; // страховка от неограниченного роста при множестве разных CDN-хостов
+
+function rememberWorkingReferer(hostname, candidate) {
+  if (workingRefererByHost.size >= WORKING_REFERER_MAX_HOSTS && !workingRefererByHost.has(hostname)) {
+    const oldestKey = workingRefererByHost.keys().next().value;
+    if (oldestKey) workingRefererByHost.delete(oldestKey);
+  }
+  workingRefererByHost.set(hostname, { ...candidate, expiresAt: Date.now() + WORKING_REFERER_TTL_MS });
+}
+
+function getRememberedReferer(hostname) {
+  const hit = workingRefererByHost.get(hostname);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    workingRefererByHost.delete(hostname);
+    return null;
+  }
+  return { referer: hit.referer, origin: hit.origin };
+}
+
+const deadUrlCache = new Map(); // url → expiresAt
+const DEAD_URL_TTL_MS = 15_000;
+
+function isMarkedDead(url) {
+  const exp = deadUrlCache.get(url);
+  if (!exp) return false;
+  if (Date.now() > exp) {
+    deadUrlCache.delete(url);
+    return false;
+  }
+  return true;
+}
+
+function markDead(url) {
+  deadUrlCache.set(url, Date.now() + DEAD_URL_TTL_MS);
+}
+
+// периодическая чистка — без неё deadUrlCache/workingRefererByHost росли бы
+// вечно записями, к которым больше никогда не обратятся
+setInterval(() => {
+  const now = Date.now();
+  for (const [url, exp] of deadUrlCache) {
+    if (now > exp) deadUrlCache.delete(url);
+  }
+  for (const [hostname, entry] of workingRefererByHost) {
+    if (now > entry.expiresAt) workingRefererByHost.delete(hostname);
+  }
+}, 5 * 60_000).unref();
 
 function segmentCacheSet(key, buf, contentType) {
   if (segmentCache.size >= SEGMENT_CACHE_MAX) {
@@ -139,6 +199,12 @@ router.get('/relay', auth, async (req, res) => {
       return res.send(cached.buf);
     }
 
+    if (isMarkedDead(targetUrl)) {
+      // недавно уже перебрали все referer-кандидаты и всё равно 404 —
+      // ссылка протухла (истёк временной токен), смысла повторять нет
+      return res.status(410).json({ error: 'Ссылка на поток протухла, нужен свежий extract' });
+    }
+
     // один раз качаем на URL, остальные ждут
     const downloadResult = await fetchOnce(cacheKey, async () => {
       const primary = guessReferer(targetUrl);
@@ -195,7 +261,10 @@ router.get('/relay', auth, async (req, res) => {
         .map(originOf)
         .filter(Boolean);
 
+      const remembered = getRememberedReferer(host);
+
       const refererCandidates = [
+        remembered,   // сначала то, что сработало для этого хоста в прошлый раз
         queryCandidate,
         primary,
         hostCandidate,
@@ -273,6 +342,7 @@ router.get('/relay', auth, async (req, res) => {
             'url:',
             targetUrl.slice(0, 80)
           );
+          if (host) rememberWorkingReferer(host, { referer, origin });
           break;
         }
 
@@ -292,6 +362,11 @@ router.get('/relay', auth, async (req, res) => {
       }
 
       if (!response) {
+        // помечаем мёртвой только при явном отказе CDN (404/403 — протухший токен),
+        // а не при сетевой заминке (таймаут/DNS/разрыв — lastStatus тогда 0)
+        if (lastStatus === 404 || lastStatus === 403) {
+          markDead(targetUrl);
+        }
         return {
           ok: false,
           status: lastStatus || 502,

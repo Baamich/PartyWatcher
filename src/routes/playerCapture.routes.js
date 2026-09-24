@@ -233,8 +233,11 @@ router.post('/extract', auth, async (req, res) => {
   const adapter = siteAdapters[siteName] || null;
   console.log('[player-capture] сайт определён как:', siteName, '| адаптер найден:', !!adapter);
 
+  const forceRefresh = !!req.body.forceRefresh;
+
   // если для этой комнаты+серии уже есть свежий кэш — не гоняем puppeteer заново
-  if (roomCode) {
+  // (кроме forceRefresh — старая ссылка протухла, кэш нужно обойти)
+  if (roomCode && !forceRefresh) {
     const cached = playerCaptureCache.get(roomCode, requestedEpisodeForCache);
     if (cached) {
       console.log('[player-capture] отдаю из кэша для комнаты', roomCode, 'серия', requestedEpisodeForCache || 1);

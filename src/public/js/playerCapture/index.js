@@ -4,6 +4,18 @@ import { createIframePlayer } from './iframeManager.js';
 import { detectMeta } from './detector.js';
 import { showEpisodeControls, hideEpisodeControls } from './controls.js';
 
+function parseStreamExpiry(url) {
+  const m = url.match(/:(\d{10}):/);
+  if (!m) return null;
+  const raw = m[1]; // ГГГГММДДЧЧ
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(4, 6));
+  const day = Number(raw.slice(6, 8));
+  const hour = Number(raw.slice(8, 10));
+  const date = new Date(year, month - 1, day, hour);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 /** Выбрать поток: 720p → 1080p → лучшее из оставшихся */
 function pickBestStream(streams) {
   if (!streams?.length) return null;
@@ -273,8 +285,13 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
   let currentStream = stream;
   const streamsList = allStreams || [stream];
   let hlsInstance = null;
+  let isRefreshingStream = false; // общий флаг вместо hlsInstance.__refreshing — переживает пересоздание hlsInstance
+  let mediaRecoverTried = false;
+  let consecutiveNetworkErrors = 0; // если CDN рвётся без чёткого 404/410 (CORS/timeout) несколько раз подряд — тоже повод обновить поток
 
     const setupSource = async (streamToPlay) => {
+    mediaRecoverTried = false;      // новый источник — можно снова попробовать recoverMediaError при следующей ошибке
+    consecutiveNetworkErrors = 0;   // и снова с нуля считать подряд идущие сетевые ошибки
     const streamUrl = streamToPlay.url;
     const isHls = streamToPlay.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl) || /cinemap\.cc|cinemar\.cc|cfnd\./i.test(streamUrl);
     const refQ = streamToPlay.referer
@@ -334,23 +351,55 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
           hlsInstance.attachMedia(videoEl);
           hlsInstance.on(Hls.Events.ERROR, (event, data) => {
             console.error('[capture] hls error', data);
-            if (data.fatal) {
-              try { hlsInstance.destroy(); } catch (_) {}
-              hlsInstance = new Hls({
-                enableWorker: true,
-                maxBufferLength: 30,
-                maxMaxBufferLength: 60,
-              });
-              if (streamToPlay.playlist) {
-                const blob = new Blob([toAbsolutePlaylist(streamToPlay.playlist)], {
-                  type: 'application/vnd.apple.mpegurl',
-                });
-                hlsInstance.loadSource(URL.createObjectURL(blob));
-              } else {
-                hlsInstance.loadSource(playUrl);
-              }
-              hlsInstance.attachMedia(videoEl);
+            if (!data.fatal) return;
+
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              consecutiveNetworkErrors++;
             }
+
+            // сетевые фатальные ошибки на уже "протухшей" подписанной ссылке
+            // (410/404 от relay) не лечатся пересозданием Hls с тем же URL —
+            // нужен свежий extract. То же самое, если CDN несколько раз подряд
+            // обрывается без внятного кода (CORS/timeout) — тоже сигнал,
+            // что со старой ссылкой что-то не так
+            const isDeadLink =
+              data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+              (data.response?.code === 410 || data.response?.code === 404 || consecutiveNetworkErrors >= 3);
+
+            if (isDeadLink && !isRefreshingStream) {
+              console.warn('[capture] ссылка протухла (или CDN стабильно рвётся), запрашиваю свежий поток...');
+              refreshExpiredStream();
+              return;
+            }
+
+            // фатальную ошибку декодера часто можно вылечить без полной пересборки —
+            // recoverMediaError() дешевле и не сбивает позицию воспроизведения
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !mediaRecoverTried) {
+              mediaRecoverTried = true;
+              console.warn('[capture] пробую recoverMediaError() перед пересборкой плеера');
+              try {
+                hlsInstance.recoverMediaError();
+                return;
+              } catch (_) {
+                // не получилось — падаем в обычную пересборку ниже
+              }
+            }
+
+            try { hlsInstance.destroy(); } catch (_) {}
+            hlsInstance = new Hls({
+              enableWorker: true,
+              maxBufferLength: 30,
+              maxMaxBufferLength: 60,
+            });
+            if (streamToPlay.playlist) {
+              const blob = new Blob([toAbsolutePlaylist(streamToPlay.playlist)], {
+                type: 'application/vnd.apple.mpegurl',
+              });
+              hlsInstance.loadSource(URL.createObjectURL(blob));
+            } else {
+              hlsInstance.loadSource(playUrl);
+            }
+            hlsInstance.attachMedia(videoEl);
           });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
           videoEl.src = playUrl;
@@ -367,6 +416,127 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
   };
 
   setupSource(currentStream);
+
+  let proactiveRefreshTimer = null;
+  let refreshAttempts = 0;
+  const MAX_REFRESH_ATTEMPTS = 3;
+  const RETRY_BASE_DELAY_MS = 4000;
+
+  function scheduleProactiveRefresh(streamUrl) {
+    clearTimeout(proactiveRefreshTimer);
+    if (!isOwner) return; // зрители получают новую ссылку от хоста через сокет, сами не дёргают extract
+
+    const expiry = parseStreamExpiry(streamUrl);
+    if (!expiry) return;
+
+    // обновляем за 2 минуты до истечения — с запасом на сетевые задержки
+    const refreshAt = expiry.getTime() - 2 * 60 * 1000;
+    const delay = refreshAt - Date.now();
+
+    if (delay <= 0) {
+      // ссылка уже истекла или истечёт вот-вот — обновляем сразу
+      refreshExpiredStream();
+      return;
+    }
+
+    console.log('[capture] запланировано проактивное обновление потока через', Math.round(delay / 1000), 'сек');
+    proactiveRefreshTimer = setTimeout(() => refreshExpiredStream(), delay);
+  }
+
+  scheduleProactiveRefresh(currentStream.url);
+
+    // независимый сторож: если видео "виснет" на буферизации дольше 12 сек —
+  // считаем поток подвисшим, даже если hls.js не кинул fatal-ошибку явно
+  let stallTimer = null;
+  const STALL_TIMEOUT_MS = 12000;
+
+  function armStallWatchdog() {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (videoEl.paused || videoEl.ended) return; // пауза/конец — это не зависание
+      if (isRefreshingStream) return; // обновление уже идёт — не запускаем второе поверх
+      console.warn('[capture] видео виснет на буферизации дольше', STALL_TIMEOUT_MS / 1000, 'сек — пробую обновить поток');
+      refreshExpiredStream();
+    }, STALL_TIMEOUT_MS);
+  }
+
+  function disarmStallWatchdog() {
+    clearTimeout(stallTimer);
+  }
+
+  videoEl.addEventListener('waiting', armStallWatchdog);
+  videoEl.addEventListener('playing', disarmStallWatchdog);
+  videoEl.addEventListener('pause', disarmStallWatchdog);
+
+  async function refreshExpiredStream() {
+    if (!isOwner) return; // только хост инициирует переизвлечение, зритель получит обновление через socket
+    if (isRefreshingStream) return; // уже обновляем — не запускаем параллельно
+    isRefreshingStream = true;
+    disarmStallWatchdog();
+
+    const wasPlaying = !videoEl.paused;
+    const pos = videoEl.currentTime || 0;
+
+    try {
+      const res = await fetch('/api/player-capture/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          url: videoUrl,
+          episode: meta?.currentEpisode || null,
+          roomCode: window.code,
+          forceRefresh: true, // игнорируем кэш на бэкенде — старая ссылка мертва
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.streams?.length) {
+        refreshAttempts = 0; // успех — сбрасываем счётчик неудачных попыток
+
+        if (window.socket && window.code) {
+          window.socket.emit('player_capture:streams', {
+            code: window.code,
+            season: data.meta?.currentSeason || 1,
+            episode: data.meta?.currentEpisode || 1,
+            voice: data.meta?.currentVoice || null,
+            streams: data.streams,
+            playerIframes: data.playerIframes || [],
+            meta: data.meta,
+          });
+        }
+        const best = pickBestStream(data.streams);
+        currentStream = best;
+        if (meta) meta.currentQuality = best?.quality || null;
+
+        await setupSource(best);
+        scheduleProactiveRefresh(best.url); // сразу планируем следующее обновление для НОВОЙ ссылки
+
+        const resume = () => {
+          try { videoEl.currentTime = pos; } catch (_) {}
+          if (wasPlaying) videoEl.play().catch(() => {});
+        };
+        if (videoEl.readyState >= 2) resume();
+        else videoEl.addEventListener('loadeddata', resume, { once: true });
+      } else {
+        refreshAttempts++;
+        console.error('[capture] не удалось получить свежий поток (попытка', refreshAttempts, '):', data.error || data.message);
+        if (refreshAttempts < MAX_REFRESH_ATTEMPTS) {
+          setTimeout(() => refreshExpiredStream(), RETRY_BASE_DELAY_MS * refreshAttempts); // растущая пауза: 4с, 8с, 12с
+        } else {
+          console.error('[capture] превышен лимит попыток обновления потока — сдаюсь');
+        }
+      }
+    } catch (e) {
+      refreshAttempts++;
+      console.error('[capture] ошибка обновления протухшего потока (попытка', refreshAttempts, '):', e.message);
+      if (refreshAttempts < MAX_REFRESH_ATTEMPTS) {
+        setTimeout(() => refreshExpiredStream(), RETRY_BASE_DELAY_MS * refreshAttempts);
+      }
+    } finally {
+      isRefreshingStream = false;
+    }
+  }
 
   if (isOwner) {
     videoEl.addEventListener('play', () => {
@@ -399,6 +569,8 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     if (meta) meta.currentQuality = quality;
 
     setupSource(next).then(() => {
+      scheduleProactiveRefresh(next.url); // у другого качества обычно свой токен/срок жизни ссылки
+
       const resume = () => {
         try { videoEl.currentTime = pos; } catch (_) {}
         if (wasPlaying) videoEl.play().catch(() => {});
@@ -496,6 +668,11 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     doPlayPause: (play) => (play ? videoEl.play().catch(() => {}) : videoEl.pause()),
     seekTo: (sec) => { videoEl.currentTime = sec; },
     destroy: () => {
+      clearTimeout(proactiveRefreshTimer);
+      clearTimeout(stallTimer);
+      videoEl.removeEventListener('waiting', armStallWatchdog);
+      videoEl.removeEventListener('playing', disarmStallWatchdog);
+      videoEl.removeEventListener('pause', disarmStallWatchdog);
       try { if (hlsInstance) hlsInstance.destroy(); } catch (_) {}
       hlsInstance = null;
     },
