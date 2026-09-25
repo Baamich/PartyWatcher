@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { warmStream } = require('./streamProxy.routes'); // переиспользуем гонку referer+proxy вместо дублирования
 
 // папка для отладочных скриншотов — внутри проекта, чтобы отдавать через статику
 // Express и смотреть в браузере, без scp/ssh (см. подключение статики в server.js)
@@ -93,6 +94,33 @@ function pickPlayerOrigin(page) {
 // повторный запрос просто ждёт результат первого, вместо запуска второго
 // Puppeteer+прокси параллельно (что удваивает нагрузку и путает логи)
 const inFlightExtracts = new Map(); // key: `${roomCode}:${episode}` → Promise
+
+// Ограничение одновременных Puppeteer-сессий: без этого несколько параллельных
+// /extract (из разных комнат) поднимают несколько Chromium сразу, резко
+// увеличивая риск OOM-краша процесса. А краш обнуляет весь прогретый кэш
+// (workingRefererByHost/playlistCache в streamProxy.routes.js) — именно это,
+// а не сам алгоритм перебора referer, скорее всего и объясняет повторяющиеся
+// "с нуля" гонки кандидатов, которые видно в логах снова и снова.
+const MAX_CONCURRENT_BROWSERS = 2;
+let activeBrowsers = 0;
+const browserWaitQueue = [];
+
+function acquireBrowserSlot() {
+  if (activeBrowsers < MAX_CONCURRENT_BROWSERS) {
+    activeBrowsers++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => browserWaitQueue.push(resolve));
+}
+
+function releaseBrowserSlot() {
+  const next = browserWaitQueue.shift();
+  if (next) {
+    next(); // слот передаётся следующему в очереди без изменения счётчика
+  } else {
+    activeBrowsers = Math.max(0, activeBrowsers - 1);
+  }
+}
 
 /**
  * Кликает по #cdnplayer-container несколько раз подряд, проверяя после каждого клика,
@@ -292,6 +320,7 @@ router.post('/extract', auth, async (req, res) => {
    */
   async function attemptExtract(useProxy) {
     let browser = null;
+    await acquireBrowserSlot();
     try {
       const launchArgs = [
         '--no-sandbox',
@@ -2296,72 +2325,22 @@ router.post('/extract', auth, async (req, res) => {
 
       console.log('[player-capture] uniqueStreams из CDN:', uniqueStreams.map((s) => s.quality || s.url.slice(0, 60)));
 
-      // ВАЖНО: токен в voidboost-ссылке живёт очень недолго (судя по логам — секунды).
-      // Раньше мы просто отдавали сырой URL клиенту, а relay лениво резолвил referer
-      // уже ПОСЛЕ полного round-trip (страница → клиент → relay) — к этому моменту
-      // токен часто уже мёртв, сколько referer-кандидатов ни перебирай.
-      // Тянем манифест ПРЯМО СЕЙЧАС, пока сессия ещё свежая, и отдаём клиенту уже
-      // готовый (переписанный под relay) плейлист — так же, как уже сделано для
-      // балаболки/hlsSource ниже по файлу.
+      // Прогреваем relay-кэш ЧЕРЕЗ ТУ ЖЕ логику, что использует /api/stream/relay
+      // (гонка referer-кандидатов + прокси), вместо отдельного урезанного
+      // eager-fetch без прокси, который проваливался почти всегда (voidboost
+      // требует прокси). После успешного прогрева playlistCache/workingReferer
+      // уже тёплые — клиентский hls.js получит мгновенный cache HIT с рабочей
+      // комбинацией referer+прокси, без повторного перебора.
       if (uniqueStreams.length > 0) {
         const masterUrl = uniqueStreams[0].url;
-        const eagerHeaders = {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: '*/*',
-        };
-        // самые вероятные referer для voidboost — сначала родной rezka-ua.tv,
-        // это тот же домен, с которого только что реально получили AJAX-ответ
-        const eagerReferers = ['https://rezka-ua.tv/', 'https://kinogomy.net/'];
-
-        let eagerText = null;
-        let eagerReferer = null;
-        for (const ref of eagerReferers) {
-          try {
-            const r = await fetch(masterUrl, {
-              headers: { ...eagerHeaders, Referer: ref, Origin: ref.replace(/\/$/, '') },
-            });
-            if (r.ok) {
-              const t = await r.text();
-              if (t && t.includes('#EXTM3U')) {
-                eagerText = t;
-                eagerReferer = ref;
-                break;
-              }
-            }
-          } catch (_) {
-            // пробуем следующий referer
-          }
-        }
-
-        if (eagerText) {
-          console.log('[player-capture] eager-скачан манифест сразу после AJAX, referer:', eagerReferer, 'длина:', eagerText.length);
-          try {
-            const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
-            const rewritten = eagerText
-              .split('\n')
-              .map((line) => {
-                if (line.startsWith('#EXT-X-MAP') || (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line))) {
-                  return line.replace(/URI="([^"]+)"/, (_, uri) => {
-                    const abs = uri.startsWith('http') ? uri : baseUrl + uri;
-                    return `URI="/api/stream/relay?url=${encodeURIComponent(abs)}&referer=${encodeURIComponent(eagerReferer)}"`;
-                  });
-                }
-                if (line.startsWith('#') || !line.trim()) return line;
-                const abs = line.trim().startsWith('http') ? line.trim() : baseUrl + line.trim();
-                return `/api/stream/relay?url=${encodeURIComponent(abs)}&referer=${encodeURIComponent(eagerReferer)}`;
-              })
-              .join('\n');
-
-            uniqueStreams = [
-              { ...uniqueStreams[0], playlist: rewritten, referer: eagerReferer },
-              ...uniqueStreams.slice(1),
-            ];
-          } catch (e) {
-            console.warn('[player-capture] не удалось переписать eager-плейлист:', e.message);
-          }
-        } else {
-          console.warn('[player-capture] eager-скачивание манифеста не удалось — токен, вероятно, уже протух по пути к клиенту');
+        try {
+          const warmed = await Promise.race([
+            warmStream(masterUrl),
+            new Promise((resolve) => setTimeout(() => resolve(false), 6000)),
+          ]);
+          console.log('[player-capture] прогрев relay-кэша:', masterUrl.slice(0, 80), warmed ? 'OK' : 'не удалось/таймаут');
+        } catch (e) {
+          console.warn('[player-capture] ошибка прогрева relay-кэша:', e.message);
         }
       }
     } else {
@@ -2447,6 +2426,7 @@ router.post('/extract', auth, async (req, res) => {
       return responseData;
     } finally {
       if (browser) await browser.close();
+      releaseBrowserSlot();
     }
   }
 

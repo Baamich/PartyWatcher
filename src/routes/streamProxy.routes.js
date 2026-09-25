@@ -21,7 +21,7 @@ function buildDispatcher() {
 // кэшируем на 20 сек, чтобы ретраи hls.js (при капризах CDN вроде voidboost)
 // не гоняли заново весь перебор referer-кандидатов на каждую попытку
 const playlistRawCache = new Map(); // targetUrl → { text, expires }
-const PLAYLIST_CACHE_TTL_MS = 20_000;
+const PLAYLIST_CACHE_TTL_MS = 45_000;
 const PLAYLIST_CACHE_MAX = 100;
 
 function playlistCacheGet(key) {
@@ -240,6 +240,201 @@ function guessReferer(targetUrl) {
   }
 }
 
+// хосты, для которых прокси почти всегда обязателен (эмпирика из логов —
+// voidboost банит прямой IP сервера независимо от правильности referer).
+// Пробуем прокси ПЕРВЫМ для них, чтобы не тратить лишний round-trip
+// на заведомо обречённую попытку без прокси
+const PROXY_PREFERRED_HOSTS = ['voidboost', 'collaps', 'cdnmovies', 'ashdi'];
+function hostPrefersProxyFirst(hostname) {
+  return PROXY_PREFERRED_HOSTS.some((h) => (hostname || '').includes(h));
+}
+
+// Пробуем один конкретный referer-кандидат (без прокси / с прокси, порядок
+// зависит от preferProxyFirst). Бросает при полном отказе — err.status/err.body/err.referer
+async function tryCandidate(targetUrl, { referer, origin }, isLast, preferProxyFirst) {
+  const headers = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Referer: referer,
+    Accept: '*/*',
+    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'cross-site',
+    Connection: 'keep-alive',
+  };
+  if (!isLast) headers['Origin'] = origin;
+
+  const dispatcher = PROXY_SERVER ? buildDispatcher() : null;
+  const attemptOrder = preferProxyFirst && dispatcher
+    ? [{ proxy: true }, { proxy: false }]
+    : [{ proxy: false }, { proxy: true }];
+
+  let localStatus = 0;
+  let localBody = '';
+
+  for (const step of attemptOrder) {
+    if (step.proxy && !dispatcher) continue;
+    try {
+      const fetchOpts = { headers };
+      if (step.proxy) fetchOpts.dispatcher = dispatcher;
+      const res = await fetch(targetUrl, fetchOpts);
+      if (res && res.ok) {
+        return { response: res, usedProxy: step.proxy, referer, origin };
+      }
+      localStatus = res ? res.status : 0;
+      if (res) localBody = await res.text().catch(() => '');
+      // 410 Gone — CDN подтвердил протухший токен, смена referer/proxy не поможет
+      if (localStatus === 410) break;
+    } catch (e) {
+      localBody = e.message || 'fetch failed';
+    }
+  }
+
+  const err = new Error(`candidate failed: ${localStatus || 'net'}`);
+  err.status = localStatus;
+  err.body = localBody;
+  err.referer = referer;
+  throw err;
+}
+
+// Основная логика получения потока — гонка referer-кандидатов (+прокси).
+// Вынесена в отдельную функцию, чтобы её могли использовать И /relay (по
+// запросу клиента), И playerCapture.routes.js (прогрев сразу после AJAX,
+// пока Puppeteer-сессия ещё жива) — раньше прогрев дублировал урезанную
+// версию этой логики БЕЗ прокси, из-за чего всегда проваливался.
+async function resolveStream(targetUrl, { fromQuery = '' } = {}) {
+  let host = '';
+  try { host = new URL(targetUrl).hostname || ''; } catch (_) {}
+
+  if (isMarkedDead(targetUrl)) {
+    return { ok: false, status: 410, body: 'dead (cached)' };
+  }
+
+  const cacheKey = targetUrl;
+  const cachedPlaylist = playlistCacheGet(cacheKey);
+  if (cachedPlaylist !== null) {
+    return { ok: true, cached: true, text: cachedPlaylist, fromQuery };
+  }
+
+  return fetchOnce(cacheKey, async () => {
+    const isVk = /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs|vk\.com/i.test(targetUrl);
+    const primary = guessReferer(targetUrl);
+
+    let queryCandidate = null;
+    if (fromQuery.startsWith('http')) {
+      try {
+        const u = new URL(fromQuery);
+        queryCandidate = { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
+      } catch (_) {}
+    }
+
+    let hostCandidate = null;
+    try {
+      const u = new URL(targetUrl);
+      hostCandidate = { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
+    } catch (_) {}
+
+    function originOf(urlOrHost) {
+      try {
+        const u = urlOrHost.startsWith('http') ? new URL(urlOrHost) : new URL('https://' + urlOrHost);
+        return { referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` };
+      } catch { return null; }
+    }
+
+    const FAMILY_FALLBACKS = [
+      'kinogomy.stravers.live', 'kinogomy.stloadi.live', 'balabolka.stravers.live',
+      'marie.as.stravers.live', 'marie-as.stloadi.live', 'kinogomy.net',
+      'cdn.lordfilm64.com', 'api.ortified.ws', 'vk.com', 'rezka-ua.tv', 'hdrezka.tv', 'rezka.ag',
+    ].map(originOf).filter(Boolean);
+
+    const remembered = getRememberedReferer(host);
+    const refererCandidates = [remembered, queryCandidate, primary, hostCandidate, ...FAMILY_FALLBACKS].filter(Boolean);
+    const seen = new Set();
+    const uniqueCandidates = refererCandidates.filter((c) => {
+      const key = c.referer + '|' + c.origin;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    let response = null;
+    let usedProxy = false;
+    let winningCandidate = null;
+    let lastStatus = 0;
+    let lastBody = '';
+
+    const proxyFirst = hostPrefersProxyFirst(host);
+
+    if (remembered) {
+      try {
+        const result = await tryCandidate(targetUrl, remembered, false, remembered.usedProxy ?? proxyFirst);
+        response = result.response;
+        usedProxy = result.usedProxy;
+        winningCandidate = { referer: result.referer, origin: result.origin };
+      } catch (e) {
+        console.warn('[stream-relay] remembered referer больше не работает, забываю:', e.referer, e.status || 'net');
+        forgetWorkingReferer(host);
+      }
+    }
+
+    if (!response) {
+      const rest = uniqueCandidates.filter((c) => !remembered || c.referer !== remembered.referer);
+      const attempts = rest.map((c, idx) => tryCandidate(targetUrl, c, idx === rest.length - 1, proxyFirst));
+      try {
+        const result = await Promise.any(attempts);
+        response = result.response;
+        usedProxy = result.usedProxy;
+        winningCandidate = { referer: result.referer, origin: result.origin };
+      } catch (aggregateErr) {
+        const errors = aggregateErr.errors || [];
+        const lastErr = errors[errors.length - 1];
+        lastStatus = lastErr?.status || 0;
+        lastBody = lastErr?.body || '';
+        for (const e of errors) {
+          console.warn('[stream-relay] отказ', e.status || 'net', 'referer:', e.referer, targetUrl.slice(0, 80), String(e.body).slice(0, 80));
+        }
+      }
+    }
+
+    if (!response) {
+      if (lastStatus === 404 || lastStatus === 403 || lastStatus === 410) markDead(targetUrl);
+      return { ok: false, status: lastStatus || 502, body: lastBody };
+    }
+
+    console.log('[stream-relay] OK', usedProxy ? 'proxy:ON' : 'proxy:OFF', 'referer:', winningCandidate.referer, 'status:', response.status, 'vk:', isVk, 'url:', targetUrl.slice(0, 80));
+    if (host) rememberWorkingReferer(host, winningCandidate, usedProxy);
+
+    const contentType = response.headers.get('content-type') || '';
+    const looksLikeUrlM3u8 = targetUrl.includes('.m3u8');
+    const looksLikeType = contentType.includes('mpegurl') || contentType.includes('application/vnd.apple');
+    const buf = Buffer.from(await response.arrayBuffer());
+    const head = buf.slice(0, 16).toString('utf8');
+    const isM3u8Body = head.startsWith('#EXTM3U');
+
+    if (looksLikeUrlM3u8 || looksLikeType || isM3u8Body) {
+      const text = buf.toString('utf8');
+      playlistCacheSet(cacheKey, text);
+    }
+
+    return { ok: true, buf, contentType, looksLikeUrlM3u8, looksLikeType, isM3u8Body, fromQuery };
+  });
+}
+
+// Прогрев relay-кэша (playlistCache + workingRefererByHost) сразу после
+// того, как playerCapture.routes.js нашёл поток из AJAX/get_cdn_series —
+// пока браузерная сессия ещё жива и токен максимально свежий. Best-effort,
+// исключений наружу не бросает.
+async function warmStream(targetUrl) {
+  try {
+    const result = await resolveStream(targetUrl);
+    return !!(result && result.ok);
+  } catch (e) {
+    console.warn('[stream-relay] прогрев не удался:', targetUrl.slice(0, 80), e.message);
+    return false;
+  }
+}
+
 router.get('/relay', auth, async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl || !targetUrl.startsWith('http')) {
@@ -247,15 +442,6 @@ router.get('/relay', auth, async (req, res) => {
   }
 
   try {
-    let host = '';
-    try {
-      host = new URL(targetUrl).hostname || '';
-    } catch (_) {}
-
-    const isVk =
-      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs|vk\.com/i.test(targetUrl) ||
-      /vkvideo\.cloud|vkuservideo|userapi\.com|vk-cdn|vkcs/i.test(host);
-
     const cacheKey = targetUrl;
     const cached = segmentCacheGet(cacheKey);
     if (cached) {
@@ -266,285 +452,35 @@ router.get('/relay', auth, async (req, res) => {
       return res.send(cached.buf);
     }
 
-    const cachedPlaylist = playlistCacheGet(cacheKey);
-    if (cachedPlaylist !== null) {
-      // тот же манифест уже качали недавно — не идём в источник заново,
-      // просто пересобираем ссылки под текущий запрос (referer из query может отличаться)
-      console.log('[stream-relay] playlist cache HIT', targetUrl.slice(0, 80));
-      const fromQueryNow = (req.query.referer || '').toString();
-      const rewritten = buildRewrittenPlaylist(cachedPlaylist, targetUrl, fromQueryNow);
+    const fromQuery = (req.query.referer || '').toString();
+    const downloadResult = await resolveStream(targetUrl, { fromQuery });
+
+    if (!downloadResult.ok) {
+      console.error('[stream-relay] CDN отказал:', downloadResult.status, targetUrl.slice(0, 120));
+      return res.status(downloadResult.status || 502).json({ error: `CDN вернул ${downloadResult.status}` });
+    }
+
+    if (downloadResult.cached) {
+      const rewritten = buildRewrittenPlaylist(downloadResult.text, targetUrl, fromQuery);
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       res.setHeader('Access-Control-Allow-Origin', '*');
       return res.send(rewritten);
     }
 
-    if (isMarkedDead(targetUrl)) {
-      // недавно уже перебрали все referer-кандидаты и всё равно 404 —
-      // ссылка протухла (истёк временной токен), смысла повторять нет
-      return res.status(410).json({ error: 'Ссылка на поток протухла, нужен свежий extract' });
-    }
-
-    // один раз качаем на URL, остальные ждут
-    const downloadResult = await fetchOnce(cacheKey, async () => {
-      const primary = guessReferer(targetUrl);
-      const fromQuery = (req.query.referer || '').toString();
-
-      let queryCandidate = null;
-      if (fromQuery.startsWith('http')) {
-        try {
-          const u = new URL(fromQuery);
-          queryCandidate = {
-            referer: `${u.protocol}//${u.hostname}/`,
-            origin: `${u.protocol}//${u.hostname}`,
-          };
-        } catch (_) {}
-      }
-
-      let hostCandidate = null;
-      try {
-        const u = new URL(targetUrl);
-        hostCandidate = {
-          referer: `${u.protocol}//${u.hostname}/`,
-          origin: `${u.protocol}//${u.hostname}`,
-        };
-      } catch (_) {}
-
-      function originOf(urlOrHost) {
-        try {
-          const u = urlOrHost.startsWith('http')
-            ? new URL(urlOrHost)
-            : new URL('https://' + urlOrHost);
-          return {
-            referer: `${u.protocol}//${u.hostname}/`,
-            origin: `${u.protocol}//${u.hostname}`,
-          };
-        } catch {
-          return null;
-        }
-      }
-
-      const FAMILY_FALLBACKS = [
-        'kinogomy.stravers.live',
-        'kinogomy.stloadi.live',
-        'balabolka.stravers.live',
-        'marie.as.stravers.live',
-        'marie-as.stloadi.live',
-        'kinogomy.net',
-        'cdn.lordfilm64.com',
-        'api.ortified.ws',
-        'vk.com',
-        'rezka-ua.tv',
-        'hdrezka.tv',
-        'rezka.ag',
-      ]
-        .map(originOf)
-        .filter(Boolean);
-
-      const remembered = getRememberedReferer(host);
-
-      const refererCandidates = [
-        remembered,   // сначала то, что сработало для этого хоста в прошлый раз
-        queryCandidate,
-        primary,
-        hostCandidate,
-        ...FAMILY_FALLBACKS,
-      ].filter(Boolean);
-
-      const seen = new Set();
-      const uniqueCandidates = refererCandidates.filter((c) => {
-        const key = c.referer + '|' + c.origin;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      let response = null;
-      let lastStatus = 0;
-      let lastBody = '';
-      let usedProxy = false;
-      let winningCandidate = null;
-
-      // Пробуем один конкретный кандидат (без прокси, затем с прокси если есть PROXY_SERVER).
-      // Возвращает {response, usedProxy} либо кидает с lastStatus/lastBody для логов отказа.
-      async function tryCandidate({ referer, origin }, isLast, preferProxyFirst) {
-        const headers = {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Referer: referer,
-          Accept: '*/*',
-          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Sec-Fetch-Dest': 'empty',
-          'Sec-Fetch-Mode': 'cors',
-          'Sec-Fetch-Site': 'cross-site',
-          Connection: 'keep-alive',
-        };
-        if (!isLast) headers['Origin'] = origin;
-
-        const dispatcher = PROXY_SERVER ? buildDispatcher() : null;
-        const attemptOrder = preferProxyFirst && dispatcher
-          ? [{ proxy: true }, { proxy: false }]
-          : [{ proxy: false }, { proxy: true }];
-
-        let localStatus = 0;
-        let localBody = '';
-
-        for (const step of attemptOrder) {
-          if (step.proxy && !dispatcher) continue;
-          try {
-            const fetchOpts = { headers };
-            if (step.proxy) fetchOpts.dispatcher = dispatcher;
-            const res = await fetch(targetUrl, fetchOpts);
-            if (res && res.ok) {
-              return { response: res, usedProxy: step.proxy, referer, origin };
-            }
-            localStatus = res ? res.status : 0;
-            if (res) localBody = await res.text().catch(() => '');
-
-            // 410 Gone — сам CDN подтвердил, что токен истёк. Это не вопрос
-            // "неправильный referer", смена referer/proxy тут не поможет —
-            // прерываем перебор шагов для ЭТОГО кандидата сразу
-            if (localStatus === 410) break;
-          } catch (e) {
-            localBody = e.message || 'fetch failed';
-          }
-        }
-
-        const err = new Error(`candidate failed: ${localStatus || 'net'}`);
-        err.status = localStatus;
-        err.body = localBody;
-        err.referer = referer;
-        throw err;
-      }
-      // remembered — если знаем и referer, и нужен ли был прокси, пробуем ТОЛЬКО его,
-      // сразу с правильным проксёй, без лишних параллельных запросов
-      if (remembered) {
-        try {
-          const result = await tryCandidate(remembered, false, remembered.usedProxy);
-          response = result.response;
-          usedProxy = result.usedProxy;
-          winningCandidate = { referer: result.referer, origin: result.origin };
-        } catch (e) {
-          console.warn('[stream-relay] remembered referer больше не работает, забываю:', e.referer, e.status || 'net');
-          forgetWorkingReferer(host);
-        }
-      }
-
-      // не нашли через remembered — бьём оставшиеся кандидаты ПАРАЛЛЕЛЬНО,
-      // берём первый успешный (Promise.any), остальные просто игнорируются
-      if (!response) {
-        const rest = uniqueCandidates.filter((c) => !remembered || c.referer !== remembered.referer);
-        const attempts = rest.map((c, idx) =>
-          tryCandidate(c, idx === rest.length - 1, false)
-        );
-
-        try {
-          const result = await Promise.any(attempts);
-          response = result.response;
-          usedProxy = result.usedProxy;
-          winningCandidate = { referer: result.referer, origin: result.origin };
-        } catch (aggregateErr) {
-          // все параллельные попытки упали — берём последнюю ошибку для лога/статуса
-          const errors = aggregateErr.errors || [];
-          const lastErr = errors[errors.length - 1];
-          lastStatus = lastErr?.status || 0;
-          lastBody = lastErr?.body || '';
-          for (const e of errors) {
-            console.warn('[stream-relay] отказ', e.status || 'net', 'referer:', e.referer, targetUrl.slice(0, 80), String(e.body).slice(0, 80));
-          }
-        }
-      }
-
-      if (response && winningCandidate) {
-        console.log(
-          '[stream-relay] OK',
-          usedProxy ? 'proxy:ON' : 'proxy:OFF',
-          'referer:',
-          winningCandidate.referer,
-          'status:',
-          response.status,
-          'vk:',
-          isVk,
-          'url:',
-          targetUrl.slice(0, 80)
-        );
-        if (host) rememberWorkingReferer(host, winningCandidate, usedProxy);
-      }
-
-      if (!response) {
-        if (lastStatus === 404 || lastStatus === 403 || lastStatus === 410) {
-          markDead(targetUrl);
-        }
-        return {
-          ok: false,
-          status: lastStatus || 502,
-          body: lastBody,
-        };
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-      const looksLikeUrlM3u8 = targetUrl.includes('.m3u8');
-      const looksLikeType =
-        contentType.includes('mpegurl') ||
-        contentType.includes('application/vnd.apple');
-
-      const buf = Buffer.from(await response.arrayBuffer());
-      const head = buf.slice(0, 16).toString('utf8');
-      const isM3u8Body = head.startsWith('#EXTM3U');
-
-      return {
-        ok: true,
-        buf,
-        contentType,
-        looksLikeUrlM3u8,
-        looksLikeType,
-        isM3u8Body,
-        fromQuery,
-      };
-    });
-
-    if (!downloadResult.ok) {
-      console.error(
-        '[stream-relay] CDN отказал:',
-        downloadResult.status,
-        targetUrl.slice(0, 120),
-        String(downloadResult.body || '').slice(0, 200)
-      );
-      return res
-        .status(downloadResult.status || 502)
-        .json({ error: `CDN вернул ${downloadResult.status}` });
-    }
-
-    const {
-      buf,
-      contentType,
-      looksLikeUrlM3u8,
-      looksLikeType,
-      isM3u8Body,
-      fromQuery,
-    } = downloadResult;
+    const { buf, looksLikeUrlM3u8, looksLikeType, isM3u8Body } = downloadResult;
 
     if (looksLikeUrlM3u8 || looksLikeType || isM3u8Body) {
       const text = buf.toString('utf8');
-      playlistCacheSet(cacheKey, text); // на будущее — если hls.js вдруг переспросит тот же манифест
       const rewritten = buildRewrittenPlaylist(text, targetUrl, fromQuery);
-
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       res.setHeader('Access-Control-Allow-Origin', '*');
       return res.send(rewritten);
     }
 
-    // бинарь (сегменты)
-    const ct = contentType || 'application/octet-stream';
-    if (
-      !looksLikeUrlM3u8 &&
-      !looksLikeType &&
-      !isM3u8Body &&
-      buf.length > 0 &&
-      buf.length < 8_000_000
-    ) {
+    const ct = downloadResult.contentType || 'application/octet-stream';
+    if (buf.length > 0 && buf.length < 8_000_000) {
       segmentCacheSet(cacheKey, buf, ct);
     }
-
     res.setHeader('Content-Type', ct);
     res.setHeader('Access-Control-Allow-Origin', '*');
     const { Readable } = require('stream');
@@ -556,11 +492,9 @@ router.get('/relay', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('[stream-relay] EXCEPTION:', err && err.message);
-    console.error(err && err.stack);
-    if (!res.headersSent) {
-      res.status(500).json({ error: (err && err.message) || 'relay error' });
-    }
+    if (!res.headersSent) res.status(500).json({ error: (err && err.message) || 'relay error' });
   }
 });
 
 module.exports = router;
+module.exports.warmStream = warmStream;
