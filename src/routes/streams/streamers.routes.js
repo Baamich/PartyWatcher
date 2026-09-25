@@ -12,10 +12,11 @@ function validateStreamerName(name) {
   return null;
 }
 
-// GET /streamers?q=имя  — список стримеров, поиск без учёта регистра
+// GET /streamers?q=имя&limit=5  — список стримеров, поиск без учёта регистра
 router.get('/', async (req, res) => {
   try {
     const q = (req.query.q || '').trim().toLowerCase();
+    const limit = Math.min(parseInt(req.query.limit, 10) || 0, 50) || null;
 
     const match = { $ne: null };
     if (q) {
@@ -23,11 +24,14 @@ router.get('/', async (req, res) => {
       match.$options = 'i';
     }
 
-    const streamers = await User.find({ streamerNameLower: match })
-      .select('streamerName isLive -_id')
-      .sort({ isLive: -1, streamerName: 1 })
-      .lean();
+    let query = User.find({ streamerNameLower: match })
+      .select('streamerName isLive profileViews -_id')
+      // при поиске сначала эфир, потом чаще открываемые профили, потом по алфавиту
+      .sort({ isLive: -1, profileViews: -1, streamerName: 1 });
 
+    if (limit) query = query.limit(limit);
+
+    const streamers = await query.lean();
     res.json(streamers);
   } catch (err) {
     console.error('[GET /streamers]', err);
@@ -112,7 +116,11 @@ router.get('/:name', async (req, res) => {
     const nameLower = String(req.params.name || '').trim().toLowerCase();
     if (!nameLower) return res.status(400).json({ error: 'Не указано имя стримера' });
 
-    const streamer = await User.findOne({ streamerNameLower: nameLower })
+    const streamer = await User.findOneAndUpdate(
+      { streamerNameLower: nameLower },
+      { $inc: { profileViews: 1 } },
+      { new: true }
+    )
       .select('streamerName isLive streamerBio streamerAvatarUrl streamerBannerUrl -_id')
       .lean();
 

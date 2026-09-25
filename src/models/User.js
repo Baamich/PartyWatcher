@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema(
     streamerBio: { type: String, default: '' },
     streamerAvatarUrl: { type: String, default: null },
     streamerBannerUrl: { type: String, default: null },
+    profileViews: { type: Number, default: 0 }, 
   },
   { versionKey: false }
 );

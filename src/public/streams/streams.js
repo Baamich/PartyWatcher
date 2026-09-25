@@ -65,7 +65,10 @@ async function loadStreamers(query = '') {
   }
 }
 
+let searchDebounceTimer = null;
+
 function onStreamerSearch() {
+  hideSuggestions();
   loadStreamers(document.getElementById('streamerSearchInput')?.value || '');
 }
 
@@ -74,6 +77,66 @@ function handleStreamerSearchKey(e) {
     e.preventDefault();
     onStreamerSearch();
   }
+}
+
+function handleStreamerSearchInput() {
+  const q = document.getElementById('streamerSearchInput')?.value || '';
+  clearTimeout(searchDebounceTimer);
+
+  if (!q.trim()) {
+    hideSuggestions();
+    loadStreamers('');
+    return;
+  }
+
+  if (q.trim().length < 3) {
+    hideSuggestions();
+    return;
+  }
+
+  searchDebounceTimer = setTimeout(async () => {
+    try {
+      const results = await api('/streamers?q=' + encodeURIComponent(q.trim()) + '&limit=5');
+      renderSuggestions(results, q.trim());
+      loadStreamers(q); // сразу же фильтруем и основную сетку
+    } catch (err) {
+      console.warn('[handleStreamerSearchInput]', err.message);
+    }
+  }, 300);
+}
+
+function renderSuggestions(streamers, query) {
+  const box = document.getElementById('searchSuggestions');
+  if (!box) return;
+
+  if (!streamers.length) {
+    box.innerHTML = `<div class="suggestion-item" style="cursor:default;color:var(--text-muted);">Ничего не найдено</div>`;
+    box.classList.remove('hidden');
+    return;
+  }
+
+  box.innerHTML = '';
+  streamers.forEach((s) => {
+    const row = document.createElement('div');
+    row.className = 'suggestion-item';
+    row.innerHTML = `<span>${s.streamerName}</span>${s.isLive ? '<span class="suggestion-badge">В ЭФИРЕ</span>' : ''}`;
+    row.onclick = () => {
+      document.getElementById('streamerSearchInput').value = s.streamerName;
+      hideSuggestions();
+      loadStreamers(s.streamerName);
+    };
+    box.appendChild(row);
+  });
+  box.classList.remove('hidden');
+}
+
+function hideSuggestions() {
+  document.getElementById('searchSuggestions')?.classList.add('hidden');
+}
+
+// небольшая задержка, чтобы клик по подсказке успел сработать раньше blur
+function hideSuggestionsSoon() {
+  setTimeout(hideSuggestions, 150);
 }
 
 async function goToMyProfile() {

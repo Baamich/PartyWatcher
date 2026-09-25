@@ -33,8 +33,12 @@
 
   <div class="streams-layout">
     <div class="streams-search-wrap">
-      <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера" onkeydown="handleStreamerSearchKey(event)" />
+      <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера"
+             onkeydown="handleStreamerSearchKey(event)"
+             oninput="handleStreamerSearchInput()"
+             onblur="hideSuggestionsSoon()" />
       <button type="button" class="search-icon-btn" onclick="onStreamerSearch()" aria-label="Искать">🔍</button>
+      <div id="searchSuggestions" class="search-suggestions hidden"></div>
     </div>
 
     <section class="streams-section">

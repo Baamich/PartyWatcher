@@ -1,7 +1,17 @@
-let pendingAvatarBase64; // undefined = не менялось, строка = новое изображение
+let pendingAvatarBase64;
 let pendingBannerBase64;
 
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 МБ на файл (совпадает с лимитом на сервере)
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+function showToast(type, message) {
+  const el = document.getElementById('saveToast');
+  if (!el) return;
+  el.textContent = message;
+  el.className = `save-toast ${type === 'success' ? 'toast-success' : 'toast-error'}`;
+  el.classList.remove('hidden');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.add('hidden'), 3000);
+}
 
 async function init() {
   let me;
@@ -49,21 +59,16 @@ function readFileAsBase64(file) {
 }
 
 async function onImageSelected(event, kind) {
-  const errEl = document.getElementById('editError');
-  errEl.classList.add('hidden');
-
   const file = event.target.files?.[0];
   if (!file) return;
 
   if (!file.type.startsWith('image/')) {
-    errEl.textContent = 'Нужно выбрать картинку';
-    errEl.classList.remove('hidden');
+    showToast('error', 'Нужно выбрать картинку');
     event.target.value = '';
     return;
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    errEl.textContent = 'Файл слишком большой (максимум 4 МБ)';
-    errEl.classList.remove('hidden');
+    showToast('error', 'Файл слишком большой (максимум 4 МБ)');
     event.target.value = '';
     return;
   }
@@ -74,8 +79,7 @@ async function onImageSelected(event, kind) {
     if (kind === 'avatar') pendingAvatarBase64 = base64;
     else pendingBannerBase64 = base64;
   } catch (err) {
-    errEl.textContent = err.message;
-    errEl.classList.remove('hidden');
+    showToast('error', err.message);
   }
 }
 
@@ -104,22 +108,21 @@ async function submitStreamerName() {
 }
 
 async function submitProfile() {
-  const errEl = document.getElementById('editError');
-  const okEl = document.getElementById('editOk');
-  errEl.classList.add('hidden');
-  okEl.classList.add('hidden');
+  const bioEl = document.getElementById('bioInput');
+  if (!bioEl) {
+    showToast('error', 'Форма не загружена — обнови страницу');
+    return;
+  }
 
-  const body = { streamerBio: document.getElementById('bioInput').value };
+  const body = { streamerBio: bioEl.value };
   if (pendingAvatarBase64 !== undefined) body.streamerAvatarUrl = pendingAvatarBase64;
   if (pendingBannerBase64 !== undefined) body.streamerBannerUrl = pendingBannerBase64;
 
   try {
     await api('/streamers/me', { method: 'PATCH', body });
-    okEl.classList.remove('hidden');
-    setTimeout(() => okEl.classList.add('hidden'), 1500);
+    showToast('success', 'Сохранено');
   } catch (err) {
-    errEl.textContent = err.message || 'Не удалось сохранить';
-    errEl.classList.remove('hidden');
+    showToast('error', err.message || 'Не удалось сохранить');
   }
 }
 
