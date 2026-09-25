@@ -389,7 +389,7 @@ router.get('/relay', auth, async (req, res) => {
         let localBody = '';
 
         for (const step of attemptOrder) {
-          if (step.proxy && !dispatcher) continue; // прокси не настроен — пропускаем этот шаг
+          if (step.proxy && !dispatcher) continue;
           try {
             const fetchOpts = { headers };
             if (step.proxy) fetchOpts.dispatcher = dispatcher;
@@ -399,6 +399,11 @@ router.get('/relay', auth, async (req, res) => {
             }
             localStatus = res ? res.status : 0;
             if (res) localBody = await res.text().catch(() => '');
+
+            // 410 Gone — сам CDN подтвердил, что токен истёк. Это не вопрос
+            // "неправильный referer", смена referer/proxy тут не поможет —
+            // прерываем перебор шагов для ЭТОГО кандидата сразу
+            if (localStatus === 410) break;
           } catch (e) {
             localBody = e.message || 'fetch failed';
           }
@@ -410,7 +415,6 @@ router.get('/relay', auth, async (req, res) => {
         err.referer = referer;
         throw err;
       }
-
       // remembered — если знаем и referer, и нужен ли был прокси, пробуем ТОЛЬКО его,
       // сразу с правильным проксёй, без лишних параллельных запросов
       if (remembered) {
@@ -467,9 +471,7 @@ router.get('/relay', auth, async (req, res) => {
       }
 
       if (!response) {
-        // помечаем мёртвой только при явном отказе CDN (404/403 — протухший токен),
-        // а не при сетевой заминке (таймаут/DNS/разрыв — lastStatus тогда 0)
-        if (lastStatus === 404 || lastStatus === 403) {
+        if (lastStatus === 404 || lastStatus === 403 || lastStatus === 410) {
           markDead(targetUrl);
         }
         return {
