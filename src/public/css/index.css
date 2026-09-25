@@ -42,6 +42,7 @@ body {
   gap: 10px;
   user-select: none;
   text-decoration: none;
+  margin-left: -8px; /* сдвигаем сам логотип левее, остальной хедер не трогаем */
 }
 
 .brand-mark {
@@ -106,6 +107,44 @@ button {
 
 .type-row select {
   flex: 1;
+}
+
+
+/* ---- переключатель разделов: Комнаты / Прямые трансляции ---- */
+
+.page-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.page-nav-btn {
+  width: auto;
+  text-align: left;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 4px 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.page-nav-btn:hover {
+  background: none;
+  box-shadow: none;
+  color: var(--text);
+}
+
+.page-nav-btn.active {
+  color: var(--text);
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 2px;
+  width: fit-content;
 }
 
 .info-btn {

@@ -1,0 +1,143 @@
+/* ==== Layout страницы трансляций ==== */
+
+.streams-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+.streams-search-wrap {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto 28px;
+}
+
+.streams-search-wrap input {
+  width: 100%;
+  margin: 0;
+  padding-right: 42px;
+}
+
+.streams-section {
+  margin-bottom: 34px;
+}
+
+.streams-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.streams-section-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---- карточка стримера ---- */
+
+.streamer-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.streamer-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--text-muted);
+}
+
+.streamer-avatar-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 10px;
+}
+
+.streamer-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-alt);
+}
+
+.streamer-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 24px;
+}
+
+.live-badge {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.streamer-name {
+  text-align: center;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.streamer-meta {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- ряд активных (горизонтальный скролл) ---- */
+
+.active-streamers-row {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+}
+
+.active-streamers-row .streamer-card {
+  flex: 0 0 150px;
+}
+
+/* ---- общая сетка всех стримеров ---- */
+
+.streamers-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1000px) { .streamers-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 760px)  { .streamers-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px)  { .streamers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.my-profile-btn {
+  margin-top: 6px;
+}

@@ -120,9 +120,9 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', auth, async (req, res) => {
-  const user = await User.findById(req.user.id).select('username role');
+  const user = await User.findById(req.user.id).select('username role streamerName');
   if (!user) return res.status(401).json({ error: 'Юзер не найден' });
-  res.json({ id: user._id, username: user.username, role: user.role });
+  res.json({ id: user._id, username: user.username, role: user.role, streamerName: user.streamerName || null });
 });
 
 module.exports = router;

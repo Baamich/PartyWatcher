@@ -21,6 +21,7 @@ const youtubeCaptureRoutes = require('./routes/youtubeCapture.routes');
 const voiceRoutes = require('./routes/voice.routes');
 
 const supportRoutes = require('./routes/support.routes');
+const streamersRoutes = require('./routes/streams/streamers.routes');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
 const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
@@ -52,6 +53,12 @@ async function start() {
 
   app.use('/debug-screenshots', express.static(debugScreenshotsDir));
   app.use('/api/support', supportRoutes);
+  app.use('/api/streamers', streamersRoutes);
+
+  // страница профиля стримера — единый шаблон на любое имя
+  app.get('/streamers/:name', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'streamers', 'streamer.html'));
+  });
     
   app.set('io', io);
 
