@@ -24,7 +24,7 @@ body {
 @media (min-width: 1050px), (orientation: landscape) {
   .layout {
     display: grid;
-    grid-template-columns: 140px 380px 1fr;
+    grid-template-columns: 110px 380px 1fr;
     gap: 32px;
     align-items: start;
   }
@@ -59,7 +59,33 @@ button {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 22px; /* чтобы кнопки визуально совпадали по высоте с "Мои комнаты" и "Создать комнату" */
+  margin-top: 22px;
+  margin-left: -12px; /* ещё левее, к краю страницы */
+}
+
+/* ---- мобильная версия: ряд кнопок-«таблеток» под логотипом ---- */
+@media (max-width: 1049px) and (orientation: portrait) {
+  .nav-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 auto 18px;
+    max-width: 1100px;
+    padding: 0 16px;
+  }
+
+  .page-nav-btn {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    width: auto;
+  }
+
+  .page-nav-btn.active {
+    border-color: var(--text);
+    width: auto;
+  }
 }
 
 .page-nav-btn {
@@ -641,27 +667,4 @@ button {
   width: 100%;
   margin: 0;
   padding-right: 42px;
-}
-
-.search-icon-btn {
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 34px;
-  height: 32px;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
-  font-size: 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.search-icon-btn:hover {
-  background: var(--surface-alt);
-  color: var(--text);
 }

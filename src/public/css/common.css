@@ -425,3 +425,30 @@ button:active {
   font-size: 13px;
   margin-bottom: 10px;
 }
+
+/* =========================================
+   ОБЩАЯ КНОПКА-ЛУПА ВНУТРИ ПОЛЯ ПОИСКА
+   ========================================= */
+
+.search-icon-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.search-icon-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}

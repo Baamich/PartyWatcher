@@ -74,8 +74,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-alt);
-  color: var(--text);
+  background: #000; /* TODO: когда появится трекер эфира — сюда кадр со стрима вместо чёрного фона */
+  color: #fff;
   font-weight: 700;
   font-size: 24px;
 }

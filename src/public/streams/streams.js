@@ -18,8 +18,8 @@ function renderStreamerCard(streamer) {
   card.className = 'streamer-card';
   card.innerHTML = `
     <div class="streamer-avatar-wrap">
-      ${streamer.avatarUrl
-        ? `<img class="streamer-avatar" src="${streamer.avatarUrl}" loading="lazy" />`
+      ${streamer.streamerAvatarUrl
+        ? `<img class="streamer-avatar" src="${streamer.streamerAvatarUrl}" loading="lazy" />`
         : `<div class="streamer-avatar-fallback">${streamerInitial(streamer.streamerName)}</div>`}
       ${streamer.isLive ? '<span class="live-badge">В ЭФИРЕ</span>' : ''}
     </div>

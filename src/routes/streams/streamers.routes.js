@@ -25,7 +25,7 @@ router.get('/', async (req, res) => {
     }
 
     let query = User.find({ streamerNameLower: match })
-      .select('streamerName isLive profileViews -_id')
+      .select('streamerName isLive profileViews streamerAvatarUrl -_id')
       // при поиске сначала эфир, потом чаще открываемые профили, потом по алфавиту
       .sort({ isLive: -1, profileViews: -1, streamerName: 1 });
 
