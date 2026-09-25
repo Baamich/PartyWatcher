@@ -15,6 +15,7 @@
 module.exports = {
   rezka: {
     mode: 'schedule-table',
+    useProxy: true,
     playerFrameMatch: (frameUrl) =>
       frameUrl.includes('balabolka.stravers.live') && !/\/(series|films)\/.+\.html/.test(frameUrl),
     episodeDropdownTrigger: 'div[data-select="episodeType1"] .select__item',
