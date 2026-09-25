@@ -448,13 +448,37 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     // независимый сторож: если видео "виснет" на буферизации дольше 12 сек —
   // считаем поток подвисшим, даже если hls.js не кинул fatal-ошибку явно
   let stallTimer = null;
-  const STALL_TIMEOUT_MS = 12000;
+  const STALL_TIMEOUT_MS = 20000; // было 12с — мало: сам relay (перебор referer+proxy) иногда тормозит дольше
+  const MIN_REFRESH_INTERVAL_MS = 90 * 1000; // не поднимать Puppeteer заново чаще, чем раз в 90 сек
+  let lastRefreshAt = 0;
+  let softRetryTried = false; // перед тяжёлым re-extract сначала пробуем дёшево пнуть hls.js
 
   function armStallWatchdog() {
     clearTimeout(stallTimer);
     stallTimer = setTimeout(() => {
       if (videoEl.paused || videoEl.ended) return; // пауза/конец — это не зависание
       if (isRefreshingStream) return; // обновление уже идёт — не запускаем второе поверх
+
+      // 1) дешёвая попытка: просто заставить hls.js перечитать манифест/сегмент
+      // через уже открытый relay. Часто "зависание" — это just медленный перебор
+      // referer-кандидатов в streamProxy.routes.js, а не протухшая ссылка.
+      if (!softRetryTried && hlsInstance) {
+        softRetryTried = true;
+        console.warn('[capture] буферизация зависла — пробую startLoad() вместо полного re-extract');
+        try { hlsInstance.startLoad(); } catch (_) {}
+        armStallWatchdog(); // даём ещё один цикл на дешёвую попытку, прежде чем эскалировать
+        return;
+      }
+
+      // 2) дешёвая попытка не помогла — только тогда тяжёлый путь (Puppeteer),
+      // и не чаще MIN_REFRESH_INTERVAL_MS, чтобы не улетать в цикл "перезапуск каждые 30-40с"
+      const sinceLastRefresh = Date.now() - lastRefreshAt;
+      if (sinceLastRefresh < MIN_REFRESH_INTERVAL_MS) {
+        console.warn('[capture] всё ещё виснет, но re-extract был', Math.round(sinceLastRefresh / 1000), 'сек назад — жду кулдаун');
+        armStallWatchdog();
+        return;
+      }
+
       console.warn('[capture] видео виснет на буферизации дольше', STALL_TIMEOUT_MS / 1000, 'сек — пробую обновить поток');
       refreshExpiredStream();
     }, STALL_TIMEOUT_MS);
@@ -462,6 +486,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
 
   function disarmStallWatchdog() {
     clearTimeout(stallTimer);
+    softRetryTried = false; // playback пошло — сбрасываем, чтобы при следующем стопоре снова сначала пробовали дешёвый путь
   }
 
   videoEl.addEventListener('waiting', armStallWatchdog);
@@ -472,6 +497,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     if (!isOwner) return; // только хост инициирует переизвлечение, зритель получит обновление через socket
     if (isRefreshingStream) return; // уже обновляем — не запускаем параллельно
     isRefreshingStream = true;
+    lastRefreshAt = Date.now(); // ← новое: без этого кулдаун выше не работает
     disarmStallWatchdog();
 
     const wasPlaying = !videoEl.paused;
