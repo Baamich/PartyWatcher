@@ -17,6 +17,30 @@ function buildDispatcher() {
   }
   return cachedDispatcher;
 }
+// манифест (плейлист) для VOD не меняется в течение короткого окна —
+// кэшируем на 20 сек, чтобы ретраи hls.js (при капризах CDN вроде voidboost)
+// не гоняли заново весь перебор referer-кандидатов на каждую попытку
+const playlistRawCache = new Map(); // targetUrl → { text, expires }
+const PLAYLIST_CACHE_TTL_MS = 20_000;
+const PLAYLIST_CACHE_MAX = 100;
+
+function playlistCacheGet(key) {
+  const hit = playlistRawCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expires) {
+    playlistRawCache.delete(key);
+    return null;
+  }
+  return hit.text;
+}
+
+function playlistCacheSet(key, text) {
+  if (playlistRawCache.size >= PLAYLIST_CACHE_MAX) {
+    const first = playlistRawCache.keys().next().value;
+    if (first) playlistRawCache.delete(first);
+  }
+  playlistRawCache.set(key, { text, expires: Date.now() + PLAYLIST_CACHE_TTL_MS });
+}
 
 // кэш сегментов
 const segmentCache = new Map(); // key → { buf, contentType, expires }
@@ -56,6 +80,10 @@ function getRememberedReferer(hostname) {
     return null;
   }
   return { referer: hit.referer, origin: hit.origin };
+}
+
+function forgetWorkingReferer(hostname) {
+  workingRefererByHost.delete(hostname);
 }
 
 const deadUrlCache = new Map(); // url → expiresAt
@@ -109,6 +137,40 @@ function fetchOnce(key, fn) {
     .finally(() => inFlightRelay.delete(key));
   inFlightRelay.set(key, p);
   return p;
+}
+
+function buildRewrittenPlaylist(text, targetUrl, fromQuery) {
+  const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+
+  const toRelay = (relOrAbsUrl) => {
+    let absoluteUrl = relOrAbsUrl;
+    if (!relOrAbsUrl.startsWith('http')) {
+      try {
+        absoluteUrl = new URL(relOrAbsUrl, baseUrl).href;
+      } catch {
+        absoluteUrl = baseUrl + relOrAbsUrl;
+      }
+    }
+    const ref =
+      fromQuery && fromQuery.startsWith('http')
+        ? `&referer=${encodeURIComponent(fromQuery)}`
+        : '';
+    return `/api/stream/relay?url=${encodeURIComponent(absoluteUrl)}${ref}`;
+  };
+
+  return text
+    .split('\n')
+    .map((line) => {
+      if (line.startsWith('#EXT-X-MAP')) {
+        return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
+      }
+      if (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line)) {
+        return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
+      }
+      if (line.startsWith('#') || !line.trim()) return line;
+      return toRelay(line.trim());
+    })
+    .join('\n');
 }
 
 function guessReferer(targetUrl) {
@@ -197,6 +259,18 @@ router.get('/relay', auth, async (req, res) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=60');
       return res.send(cached.buf);
+    }
+
+    const cachedPlaylist = playlistCacheGet(cacheKey);
+    if (cachedPlaylist !== null) {
+      // тот же манифест уже качали недавно — не идём в источник заново,
+      // просто пересобираем ссылки под текущий запрос (referer из query может отличаться)
+      console.log('[stream-relay] playlist cache HIT', targetUrl.slice(0, 80));
+      const fromQueryNow = (req.query.referer || '').toString();
+      const rewritten = buildRewrittenPlaylist(cachedPlaylist, targetUrl, fromQueryNow);
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.send(rewritten);
     }
 
     if (isMarkedDead(targetUrl)) {
@@ -307,6 +381,16 @@ router.get('/relay', auth, async (req, res) => {
         } catch (e) {
           response = null;
           lastBody = e.message || 'fetch failed';
+
+          // чистый сетевой обрыв (не HTTP-ошибка) — вероятно, случайная заминка,
+          // а не проблема с referer; один быстрый повтор того же referer дешевле,
+          // чем сразу переходить к следующему кандидату
+          try {
+            response = await fetch(targetUrl, { headers });
+          } catch (e2) {
+            response = null;
+            lastBody = e2.message || 'fetch failed';
+          }
         }
 
         // 2) если не ок и есть PROXY — пробуем С прокси
@@ -358,6 +442,14 @@ router.get('/relay', auth, async (req, res) => {
           targetUrl.slice(0, 80),
           String(lastBody).slice(0, 80)
         );
+
+        // "запомненный" referer только что подвёл (CDN мог сменить вердикт
+        // для того же URL/хоста) — забываем его немедленно, а не ждём TTL,
+        // иначе следующий запрос снова первым делом упрётся в тот же 404
+        if (host && i === 0 && remembered && referer === remembered.referer) {
+          forgetWorkingReferer(host);
+        }
+
         response = null;
       }
 
@@ -418,37 +510,8 @@ router.get('/relay', auth, async (req, res) => {
 
     if (looksLikeUrlM3u8 || looksLikeType || isM3u8Body) {
       const text = buf.toString('utf8');
-      const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-
-      const toRelay = (relOrAbsUrl) => {
-        let absoluteUrl = relOrAbsUrl;
-        if (!relOrAbsUrl.startsWith('http')) {
-          try {
-            absoluteUrl = new URL(relOrAbsUrl, baseUrl).href;
-          } catch {
-            absoluteUrl = baseUrl + relOrAbsUrl;
-          }
-        }
-        const ref =
-          fromQuery && fromQuery.startsWith('http')
-            ? `&referer=${encodeURIComponent(fromQuery)}`
-            : '';
-        return `/api/stream/relay?url=${encodeURIComponent(absoluteUrl)}${ref}`;
-      };
-
-      const rewritten = text
-        .split('\n')
-        .map((line) => {
-          if (line.startsWith('#EXT-X-MAP')) {
-            return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
-          }
-          if (line.startsWith('#EXT-X-KEY') && /URI="([^"]+)"/.test(line)) {
-            return line.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toRelay(uri)}"`);
-          }
-          if (line.startsWith('#') || !line.trim()) return line;
-          return toRelay(line.trim());
-        })
-        .join('\n');
+      playlistCacheSet(cacheKey, text); // на будущее — если hls.js вдруг переспросит тот же манифест
+      const rewritten = buildRewrittenPlaylist(text, targetUrl, fromQuery);
 
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       res.setHeader('Access-Control-Allow-Origin', '*');
