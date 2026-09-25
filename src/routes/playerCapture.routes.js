@@ -1468,12 +1468,16 @@ router.post('/extract', auth, async (req, res) => {
       (adapter?.playerFrameMatch || siteName === 'rezka')
     ) {
       if (alreadyHaveCdn) {
-        console.log('[player-capture] CDN уже есть из AJAX, skip клики/переключение серии');
+        // поток уже есть из прямого AJAX get_cdn_series — он рабочий и свежий.
+        // ВАЖНО: раньше этот флаг пропускал только клик "разбудить плеер",
+        // а весь код ниже (поиск iframe / native клик по серии / <video> fallback)
+        // всё равно выполнялся и по пути делал cdnSeriesStreams.length = 0,
+        // стирая уже добытый рабочий поток и подменяя его на битый из <video>.
+        // Теперь пропускаем ВЕСЬ этот блок целиком.
+        console.log('[player-capture] CDN уже есть из AJAX — пропускаю поиск iframe/клик по серии/video-fallback целиком');
       } else {
       // сначала пытаемся разбудить плеер
       await clickPlayerAndWaitFrame(page, adapter, 'серия');
-      // ... весь код этой ветки до её закрывающей }
-      } // закрыть else от alreadyHaveCdn
 
       // --- 1) пробуем старый способ (iframe balabolka) ---
       let targetFrame = null;
@@ -1705,6 +1709,7 @@ router.post('/extract', auth, async (req, res) => {
       if (!playerApiData && foundStreams.length === 0) {
         console.warn('[player-capture] после клика новый поток так и не пришёл — переключение, скорее всего, не сработало');
       }
+      } 
     } else {
       if (requestedEpisode) {
         console.warn('[player-capture] нет адаптера переключения серий для сайта', siteName);
