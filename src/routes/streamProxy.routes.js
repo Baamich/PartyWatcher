@@ -64,12 +64,14 @@ const workingRefererByHost = new Map(); // hostname → { referer, origin }
 const WORKING_REFERER_TTL_MS = 30 * 60_000; // 30 минут доверия одному варианту
 const WORKING_REFERER_MAX_HOSTS = 200; // страховка от неограниченного роста при множестве разных CDN-хостов
 
-function rememberWorkingReferer(hostname, candidate) {
+function rememberWorkingReferer(hostname, candidate, usedProxy) {
   if (workingRefererByHost.size >= WORKING_REFERER_MAX_HOSTS && !workingRefererByHost.has(hostname)) {
     const oldestKey = workingRefererByHost.keys().next().value;
     if (oldestKey) workingRefererByHost.delete(oldestKey);
   }
-  workingRefererByHost.set(hostname, { ...candidate, expiresAt: Date.now() + WORKING_REFERER_TTL_MS });
+  // храним и usedProxy — иначе при повторном запросе мы всё равно сначала
+  // тратим время на попытку БЕЗ прокси, хотя уже знаем что нужен прокси
+  workingRefererByHost.set(hostname, { ...candidate, usedProxy: !!usedProxy, expiresAt: Date.now() + WORKING_REFERER_TTL_MS });
 }
 
 function getRememberedReferer(hostname) {
@@ -79,7 +81,7 @@ function getRememberedReferer(hostname) {
     workingRefererByHost.delete(hostname);
     return null;
   }
-  return { referer: hit.referer, origin: hit.origin };
+  return { referer: hit.referer, origin: hit.origin, usedProxy: hit.usedProxy };
 }
 
 function forgetWorkingReferer(hostname) {
@@ -223,9 +225,12 @@ function guessReferer(targetUrl) {
       u.hostname.includes('cdnmovies') ||
       u.hostname.includes('ashdi')
     ) {
+      // по логам rezka-ua.tv referer у voidboost всё чаще 404-ит, а kinogomy.net
+      // стабильно проходит (обычно через прокси) — ставим его первым кандидатом,
+      // rezka-ua.tv остаётся в FAMILY_FALLBACKS как запасной
       return {
-        referer: 'https://rezka-ua.tv/',
-        origin: 'https://rezka-ua.tv',
+        referer: 'https://kinogomy.net/',
+        origin: 'https://kinogomy.net',
       };
     }
 
@@ -357,11 +362,11 @@ router.get('/relay', auth, async (req, res) => {
       let lastStatus = 0;
       let lastBody = '';
       let usedProxy = false;
+      let winningCandidate = null;
 
-      for (let i = 0; i < uniqueCandidates.length; i++) {
-        const { referer, origin } = uniqueCandidates[i];
-        const isLast = i === uniqueCandidates.length - 1;
-
+      // Пробуем один конкретный кандидат (без прокси, затем с прокси если есть PROXY_SERVER).
+      // Возвращает {response, usedProxy} либо кидает с lastStatus/lastBody для логов отказа.
+      async function tryCandidate({ referer, origin }, isLast, preferProxyFirst) {
         const headers = {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -375,82 +380,90 @@ router.get('/relay', auth, async (req, res) => {
         };
         if (!isLast) headers['Origin'] = origin;
 
-        // 1) сначала БЕЗ прокси
-        try {
-          response = await fetch(targetUrl, { headers });
-        } catch (e) {
-          response = null;
-          lastBody = e.message || 'fetch failed';
+        const dispatcher = PROXY_SERVER ? buildDispatcher() : null;
+        const attemptOrder = preferProxyFirst && dispatcher
+          ? [{ proxy: true }, { proxy: false }]
+          : [{ proxy: false }, { proxy: true }];
 
-          // чистый сетевой обрыв (не HTTP-ошибка) — вероятно, случайная заминка,
-          // а не проблема с referer; один быстрый повтор того же referer дешевле,
-          // чем сразу переходить к следующему кандидату
-          try {
-            response = await fetch(targetUrl, { headers });
-          } catch (e2) {
-            response = null;
-            lastBody = e2.message || 'fetch failed';
-          }
-        }
+        let localStatus = 0;
+        let localBody = '';
 
-        // 2) если не ок и есть PROXY — пробуем С прокси
-        if ((!response || !response.ok) && PROXY_SERVER) {
-          const dispatcher = buildDispatcher();
-          const fetchOpts = { headers };
-          if (dispatcher) fetchOpts.dispatcher = dispatcher;
+        for (const step of attemptOrder) {
+          if (step.proxy && !dispatcher) continue; // прокси не настроен — пропускаем этот шаг
           try {
-            console.log(
-              '[stream-relay] retry WITH proxy, was:',
-              response?.status || 'fail',
-              'host:',
-              host
-            );
-            response = await fetch(targetUrl, fetchOpts);
-            usedProxy = true;
+            const fetchOpts = { headers };
+            if (step.proxy) fetchOpts.dispatcher = dispatcher;
+            const res = await fetch(targetUrl, fetchOpts);
+            if (res && res.ok) {
+              return { response: res, usedProxy: step.proxy, referer, origin };
+            }
+            localStatus = res ? res.status : 0;
+            if (res) localBody = await res.text().catch(() => '');
           } catch (e) {
-            response = null;
-            lastBody = e.message || 'fetch failed';
+            localBody = e.message || 'fetch failed';
           }
         }
 
-        if (response && response.ok) {
-          console.log(
-            '[stream-relay] OK',
-            usedProxy ? 'proxy:ON' : 'proxy:OFF',
-            'referer:',
-            referer,
-            'status:',
-            response.status,
-            'vk:',
-            isVk,
-            'url:',
-            targetUrl.slice(0, 80)
-          );
-          if (host) rememberWorkingReferer(host, { referer, origin });
-          break;
-        }
+        const err = new Error(`candidate failed: ${localStatus || 'net'}`);
+        err.status = localStatus;
+        err.body = localBody;
+        err.referer = referer;
+        throw err;
+      }
 
-        lastStatus = response ? response.status : 0;
-        if (response) {
-          lastBody = await response.text().catch(() => '');
-        }
-        console.warn(
-          '[stream-relay] отказ',
-          lastStatus || 'net',
-          'referer:',
-          referer,
-          targetUrl.slice(0, 80),
-          String(lastBody).slice(0, 80)
-        );
-
-        // "запомненный" referer только что подвёл (CDN мог сменить вердикт
-        // для того же URL/хоста) — забываем его немедленно, а не ждём TTL,
-        // иначе следующий запрос снова первым делом упрётся в тот же 404
-        if (host && i === 0 && remembered && referer === remembered.referer) {
+      // remembered — если знаем и referer, и нужен ли был прокси, пробуем ТОЛЬКО его,
+      // сразу с правильным проксёй, без лишних параллельных запросов
+      if (remembered) {
+        try {
+          const result = await tryCandidate(remembered, false, remembered.usedProxy);
+          response = result.response;
+          usedProxy = result.usedProxy;
+          winningCandidate = { referer: result.referer, origin: result.origin };
+        } catch (e) {
+          console.warn('[stream-relay] remembered referer больше не работает, забываю:', e.referer, e.status || 'net');
           forgetWorkingReferer(host);
         }
+      }
 
-        response = null;
+      // не нашли через remembered — бьём оставшиеся кандидаты ПАРАЛЛЕЛЬНО,
+      // берём первый успешный (Promise.any), остальные просто игнорируются
+      if (!response) {
+        const rest = uniqueCandidates.filter((c) => !remembered || c.referer !== remembered.referer);
+        const attempts = rest.map((c, idx) =>
+          tryCandidate(c, idx === rest.length - 1, false)
+        );
+
+        try {
+          const result = await Promise.any(attempts);
+          response = result.response;
+          usedProxy = result.usedProxy;
+          winningCandidate = { referer: result.referer, origin: result.origin };
+        } catch (aggregateErr) {
+          // все параллельные попытки упали — берём последнюю ошибку для лога/статуса
+          const errors = aggregateErr.errors || [];
+          const lastErr = errors[errors.length - 1];
+          lastStatus = lastErr?.status || 0;
+          lastBody = lastErr?.body || '';
+          for (const e of errors) {
+            console.warn('[stream-relay] отказ', e.status || 'net', 'referer:', e.referer, targetUrl.slice(0, 80), String(e.body).slice(0, 80));
+          }
+        }
+      }
+
+      if (response && winningCandidate) {
+        console.log(
+          '[stream-relay] OK',
+          usedProxy ? 'proxy:ON' : 'proxy:OFF',
+          'referer:',
+          winningCandidate.referer,
+          'status:',
+          response.status,
+          'vk:',
+          isVk,
+          'url:',
+          targetUrl.slice(0, 80)
+        );
+        if (host) rememberWorkingReferer(host, winningCandidate, usedProxy);
       }
 
       if (!response) {
