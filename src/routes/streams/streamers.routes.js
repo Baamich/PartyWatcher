@@ -69,6 +69,7 @@ router.patch('/me', auth, async (req, res) => {
     if (!me.streamerName) return res.status(409).json({ error: 'Сначала создай имя стримера' });
 
     const { streamerBio, streamerAvatarUrl, streamerBannerUrl } = req.body;
+    const MAX_IMAGE_CHARS = 6_000_000; // ~4 МБ картинки в base64
 
     if (streamerBio !== undefined) {
       if (String(streamerBio).length > 2000) {
@@ -76,8 +77,20 @@ router.patch('/me', auth, async (req, res) => {
       }
       me.streamerBio = String(streamerBio).trim();
     }
-    if (streamerAvatarUrl !== undefined) me.streamerAvatarUrl = streamerAvatarUrl || null;
-    if (streamerBannerUrl !== undefined) me.streamerBannerUrl = streamerBannerUrl || null;
+
+    if (streamerAvatarUrl !== undefined) {
+      if (streamerAvatarUrl && streamerAvatarUrl.length > MAX_IMAGE_CHARS) {
+        return res.status(400).json({ error: 'Аватар слишком большой (максимум ~4 МБ)' });
+      }
+      me.streamerAvatarUrl = streamerAvatarUrl || null;
+    }
+
+    if (streamerBannerUrl !== undefined) {
+      if (streamerBannerUrl && streamerBannerUrl.length > MAX_IMAGE_CHARS) {
+        return res.status(400).json({ error: 'Баннер слишком большой (максимум ~4 МБ)' });
+      }
+      me.streamerBannerUrl = streamerBannerUrl || null;
+    }
 
     await me.save();
 

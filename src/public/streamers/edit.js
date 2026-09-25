@@ -1,3 +1,8 @@
+let pendingAvatarBase64; // undefined = не менялось, строка = новое изображение
+let pendingBannerBase64;
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 МБ на файл (совпадает с лимитом на сервере)
+
 async function init() {
   let me;
   try {
@@ -9,15 +14,69 @@ async function init() {
   }
 
   if (me.streamerName) {
-    showEditSection(me);
+    await showEditSection(me.streamerName);
   } else {
     document.getElementById('createNameSection').classList.remove('hidden');
   }
 }
 
-function showEditSection(me) {
+async function showEditSection(streamerName) {
   document.getElementById('editProfileSection').classList.remove('hidden');
-  document.getElementById('currentStreamerName').textContent = me.streamerName;
+  document.getElementById('currentStreamerName').textContent = streamerName;
+
+  try {
+    const streamer = await api('/streamers/' + encodeURIComponent(streamerName.toLowerCase()));
+    document.getElementById('bioInput').value = streamer.streamerBio || '';
+    if (streamer.streamerAvatarUrl) setPreview('avatar', streamer.streamerAvatarUrl);
+    if (streamer.streamerBannerUrl) setPreview('banner', streamer.streamerBannerUrl);
+  } catch (err) {
+    console.warn('[showEditSection]', err.message);
+  }
+}
+
+function setPreview(kind, dataUrl) {
+  const el = document.getElementById(kind + 'Preview');
+  if (el) el.style.backgroundImage = `url('${dataUrl}')`;
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onImageSelected(event, kind) {
+  const errEl = document.getElementById('editError');
+  errEl.classList.add('hidden');
+
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    errEl.textContent = 'Нужно выбрать картинку';
+    errEl.classList.remove('hidden');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    errEl.textContent = 'Файл слишком большой (максимум 4 МБ)';
+    errEl.classList.remove('hidden');
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const base64 = await readFileAsBase64(file);
+    setPreview(kind, base64);
+    if (kind === 'avatar') pendingAvatarBase64 = base64;
+    else pendingBannerBase64 = base64;
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  }
 }
 
 async function submitStreamerName() {
@@ -37,7 +96,7 @@ async function submitStreamerName() {
       body: { streamerName: name },
     });
     document.getElementById('createNameSection').classList.add('hidden');
-    showEditSection({ streamerName: result.streamerName });
+    await showEditSection(result.streamerName);
   } catch (err) {
     errEl.textContent = err.message || 'Не удалось создать имя';
     errEl.classList.remove('hidden');
@@ -50,11 +109,9 @@ async function submitProfile() {
   errEl.classList.add('hidden');
   okEl.classList.add('hidden');
 
-  const body = {
-    streamerBio: document.getElementById('bioInput').value,
-    streamerAvatarUrl: document.getElementById('avatarUrlInput').value.trim() || null,
-    streamerBannerUrl: document.getElementById('bannerUrlInput').value.trim() || null,
-  };
+  const body = { streamerBio: document.getElementById('bioInput').value };
+  if (pendingAvatarBase64 !== undefined) body.streamerAvatarUrl = pendingAvatarBase64;
+  if (pendingBannerBase64 !== undefined) body.streamerBannerUrl = pendingBannerBase64;
 
   try {
     await api('/streamers/me', { method: 'PATCH', body });

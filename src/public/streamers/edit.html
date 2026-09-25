@@ -44,11 +44,17 @@
       <div id="editError" class="auth-error hidden"></div>
       <div id="editOk" class="support-ok hidden">Сохранено ✓</div>
 
-      <label class="auth-label" for="bannerUrlInput">Ссылка на баннер</label>
-      <input id="bannerUrlInput" placeholder="https://..." />
+      <label class="auth-label" for="bannerFileInput">Баннер</label>
+      <div id="bannerPreviewWrap" class="image-preview-wrap">
+        <div id="bannerPreview" class="image-preview banner-preview"></div>
+      </div>
+      <input id="bannerFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'banner')" />
 
-      <label class="auth-label" for="avatarUrlInput">Ссылка на аватар</label>
-      <input id="avatarUrlInput" placeholder="https://..." />
+      <label class="auth-label" for="avatarFileInput">Аватар</label>
+      <div id="avatarPreviewWrap" class="image-preview-wrap">
+        <div id="avatarPreview" class="image-preview avatar-preview"></div>
+      </div>
+      <input id="avatarFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'avatar')" />
 
       <label class="auth-label" for="bioInput">Описание</label>
       <textarea id="bioInput" rows="6" maxlength="2000" placeholder="Расскажи о себе (до 2000 символов)"></textarea>
