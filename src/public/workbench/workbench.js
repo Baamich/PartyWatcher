@@ -267,6 +267,10 @@ function startLiveStatusPolling() {
   }, 5000);
 }
 
+function goToMyStreamerProfile() {
+  if (myStreamerNameLower) location.href = `/streamers/${encodeURIComponent(myStreamerNameLower)}`;
+}
+
 async function init() {
   let me;
   try {

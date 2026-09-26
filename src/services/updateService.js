@@ -56,8 +56,8 @@ async function performUpdate(targetHash) {
       status.log.push(await run('pip3 install --upgrade yt-dlp --break-system-packages'));
     }
 
-    status.log.push('pm2 reload partywatcher...');
-    status.log.push(await run('pm2 reload partywatcher --force'));
+    status.log.push('pm2 restart partywatcher...');
+    status.log.push(await run('pm2 restart partywatcher'));
 
     status.state = 'done';
   } catch (err) {
