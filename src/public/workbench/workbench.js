@@ -61,7 +61,13 @@ async function doGenerateKey() {
   }
 }
 
+let currentPlayerLiveState = null; // чтобы не пересоздавать плеер на каждый тик поллинга
+
 function updatePlayer(isLive, playbackId) {
+  const stateKey = isLive ? `live:${playbackId}` : 'offline';
+  if (stateKey === currentPlayerLiveState) return; // ничего не изменилось — не трогаем видео
+  currentPlayerLiveState = stateKey;
+
   const video = document.getElementById('playerVideo');
   const offline = document.getElementById('playerOffline');
 
@@ -82,7 +88,7 @@ function updatePlayer(isLive, playbackId) {
     hlsPlayer.loadSource(src);
     hlsPlayer.attachMedia(video);
   } else {
-    video.src = src; // Safari умеет HLS нативно
+    video.src = src;
   }
   video.play().catch(() => {});
 }
@@ -209,6 +215,20 @@ function initChat(streamerNameLower) {
   });
 }
 
+let liveStatusPollTimer = null;
+
+function startLiveStatusPolling() {
+  clearInterval(liveStatusPollTimer);
+  liveStatusPollTimer = setInterval(async () => {
+    try {
+      const data = await api('/workbench/me');
+      updatePlayer(data.isLive, data.streamPlaybackId);
+    } catch (err) {
+      console.warn('[liveStatusPoll]', err.message);
+    }
+  }, 5000);
+}
+
 async function init() {
   let me;
   try {
@@ -225,6 +245,7 @@ async function init() {
 
   await loadSettings();
   initChat(myStreamerNameLower);
+  startLiveStatusPolling();
 }
 
 init();
