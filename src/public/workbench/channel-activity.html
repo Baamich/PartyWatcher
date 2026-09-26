@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="/js/theme.js"></script>
+  <script src="/js/favicon.js"></script>
+  <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/workbench/workbench.css" />
+  <title>PartyWatcher — Актив канала</title>
+</head>
+<body>
+  <div class="page-header">
+    <a href="/index.html" class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+    </a>
+    <div class="header-right">
+      <button class="icon-btn" onclick="location.href='/workbench.html'">← Назад</button>
+    </div>
+  </div>
+
+  <div class="wb-layout" style="grid-template-columns: 1fr;">
+    <div class="wb-main">
+      <section class="wb-panel">
+        <h2>Заблокированные пользователи</h2>
+        <div id="bansList"></div>
+      </section>
+      <section class="wb-panel">
+        <h2>Подписчики</h2>
+        <p style="color:var(--text-muted); font-size:14px;">Система подписок ещё не реализована — появится отдельным шагом.</p>
+      </section>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/workbench/channel-activity.js"></script>
+</body>
+</html>

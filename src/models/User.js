@@ -16,7 +16,12 @@ const userSchema = new mongoose.Schema(
     streamerBio: { type: String, default: '' },
     streamerAvatarUrl: { type: String, default: null },
     streamerBannerUrl: { type: String, default: null },
-    profileViews: { type: Number, default: 0 }, 
+    profileViews: { type: Number, default: 0 },
+
+    // ---- творческая студия ----
+    streamTitle: { type: String, default: '' },
+    streamDescription: { type: String, default: '' },
+    streamKey: { type: String, default: null }, // TODO: подключить к реальному RTMP-приёму (node-media-server или аналог) 
   },
   { versionKey: false }
 );

@@ -7,16 +7,8 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/workbench/workbench.css" />
   <title>PartyWatcher — Творческая студия</title>
-  <style>
-    .wb-placeholder {
-      max-width: 600px;
-      margin: 100px auto;
-      text-align: center;
-      color: var(--text-muted);
-      padding: 0 16px;
-    }
-  </style>
 </head>
 <body>
   <div class="page-header">
@@ -33,9 +25,64 @@
     </div>
   </div>
 
-  <div class="wb-placeholder">
-    <!-- TODO: тут будет творческая студия / конструктор страницы стримера -->
-    <p>Творческая студия скоро появится.</p>
+  <div id="saveToast" class="save-toast hidden"></div>
+
+  <div class="wb-layout">
+    <nav class="wb-nav">
+      <button type="button" class="wb-nav-btn active">📡 Управление трансляцией</button>
+      <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
+      <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
+    </nav>
+
+    <div class="wb-main">
+      <section class="wb-panel">
+        <div class="wb-key-row">
+          <input id="streamKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
+          <button type="button" class="icon-btn" onclick="copyStreamKey()">📋 Скопировать</button>
+          <button type="button" class="icon-btn" onclick="generateStreamKey()">🔄 Сгенерировать</button>
+        </div>
+        <p class="wb-hint">Ключ вставляется в OBS как «Ключ потока». Полностью виден только сразу после генерации и по кнопке «Скопировать».</p>
+      </section>
+
+      <section class="wb-panel">
+        <label class="auth-label" for="streamTitleInput">Название стрима</label>
+        <input id="streamTitleInput" maxlength="140" placeholder="О чём стрим?" />
+
+        <label class="auth-label" for="streamDescInput">Описание</label>
+        <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее"></textarea>
+
+        <button type="button" class="auth-submit" onclick="saveSettings()">Сохранить</button>
+      </section>
+    </div>
+
+    <aside class="wb-chat">
+      <div class="wb-chat-head">
+        <span>Чат</span>
+        <span class="wb-viewers">👁 <span id="viewersCount">0</span></span>
+      </div>
+      <div id="chatMessages" class="wb-chat-messages"></div>
+      <div class="wb-chat-input-row">
+        <input id="chatInput" placeholder="Написать в чат…" onkeydown="handleChatKey(event)" />
+        <button type="button" onclick="sendChatMessage()">➤</button>
+      </div>
+    </aside>
   </div>
+
+  <div id="timeoutModal" class="modal hidden">
+    <div class="modal-content">
+      <button type="button" class="modal-close" onclick="closeTimeoutModal()">×</button>
+      <h3 id="timeoutModalName"></h3>
+      <div class="wb-timeout-inputs">
+        <input id="timeoutHours" type="number" min="0" max="99" value="0" /> ч
+        <input id="timeoutMinutes" type="number" min="0" max="59" value="5" /> м
+        <input id="timeoutSeconds" type="number" min="0" max="59" value="0" /> с
+      </div>
+      <button type="button" class="auth-submit" onclick="confirmTimeout()">Ограничить</button>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/workbench/workbench.js"></script>
 </body>
 </html>

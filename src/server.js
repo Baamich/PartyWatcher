@@ -22,6 +22,8 @@ const voiceRoutes = require('./routes/voice.routes');
 
 const supportRoutes = require('./routes/support.routes');
 const streamersRoutes = require('./routes/streams/streamers.routes');
+const workbenchRoutes = require('./routes/streams/workbench.routes');
+const registerChatSocket = require('./sockets/chatSocket');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
 const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
@@ -54,6 +56,7 @@ async function start() {
   app.use('/debug-screenshots', express.static(debugScreenshotsDir));
   app.use('/api/support', supportRoutes);
   app.use('/api/streamers', streamersRoutes);
+  app.use('/api/workbench', workbenchRoutes);
 
   // страница профиля стримера — единый шаблон на любое имя
   app.get('/streamers/:name', (req, res) => {
@@ -63,6 +66,7 @@ async function start() {
   app.set('io', io);
 
   registerRoomSocket(io);
+  registerChatSocket(io);
 
   app.use((err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {

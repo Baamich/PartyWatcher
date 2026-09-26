@@ -1,0 +1,200 @@
+.wb-layout {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 1000px) {
+  .wb-layout {
+    grid-template-columns: 200px 1fr 320px;
+  }
+}
+
+.wb-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wb-nav-btn {
+  width: 100%;
+  text-align: left;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wb-nav-btn:hover { background: var(--border); color: var(--text); }
+.wb-nav-btn.active { color: var(--text); border-color: var(--accent); }
+
+.wb-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.wb-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+
+.wb-key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.wb-key-input {
+  flex: 1;
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
+.wb-key-row .icon-btn {
+  width: auto;
+  white-space: nowrap;
+}
+
+.wb-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+#streamDescInput {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+/* ---- чат ---- */
+
+.wb-chat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  height: 640px;
+  overflow: hidden;
+}
+
+.wb-chat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.wb-viewers {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.wb-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wb-chat-msg {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wb-mod-btn {
+  width: auto;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wb-mod-btn:hover { background: none; }
+
+.wb-msg-author { font-weight: 700; }
+
+.wb-msg-deleted {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.wb-chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.wb-chat-input-row input { flex: 1; margin: 0; }
+.wb-chat-input-row button { width: auto; }
+
+.wb-timeout-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.wb-timeout-inputs input {
+  width: 60px;
+  text-align: center;
+}
+
+.save-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  max-width: 90vw;
+  text-align: center;
+}
+
+.save-toast.toast-success {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid #22c55e;
+  color: #22c55e;
+}
+
+.save-toast.toast-error {
+  background: rgba(207, 85, 89, 0.15);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
