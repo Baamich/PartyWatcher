@@ -16,7 +16,7 @@ body {
 }
 
 .layout {
-  max-width: 1300px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 8px 16px 60px;
 }
@@ -24,9 +24,10 @@ body {
 @media (min-width: 1050px), (orientation: landscape) {
   .layout {
     display: grid;
-    grid-template-columns: 110px 380px 1fr;
+    grid-template-columns: 380px 1fr; /* как было изначально */
     gap: 32px;
     align-items: start;
+    padding-left: 190px; /* резерв слева под фиксированную .nav-sidebar */
   }
 }
 
@@ -52,41 +53,6 @@ button {
   flex: 1;
 }
 
-
-/* ---- переключатель разделов: Комнаты / Прямые трансляции ---- */
-
-.nav-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 22px;
-  margin-left: -12px; /* ещё левее, к краю страницы */
-}
-
-/* ---- мобильная версия: ряд кнопок-«таблеток» под логотипом ---- */
-@media (max-width: 1049px) and (orientation: portrait) {
-  .nav-sidebar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 0 auto 18px;
-    max-width: 1100px;
-    padding: 0 16px;
-  }
-
-  .page-nav-btn {
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 6px 14px;
-    width: auto;
-  }
-
-  .page-nav-btn.active {
-    border-color: var(--text);
-    width: auto;
-  }
-}
 
 .page-nav-btn {
   width: auto;

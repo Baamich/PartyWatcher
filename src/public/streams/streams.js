@@ -119,12 +119,14 @@ function renderSuggestions(streamers, query) {
   streamers.forEach((s) => {
     const row = document.createElement('div');
     row.className = 'suggestion-item';
-    row.innerHTML = `<span>${s.streamerName}</span>${s.isLive ? '<span class="suggestion-badge">В ЭФИРЕ</span>' : ''}`;
-    row.onclick = () => {
-      document.getElementById('streamerSearchInput').value = s.streamerName;
-      hideSuggestions();
-      loadStreamers(s.streamerName);
-    };
+    row.innerHTML = `
+      ${s.streamerAvatarUrl
+        ? `<img class="suggestion-avatar" src="${s.streamerAvatarUrl}" />`
+        : `<div class="suggestion-avatar-fallback">${streamerInitial(s.streamerName)}</div>`}
+      <span class="suggestion-name">${s.streamerName}</span>
+      ${s.isLive ? '<span class="suggestion-badge">В ЭФИРЕ</span>' : ''}
+    `;
+    row.onclick = () => (location.href = `/streamers/${encodeURIComponent(s.streamerName.toLowerCase())}`);
     box.appendChild(row);
   });
   box.classList.remove('hidden');

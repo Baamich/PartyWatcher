@@ -452,3 +452,91 @@ button:active {
   background: var(--surface-alt);
   color: var(--text);
 }
+
+/* =========================================
+   ФЕЙД ПРИ ПЕРЕХОДЕ МЕЖДУ СТРАНИЦАМИ
+   ========================================= */
+
+body {
+  transition: opacity 0.15s ease;
+}
+
+body.page-fade-out {
+  opacity: 0;
+}
+
+/* =========================================
+   НАВИГАЦИЯ МЕЖДУ РАЗДЕЛАМИ: Комнаты / Прямые трансляции
+   (общая для index.html и streams.html)
+   ========================================= */
+
+.nav-sidebar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 auto 18px;
+  max-width: 1100px;
+  padding: 0 16px;
+}
+
+.page-nav-btn {
+  width: auto;
+  text-align: left;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: none;
+  padding: 6px 14px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.page-nav-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.page-nav-btn.active {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+/* ---- десктоп: закреплённая колонка слева, вне сетки — не меняет ширину форм ---- */
+@media (min-width: 1050px), (orientation: landscape) {
+  .nav-sidebar {
+    position: fixed;
+    left: 16px;
+    top: 96px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 4px;
+    width: 140px;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    z-index: 5;
+  }
+
+  .page-nav-btn {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 4px 0;
+  }
+
+  .page-nav-btn:hover {
+    background: none;
+  }
+
+  .page-nav-btn.active {
+    border-bottom: 2px solid var(--text);
+    padding-bottom: 2px;
+    width: fit-content;
+  }
+}
