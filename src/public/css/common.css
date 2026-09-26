@@ -506,3 +506,33 @@ body.page-fade-out {
   border-color: var(--text);
 }
 
+/* ---- десктоп: узкая колонка слева от "Создать комнату" (не участвует в гриде на телефоне) ---- */
+@media (min-width: 1050px), (orientation: landscape) {
+  .nav-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin: 22px 0 0;
+    max-width: none;
+    padding: 0;
+  }
+
+  .nav-sidebar .page-nav-btn {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 4px 0;
+    width: fit-content;
+  }
+
+  .nav-sidebar .page-nav-btn:hover {
+    background: none;
+  }
+
+  .nav-sidebar .page-nav-btn.active {
+    border-bottom: 2px solid var(--text);
+    padding-bottom: 2px;
+  }
+}
+
