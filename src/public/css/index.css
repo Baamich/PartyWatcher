@@ -53,34 +53,6 @@ button {
 }
 
 
-.page-nav-btn {
-  width: auto;
-  text-align: left;
-  background: none;
-  border: none;
-  box-shadow: none;
-  padding: 4px 0;
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s ease;
-}
-
-.page-nav-btn:hover {
-  background: none;
-  box-shadow: none;
-  color: var(--text);
-}
-
-.page-nav-btn.active {
-  color: var(--text);
-  border-bottom: 2px solid var(--text);
-  padding-bottom: 2px;
-  width: fit-content;
-}
-
 .info-btn {
   width: 26px;
   height: 26px;
