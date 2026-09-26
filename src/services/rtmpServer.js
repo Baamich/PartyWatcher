@@ -14,7 +14,7 @@ const nmsConfig = {
     ping_timeout: 60,
   },
   http: {
-    port: 8888, // локальный, наружу не открываем — HLS отдаёт Express через /media/live
+    port: 8888,
     mediaroot: MEDIA_ROOT,
     allow_origin: '*',
   },
@@ -33,34 +33,45 @@ const nmsConfig = {
 
 const nms = new NodeMediaServer(nmsConfig);
 
-// СИНХРОННАЯ проверка по кэшу в памяти — критично: если бы тут был await к базе,
-// FFmpeg мог бы успеть начать писать файлы под секретным ключом ещё до ответа Mongo.
+// ВАЖНО: не трогаем session.publishStreamPath и другие внутренности NMS —
+// в v4.4.3 подмена этого поля ломает внутреннее состояние broadcast_server
+// и вызывает падение процесса при donePublish. Файлы HLS пишутся туда, куда
+// FFmpeg и так пишет по умолчанию (папка = имя ключа); публичный доступ
+// через playbackId организован отдельным Express-роутом в server.js,
+// который ищет нужную папку по обратному соответствию (см. streamKeyCache).
+
 nms.on('prePublish', (id, streamPath) => {
-  const key = streamPath.split('/').pop();
-  const entry = streamKeyCache.get(key);
-  const session = nms.getSession(id);
+  try {
+    if (!streamPath) return;
+    const key = streamPath.split('/').pop();
+    const entry = streamKeyCache.get(key);
+    const session = nms.getSession(id);
 
-  if (!entry) {
-    session.reject(); // неизвестный ключ — обрываем немедленно, до записи чего-либо на диск
-    return;
+    if (!entry) {
+      session?.reject();
+      return;
+    }
+
+    User.updateOne({ _id: entry.userId }, { isLive: true }).catch((err) =>
+      console.error('[rtmp] isLive set error', err)
+    );
+  } catch (err) {
+    console.error('[rtmp] prePublish handler error', err);
   }
-
-  // Подменяем путь публикации на публичный playbackId ДО того, как транскодер начнёт
-  // писать HLS-файлы. Секретный ключ в итоге никогда не становится именем папки на диске.
-  session.publishStreamPath = `/live/${entry.playbackId}`;
-
-  User.updateOne({ _id: entry.userId }, { isLive: true }).catch((err) =>
-    console.error('[rtmp] isLive set error', err)
-  );
 });
 
 nms.on('donePublish', (id, streamPath) => {
-  const key = streamPath.split('/').pop();
-  const entry = streamKeyCache.get(key);
-  if (entry) {
-    User.updateOne({ _id: entry.userId }, { isLive: false }).catch((err) =>
-      console.error('[rtmp] isLive unset error', err)
-    );
+  try {
+    if (!streamPath) return;
+    const key = streamPath.split('/').pop();
+    const entry = streamKeyCache.get(key);
+    if (entry) {
+      User.updateOne({ _id: entry.userId }, { isLive: false }).catch((err) =>
+        console.error('[rtmp] isLive unset error', err)
+      );
+    }
+  } catch (err) {
+    console.error('[rtmp] donePublish handler error', err);
   }
 });
 

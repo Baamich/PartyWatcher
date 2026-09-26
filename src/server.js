@@ -44,7 +44,20 @@ async function start() {
   app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir)));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
-  app.use('/media/live', express.static(path.join(process.cwd(), 'media', 'live')));
+
+  // Раздача HLS по публичному playbackId: реальные файлы FFmpeg пишет в папку
+  // с именем секретного streamKey — секретный ключ никогда не попадает в URL зрителя.
+  const streamKeyCache = require('./services/streamKeyCache');
+  app.get('/media/live/:playbackId/:file', (req, res) => {
+    const key = streamKeyCache.keyByPlaybackId(req.params.playbackId);
+    if (!key) return res.status(404).end();
+
+    const safeFile = path.basename(req.params.file); // защита от path traversal
+    const filePath = path.join(process.cwd(), 'media', 'live', key, safeFile);
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
+  });
 
   app.use('/api/auth', authRoutes);
   app.use('/api/rooms', roomRoutes);
