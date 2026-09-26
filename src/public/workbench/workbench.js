@@ -16,7 +16,7 @@ function showToast(type, message) {
 
 async function loadSettings() {
   try {
-    const data = await api('/workbench/me');
+    const data = await api('/workbench/me?_=' + Date.now());
     document.getElementById('streamTitleInput').value = data.streamTitle || '';
     document.getElementById('streamDescInput').value = data.streamDescription || '';
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
@@ -87,6 +87,21 @@ function updatePlayer(isLive, playbackId) {
     hlsPlayer = new Hls();
     hlsPlayer.loadSource(src);
     hlsPlayer.attachMedia(video);
+
+    const playerReconnectScheduler = createReconnectScheduler(
+      () => new Promise((resolve) => {
+        hlsPlayer.loadSource(src);
+        hlsPlayer.once(Hls.Events.MANIFEST_PARSED, () => resolve(true));
+        setTimeout(() => resolve(false), 3000);
+      }),
+      () => { offline.classList.remove('hidden'); video.classList.add('hidden'); }
+    );
+
+    hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
+      if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        playerReconnectScheduler.start();
+      }
+    });
   } else {
     video.src = src;
   }
@@ -193,26 +208,49 @@ function confirmTimeout() {
   closeTimeoutModal();
 }
 
+let chatReconnectScheduler = null;
+
 function initChat(streamerNameLower) {
-  socket = io('/chat');
+  // reconnection: false — отключаем встроенную схему socket.io, управляем сами по своему графику
+  socket = io('/chat', { reconnection: false });
 
-  socket.on('connect', () => socket.emit('chat:join', { streamerName: streamerNameLower }));
+  const bindSocketEvents = () => {
+    socket.on('chat:history', (messages) => {
+      document.getElementById('chatMessages').innerHTML = '';
+      messages.forEach(renderMessage);
+    });
 
-  socket.on('chat:history', (messages) => {
-    document.getElementById('chatMessages').innerHTML = '';
-    messages.forEach(renderMessage);
+    socket.on('chat:message', renderMessage);
+
+    socket.on('chat:message-deleted', ({ messageId }) => {
+      const row = document.querySelector(`.wb-chat-msg[data-id="${messageId}"]`);
+      if (row) row.innerHTML = buildMessageHtml({ deleted: true });
+    });
+
+    socket.on('chat:viewers', (count) => {
+      document.getElementById('viewersCount').textContent = count;
+    });
+  };
+
+  socket.on('connect', () => {
+    chatReconnectScheduler?.reset();
+    socket.emit('chat:join', { streamerName: streamerNameLower });
   });
 
-  socket.on('chat:message', renderMessage);
-
-  socket.on('chat:message-deleted', ({ messageId }) => {
-    const row = document.querySelector(`.wb-chat-msg[data-id="${messageId}"]`);
-    if (row) row.innerHTML = buildMessageHtml({ deleted: true });
+  socket.on('disconnect', () => {
+    chatReconnectScheduler?.start();
   });
 
-  socket.on('chat:viewers', (count) => {
-    document.getElementById('viewersCount').textContent = count;
-  });
+  bindSocketEvents();
+
+  chatReconnectScheduler = createReconnectScheduler(
+    () => new Promise((resolve) => {
+      socket.connect();
+      socket.once('connect', () => resolve(true));
+      setTimeout(() => resolve(socket.connected), 1500); // не ждём вечно один попыточный тик
+    }),
+    () => showToast('error', 'Не удалось восстановить соединение с чатом. Обнови страницу.')
+  );
 }
 
 let liveStatusPollTimer = null;
@@ -221,7 +259,7 @@ function startLiveStatusPolling() {
   clearInterval(liveStatusPollTimer);
   liveStatusPollTimer = setInterval(async () => {
     try {
-      const data = await api('/workbench/me');
+      const data = await api('/workbench/me?_=' + Date.now());
       updatePlayer(data.isLive, data.streamPlaybackId);
     } catch (err) {
       console.warn('[liveStatusPoll]', err.message);

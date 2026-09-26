@@ -38,8 +38,15 @@ async function start() {
   const io = new Server(server, { cors: { origin: '*' } });
   
   app.use(cors());
-  app.use(express.json({ limit: '15mb' })); 
+  app.use(express.json({ limit: '15mb' }));
   app.use(cookieParser());
+
+  // API не должно кэшироваться ни браузером, ни Cloudflare — иначе статус isLive/чат зависают на старом значении
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    next();
+  });
+  
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir)));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
