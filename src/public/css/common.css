@@ -506,37 +506,3 @@ body.page-fade-out {
   border-color: var(--text);
 }
 
-/* ---- десктоп: закреплённая колонка слева, вне сетки — не меняет ширину форм ---- */
-@media (min-width: 1050px), (orientation: landscape) {
-  .nav-sidebar {
-    position: fixed;
-    left: 16px;
-    top: 96px;
-    display: flex;
-    flex-direction: column;
-    flex-wrap: nowrap;
-    gap: 4px;
-    width: 140px;
-    max-width: none;
-    margin: 0;
-    padding: 0;
-    z-index: 5;
-  }
-
-  .page-nav-btn {
-    background: none;
-    border: none;
-    border-radius: 0;
-    padding: 4px 0;
-  }
-
-  .page-nav-btn:hover {
-    background: none;
-  }
-
-  .page-nav-btn.active {
-    border-bottom: 2px solid var(--text);
-    padding-bottom: 2px;
-    width: fit-content;
-  }
-}

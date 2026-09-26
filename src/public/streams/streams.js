@@ -40,17 +40,14 @@ function renderStreamersList(container, streamers, emptyText) {
   streamers.forEach((s) => container.appendChild(renderStreamerCard(s)));
 }
 
-async function loadStreamers(query = '') {
+async function loadStreamers() {
   try {
-    const params = new URLSearchParams();
-    if (query.trim()) params.set('q', query.trim());
-
-    const streamers = await api('/streamers' + (params.toString() ? '?' + params.toString() : ''));
+    const streamers = await api('/streamers');
 
     renderStreamersList(
       document.getElementById('streamersGrid'),
       streamers,
-      query ? 'Никого не нашли' : 'Стримеров пока нет'
+      'Стримеров пока нет'
     );
 
     // будет потом считываться по итогу окончания стрима (сортировка по накопленным часам эфира)
@@ -68,8 +65,10 @@ async function loadStreamers(query = '') {
 let searchDebounceTimer = null;
 
 function onStreamerSearch() {
+  const q = (document.getElementById('streamerSearchInput')?.value || '').trim();
+  if (!q) return;
   hideSuggestions();
-  loadStreamers(document.getElementById('streamerSearchInput')?.value || '');
+  location.href = `/streams/search.html?q=${encodeURIComponent(q)}`;
 }
 
 function handleStreamerSearchKey(e) {
@@ -83,12 +82,6 @@ function handleStreamerSearchInput() {
   const q = document.getElementById('streamerSearchInput')?.value || '';
   clearTimeout(searchDebounceTimer);
 
-  if (!q.trim()) {
-    hideSuggestions();
-    loadStreamers('');
-    return;
-  }
-
   if (q.trim().length < 3) {
     hideSuggestions();
     return;
@@ -98,7 +91,7 @@ function handleStreamerSearchInput() {
     try {
       const results = await api('/streamers?q=' + encodeURIComponent(q.trim()) + '&limit=5');
       renderSuggestions(results, q.trim());
-      loadStreamers(q); // сразу же фильтруем и основную сетку
+      // "Все стримеры" сюда больше не трогаем — это только автодополнение
     } catch (err) {
       console.warn('[handleStreamerSearchInput]', err.message);
     }

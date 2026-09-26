@@ -8,7 +8,8 @@
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css" />
   <link rel="stylesheet" href="/streams/streams.css" />
-  <title>PartyWatcher — Трансляции</title>
+  <link rel="stylesheet" href="/streams/search.css" />
+  <title>PartyWatcher — Поиск стримеров</title>
 </head>
 <body>
   <div class="page-header">
@@ -20,12 +21,10 @@
       </svg>
       <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
     </a>
-
     <div class="header-right">
       <div class="corner-menu">
-        <span class="corner-name" id="meName"></span>
         <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-        <button class="icon-btn my-profile-btn" onclick="goToMyProfile()">👤 Мой профиль</button>
+        <button class="icon-btn" onclick="location.href='/streams.html'">К списку</button>
       </div>
     </div>
   </div>
@@ -35,34 +34,21 @@
     <button type="button" class="page-nav-btn active" onclick="navigateWithFade('/streams.html')">📡 Прямые трансляции</button>
   </nav>
 
-  <div class="streams-layout">
+  <div class="search-results-layout">
     <div class="streams-search-wrap">
-      <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера"
-             autocomplete="off"
-             onkeydown="handleStreamerSearchKey(event)"
-             oninput="handleStreamerSearchInput()"
-             onblur="hideSuggestionsSoon()" />
-      <button type="button" class="search-icon-btn" onclick="onStreamerSearch()" aria-label="Искать">🔍</button>
-      <div id="searchSuggestions" class="search-suggestions hidden"></div>
+      <input id="searchQueryInput" type="text" autocomplete="off"
+             placeholder="Поиск по имени стримера"
+             onkeydown="handleSearchKey(event)" />
+      <button type="button" class="search-icon-btn" onclick="runSearch()" aria-label="Искать">🔍</button>
     </div>
 
-    <section class="streams-section">
-      <div class="streams-section-head">
-        <h2>Активные стримеры</h2>
-        <span class="streams-section-hint">часто стримящие за последнее время</span>
-      </div>
-      <!-- будет потом считываться по итогу окончания стрима (накопленные часы эфира) -->
-      <div id="activeStreamersRow" class="active-streamers-row"></div>
-    </section>
-
-    <section class="streams-section">
-      <h2>Все стримеры</h2>
-      <div id="streamersGrid" class="streamers-grid"></div>
-    </section>
+    <h2 id="resultsHeading" class="results-heading"></h2>
+    <div id="resultsGrid" class="streamers-grid"></div>
   </div>
 
   <script src="/js/api.js"></script>
   <script src="/js/page-transition.js"></script>
   <script src="/streams/streams.js"></script>
+  <script src="/streams/search.js"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ body {
 }
 
 .layout {
-  max-width: 1100px;
+  max-width: 1290px;
   margin: 0 auto;
   padding: 8px 16px 60px;
 }
@@ -24,10 +24,9 @@ body {
 @media (min-width: 1050px), (orientation: landscape) {
   .layout {
     display: grid;
-    grid-template-columns: 380px 1fr; /* как было изначально */
+    grid-template-columns: 140px 380px 1fr;
     gap: 32px;
     align-items: start;
-    padding-left: 190px; /* резерв слева под фиксированную .nav-sidebar */
   }
 }
 
@@ -633,4 +632,34 @@ button {
   width: 100%;
   margin: 0;
   padding-right: 42px;
+}
+
+/* ---- десктоп: nav-sidebar как отдельная колонка грида, слева от "Создать комнату" ---- */
+@media (min-width: 1050px), (orientation: landscape) {
+  .nav-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin: 22px 0 0; /* совпадает по высоте с h2-заголовками "СОЗДАТЬ КОМНАТУ" / "МОИ КОМНАТЫ" */
+    max-width: none;
+    padding: 0;
+  }
+
+  .nav-sidebar .page-nav-btn {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 4px 0;
+    width: fit-content;
+  }
+
+  .nav-sidebar .page-nav-btn:hover {
+    background: none;
+  }
+
+  .nav-sidebar .page-nav-btn.active {
+    border-bottom: 2px solid var(--text);
+    padding-bottom: 2px;
+  }
 }

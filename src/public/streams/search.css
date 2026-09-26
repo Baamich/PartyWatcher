@@ -1,0 +1,15 @@
+.search-results-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+@media (min-width: 1050px), (orientation: landscape) {
+  .search-results-layout {
+    padding-left: 190px;
+  }
+}
+
+.results-heading {
+  margin: 24px 0 14px;
+}
