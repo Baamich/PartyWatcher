@@ -198,3 +198,27 @@
   border: 1px solid var(--danger);
   color: var(--danger);
 }
+
+.wb-key-input {
+  max-width: 220px; /* было flex:1 на всю ширину — теперь компактнее */
+  flex: none;
+}
+
+.wb-player {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+.wb-player-offline {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}

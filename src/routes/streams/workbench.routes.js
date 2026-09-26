@@ -4,6 +4,7 @@ const router = express.Router();
 const User = require('../../models/User');
 const ChannelBan = require('../../models/ChannelBan');
 const auth = require('../../middleware/auth');
+const streamKeyCache = require('../../services/streamKeyCache');
 
 async function requireStreamer(req, res, next) {
   const me = await User.findById(req.user.id);
@@ -24,14 +25,27 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     streamTitle: me.streamTitle || '',
     streamDescription: me.streamDescription || '',
     streamKeyMasked: maskKey(me.streamKey),
+    streamPlaybackId: me.streamPlaybackId || null,
+    isLive: me.isLive,
   });
 });
 
-// POST /workbench/stream-key/generate — сгенерировать (или перевыпустить) ключ
+// POST /workbench/stream-key/generate — сгенерировать (или перевыпустить) пару ключ+playbackId
 router.post('/stream-key/generate', auth, requireStreamer, async (req, res) => {
+  const oldKey = req.streamerUser.streamKey;
   const key = crypto.randomBytes(20).toString('hex');
+  const playbackId = crypto.randomBytes(12).toString('hex');
+
   req.streamerUser.streamKey = key;
+  req.streamerUser.streamPlaybackId = playbackId;
   await req.streamerUser.save();
+
+  streamKeyCache.set(oldKey, key, {
+    userId: String(req.streamerUser._id),
+    playbackId,
+    streamerNameLower: req.streamerUser.streamerNameLower,
+  });
+
   res.json({ streamKey: key, streamKeyMasked: maskKey(key) });
 });
 

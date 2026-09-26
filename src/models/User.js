@@ -21,7 +21,8 @@ const userSchema = new mongoose.Schema(
     // ---- творческая студия ----
     streamTitle: { type: String, default: '' },
     streamDescription: { type: String, default: '' },
-    streamKey: { type: String, default: null }, // TODO: подключить к реальному RTMP-приёму (node-media-server или аналог) 
+    streamKey: { type: String, default: null, unique: true, sparse: true }, // секретный, для OBS
+    streamPlaybackId: { type: String, default: null, unique: true, sparse: true }, // публичный, для плеера у зрителей 
   },
   { versionKey: false }
 );

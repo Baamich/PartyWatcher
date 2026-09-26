@@ -2,6 +2,7 @@ let socket;
 let myStreamerNameLower;
 let fullStreamKey = null;
 let timeoutTarget = null;
+let hlsPlayer = null;
 
 function showToast(type, message) {
   const el = document.getElementById('saveToast');
@@ -19,21 +20,71 @@ async function loadSettings() {
     document.getElementById('streamTitleInput').value = data.streamTitle || '';
     document.getElementById('streamDescInput').value = data.streamDescription || '';
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
+    setGenerateBtnState(!!data.streamKeyMasked);
+    updatePlayer(data.isLive, data.streamPlaybackId);
   } catch (err) {
     console.warn('[loadSettings]', err.message);
   }
 }
 
-async function generateStreamKey() {
-  if (fullStreamKey && !confirm('Старый ключ перестанет работать. Сгенерировать новый?')) return;
+function setGenerateBtnState(hasKey) {
+  const btn = document.getElementById('generateKeyBtn');
+  btn.textContent = hasKey ? '🔄' : '🔄 Сгенерировать';
+}
+
+function onGenerateKeyClick() {
+  if (fullStreamKey || document.getElementById('streamKeyInput').value) {
+    document.getElementById('regenConfirmModal').classList.remove('hidden');
+  } else {
+    doGenerateKey();
+  }
+}
+
+function closeRegenConfirm() {
+  document.getElementById('regenConfirmModal').classList.add('hidden');
+}
+
+function confirmRegenerateKey() {
+  closeRegenConfirm();
+  doGenerateKey();
+}
+
+async function doGenerateKey() {
   try {
     const data = await api('/workbench/stream-key/generate', { method: 'POST' });
     fullStreamKey = data.streamKey;
     document.getElementById('streamKeyInput').value = data.streamKeyMasked;
+    setGenerateBtnState(true);
     showToast('success', 'Ключ сгенерирован — скопируй его сейчас, полностью он больше не покажется');
   } catch (err) {
     showToast('error', err.message || 'Не удалось сгенерировать ключ');
   }
+}
+
+function updatePlayer(isLive, playbackId) {
+  const video = document.getElementById('playerVideo');
+  const offline = document.getElementById('playerOffline');
+
+  if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
+
+  if (!isLive || !playbackId) {
+    video.classList.add('hidden');
+    offline.classList.remove('hidden');
+    return;
+  }
+
+  offline.classList.add('hidden');
+  video.classList.remove('hidden');
+  const src = `/media/live/${playbackId}/index.m3u8`;
+
+  if (window.Hls && Hls.isSupported()) {
+    hlsPlayer = new Hls();
+    hlsPlayer.loadSource(src);
+    hlsPlayer.attachMedia(video);
+  } else {
+    video.src = src; // Safari умеет HLS нативно
+  }
+  video.play().catch(() => {});
 }
 
 async function copyStreamKey() {

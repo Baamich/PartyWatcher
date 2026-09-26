@@ -35,13 +35,18 @@
     </nav>
 
     <div class="wb-main">
-      <section class="wb-panel">
+      <section class="wb-panel wb-key-panel">
         <div class="wb-key-row">
           <input id="streamKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
-          <button type="button" class="icon-btn" onclick="copyStreamKey()">📋 Скопировать</button>
-          <button type="button" class="icon-btn" onclick="generateStreamKey()">🔄 Сгенерировать</button>
+          <button type="button" class="icon-btn" onclick="copyStreamKey()">📋</button>
+          <button type="button" id="generateKeyBtn" class="icon-btn" onclick="onGenerateKeyClick()">🔄 Сгенерировать</button>
         </div>
-        <p class="wb-hint">Ключ вставляется в OBS как «Ключ потока». Полностью виден только сразу после генерации и по кнопке «Скопировать».</p>
+        <p class="wb-hint">Ключ вставляется в OBS: сервер <code>rtmp://ВАШ_IP/live</code>, ключ потока — из поля выше.</p>
+      </section>
+
+      <section class="wb-panel">
+        <div id="playerOffline" class="wb-player-offline">Стрим сейчас офлайн</div>
+        <video id="playerVideo" class="wb-player hidden" controls muted playsinline></video>
       </section>
 
       <section class="wb-panel">
@@ -81,6 +86,17 @@
     </div>
   </div>
 
+  <div id="regenConfirmModal" class="modal hidden">
+    <div class="modal-content">
+      <button type="button" class="modal-close" onclick="closeRegenConfirm()">×</button>
+      <h3>Сгенерировать новый ключ?</h3>
+      <p class="wb-hint">Старый ключ сразу перестанет работать — если сейчас идёт трансляция через него, она оборвётся.</p>
+      <button type="button" class="auth-submit" onclick="confirmRegenerateKey()">Да, сгенерировать</button>
+      <button type="button" class="icon-btn" onclick="closeRegenConfirm()">Отмена</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
   <script src="/js/api.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/workbench/workbench.js"></script>

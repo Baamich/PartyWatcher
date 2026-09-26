@@ -24,6 +24,8 @@ const supportRoutes = require('./routes/support.routes');
 const streamersRoutes = require('./routes/streams/streamers.routes');
 const workbenchRoutes = require('./routes/streams/workbench.routes');
 const registerChatSocket = require('./sockets/chatSocket');
+const rtmpServer = require('./services/rtmpServer');
+const streamKeyCache = require('./services/streamKeyCache');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
 const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
@@ -42,6 +44,7 @@ async function start() {
   app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir)));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
+  app.use('/media/live', express.static(path.join(process.cwd(), 'media', 'live')));
 
   app.use('/api/auth', authRoutes);
   app.use('/api/rooms', roomRoutes);
@@ -67,6 +70,9 @@ async function start() {
 
   registerRoomSocket(io);
   registerChatSocket(io);
+
+  await streamKeyCache.loadAll(); // заполняем кэш ключей ДО старта RTMP-сервера
+  rtmpServer.run();
 
   app.use((err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
