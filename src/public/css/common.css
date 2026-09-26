@@ -506,16 +506,17 @@ body.page-fade-out {
   border-color: var(--text);
 }
 
-/* ---- десктоп: узкая колонка слева от "Создать комнату" (не участвует в гриде на телефоне) ---- */
+/* ---- десктоп: узкая колонка слева от "Создать комнату" (index.html — ячейка грида) ---- */
+/* на streams.html/search.html (без грида) max-width+margin:auto+padding выравнивают блок ровно под логотип, как у .page-header */
 @media (min-width: 1050px), (orientation: landscape) {
   .nav-sidebar {
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
     gap: 4px;
-    margin: 22px 0 0;
-    max-width: none;
-    padding: 0;
+    max-width: 1100px;
+    margin: 22px auto 0;
+    padding: 0 16px;
   }
 
   .nav-sidebar .page-nav-btn {

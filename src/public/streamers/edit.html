@@ -1,73 +1,73 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/theme.js"></script>
-  <script src="/js/favicon.js"></script>
-  <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-  <link rel="stylesheet" href="/css/common.css" />
-  <link rel="stylesheet" href="/streamers/edit.css" />
-  <title>PartyWatcher — Редактирование профиля</title>
-</head>
-<body>
-  <div class="page-header">
-    <a href="/index.html" class="brand">
-      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
-        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
-    </a>
-    <div class="header-right">
-      <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+  <!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="/js/theme.js"></script>
+    <script src="/js/favicon.js"></script>
+    <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
+    <link rel="stylesheet" href="/css/common.css" />
+    <link rel="stylesheet" href="/streamers/edit.css" />
+    <title>PartyWatcher — Редактирование профиля</title>
+  </head>
+  <body>
+    <div class="page-header">
+      <a href="/index.html" class="brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+      </a>
+      <div class="header-right">
+        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+      </div>
     </div>
-  </div>
 
-  <div id="saveToast" class="save-toast hidden"></div>
+    <div id="saveToast" class="save-toast hidden"></div>
 
-  <div class="edit-layout">
+    <div class="edit-layout">
 
-    <!-- Шаг 1: создание имени стримера (показывается, если его ещё нет) -->
-    <section id="createNameSection" class="edit-card hidden">
-      <h1 class="edit-title">Стать стримером</h1>
-      <p class="edit-hint">Придумай имя — по нему тебя будут искать (страница будет доступна по адресу /streamers/имя, в нижнем регистре).</p>
-      <div id="createNameError" class="auth-error hidden"></div>
-      <label class="auth-label" for="newStreamerName">Имя стримера</label>
-      <input id="newStreamerName" placeholder="Например, Baamich" maxlength="32" />
-      <button type="button" class="auth-submit" onclick="submitStreamerName()">Создать</button>
-    </section>
+      <!-- Шаг 1: создание имени стримера (показывается, если его ещё нет) -->
+      <section id="createNameSection" class="edit-card hidden">
+        <h1 class="edit-title">Стать стримером</h1>
+        <p class="edit-hint">Придумай имя — по нему тебя будут искать (страница будет доступна по адресу /streamers/имя, в нижнем регистре).</p>
+        <div id="createNameError" class="auth-error hidden"></div>
+        <label class="auth-label" for="newStreamerName">Имя стримера</label>
+        <input id="newStreamerName" placeholder="Например, Baamich" maxlength="32" />
+        <button type="button" class="auth-submit" onclick="submitStreamerName()">Создать</button>
+      </section>
 
-    <!-- Шаг 2: редактирование профиля (показывается, если имя уже есть) -->
-    <section id="editProfileSection" class="edit-card hidden">
-      <h1 class="edit-title">Редактирование профиля</h1>
-      <p class="edit-hint">Профиль: <span id="currentStreamerName" class="current-name"></span></p>
-      <div id="editError" class="auth-error hidden"></div>
-      <div id="editOk" class="support-ok hidden">Сохранено ✓</div>
+      <!-- Шаг 2: редактирование профиля (показывается, если имя уже есть) -->
+      <section id="editProfileSection" class="edit-card hidden">
+        <h1 class="edit-title">Редактирование профиля</h1>
+        <p class="edit-hint">Профиль: <span id="currentStreamerName" class="current-name"></span></p>
+        <div id="editError" class="auth-error hidden"></div>
+        <div id="editOk" class="support-ok hidden">Сохранено ✓</div>
 
-      <label class="auth-label" for="bannerFileInput">Баннер</label>
-      <div id="bannerPreviewWrap" class="image-preview-wrap">
-        <div id="bannerPreview" class="image-preview banner-preview"></div>
-      </div>
-      <input id="bannerFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'banner')" />
+        <label class="auth-label" for="bannerFileInput">Баннер</label>
+        <div id="bannerPreviewWrap" class="image-preview-wrap">
+          <div id="bannerPreview" class="image-preview banner-preview"></div>
+        </div>
+        <input id="bannerFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'banner')" />
 
-      <label class="auth-label" for="avatarFileInput">Аватар</label>
-      <div id="avatarPreviewWrap" class="image-preview-wrap">
-        <div id="avatarPreview" class="image-preview avatar-preview"></div>
-      </div>
-      <input id="avatarFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'avatar')" />
+        <label class="auth-label" for="avatarFileInput">Аватар</label>
+        <div id="avatarPreviewWrap" class="image-preview-wrap">
+          <div id="avatarPreview" class="image-preview avatar-preview"></div>
+        </div>
+        <input id="avatarFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'avatar')" />
 
-      <label class="auth-label" for="bioInput">Описание</label>
-      <textarea id="bioInput" rows="6" maxlength="2000" placeholder="Расскажи о себе (до 2000 символов)"></textarea>
+        <label class="auth-label" for="bioInput">Описание</label>
+        <textarea id="bioInput" rows="6" maxlength="2000" placeholder="Расскажи о себе (до 2000 символов)"></textarea>
 
-      <button type="button" class="auth-submit" onclick="submitProfile()">Сохранить</button>
-      <button type="button" class="icon-btn" id="backToProfileBtn" onclick="goToOwnProfile()">Открыть профиль</button>
-    </section>
+        <button type="button" class="auth-submit" onclick="submitProfile()">Сохранить</button>
+        <button type="button" class="icon-btn" id="backToProfileBtn" onclick="goToOwnProfile()">Открыть профиль</button>
+      </section>
 
-  </div>
+    </div>
 
-  <script src="/js/api.js"></script>
-  <script src="/streamers/edit.js"></script>
-</body>
-</html>
+    <script src="/js/api.js"></script>
+    <script src="/streamers/edit.js"></script>
+  </body>
+  </html>
