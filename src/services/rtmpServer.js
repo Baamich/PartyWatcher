@@ -22,16 +22,22 @@ const nmsConfig = {
     mediaroot: MEDIA_ROOT,
     allow_origin: '*',
   },
-  // trans больше не используем — его внутреннее срабатывание непрозрачно и
-  // молча ничего не делало при живом RTMP-соединении, без единой строки в логах.
-  // Сами запускаем ffmpeg дочерним процессом ниже — так видно любую ошибку.
 };
 
 const nms = new NodeMediaServer(nmsConfig);
 const activeTranscodes = new Map(); // key -> ChildProcess
 
+function keyFromStreamPath(streamPath) {
+  // v4: session.streamPath вида "/live/mySecretKey"
+  if (!streamPath || typeof streamPath !== 'string') return null;
+  const parts = streamPath.replace(/^\//, '').split('/');
+  // app = parts[0] ('live'), key = parts[1]
+  if (parts[0] !== 'live' || !parts[1]) return null;
+  return parts[1];
+}
+
 function startTranscode(key) {
-  if (activeTranscodes.has(key)) return; // уже запущен
+  if (activeTranscodes.has(key)) return;
   const outDir = path.join(MEDIA_ROOT, 'live', key);
   fs.mkdirSync(outDir, { recursive: true });
   const outputPath = path.join(outDir, 'index.m3u8');
@@ -51,16 +57,21 @@ function startTranscode(key) {
   const proc = spawn(FFMPEG_PATH, args);
   activeTranscodes.set(key, proc);
 
-  proc.stderr.on('data', (chunk) => {
-    console.log(`[ffmpeg:${key}]`, chunk.toString().trim());
-  });
-  proc.on('error', (err) => {
-    console.error(`[ffmpeg:${key}] не удалось запустить процесс`, err);
-  });
+  proc.stderr.on('data', (chunk) => console.log(`[ffmpeg:${key}]`, chunk.toString().trim()));
+  proc.on('error', (err) => console.error(`[ffmpeg:${key}] не удалось запустить процесс`, err));
   proc.on('exit', (code, signal) => {
     console.log(`[rtmp] ffmpeg для ${key} завершился (code=${code}, signal=${signal})`);
     activeTranscodes.delete(key);
   });
+
+  const entry = streamKeyCache.get(key);
+  if (entry) {
+    User.updateOne({ _id: entry.userId }, { isLive: true })
+      .then((r) => console.log('[rtmp] isLive=true, matched:', r.matchedCount, 'modified:', r.modifiedCount))
+      .catch((err) => console.error('[rtmp] isLive set error', err));
+  } else {
+    console.warn('[rtmp] стрим идёт под ключом, которого нет в кэше:', key);
+  }
 }
 
 function stopTranscode(key) {
@@ -69,55 +80,45 @@ function stopTranscode(key) {
     proc.kill('SIGINT');
     activeTranscodes.delete(key);
   }
+  const entry = streamKeyCache.get(key);
+  if (entry) {
+    User.updateOne({ _id: entry.userId }, { isLive: false })
+      .then((r) => console.log('[rtmp] isLive=false, matched:', r.matchedCount, 'modified:', r.modifiedCount))
+      .catch((err) => console.error('[rtmp] isLive unset error', err));
+  }
 }
 
-nms.on('prePublish', (id, streamPath) => {
-  try {
-    if (!streamPath) return;
-    const key = streamPath.split('/').pop();
-    const entry = streamKeyCache.get(key);
-    const session = nms.getSession(id);
-
-    if (!entry) {
-      console.warn('[rtmp] prePublish: ключ не найден в кэше, реджект', key);
-      session?.reject();
-      return;
-    }
-
-    console.log('[rtmp] prePublish: найден пользователь', entry.userId, 'playbackId', entry.playbackId);
-    User.updateOne({ _id: entry.userId }, { isLive: true })
-      .then((result) => console.log('[rtmp] isLive=true записан, matched:', result.matchedCount, 'modified:', result.modifiedCount))
-      .catch((err) => console.error('[rtmp] isLive set error', err));
-  } catch (err) {
-    console.error('[rtmp] prePublish handler error', err);
-  }
+// v4: nms.on проксирует в Context.eventEmitter; колбэк получает session, не (id, path, args)
+nms.on('postPublish', (session) => {
+  const streamPath = session?.streamPath || '';
+  const key = keyFromStreamPath(streamPath);
+  console.log('[rtmp] postPublish', streamPath, '→ key=', key);
+  if (key) startTranscode(key);
 });
 
-nms.on('postPublish', (id, streamPath) => {
-  try {
-    if (!streamPath) return;
-    const key = streamPath.split('/').pop();
-    startTranscode(key);
-  } catch (err) {
-    console.error('[rtmp] postPublish handler error', err);
-  }
+nms.on('donePublish', (session) => {
+  const streamPath = session?.streamPath || '';
+  const key = keyFromStreamPath(streamPath);
+  console.log('[rtmp] donePublish', streamPath, '→ key=', key);
+  if (key) stopTranscode(key);
 });
 
-nms.on('donePublish', (id, streamPath) => {
+// на случай старых/кривых версий, где on() ещё нет — fallback через Context
+if (typeof nms.on !== 'function') {
   try {
-    if (!streamPath) return;
-    const key = streamPath.split('/').pop();
-    stopTranscode(key);
-
-    const entry = streamKeyCache.get(key);
-    if (entry) {
-      User.updateOne({ _id: entry.userId }, { isLive: false }).catch((err) =>
-        console.error('[rtmp] isLive unset error', err)
-      );
-    }
-  } catch (err) {
-    console.error('[rtmp] donePublish handler error', err);
+    const Context = require('node-media-server/src/core/context.js');
+    Context.eventEmitter.on('postPublish', (session) => {
+      const key = keyFromStreamPath(session?.streamPath);
+      if (key) startTranscode(key);
+    });
+    Context.eventEmitter.on('donePublish', (session) => {
+      const key = keyFromStreamPath(session?.streamPath);
+      if (key) stopTranscode(key);
+    });
+    console.log('[rtmp] подписался на Context.eventEmitter (nms.on отсутствует)');
+  } catch (e) {
+    console.error('[rtmp] не удалось подписаться на события NMS:', e.message);
   }
-});
+}
 
 module.exports = nms;

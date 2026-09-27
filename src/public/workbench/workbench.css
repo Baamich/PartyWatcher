@@ -215,8 +215,51 @@
 }
 
 .wb-clear-chat-btn {
-  padding: 2px 6px;
+  width: auto;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  box-shadow: none;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.wb-clear-chat-btn:hover {
+  filter: brightness(0.9);
+}
+
+/* ---- кастомный тултип вместо нативного title ---- */
+
+.wb-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.wb-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
   font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 10;
+}
+
+.wb-tooltip-wrap:hover .wb-tooltip {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 #chatPanel .wb-window-content {
