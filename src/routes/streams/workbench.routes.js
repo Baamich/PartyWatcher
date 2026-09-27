@@ -44,7 +44,7 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
   // подчищаем рассинхрон флага в базе, раз уж всё равно проверили диск
   if (liveNow !== me.isLive) {
     me.isLive = liveNow;
-    if (!liveNow) me.liveStartedAt = null;
+    // liveStartedAt чистит только rtmpServer.finalizeStop — не диск
     await me.save();
   }
 
@@ -54,7 +54,8 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     streamKeyMasked: maskKey(me.streamKey),
     streamPlaybackId: me.streamPlaybackId || null,
     isLive: liveNow,
-    liveStartedAt: liveNow ? (me.liveStartedAt || null) : null,
+    // отдаём всегда, пока finalizeStop не обнулил — чтобы таймер пережил краткий offline
+    liveStartedAt: me.liveStartedAt || null,
   });
 });
 

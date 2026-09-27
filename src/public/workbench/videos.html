@@ -22,7 +22,7 @@
     </a>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" onclick="location.href='/streamers/' + (window.__streamerName || '')">← Профиль</button>
+        <button class="icon-btn" onclick="goProfile()">← Профиль</button>
         <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
       </div>
     </div>
@@ -39,8 +39,32 @@
 
       <div class="wb-subpage-main">
         <h1 class="wb-subpage-title">🎬 Видеостудия</h1>
-        <p class="wb-subpage-hint">Записи хранятся 3 дня (и после публикации тоже удаляются).</p>
+        <p class="wb-subpage-hint">Записи хранятся 3 дня (после публикации тоже удаляются с профиля).</p>
         <div id="vodList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="editVodModal" class="modal hidden">
+    <div class="modal-content" style="min-width:min(420px,92vw)">
+      <button type="button" class="modal-close" onclick="closeEditVod()">×</button>
+      <h3 style="margin:0 0 12px">Редактировать запись</h3>
+      <label class="auth-label">Название</label>
+      <input id="editVodTitle" maxlength="140" />
+      <label class="auth-label">Описание</label>
+      <textarea id="editVodDesc" rows="4" maxlength="2000" style="width:100%;font-family:inherit;font-size:14px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;resize:vertical"></textarea>
+      <button type="button" class="auth-submit" onclick="saveEditVod()">Сохранить</button>
+    </div>
+  </div>
+
+  <div id="delVodModal" class="modal hidden">
+    <div class="modal-content" style="min-width:min(360px,92vw)">
+      <button type="button" class="modal-close" onclick="closeDelVod()">×</button>
+      <h3 style="margin:0 0 10px">Удалить запись?</h3>
+      <p class="wb-subpage-hint" style="margin-bottom:16px">Файл будет удалён навсегда. С профиля тоже исчезнет.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="icon-btn vod-btn-danger" onclick="confirmDelVod()">Да, удалить</button>
+        <button type="button" class="icon-btn" onclick="closeDelVod()">Отмена</button>
       </div>
     </div>
   </div>

@@ -9,7 +9,7 @@ const streamKeyCache = require('./streamKeyCache');
 const MEDIA_ROOT = path.join(process.cwd(), 'media');
 const VOD_ROOT = path.join(MEDIA_ROOT, 'vod');
 const FFMPEG_PATH = '/usr/bin/ffmpeg';
-const PUBLISH_GRACE_MS = 15_000;
+const GRACE_AT_MS = [5_000, 7_000, 12_000, 20_000];
 const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 fs.mkdirSync(path.join(MEDIA_ROOT, 'live'), { recursive: true });
@@ -156,14 +156,47 @@ async function finalizeStop(key) {
 }
 
 function scheduleStop(key) {
-  if (pendingStopTimers.has(key)) return; // уже ждём
-  console.log(`[rtmp] grace ${PUBLISH_GRACE_MS / 1000}s → stop?`, key.slice(0, 8) + '…');
-  const timer = setTimeout(() => {
-    pendingStopTimers.delete(key);
-    console.log('[rtmp] grace истёк → stop', key.slice(0, 8) + '…');
-    finalizeStop(key);
-  }, PUBLISH_GRACE_MS);
-  pendingStopTimers.set(key, timer);
+  if (pendingStopTimers.has(key)) return;
+
+  const t0 = Date.now();
+  let step = 0;
+
+  console.log(
+    `[rtmp] grace steps [${GRACE_AT_MS.map((ms) => ms / 1000).join('→')}]s`,
+    key.slice(0, 8) + '…'
+  );
+
+  function arm() {
+    if (step >= GRACE_AT_MS.length) {
+      pendingStopTimers.delete(key);
+      console.log('[rtmp] grace exhausted → stop', key.slice(0, 8) + '…');
+      finalizeStop(key);
+      return;
+    }
+
+    const delay = Math.max(0, GRACE_AT_MS[step] - (Date.now() - t0));
+    const timer = setTimeout(() => {
+      // postPublish мог снять таймер через clearPendingStop
+      if (!pendingStopTimers.has(key)) return;
+
+      step += 1;
+      if (step >= GRACE_AT_MS.length) {
+        pendingStopTimers.delete(key);
+        console.log('[rtmp] grace exhausted → stop', key.slice(0, 8) + '…');
+        finalizeStop(key);
+      } else {
+        console.log(
+          `[rtmp] grace checkpoint ${step}/${GRACE_AT_MS.length} (@${GRACE_AT_MS[step - 1] / 1000}s)`,
+          key.slice(0, 8) + '…'
+        );
+        arm();
+      }
+    }, delay);
+
+    pendingStopTimers.set(key, timer);
+  }
+
+  arm();
 }
 
 async function createVodDoc(key) {

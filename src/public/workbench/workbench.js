@@ -434,8 +434,13 @@ function updatePlayer(isLive, playbackId, liveStartedAt) {
     offline.classList.remove('hidden');
     showReconnectingOverlay(false);
     setLiveBadge('offline');
-    liveSinceTs = null;
-    stopLiveTimer();
+    // если сервер ещё держит liveStartedAt (grace) — помним точку старта, таймер не обнуляем
+    if (liveStartedAt) {
+      liveSinceTs = new Date(liveStartedAt).getTime();
+    } else {
+      liveSinceTs = null;
+    }
+    stopLiveTimer(); // не тикаем в офлайне; при возврате в эфир — продолжим с liveSinceTs
     return;
   }
 

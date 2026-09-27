@@ -35,4 +35,18 @@ async function loadBans() {
   }
 }
 
+
+async function goProfile() {
+  try {
+    const me = await api('/auth/me');
+    if (me.streamerName) {
+      location.href = '/streamers/' + encodeURIComponent(me.streamerName.toLowerCase());
+    } else {
+      location.href = '/streamers/edit.html';
+    }
+  } catch {
+    location.href = '/index.html';
+  }
+}
+
 loadBans();

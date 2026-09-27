@@ -593,3 +593,96 @@
   width: 10px;
   height: 10px;
 }
+
+.vod-card-top { margin-bottom: 12px; }
+
+.vod-meta-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.vod-card-body {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-alt);
+}
+
+.vod-media {
+  width: 320px;
+  max-width: 48%;
+  flex-shrink: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vod-media video {
+  width: 100%;
+  max-height: 200px;
+  display: block;
+  border-radius: 0;
+}
+
+.vod-side {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vod-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.vod-field-val {
+  font-size: 14px;
+  color: var(--text);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.vod-side-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.vod-side-actions .icon-btn {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+}
+
+.vod-btn-danger {
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+  color: #fff !important;
+}
+
+.vod-btn-danger:hover {
+  filter: brightness(1.08);
+}
+
+@media (max-width: 700px) {
+  .vod-card-body { flex-direction: column; }
+  .vod-media { width: 100%; max-width: 100%; }
+  .vod-side { border-left: none; border-top: 1px solid var(--border); }
+}
