@@ -18,7 +18,7 @@ async function logAction(nsp, streamerNameLower, actorUsername, action, targetUs
   if (!roomSockets) return;
   roomSockets.forEach((sid) => {
     const s = nsp.sockets.get(sid);
-    if (s?.data?.isOwner) s.emit('action:logged', entry); // журнал видит только сам владелец канала
+    if (s?.data?.isOwner) s.emit('action:logged', entry);
   });
 }
 
@@ -42,7 +42,7 @@ module.exports = function registerChatSocket(io) {
   const nsp = io.of('/chat');
 
   nsp.on('connection', (socket) => {
-    const authUser = getUserFromSocket(socket); // null = гость, может смотреть, не может писать
+    const authUser = getUserFromSocket(socket);
     let currentStreamerNameLower = null;
 
     socket.on('chat:join', async ({ streamerName }) => {
@@ -57,7 +57,11 @@ module.exports = function registerChatSocket(io) {
       const count = nsp.adapter.rooms.get(roomName(currentStreamerNameLower))?.size || 0;
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:viewers', count);
 
-      const history = await StreamChatMessage.find({ streamerNameLower: currentStreamerNameLower })
+      // только живые сообщения — удалённые и после clear не попадают в историю
+      const history = await StreamChatMessage.find({
+        streamerNameLower: currentStreamerNameLower,
+        deleted: { $ne: true },
+      })
         .sort({ createdAt: -1 })
         .limit(50)
         .lean();
@@ -131,10 +135,8 @@ module.exports = function registerChatSocket(io) {
 
     socket.on('chat:clear', async () => {
       if (!socket.data.isOwner || !currentStreamerNameLower) return;
-      await StreamChatMessage.updateMany(
-        { streamerNameLower: currentStreamerNameLower, deleted: false },
-        { deleted: true }
-      );
+      // жёсткое удаление — после F5 чат пустой, не «Сообщение удалено»
+      await StreamChatMessage.deleteMany({ streamerNameLower: currentStreamerNameLower });
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:cleared');
       logAction(nsp, currentStreamerNameLower, authUser.username, 'clear_chat');
     });

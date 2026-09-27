@@ -25,85 +25,161 @@ const nmsConfig = {
 };
 
 const nms = new NodeMediaServer(nmsConfig);
-const activeTranscodes = new Map(); // key -> ChildProcess
+
+/** @type {Map<string, { proc: import('child_process').ChildProcess, gen: number }>} */
+const activeTranscodes = new Map();
+/** generation по ключу — чтобы старый ffmpeg/таймер не трогал новый стрим */
+const keyGen = new Map();
+
+function nextGen(key) {
+  const g = (keyGen.get(key) || 0) + 1;
+  keyGen.set(key, g);
+  return g;
+}
+
+function currentGen(key) {
+  return keyGen.get(key) || 0;
+}
 
 function keyFromStreamPath(streamPath) {
-  // v4: session.streamPath вида "/live/mySecretKey"
   if (!streamPath || typeof streamPath !== 'string') return null;
   const parts = streamPath.replace(/^\//, '').split('/');
-  // app = parts[0] ('live'), key = parts[1]
   if (parts[0] !== 'live' || !parts[1]) return null;
   return parts[1];
 }
 
-function startTranscode(key) {
-  if (activeTranscodes.has(key)) return;
-  const outDir = path.join(MEDIA_ROOT, 'live', key);
-  fs.mkdirSync(outDir, { recursive: true });
-  const outputPath = path.join(outDir, 'index.m3u8');
+function mediaDir(key) {
+  return path.join(MEDIA_ROOT, 'live', key);
+}
 
+function wipeMedia(key) {
+  try {
+    fs.rmSync(mediaDir(key), { recursive: true, force: true });
+  } catch (_) {}
+}
+
+async function setLive(key, isLive) {
+  const entry = streamKeyCache.get(key);
+  if (!entry) {
+    console.warn('[rtmp] ключ не в кэше, isLive не обновлён:', key.slice(0, 8), '→', isLive);
+    return;
+  }
+  try {
+    const r = await User.updateOne(
+      { _id: entry.userId },
+      { $set: { isLive: !!isLive } }
+    );
+    console.log(
+      `[rtmp] isLive=${!!isLive}, key=${key.slice(0, 8)}… matched=${r.matchedCount} modified=${r.modifiedCount}`
+    );
+  } catch (err) {
+    console.error('[rtmp] isLive update error', err.message);
+  }
+}
+
+function killProc(proc) {
+  if (!proc || proc.killed) return;
+  try {
+    proc.kill('SIGKILL');
+  } catch (_) {}
+}
+
+function stopTranscode(key, { updateDb = true, wipe = true } = {}) {
+  // инвалидируем поколение — любые отложенные start этого ключа отменятся
+  nextGen(key);
+
+  const entry = activeTranscodes.get(key);
+  if (entry) {
+    killProc(entry.proc);
+    activeTranscodes.delete(key);
+    console.log('[rtmp] остановил ffmpeg для', key.slice(0, 8) + '…');
+  }
+
+  if (wipe) wipeMedia(key);
+  if (updateDb) {
+    // не ждём — offline на фронте должен появиться быстро
+    setLive(key, false);
+  }
+}
+
+function startTranscode(key) {
+  // стоп предыдущего без смены isLive (сейчас сразу выставим true)
+  const prev = activeTranscodes.get(key);
+  if (prev) {
+    killProc(prev.proc);
+    activeTranscodes.delete(key);
+  }
+
+  const gen = nextGen(key);
+  wipeMedia(key);
+  fs.mkdirSync(mediaDir(key), { recursive: true });
+  const outputPath = path.join(mediaDir(key), 'index.m3u8');
+
+  // OBS уже отдаёт H264 + AAC → оба copy. Перекод AAC на ARM убивал speed до 0.3x.
   const args = [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-fflags', '+genpts+discardcorrupt+nobuffer',
+    '-flags', 'low_delay',
+    '-probesize', '32',
+    '-analyzeduration', '0',
     '-i', `rtmp://127.0.0.1:1935/live/${key}`,
     '-c:v', 'copy',
-    '-c:a', 'aac',
+    '-c:a', 'copy',
     '-f', 'hls',
     '-hls_time', '2',
     '-hls_list_size', '6',
-    '-hls_flags', 'delete_segments',
+    '-hls_flags', 'delete_segments+omit_endlist+independent_segments',
+    '-hls_allow_cache', '0',
+    '-start_number', '0',
     outputPath,
   ];
 
-  console.log('[rtmp] запускаю ffmpeg для ключа', key);
-  const proc = spawn(FFMPEG_PATH, args);
-  activeTranscodes.set(key, proc);
+  // небольшая пауза: даём publisher'у стабилизироваться после reconnect OBS
+  setTimeout(() => {
+    if (currentGen(key) !== gen) {
+      console.log('[rtmp] start отменён (новый gen) для', key.slice(0, 8) + '…');
+      return;
+    }
 
-  proc.stderr.on('data', (chunk) => console.log(`[ffmpeg:${key}]`, chunk.toString().trim()));
-  proc.on('error', (err) => console.error(`[ffmpeg:${key}] не удалось запустить процесс`, err));
-  proc.on('exit', (code, signal) => {
-    console.log(`[rtmp] ffmpeg для ${key} завершился (code=${code}, signal=${signal})`);
-    activeTranscodes.delete(key);
-  });
+    console.log('[rtmp] запускаю ffmpeg для ключа', key.slice(0, 8) + '…', 'gen=', gen);
+    const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    activeTranscodes.set(key, { proc, gen });
 
-  const entry = streamKeyCache.get(key);
-  if (entry) {
-    User.updateOne({ _id: entry.userId }, { isLive: true })
-      .then((r) => console.log('[rtmp] isLive=true, matched:', r.matchedCount, 'modified:', r.modifiedCount))
-      .catch((err) => console.error('[rtmp] isLive set error', err));
-  } else {
-    console.warn('[rtmp] стрим идёт под ключом, которого нет в кэше:', key);
-  }
+    proc.stderr.on('data', (chunk) => {
+      const line = chunk.toString().trim();
+      if (line) console.log(`[ffmpeg:${key.slice(0, 8)}]`, line);
+    });
+    proc.on('error', (err) => {
+      console.error(`[ffmpeg:${key.slice(0, 8)}] spawn error`, err.message);
+      if (activeTranscodes.get(key)?.gen === gen) activeTranscodes.delete(key);
+    });
+    proc.on('exit', (code, signal) => {
+      console.log(`[rtmp] ffmpeg ${key.slice(0, 8)}… exit code=${code} signal=${signal} gen=${gen}`);
+      const cur = activeTranscodes.get(key);
+      if (cur && cur.gen === gen) activeTranscodes.delete(key);
+      // если ffmpeg упал сам, а publisher ещё может быть жив — isLive не трогаем здесь;
+      // donePublish выставит false. Если publisher уже ушёл — donePublish уже отработал.
+    });
+
+    setLive(key, true);
+  }, 400);
 }
 
-function stopTranscode(key) {
-  const proc = activeTranscodes.get(key);
-  if (proc) {
-    proc.kill('SIGINT');
-    activeTranscodes.delete(key);
-  }
-  const entry = streamKeyCache.get(key);
-  if (entry) {
-    User.updateOne({ _id: entry.userId }, { isLive: false })
-      .then((r) => console.log('[rtmp] isLive=false, matched:', r.matchedCount, 'modified:', r.modifiedCount))
-      .catch((err) => console.error('[rtmp] isLive unset error', err));
-  }
-}
-
-// v4: nms.on проксирует в Context.eventEmitter; колбэк получает session, не (id, path, args)
 nms.on('postPublish', (session) => {
   const streamPath = session?.streamPath || '';
   const key = keyFromStreamPath(streamPath);
-  console.log('[rtmp] postPublish', streamPath, '→ key=', key);
+  console.log('[rtmp] postPublish', streamPath);
   if (key) startTranscode(key);
 });
 
 nms.on('donePublish', (session) => {
   const streamPath = session?.streamPath || '';
   const key = keyFromStreamPath(streamPath);
-  console.log('[rtmp] donePublish', streamPath, '→ key=', key);
-  if (key) stopTranscode(key);
+  console.log('[rtmp] donePublish', streamPath);
+  if (key) stopTranscode(key, { updateDb: true, wipe: true });
 });
 
-// на случай старых/кривых версий, где on() ещё нет — fallback через Context
 if (typeof nms.on !== 'function') {
   try {
     const Context = require('node-media-server/src/core/context.js');
@@ -113,11 +189,11 @@ if (typeof nms.on !== 'function') {
     });
     Context.eventEmitter.on('donePublish', (session) => {
       const key = keyFromStreamPath(session?.streamPath);
-      if (key) stopTranscode(key);
+      if (key) stopTranscode(key, { updateDb: true, wipe: true });
     });
-    console.log('[rtmp] подписался на Context.eventEmitter (nms.on отсутствует)');
+    console.log('[rtmp] подписался на Context.eventEmitter');
   } catch (e) {
-    console.error('[rtmp] не удалось подписаться на события NMS:', e.message);
+    console.error('[rtmp] события NMS:', e.message);
   }
 }
 
