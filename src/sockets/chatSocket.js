@@ -3,10 +3,23 @@ const config = require('../config');
 const StreamChatMessage = require('../models/StreamChatMessage');
 const ChannelBan = require('../models/ChannelBan');
 const ChannelTimeout = require('../models/ChannelTimeout');
+const ChannelActionLog = require('../models/ChannelActionLog');
 const User = require('../models/User');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
+}
+
+async function logAction(nsp, streamerNameLower, actorUsername, action, targetUsername, details) {
+  const entry = await ChannelActionLog.create({
+    streamerNameLower, actorUsername, action, targetUsername: targetUsername || null, details: details || '',
+  });
+  const roomSockets = nsp.adapter.rooms.get(roomName(streamerNameLower));
+  if (!roomSockets) return;
+  roomSockets.forEach((sid) => {
+    const s = nsp.sockets.get(sid);
+    if (s?.data?.isOwner) s.emit('action:logged', entry); // журнал видит только сам владелец канала
+  });
 }
 
 function parseCookieToken(cookieHeader) {
@@ -86,7 +99,10 @@ module.exports = function registerChatSocket(io) {
         { deleted: true },
         { new: true }
       );
-      if (msg) nsp.to(roomName(currentStreamerNameLower)).emit('chat:message-deleted', { messageId });
+      if (msg) {
+        nsp.to(roomName(currentStreamerNameLower)).emit('chat:message-deleted', { messageId });
+        logAction(nsp, currentStreamerNameLower, authUser.username, 'delete_message', msg.senderUsername);
+      }
     });
 
     socket.on('chat:ban', async ({ userId, username }) => {
@@ -97,6 +113,7 @@ module.exports = function registerChatSocket(io) {
         { upsert: true }
       );
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:user-banned', { userId });
+      logAction(nsp, currentStreamerNameLower, authUser.username, 'ban', username);
     });
 
     socket.on('chat:timeout', async ({ userId, username, seconds }) => {
@@ -108,6 +125,18 @@ module.exports = function registerChatSocket(io) {
         { upsert: true }
       );
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:user-timeout', { userId, until });
+      const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
+      logAction(nsp, currentStreamerNameLower, authUser.username, 'timeout', username, `${h}ч ${m}м ${s}с`);
+    });
+
+    socket.on('chat:clear', async () => {
+      if (!socket.data.isOwner || !currentStreamerNameLower) return;
+      await StreamChatMessage.updateMany(
+        { streamerNameLower: currentStreamerNameLower, deleted: false },
+        { deleted: true }
+      );
+      nsp.to(roomName(currentStreamerNameLower)).emit('chat:cleared');
+      logAction(nsp, currentStreamerNameLower, authUser.username, 'clear_chat');
     });
 
     socket.on('disconnect', () => {

@@ -1,22 +1,18 @@
-.wb-layout {
-  max-width: 1300px;
+.wb-outer {
+  display: flex;
+  gap: 24px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 20px 16px 60px;
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 24px;
-}
-
-@media (min-width: 1000px) {
-  .wb-layout {
-    grid-template-columns: 200px 1fr 320px;
-  }
+  align-items: flex-start;
 }
 
 .wb-nav {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 200px;
+  flex-shrink: 0;
 }
 
 .wb-nav-btn {
@@ -35,25 +31,106 @@
 .wb-nav-btn:hover { background: var(--border); color: var(--text); }
 .wb-nav-btn.active { color: var(--text); border-color: var(--accent); }
 
-.wb-main {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-width: 0;
+/* ---- холст с перетаскиваемыми/растягиваемыми окнами ---- */
+
+.wb-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 900px;
 }
 
-.wb-panel {
+.wb-window {
+  position: absolute;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px 20px;
   box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 220px;
+  min-height: 120px;
+}
+
+.wb-window-titlebar {
+  padding: 8px 14px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: move;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wb-window-content {
+  flex: 1;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.wb-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+.wb-resize-handle::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
 }
 
 .wb-key-row {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* ---- журнал действий ---- */
+
+.wb-actionlog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.wb-actionlog-row {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.wb-actionlog-time {
+  color: var(--text-muted);
+  margin-right: 6px;
+  font-size: 11px;
+}
+
+/* мобильный вид: перетаскивание отключаем, окна идут просто друг под другом */
+@media (max-width: 900px) {
+  .wb-outer { flex-direction: column; }
+  .wb-nav { width: 100%; flex-direction: row; flex-wrap: wrap; }
+  .wb-canvas { min-height: auto; }
+  .wb-window {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    margin-bottom: 16px;
+  }
+  .wb-window-titlebar { cursor: default; }
+  .wb-resize-handle { display: none; }
 }
 
 .wb-key-input {
@@ -221,4 +298,77 @@
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
+}
+
+.wb-chat-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-clear-chat-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.wb-rtmp-copy-btn {
+  display: inline;
+  width: auto;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.wb-rtmp-copy-btn:hover {
+  background: var(--border);
+}
+
+.wb-chat-titlebar {
+  cursor: move;
+}
+
+.wb-chat-content {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.wb-chat-messages {
+  flex: 1;
+  padding: 10px 14px;
+}
+
+.wb-chat-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-clear-chat-btn {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.wb-rtmp-copy-btn {
+  display: inline;
+  width: auto;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.wb-rtmp-copy-btn:hover {
+  background: var(--border);
 }

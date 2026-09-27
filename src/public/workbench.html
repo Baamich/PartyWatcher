@@ -24,56 +24,88 @@
       <div class="corner-menu">
         <button class="icon-btn" onclick="goToMyStreamerProfile()">← Профиль</button>
         <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+        <button class="icon-btn" onclick="onResetLayoutClick()">↺ По умолчанию</button>
       </div>
     </div>
   </div>
 
   <div id="saveToast" class="save-toast hidden"></div>
 
-  <div class="wb-layout">
+  <div class="wb-outer">
     <nav class="wb-nav">
       <button type="button" class="wb-nav-btn active">📡 Управление трансляцией</button>
       <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
       <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
     </nav>
 
-    <div class="wb-main">
-      <section class="wb-panel wb-key-panel">
-        <div class="wb-key-row">
-          <input id="streamKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
-          <button type="button" class="icon-btn" onclick="copyStreamKey()">📋</button>
-          <button type="button" id="generateKeyBtn" class="icon-btn" onclick="onGenerateKeyClick()">🔄 Сгенерировать</button>
+    <div id="wbCanvas" class="wb-canvas">
+
+      <div id="keyPanel" class="wb-window">
+        <div class="wb-window-titlebar">Ключ трансляции</div>
+        <div class="wb-window-content">
+          <div class="wb-key-row">
+            <input id="streamKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
+            <button type="button" class="icon-btn" onclick="copyStreamKey()">📋</button>
+            <button type="button" id="generateKeyBtn" class="icon-btn" onclick="onGenerateKeyClick()">🔄 Сгенерировать</button>
+          </div>
+          <p class="wb-hint">
+            Сервер:
+            <button type="button" class="wb-rtmp-copy-btn" onclick="copyRtmpUrl()">rtmp://live.partywatcher.de/live 📋</button>
+          </p>
         </div>
-        <p class="wb-hint">Ключ вставляется в OBS: сервер <code>rtmp://live.partywatcher.de/live</code>, ключ потока — из поля выше.</p>
-      </section>
+        <div class="wb-resize-handle"></div>
+      </div>
 
-      <section class="wb-panel">
-        <div id="playerOffline" class="wb-player-offline">Стрим сейчас офлайн</div>
-        <video id="playerVideo" class="wb-player hidden" controls muted playsinline></video>
-      </section>
+      <div id="playerPanel" class="wb-window">
+        <div class="wb-window-titlebar">Трансляция</div>
+        <div class="wb-window-content">
+          <div id="playerOffline" class="wb-player-offline">Стрим сейчас офлайн</div>
+          <video id="playerVideo" class="wb-player hidden" controls muted playsinline></video>
+        </div>
+        <div class="wb-resize-handle"></div>
+      </div>
 
-      <section class="wb-panel">
-        <label class="auth-label" for="streamTitleInput">Название стрима</label>
-        <input id="streamTitleInput" maxlength="140" placeholder="О чём стрим?" />
+      <div id="settingsPanel" class="wb-window">
+        <div class="wb-window-titlebar">Настройки стрима</div>
+        <div class="wb-window-content">
+          <label class="auth-label" for="streamTitleInput">Название стрима</label>
+          <input id="streamTitleInput" maxlength="140" placeholder="О чём стрим?" />
 
-        <label class="auth-label" for="streamDescInput">Описание</label>
-        <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее"></textarea>
+          <label class="auth-label" for="streamDescInput">Описание</label>
+          <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее"></textarea>
 
-        <button type="button" class="auth-submit" onclick="saveSettings()">Сохранить</button>
-      </section>
+          <button type="button" class="auth-submit" onclick="saveSettings()">Сохранить</button>
+        </div>
+        <div class="wb-resize-handle"></div>
+      </div>
+
+      <div id="actionLogPanel" class="wb-window">
+        <div class="wb-window-titlebar">Журнал действий</div>
+        <div class="wb-window-content">
+          <div id="actionLogList" class="wb-actionlog-list"></div>
+        </div>
+        <div class="wb-resize-handle"></div>
+      </div>
+
+      <div id="chatPanel" class="wb-window">
+        <div class="wb-window-titlebar wb-chat-titlebar">
+          <span>Чат</span>
+          <div class="wb-chat-head-right">
+            <span class="wb-viewers">👁 <span id="viewersCount">0</span></span>
+            <button type="button" class="icon-btn wb-clear-chat-btn" onclick="onClearChatClick()">🧹</button>
+          </div>
+        </div>
+        <div class="wb-window-content wb-chat-content">
+          <div id="chatMessages" class="wb-chat-messages"></div>
+          <div class="wb-chat-input-row">
+            <input id="chatInput" placeholder="Написать в чат…" onkeydown="handleChatKey(event)" />
+            <button type="button" onclick="sendChatMessage()">➤</button>
+          </div>
+        </div>
+        <div class="wb-resize-handle"></div>
+      </div>
+
     </div>
-
-    <aside class="wb-chat">
-      <div class="wb-chat-head">
-        <span>Чат</span>
-        <span class="wb-viewers">👁 <span id="viewersCount">0</span></span>
-      </div>
-      <div id="chatMessages" class="wb-chat-messages"></div>
-      <div class="wb-chat-input-row">
-        <input id="chatInput" placeholder="Написать в чат…" onkeydown="handleChatKey(event)" />
-        <button type="button" onclick="sendChatMessage()">➤</button>
-      </div>
-    </aside>
   </div>
 
   <div id="timeoutModal" class="modal hidden">
@@ -96,6 +128,16 @@
       <p class="wb-hint">Старый ключ сразу перестанет работать — если сейчас идёт трансляция через него, она оборвётся.</p>
       <button type="button" class="auth-submit" onclick="confirmRegenerateKey()">Да, сгенерировать</button>
       <button type="button" class="icon-btn" onclick="closeRegenConfirm()">Отмена</button>
+    </div>
+  </div>
+
+  <div id="resetLayoutModal" class="modal hidden">
+    <div class="modal-content">
+      <button type="button" class="modal-close" onclick="closeResetLayoutModal()">×</button>
+      <h3>Вернуть расположение окон по умолчанию?</h3>
+      <p class="wb-hint">Все передвинутые и растянутые окна вернутся на исходные места.</p>
+      <button type="button" class="auth-submit" onclick="confirmResetLayout()">Да, вернуть</button>
+      <button type="button" class="icon-btn" onclick="closeResetLayoutModal()">Отмена</button>
     </div>
   </div>
 

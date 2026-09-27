@@ -1,10 +1,27 @@
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const User = require('../../models/User');
 const ChannelBan = require('../../models/ChannelBan');
+const WorkbenchLayout = require('../../models/WorkbenchLayout');
+const ChannelActionLog = require('../../models/ChannelActionLog');
 const auth = require('../../middleware/auth');
 const streamKeyCache = require('../../services/streamKeyCache');
+
+// Проверяем реальность по диску: обновляется ли index.m3u8 прямо сейчас,
+// а не полагаемся только на флаг isLive в базе (который мог не долететь/не записаться).
+function isCurrentlyLive(streamKey) {
+  if (!streamKey) return false;
+  try {
+    const file = path.join(process.cwd(), 'media', 'live', streamKey, 'index.m3u8');
+    const stat = fs.statSync(file);
+    return Date.now() - stat.mtimeMs < 15000; // hls_time=2с — файл должен обновляться каждые ~2 секунды
+  } catch {
+    return false;
+  }
+}
 
 async function requireStreamer(req, res, next) {
   const me = await User.findById(req.user.id);
@@ -21,12 +38,20 @@ function maskKey(key) {
 // GET /workbench/me — текущие настройки (ключ только замаскированный)
 router.get('/me', auth, requireStreamer, async (req, res) => {
   const me = req.streamerUser;
+  const liveNow = isCurrentlyLive(me.streamKey);
+
+  // подчищаем рассинхрон флага в базе, раз уж всё равно проверили диск
+  if (liveNow !== me.isLive) {
+    me.isLive = liveNow;
+    await me.save();
+  }
+
   res.json({
     streamTitle: me.streamTitle || '',
     streamDescription: me.streamDescription || '',
     streamKeyMasked: maskKey(me.streamKey),
     streamPlaybackId: me.streamPlaybackId || null,
-    isLive: me.isLive,
+    isLive: liveNow,
   });
 });
 
@@ -82,6 +107,41 @@ router.get('/bans', auth, requireStreamer, async (req, res) => {
 router.delete('/bans/:userId', auth, requireStreamer, async (req, res) => {
   await ChannelBan.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
   res.json({ status: 'ok' });
+});
+
+// GET /workbench/layout — сохранённое расположение окон этого пользователя
+router.get('/layout', auth, requireStreamer, async (req, res) => {
+  const layout = await WorkbenchLayout.findOne({ userId: req.streamerUser._id }).lean();
+  res.json({ panels: layout?.panels || null });
+});
+
+// PUT /workbench/layout — сохранить расположение окон
+router.put('/layout', auth, requireStreamer, async (req, res) => {
+  const { panels } = req.body;
+  if (panels !== null && typeof panels !== 'object') {
+    return res.status(400).json({ error: 'Некорректный формат расположения' });
+  }
+  await WorkbenchLayout.findOneAndUpdate(
+    { userId: req.streamerUser._id },
+    { panels, updatedAt: new Date() },
+    { upsert: true }
+  );
+  res.json({ status: 'ok' });
+});
+
+// DELETE /workbench/layout — сбросить к расположению по умолчанию
+router.delete('/layout', auth, requireStreamer, async (req, res) => {
+  await WorkbenchLayout.deleteOne({ userId: req.streamerUser._id });
+  res.json({ status: 'ok' });
+});
+
+// GET /workbench/action-log — последние действия модерации в этом канале
+router.get('/action-log', auth, requireStreamer, async (req, res) => {
+  const entries = await ChannelActionLog.find({ streamerNameLower: req.streamerUser.streamerNameLower })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .lean();
+  res.json(entries);
 });
 
 module.exports = router;

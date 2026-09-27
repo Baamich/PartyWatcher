@@ -4,6 +4,162 @@ let fullStreamKey = null;
 let timeoutTarget = null;
 let hlsPlayer = null;
 
+const DEFAULT_LAYOUT = {
+  keyPanel:       { x: 20,  y: 20,  w: 480, h: 130 },
+  playerPanel:    { x: 20,  y: 170, w: 480, h: 300 },
+  settingsPanel:  { x: 20,  y: 490, w: 480, h: 280 },
+  actionLogPanel: { x: 520, y: 20,  w: 260, h: 420 },
+  chatPanel:      { x: 800, y: 20,  w: 320, h: 680 },
+};
+
+let currentLayout = null;
+
+function applyLayout(layout) {
+  Object.entries(layout).forEach(([id, rect]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.left = rect.x + 'px';
+    el.style.top = rect.y + 'px';
+    el.style.width = rect.w + 'px';
+    el.style.height = rect.h + 'px';
+  });
+}
+
+function readCurrentRect(el) {
+  return {
+    x: parseInt(el.style.left, 10) || 0,
+    y: parseInt(el.style.top, 10) || 0,
+    w: el.offsetWidth,
+    h: el.offsetHeight,
+  };
+}
+
+let saveLayoutTimer = null;
+function scheduleSaveLayout() {
+  clearTimeout(saveLayoutTimer);
+  saveLayoutTimer = setTimeout(async () => {
+    try {
+      await api('/workbench/layout', { method: 'PUT', body: { panels: currentLayout } });
+    } catch (err) {
+      console.warn('[saveLayout]', err.message);
+    }
+  }, 500);
+}
+
+function makeDraggable(panelId) {
+  const el = document.getElementById(panelId);
+  if (!el) return;
+  const handle = el.querySelector('.wb-window-titlebar');
+  const resizer = el.querySelector('.wb-resize-handle');
+
+  let dragging = false, dragStartX = 0, dragStartY = 0, startLeft = 0, startTop = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return; // не мешаем кнопкам внутри заголовка (кнопка очистки чата)
+    dragging = true;
+    dragStartX = e.clientX; dragStartY = e.clientY;
+    startLeft = el.offsetLeft; startTop = el.offsetTop;
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    el.style.left = Math.max(0, startLeft + e.clientX - dragStartX) + 'px';
+    el.style.top = Math.max(0, startTop + e.clientY - dragStartY) + 'px';
+  });
+  handle.addEventListener('pointerup', () => {
+    if (!dragging) return;
+    dragging = false;
+    currentLayout[panelId] = readCurrentRect(el);
+    scheduleSaveLayout();
+  });
+
+  let resizing = false, resizeStartX = 0, resizeStartY = 0, startW = 0, startH = 0;
+  resizer.addEventListener('pointerdown', (e) => {
+    resizing = true;
+    resizeStartX = e.clientX; resizeStartY = e.clientY;
+    startW = el.offsetWidth; startH = el.offsetHeight;
+    resizer.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  resizer.addEventListener('pointermove', (e) => {
+    if (!resizing) return;
+    el.style.width = Math.max(220, startW + e.clientX - resizeStartX) + 'px';
+    el.style.height = Math.max(120, startH + e.clientY - resizeStartY) + 'px';
+  });
+  resizer.addEventListener('pointerup', () => {
+    if (!resizing) return;
+    resizing = false;
+    currentLayout[panelId] = readCurrentRect(el);
+    scheduleSaveLayout();
+  });
+}
+
+async function loadLayout() {
+  try {
+    const data = await api('/workbench/layout');
+    currentLayout = data.panels || JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  } catch {
+    currentLayout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  }
+  applyLayout(currentLayout);
+}
+
+function initDraggablePanels() {
+  ['keyPanel', 'playerPanel', 'settingsPanel', 'actionLogPanel', 'chatPanel'].forEach(makeDraggable);
+}
+
+function onResetLayoutClick() {
+  document.getElementById('resetLayoutModal').classList.remove('hidden');
+}
+function closeResetLayoutModal() {
+  document.getElementById('resetLayoutModal').classList.add('hidden');
+}
+async function confirmResetLayout() {
+  closeResetLayoutModal();
+  try {
+    await api('/workbench/layout', { method: 'DELETE' });
+  } catch (err) {
+    console.warn('[resetLayout]', err.message);
+  }
+  currentLayout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  applyLayout(currentLayout);
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function actionLogLabel(entry) {
+  switch (entry.action) {
+    case 'clear_chat': return 'очистил(а) чат';
+    case 'delete_message': return `удалил(а) сообщение пользователя ${entry.targetUsername || ''}`;
+    case 'ban': return `заблокировал(а) пользователя ${entry.targetUsername || ''}`;
+    case 'timeout': return `ограничил(а) чат пользователю ${entry.targetUsername || ''} (${entry.details || ''})`;
+    default: return entry.action;
+  }
+}
+
+function renderActionLogEntry(entry, atTop = false) {
+  const box = document.getElementById('actionLogList');
+  if (!box) return;
+  const row = document.createElement('div');
+  row.className = 'wb-actionlog-row';
+  const time = new Date(entry.createdAt || Date.now()).toLocaleTimeString();
+  row.innerHTML = `<span class="wb-actionlog-time">${time}</span><b>${escapeHtml(entry.actorUsername)}</b> — ${escapeHtml(actionLogLabel(entry))}`;
+  if (atTop && box.firstChild) box.insertBefore(row, box.firstChild);
+  else box.appendChild(row);
+}
+
+async function loadActionLog() {
+  try {
+    const entries = await api('/workbench/action-log');
+    document.getElementById('actionLogList').innerHTML = '';
+    entries.forEach((e) => renderActionLogEntry(e, false));
+  } catch (err) {
+    console.warn('[loadActionLog]', err.message);
+  }
+}
+
 function showToast(type, message) {
   const el = document.getElementById('saveToast');
   if (!el) return;
@@ -180,6 +336,18 @@ function deleteMessage(messageId) {
   socket?.emit('chat:delete', { messageId });
 }
 
+function onClearChatClick() {
+  if (confirm('Очистить весь чат для всех зрителей?')) {
+    socket?.emit('chat:clear');
+  }
+}
+
+function copyRtmpUrl() {
+  navigator.clipboard.writeText('rtmp://live.partywatcher.de/live')
+    .then(() => showToast('success', 'Адрес сервера скопирован'))
+    .catch(() => showToast('error', 'Не удалось скопировать'));
+}
+
 function openBanConfirm(userId, username) {
   if (confirm(`Заблокировать пользователя ${username} навсегда?`)) {
     socket?.emit('chat:ban', { userId, username });
@@ -230,6 +398,12 @@ function initChat(streamerNameLower) {
     socket.on('chat:viewers', (count) => {
       document.getElementById('viewersCount').textContent = count;
     });
+
+    socket.on('chat:cleared', () => {
+      document.getElementById('chatMessages').innerHTML = '';
+    });
+
+    socket.on('action:logged', (entry) => renderActionLogEntry(entry, true));
   };
 
   socket.on('connect', () => {
@@ -285,7 +459,10 @@ async function init() {
   }
   myStreamerNameLower = me.streamerName.toLowerCase();
 
+  await loadLayout();
+  initDraggablePanels();
   await loadSettings();
+  await loadActionLog();
   initChat(myStreamerNameLower);
   startLiveStatusPolling();
 }
