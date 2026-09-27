@@ -156,7 +156,7 @@ router.get('/:name', async (req, res) => {
       { $inc: { profileViews: 1 } },
       { new: true }
     )
-      .select('streamerName isLive streamerBio streamerAvatarUrl streamerBannerUrl -_id')
+      .select('streamerName isLive streamerBio streamerAvatarUrl streamerBannerUrl streamPlaybackId -_id')
       .lean();
 
     if (!streamer) return res.status(404).json({ error: 'Стример не найден' });

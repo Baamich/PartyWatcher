@@ -1,0 +1,239 @@
+/* ===== аккордеон эфира: анимация сверху вниз через grid-template-rows ===== */
+
+.live-strip {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s ease;
+  max-width: 1400px;
+  margin: 8px auto 0;
+  padding: 0 16px;
+}
+.live-strip.open {
+  grid-template-rows: 1fr;
+}
+
+.live-strip-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+
+.live-player-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.live-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.live-offline {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 15px;
+  background: #000;
+}
+
+#liveActivityCatcher {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+#liveOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  text-align: center;
+  padding: 20px;
+}
+#liveOverlay button { width: auto; padding: 14px 28px; font-size: 16px; }
+
+.live-fs-btn {
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  background: #000;
+  color: #fff;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 16px;
+  cursor: pointer;
+}
+#liveFullscreenBtn { right: 10px; }
+#liveVolumeBtn { right: 56px; }
+
+#liveVolumePopup {
+  position: absolute;
+  z-index: 7;
+  top: 56px;
+  right: 56px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+#liveVolumePopup.hidden { display: none; }
+#liveVolumePopup input { width: 100px; }
+
+/* фуллскрин на весь блок (видео+чат вместе) */
+.live-strip-inner:fullscreen,
+.live-strip-inner:-webkit-full-screen {
+  background: var(--bg);
+  padding: 16px;
+  box-sizing: border-box;
+}
+.live-strip-inner:fullscreen .live-player-wrap,
+.live-strip-inner:-webkit-full-screen .live-player-wrap {
+  aspect-ratio: auto;
+}
+
+/* ===== чат сбоку от плеера ===== */
+
+.live-chat-side {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.live-chat-header {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+#liveMessages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#liveChatForm {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+#liveChatForm input { flex: 1; margin: 0; }
+#liveChatForm button { width: auto; }
+
+#liveOwnerBar {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+#liveOwnerBar.hidden { display: none; }
+#liveOwnerBar button { width: 100%; }
+
+/* ===== профиль + колонка записей рядом ===== */
+
+.profile-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.profile-row .streamer-profile {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+.profile-avatar-wrap {
+  all: unset;
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: block;
+}
+
+.profile-name-btn {
+  all: unset;
+  cursor: pointer;
+  display: block;
+}
+.profile-name-btn:hover .profile-name { color: var(--accent); }
+
+.vod-column {
+  width: 260px;
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+.vod-column.hidden { display: none; }
+
+.vod-column h3 {
+  font-size: 14px;
+  margin: 0 0 10px;
+  color: var(--text-muted);
+}
+
+.vod-column-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.vod-column-item:hover .vod-column-title { color: var(--accent); }
+
+.vod-column-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.vod-column-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .live-strip-inner { flex-direction: column; }
+  .live-chat-side { width: 100%; height: 320px; }
+  .profile-row { flex-direction: column; }
+  .vod-column { width: 100%; }
+}

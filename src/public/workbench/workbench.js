@@ -317,16 +317,33 @@ function isPlayerStuck() {
   return false;
 }
 
+function lockToLiveEdge(video) {
+  if (video.dataset.liveLockAttached) return;
+  video.dataset.liveLockAttached = '1';
+  video.addEventListener('seeking', () => {
+    if (!video.seekable.length) return;
+    const liveEdge = video.seekable.end(video.seekable.length - 1);
+    const minAllowed = Math.max(0, liveEdge - 3); // не даём уйти дальше 3с от края
+    if (video.currentTime < minAllowed) {
+      video.currentTime = liveEdge;
+    }
+  });
+}
+
 function attachHls(playbackId) {
   const video = document.getElementById('playerVideo');
   const offline = document.getElementById('playerOffline');
+  lockToLiveEdge(video);
   const src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
 
   hlsPlayer = new Hls({
     enableWorker: true,
     lowLatencyMode: false,
-    liveSyncDurationCount: 3,
-    liveMaxLatencyDurationCount: 8,
+    liveSyncDurationCount: 2,        // ближе к живому краю (было 3)
+    liveMaxLatencyDurationCount: 4,  // было 8 — раньше давали отставать почти на весь плейлист
+    maxLiveSyncPlaybackRate: 1.15,   // если отстали — тихо ускоряется и догоняет эфир вместо рывка
+    backBufferLength: 6,             // не копим старый буфер — скраблить назад по сути нечего
+    liveDurationInfinity: true,      // помечаем поток как «живой», а не VOD с концом
     manifestLoadingMaxRetry: 8,
     levelLoadingMaxRetry: 8,
     fragLoadingMaxRetry: 8,

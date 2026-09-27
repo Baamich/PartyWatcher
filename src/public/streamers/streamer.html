@@ -8,6 +8,7 @@
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css" />
   <link rel="stylesheet" href="/streamers/streamer.css" />
+  <link rel="stylesheet" href="/streamers/live.css" />
   <title>PartyWatcher — Стример</title>
 </head>
 <body>
@@ -37,27 +38,79 @@
     <p>Стример не найден</p>
   </div>
 
-  <div id="streamerProfile" class="streamer-profile hidden">
-    <div id="banner" class="profile-banner"></div>
+  <div id="pageContent" class="hidden">
 
-    <div class="profile-header">
-      <div class="profile-avatar-wrap">
-        <div id="profileAvatar" class="profile-avatar"></div>
-        <span id="liveBadge" class="live-badge hidden">В ЭФИРЕ</span>
-      </div>
+    <!-- ===== аккордеон эфира ===== -->
+    <div id="liveStrip" class="live-strip">
+      <div class="live-strip-inner">
+        <div id="livePlayerWrap" class="live-player-wrap">
+          <video id="liveVideo" class="live-video hidden" playsinline muted></video>
+          <div id="liveOffline" class="live-offline hidden">Эфира нет</div>
 
-      <div class="profile-info">
-        <h1 id="profileName" class="profile-name"></h1>
-        <p id="profileBioShort" class="profile-bio-short"></p>
-        <button type="button" id="bioExpandBtn" class="bio-expand-btn hidden" onclick="openBioModal()">…ещё</button>
+          <div id="liveActivityCatcher"></div>
+
+          <div id="liveOverlay" class="hidden">
+            <span id="liveOverlayText">Загрузка эфира...</span>
+            <button id="liveStartBtn" class="hidden">🔊 Включить звук</button>
+          </div>
+
+          <button id="liveVolumeBtn" class="live-fs-btn" title="Громкость">🔊</button>
+          <div id="liveVolumePopup" class="hidden">
+            <input id="liveVolumeSlider" type="range" min="0" max="100" value="50">
+          </div>
+          <button id="liveFullscreenBtn" class="live-fs-btn" title="Полноэкранный режим">⛶</button>
+        </div>
+
+        <div id="liveChatSide" class="live-chat-side">
+          <div class="live-chat-header">
+            <span id="liveViewers" class="live-viewers">👁 0</span>
+          </div>
+          <div id="liveMessages"></div>
+          <form id="liveChatForm">
+            <input id="liveChatInput" placeholder="Сообщение..." autocomplete="off" maxlength="500">
+            <button type="submit">➤</button>
+          </form>
+          <div id="liveOwnerBar" class="hidden">
+            <button type="button" id="liveOwnerSettingsBtn" class="icon-btn">🛠️ Настройки трансляции</button>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <section id="vodSection" class="vod-section hidden">
-    <h2>Записи</h2>
-    <div id="vodGrid" class="vod-grid"></div>
-  </section>
+    <!-- ===== профиль + (когда открыт эфир) колонка записей ===== -->
+    <div id="profileRow" class="profile-row">
+      <div id="streamerProfile" class="streamer-profile">
+        <div id="banner" class="profile-banner"></div>
+
+        <div class="profile-header">
+          <button type="button" id="profileAvatarBtn" class="profile-avatar-wrap">
+            <div id="profileAvatar" class="profile-avatar"></div>
+            <span id="liveBadge" class="live-badge hidden">В ЭФИРЕ</span>
+          </button>
+
+          <div class="profile-info">
+            <button type="button" id="profileNameBtn" class="profile-name-btn">
+              <h1 id="profileName" class="profile-name"></h1>
+            </button>
+            <p id="profileBioShort" class="profile-bio-short"></p>
+            <button type="button" id="bioExpandBtn" class="bio-expand-btn hidden" onclick="openBioModal()">…ещё</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="vodColumn" class="vod-column hidden">
+        <h3>Записи</h3>
+        <div id="vodColumnList"></div>
+      </div>
+    </div>
+
+    <!-- ===== обычная сетка записей (когда эфир закрыт) ===== -->
+    <section id="vodSection" class="vod-section hidden">
+      <h2>Записи</h2>
+      <div id="vodGrid" class="vod-grid"></div>
+    </section>
+
+  </div>
 
   <div id="bioModal" class="modal hidden">
     <div class="modal-content bio-modal-content">
@@ -67,6 +120,22 @@
     </div>
   </div>
 
+  <div id="liveAuthModal" class="modal hidden">
+    <div class="modal-content age-gate-content">
+      <button type="button" class="modal-close" id="liveAuthModalClose" aria-label="Закрыть">×</button>
+      <div class="age-gate-icon">🔒</div>
+      <h3>Войдите, чтобы писать в чат</h3>
+      <p class="age-gate-text">Смотреть можно без аккаунта, а для сообщений нужно войти или зарегистрироваться.</p>
+      <div class="age-gate-actions">
+        <button type="button" id="liveAuthLoginBtn">Войти</button>
+        <button type="button" id="liveAuthRegisterBtn" class="icon-btn">Зарегистрироваться</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/reconnect-schedule.js"></script>
   <script src="/js/api.js"></script>
   <script src="/streamers/streamer.js"></script>
 </body>

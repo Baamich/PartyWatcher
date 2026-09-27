@@ -1,9 +1,22 @@
+function getReturnTo() {
+  const v = new URLSearchParams(location.search).get('returnTo');
+  // разрешаем только относительные внутренние пути — защита от открытого редиректа на чужой домен
+  if (v && v.startsWith('/') && !v.startsWith('//')) return v;
+  return null;
+}
+
 async function checkAuth() {
   const authBox = document.getElementById('authBox');
   const appBox = document.getElementById('appBox');
 
   try {
     const me = await api('/auth/me');
+
+    const returnTo = getReturnTo();
+    if (returnTo) {
+      location.href = returnTo;
+      return;
+    }
 
     if (authBox) authBox.classList.add('hidden');
     if (appBox) appBox.classList.remove('hidden');
@@ -25,7 +38,11 @@ async function checkAuth() {
     if (authBox) authBox.classList.remove('hidden');
     if (appBox) appBox.classList.add('hidden');
     stopAutoRefresh();
-    showLoginPanel();
+    if (new URLSearchParams(location.search).get('mode') === 'register') {
+      showRegisterPanel();
+    } else {
+      showLoginPanel();
+    }
   }
 }
 
@@ -171,6 +188,11 @@ async function login() {
         password,
       },
     });
+    const returnTo = getReturnTo();
+    if (returnTo) {
+      location.href = returnTo;
+      return;
+    }
     await checkAuth();
   } catch (err) {
     showAuthError('loginError', err.message || 'Не удалось войти');
@@ -208,6 +230,11 @@ async function register() {
       method: 'POST',
       body: { username, email, password },
     });
+    const returnTo = getReturnTo();
+    if (returnTo) {
+      location.href = returnTo;
+      return;
+    }
     await checkAuth();
   } catch (err) {
     showAuthError('registerError', err.message || 'Не удалось зарегистрироваться');
