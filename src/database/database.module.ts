@@ -13,6 +13,7 @@ import { VideoEntity } from './entities/video.entity.js'
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: 'mongodb',
         url: config.getOrThrow<string>(EnvParam.MONGO_URI),
@@ -20,6 +21,7 @@ import { VideoEntity } from './entities/video.entity.js'
         synchronize: false,
         logging: true,
         useUnifiedTopology: true,
+        ignoreUndefined: true,
         entities: [
           ChatMessageEntity,
           RoomEntity,
@@ -37,5 +39,6 @@ import { VideoEntity } from './entities/video.entity.js'
       VideoEntity,
     ]),
   ],
+  exports: [TypeOrmModule],
 })
 export class DatabaseModule {}

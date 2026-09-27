@@ -7,11 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm'
 
-export enum SupportTicketStatus {
-  UNREAD = 'unread',
-  ACCEPTED = 'accepted',
-  TRIVIAL = 'trivial',
-}
+import { SupportTicketStatus } from '../../shared/enums/support-ticket-status.enum.js'
 
 @Entity('supporttickets')
 export class SupportTicketEntity {

@@ -7,14 +7,7 @@ import {
   Index,
 } from 'typeorm'
 
-export enum VideoType {
-  YOUTUBE = 'youtube',
-  TWITCH = 'twitch',
-  VK = 'vk',
-  DRIVE = 'drive',
-  PLAYER_CAPTURE = 'player_capture',
-  DIRECT = 'direct',
-}
+import { VideoType } from '../../shared/enums/video-type.enum.js'
 
 export class VideoMeta {
   @Column({ type: 'int', array: true, default: [] })

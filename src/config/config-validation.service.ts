@@ -18,6 +18,8 @@ export class ConfigValidationService {
 
       JWT_SECRET: Joi.string().required(),
       JWT_EXPIRES_IN: Joi.string().default('7d'),
+      FORCE_SECURE_COOKIE: Joi.boolean().truthy('1').falsy('0').default(false),
+      COOKIE_DOMAIN: Joi.string().allow('').default('.partywatcher.de'),
 
       UPLOAD_DIR: Joi.string().default('uploads'),
       MAX_UPLOAD_SIZE_MB: Joi.number().default(10240),

@@ -7,6 +7,7 @@ import { EnvParam } from '../shared/enums/env.enum.js'
 @Module({
   imports: [
     PinoLoggerModule.forRootAsync({
+      inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         pinoHttp: {
           level:
