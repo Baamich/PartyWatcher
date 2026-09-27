@@ -230,17 +230,59 @@ async function doGenerateKey() {
   }
 }
 
-let currentPlayerLiveState = null; // чтобы не пересоздавать плеер на каждый тик поллинга
+let currentPlayerLiveState = null;
+let playerReconnectScheduler = null;
+let liveStatusPollTimer = null;
+
+function destroyPlayer() {
+  if (playerReconnectScheduler) {
+    try { playerReconnectScheduler.reset?.(); } catch (_) {}
+    playerReconnectScheduler = null;
+  }
+  if (hlsPlayer) {
+    try { hlsPlayer.destroy(); } catch (_) {}
+    hlsPlayer = null;
+  }
+  const video = document.getElementById('playerVideo');
+  if (video) {
+    try {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    } catch (_) {}
+  }
+}
+
+/** true, если HLS/video зависли на чёрном кадре после рестарта стрима */
+function isPlayerStuck() {
+  const video = document.getElementById('playerVideo');
+  if (!video || video.classList.contains('hidden')) return false;
+  if (video.error) return true;
+  if (video.ended) return true;
+  // типичный симптом мёртвого плейлиста после wipe: duration ~0–1с, картинки нет
+  if (video.duration > 0 && video.duration < 2.5 && video.readyState >= 1) return true;
+  if (video.readyState === 0 && currentPlayerLiveState?.startsWith('live:')) return true;
+  return false;
+}
 
 function updatePlayer(isLive, playbackId) {
-  const stateKey = isLive ? `live:${playbackId}` : 'offline';
-  if (stateKey === currentPlayerLiveState) return; // ничего не изменилось — не трогаем видео
-  currentPlayerLiveState = stateKey;
-
+  const stateKey = isLive && playbackId ? `live:${playbackId}` : 'offline';
   const video = document.getElementById('playerVideo');
   const offline = document.getElementById('playerOffline');
+  if (!video || !offline) return;
 
-  if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
+  // тот же state — выходим, НО если live и плеер залип после рестарта OBS — пересоздаём
+  if (stateKey === currentPlayerLiveState) {
+    if (stateKey !== 'offline' && isPlayerStuck()) {
+      console.warn('[player] залип после рестарта стрима — пересоздаю');
+      currentPlayerLiveState = null;
+    } else {
+      return;
+    }
+  }
+
+  currentPlayerLiveState = stateKey;
+  destroyPlayer();
 
   if (!isLive || !playbackId) {
     video.classList.add('hidden');
@@ -250,31 +292,88 @@ function updatePlayer(isLive, playbackId) {
 
   offline.classList.add('hidden');
   video.classList.remove('hidden');
-  const src = `/media/live/${playbackId}/index.m3u8`;
+  const src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
 
   if (window.Hls && Hls.isSupported()) {
-    hlsPlayer = new Hls();
+    hlsPlayer = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 8,
+      manifestLoadingMaxRetry: 6,
+      levelLoadingMaxRetry: 6,
+      fragLoadingMaxRetry: 6,
+    });
     hlsPlayer.loadSource(src);
     hlsPlayer.attachMedia(video);
 
-    const playerReconnectScheduler = createReconnectScheduler(
-      () => new Promise((resolve) => {
-        hlsPlayer.loadSource(src);
-        hlsPlayer.once(Hls.Events.MANIFEST_PARSED, () => resolve(true));
-        setTimeout(() => resolve(false), 3000);
-      }),
-      () => { offline.classList.remove('hidden'); video.classList.add('hidden'); }
+    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.play().catch(() => {});
+    });
+
+    playerReconnectScheduler = createReconnectScheduler(
+      () =>
+        new Promise((resolve) => {
+          if (!hlsPlayer) return resolve(false);
+          const retrySrc = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+          hlsPlayer.loadSource(retrySrc);
+          const onParsed = () => {
+            cleanup();
+            video.play().catch(() => {});
+            resolve(true);
+          };
+          const timer = setTimeout(() => {
+            cleanup();
+            resolve(false);
+          }, 4000);
+          function cleanup() {
+            clearTimeout(timer);
+            hlsPlayer?.off(Hls.Events.MANIFEST_PARSED, onParsed);
+          }
+          hlsPlayer.on(Hls.Events.MANIFEST_PARSED, onParsed);
+        }),
+      () => {
+        // сеть долго недоступна — покажем офлайн, поллинг снова поднимет live
+        offline.classList.remove('hidden');
+        video.classList.add('hidden');
+        currentPlayerLiveState = null;
+      }
     );
 
-    hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
-      if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        playerReconnectScheduler.start();
+    hlsPlayer.on(Hls.Events.ERROR, (_event, data) => {
+      if (!data?.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        playerReconnectScheduler?.start();
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        try {
+          hlsPlayer.recoverMediaError();
+        } catch (_) {
+          currentPlayerLiveState = null;
+          updatePlayer(true, playbackId);
+        }
+      } else {
+        currentPlayerLiveState = null;
+        updatePlayer(true, playbackId);
       }
     });
-  } else {
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = src;
+    video.play().catch(() => {});
   }
+
   video.play().catch(() => {});
+}
+
+function startLiveStatusPolling() {
+  clearInterval(liveStatusPollTimer);
+  liveStatusPollTimer = setInterval(async () => {
+    try {
+      const data = await api('/workbench/me?_=' + Date.now());
+      updatePlayer(!!data.isLive, data.streamPlaybackId);
+    } catch (err) {
+      console.warn('[liveStatusPoll]', err.message);
+    }
+  }, 3000); // чуть чаще — быстрее ловим offline/online после OBS
 }
 
 async function copyStreamKey() {
@@ -440,19 +539,6 @@ function initChat(streamerNameLower) {
   );
 }
 
-let liveStatusPollTimer = null;
-
-function startLiveStatusPolling() {
-  clearInterval(liveStatusPollTimer);
-  liveStatusPollTimer = setInterval(async () => {
-    try {
-      const data = await api('/workbench/me?_=' + Date.now());
-      updatePlayer(data.isLive, data.streamPlaybackId);
-    } catch (err) {
-      console.warn('[liveStatusPoll]', err.message);
-    }
-  }, 5000);
-}
 
 function goToMyStreamerProfile() {
   if (myStreamerNameLower) location.href = `/streamers/${encodeURIComponent(myStreamerNameLower)}`;
