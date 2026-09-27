@@ -57,10 +57,18 @@
       </div>
 
       <div id="playerPanel" class="wb-window">
-        <div class="wb-window-titlebar">Трансляция</div>
-        <div class="wb-window-content">
+        <div class="wb-window-titlebar wb-player-titlebar">
+          <span>Трансляция</span>
+          <div class="wb-live-status" id="liveStatusBadge" title="Статус эфира">
+            <span class="wb-live-dot" id="liveStatusDot"></span>
+            <span class="wb-live-label" id="liveStatusLabel">Офлайн</span>
+            <span class="wb-live-timer" id="liveStatusTimer">00:00:00</span>
+          </div>
+        </div>
+        <div class="wb-window-content wb-player-content">
           <div id="playerOffline" class="wb-player-offline">Стрим сейчас офлайн</div>
           <video id="playerVideo" class="wb-player hidden" controls muted playsinline></video>
+          <div id="playerReconnecting" class="wb-player-reconnecting hidden">Переподключение…</div>
         </div>
         <div class="wb-resize-handle"></div>
       </div>

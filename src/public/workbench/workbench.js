@@ -233,8 +233,62 @@ async function doGenerateKey() {
 let currentPlayerLiveState = null;
 let playerReconnectScheduler = null;
 let liveStatusPollTimer = null;
+let liveSinceTs = null;       // timestamp старта текущего эфира (для таймера)
+let liveTimerInterval = null;
 
-function destroyPlayer() {
+function formatLiveDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+function setLiveBadge(mode) {
+  // mode: 'offline' | 'live' | 'reconnecting'
+  const badge = document.getElementById('liveStatusBadge');
+  const label = document.getElementById('liveStatusLabel');
+  const timer = document.getElementById('liveStatusTimer');
+  if (!badge || !label || !timer) return;
+
+  badge.classList.remove('is-live', 'is-reconnecting');
+  if (mode === 'live') {
+    badge.classList.add('is-live');
+    label.textContent = 'В эфире';
+  } else if (mode === 'reconnecting') {
+    badge.classList.add('is-reconnecting');
+    label.textContent = 'Переподключение';
+  } else {
+    label.textContent = 'Офлайн';
+    timer.textContent = '00:00:00';
+  }
+}
+
+function startLiveTimer() {
+  stopLiveTimer();
+  if (!liveSinceTs) liveSinceTs = Date.now();
+  const tick = () => {
+    const el = document.getElementById('liveStatusTimer');
+    if (el && liveSinceTs) el.textContent = formatLiveDuration(Date.now() - liveSinceTs);
+  };
+  tick();
+  liveTimerInterval = setInterval(tick, 1000);
+}
+
+function stopLiveTimer() {
+  if (liveTimerInterval) {
+    clearInterval(liveTimerInterval);
+    liveTimerInterval = null;
+  }
+}
+
+function showReconnectingOverlay(show) {
+  const el = document.getElementById('playerReconnecting');
+  if (!el) return;
+  el.classList.toggle('hidden', !show);
+}
+
+function destroyPlayer({ soft = false } = {}) {
   if (playerReconnectScheduler) {
     try { playerReconnectScheduler.reset?.(); } catch (_) {}
     playerReconnectScheduler = null;
@@ -244,7 +298,7 @@ function destroyPlayer() {
     hlsPlayer = null;
   }
   const video = document.getElementById('playerVideo');
-  if (video) {
+  if (video && !soft) {
     try {
       video.pause();
       video.removeAttribute('src');
@@ -253,16 +307,92 @@ function destroyPlayer() {
   }
 }
 
-/** true, если HLS/video зависли на чёрном кадре после рестарта стрима */
 function isPlayerStuck() {
   const video = document.getElementById('playerVideo');
   if (!video || video.classList.contains('hidden')) return false;
   if (video.error) return true;
   if (video.ended) return true;
-  // типичный симптом мёртвого плейлиста после wipe: duration ~0–1с, картинки нет
   if (video.duration > 0 && video.duration < 2.5 && video.readyState >= 1) return true;
   if (video.readyState === 0 && currentPlayerLiveState?.startsWith('live:')) return true;
   return false;
+}
+
+function attachHls(playbackId) {
+  const video = document.getElementById('playerVideo');
+  const offline = document.getElementById('playerOffline');
+  const src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+
+  hlsPlayer = new Hls({
+    enableWorker: true,
+    lowLatencyMode: false,
+    liveSyncDurationCount: 3,
+    liveMaxLatencyDurationCount: 8,
+    manifestLoadingMaxRetry: 8,
+    levelLoadingMaxRetry: 8,
+    fragLoadingMaxRetry: 8,
+    manifestLoadingRetryDelay: 1000,
+    levelLoadingRetryDelay: 1000,
+  });
+  hlsPlayer.loadSource(src);
+  hlsPlayer.attachMedia(video);
+
+  hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+    showReconnectingOverlay(false);
+    setLiveBadge('live');
+    video.play().catch(() => {});
+  });
+
+  playerReconnectScheduler = createReconnectScheduler(
+    () =>
+      new Promise((resolve) => {
+        if (!hlsPlayer) return resolve(false);
+        setLiveBadge('reconnecting');
+        showReconnectingOverlay(true);
+        const retrySrc = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+        hlsPlayer.loadSource(retrySrc);
+        const onParsed = () => {
+          cleanup();
+          showReconnectingOverlay(false);
+          setLiveBadge('live');
+          video.play().catch(() => {});
+          resolve(true);
+        };
+        const timer = setTimeout(() => {
+          cleanup();
+          resolve(false);
+        }, 4000);
+        function cleanup() {
+          clearTimeout(timer);
+          hlsPlayer?.off(Hls.Events.MANIFEST_PARSED, onParsed);
+        }
+        hlsPlayer.on(Hls.Events.MANIFEST_PARSED, onParsed);
+      }),
+    () => {
+      // исчерпали попытки — не прячем плеер сразу; поллинг решит offline/live
+      showReconnectingOverlay(true);
+      setLiveBadge('reconnecting');
+    }
+  );
+
+  hlsPlayer.on(Hls.Events.ERROR, (_event, data) => {
+    if (!data?.fatal) return;
+    setLiveBadge('reconnecting');
+    showReconnectingOverlay(true);
+    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+      playerReconnectScheduler?.start();
+    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+      try {
+        hlsPlayer.recoverMediaError();
+      } catch (_) {
+        // мягкий пересоздать без сброса offline UI
+        destroyPlayer({ soft: true });
+        attachHls(playbackId);
+      }
+    } else {
+      destroyPlayer({ soft: true });
+      attachHls(playbackId);
+    }
+  });
 }
 
 function updatePlayer(isLive, playbackId) {
@@ -271,96 +401,58 @@ function updatePlayer(isLive, playbackId) {
   const offline = document.getElementById('playerOffline');
   if (!video || !offline) return;
 
-  // тот же state — выходим, НО если live и плеер залип после рестарта OBS — пересоздаём
   if (stateKey === currentPlayerLiveState) {
+    // live→live: только если реально залипли — мягкий reload HLS, без мигания offline
     if (stateKey !== 'offline' && isPlayerStuck()) {
-      console.warn('[player] залип после рестарта стрима — пересоздаю');
-      currentPlayerLiveState = null;
-    } else {
-      return;
+      console.warn('[player] залип — мягкий reload HLS');
+      setLiveBadge('reconnecting');
+      showReconnectingOverlay(true);
+      destroyPlayer({ soft: true });
+      offline.classList.add('hidden');
+      video.classList.remove('hidden');
+      if (window.Hls && Hls.isSupported()) {
+        attachHls(playbackId);
+      } else {
+        video.src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+        video.play().catch(() => {});
+      }
     }
-  }
-
-  currentPlayerLiveState = stateKey;
-  destroyPlayer();
-
-  if (!isLive || !playbackId) {
-    video.classList.add('hidden');
-    offline.classList.remove('hidden');
     return;
   }
 
-  offline.classList.add('hidden');
-  video.classList.remove('hidden');
-  const src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+  const wasLive = currentPlayerLiveState?.startsWith('live:');
+  currentPlayerLiveState = stateKey;
 
-  if (window.Hls && Hls.isSupported()) {
-    hlsPlayer = new Hls({
-      enableWorker: true,
-      lowLatencyMode: false,
-      liveSyncDurationCount: 3,
-      liveMaxLatencyDurationCount: 8,
-      manifestLoadingMaxRetry: 6,
-      levelLoadingMaxRetry: 6,
-      fragLoadingMaxRetry: 6,
-    });
-    hlsPlayer.loadSource(src);
-    hlsPlayer.attachMedia(video);
-
-    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
-      video.play().catch(() => {});
-    });
-
-    playerReconnectScheduler = createReconnectScheduler(
-      () =>
-        new Promise((resolve) => {
-          if (!hlsPlayer) return resolve(false);
-          const retrySrc = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
-          hlsPlayer.loadSource(retrySrc);
-          const onParsed = () => {
-            cleanup();
-            video.play().catch(() => {});
-            resolve(true);
-          };
-          const timer = setTimeout(() => {
-            cleanup();
-            resolve(false);
-          }, 4000);
-          function cleanup() {
-            clearTimeout(timer);
-            hlsPlayer?.off(Hls.Events.MANIFEST_PARSED, onParsed);
-          }
-          hlsPlayer.on(Hls.Events.MANIFEST_PARSED, onParsed);
-        }),
-      () => {
-        // сеть долго недоступна — покажем офлайн, поллинг снова поднимет live
-        offline.classList.remove('hidden');
-        video.classList.add('hidden');
-        currentPlayerLiveState = null;
-      }
-    );
-
-    hlsPlayer.on(Hls.Events.ERROR, (_event, data) => {
-      if (!data?.fatal) return;
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        playerReconnectScheduler?.start();
-      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-        try {
-          hlsPlayer.recoverMediaError();
-        } catch (_) {
-          currentPlayerLiveState = null;
-          updatePlayer(true, playbackId);
-        }
-      } else {
-        currentPlayerLiveState = null;
-        updatePlayer(true, playbackId);
-      }
-    });
-  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = src;
-    video.play().catch(() => {});
+  if (!isLive || !playbackId) {
+    destroyPlayer();
+    video.classList.add('hidden');
+    offline.classList.remove('hidden');
+    showReconnectingOverlay(false);
+    setLiveBadge('offline');
+    liveSinceTs = null;
+    stopLiveTimer();
+    return;
   }
 
+  // offline → live или смена playbackId
+  offline.classList.add('hidden');
+  video.classList.remove('hidden');
+  showReconnectingOverlay(false);
+
+  if (!wasLive || !liveSinceTs) {
+    liveSinceTs = Date.now();
+  }
+  setLiveBadge('live');
+  startLiveTimer();
+
+  destroyPlayer({ soft: true });
+
+  if (window.Hls && Hls.isSupported()) {
+    attachHls(playbackId);
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+    video.play().catch(() => {});
+  }
   video.play().catch(() => {});
 }
 
@@ -373,7 +465,7 @@ function startLiveStatusPolling() {
     } catch (err) {
       console.warn('[liveStatusPoll]', err.message);
     }
-  }, 3000); // чуть чаще — быстрее ловим offline/online после OBS
+  }, 3000);
 }
 
 async function copyStreamKey() {
