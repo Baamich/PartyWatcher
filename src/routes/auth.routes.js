@@ -86,6 +86,7 @@ router.post('/register', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    // streamerName не передаём — pre('validate') скопирует username
     const user = await User.create({ username, email, passwordHash });
 
     const token = signToken(user);
@@ -93,6 +94,9 @@ router.post('/register', async (req, res) => {
     res.status(201).json({ id: user._id, username: user.username, role: user.role });
   } catch (err) {
     console.error('[auth/register]', err);
+    if (err.code === 11000) {
+      return res.status(409).json({ error: 'Логин или почта уже заняты' });
+    }
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });

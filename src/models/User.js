@@ -10,8 +10,8 @@ const userSchema = new mongoose.Schema(
     createdAt: { type: Date, default: Date.now },
 
     // ---- стример ----
-    streamerName: { type: String, default: null, trim: true },
-    streamerNameLower: { type: String, default: null, unique: true, sparse: true },
+    streamerName: { type: String, default: undefined, trim: true },
+    streamerNameLower: { type: String, default: undefined, unique: true, sparse: true },
     isLive: { type: Boolean, default: false },
     liveStartedAt: { type: Date, default: null },
     streamerBio: { type: String, default: '' },
@@ -22,15 +22,28 @@ const userSchema = new mongoose.Schema(
     // ---- творческая студия ----
     streamTitle: { type: String, default: '' },
     streamDescription: { type: String, default: '' },
-    streamKey: { type: String, default: null, unique: true, sparse: true }, // секретный, для OBS
-    streamPlaybackId: { type: String, default: null, unique: true, sparse: true }, // публичный, для плеера у зрителей 
+    streamKey: { type: String, default: undefined, unique: true, sparse: true },
+    streamPlaybackId: { type: String, default: undefined, unique: true, sparse: true },
   },
   { versionKey: false }
 );
 
 userSchema.pre('validate', function (next) {
-  if (this.username) this.usernameLower = this.username.toLowerCase();
-  if (this.streamerName) this.streamerNameLower = this.streamerName.toLowerCase();
+  if (this.username) {
+    this.usernameLower = this.username.toLowerCase();
+  }
+
+  // при регистрации стример-ник = username, если не задан
+  if (!this.streamerName && this.username) {
+    this.streamerName = this.username;
+  }
+
+  if (this.streamerName) {
+    this.streamerNameLower = this.streamerName.toLowerCase();
+  } else {
+    this.streamerNameLower = undefined;
+  }
+
   next();
 });
 
