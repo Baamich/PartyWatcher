@@ -19,7 +19,7 @@ async function loadVods() {
   }
 
   if (!vods.length) {
-    list.innerHTML = '<p style="color:var(--text-muted)">Записей пока нет — они появятся после эфира.</p>';
+    list.innerHTML = '<p class="wb-subpage-hint">Записей пока нет — они появятся после эфира.</p>';
     return;
   }
 
@@ -33,32 +33,24 @@ async function loadVods() {
         : v.published
           ? '<span class="badge-pub">на профиле</span>'
           : '';
+
     card.innerHTML = `
-      <div class="vod-card-head">${escapeHtml(v.title || 'Без названия')}${statusBadge}</div>
+      <div class="vod-card-head">${escapeHtml(v.title || 'Запись эфира')}${statusBadge}</div>
       <div class="vod-meta">${fmt(v.createdAt)} · удалится ${fmt(v.expiresAt)} · ${v.status}</div>
       ${v.url
         ? `<video src="${v.url}" controls preload="metadata"></video>`
-        : '<p style="color:var(--text-muted);font-size:13px">Файл ещё пишется…</p>'}
+        : '<p class="vod-pending">Файл ещё пишется…</p>'}
+      ${v.description
+        ? `<p class="vod-desc">${escapeHtml(v.description)}</p>`
+        : ''}
       <div class="vod-actions">
-        <input data-title type="text" maxlength="140" value="${escapeHtml(v.title || '')}" placeholder="Название" />
-        <button type="button" class="icon-btn" data-save>Сохранить</button>
         <button type="button" class="icon-btn" data-pub ${v.status !== 'ready' ? 'disabled' : ''}>
           ${v.published ? 'Снять с профиля' : 'Опубликовать'}
         </button>
         <button type="button" class="icon-btn" data-del>Удалить</button>
       </div>
-      <textarea data-desc maxlength="2000" placeholder="Описание">${escapeHtml(v.description || '')}</textarea>
     `;
-    card.querySelector('[data-save]').onclick = async () => {
-      await api('/workbench/vods/' + v.id, {
-        method: 'PATCH',
-        body: {
-          title: card.querySelector('[data-title]').value,
-          description: card.querySelector('[data-desc]').value,
-        },
-      });
-      loadVods();
-    };
+
     card.querySelector('[data-pub]').onclick = async () => {
       await api('/workbench/vods/' + v.id, {
         method: 'PATCH',
@@ -75,4 +67,17 @@ async function loadVods() {
   });
 }
 
-loadVods();
+async function init() {
+  try {
+    const me = await api('/auth/me');
+    if (me.streamerName) {
+      window.__streamerName = me.streamerName.toLowerCase();
+    }
+  } catch {
+    location.href = '/index.html';
+    return;
+  }
+  loadVods();
+}
+
+init();

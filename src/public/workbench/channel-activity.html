@@ -11,7 +11,7 @@
   <title>PartyWatcher — Актив канала</title>
 </head>
 <body>
-  <div class="page-header">
+    <div class="page-header">
     <a href="/index.html" class="brand">
       <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
@@ -21,20 +21,30 @@
       <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
     </a>
     <div class="header-right">
-      <button class="icon-btn" onclick="location.href='/workbench.html'">← Назад</button>
+      <div class="corner-menu">
+        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+      </div>
     </div>
   </div>
 
-  <div class="wb-layout" style="grid-template-columns: 1fr;">
-    <div class="wb-main">
-      <section class="wb-panel">
-        <h2>Заблокированные пользователи</h2>
-        <div id="bansList"></div>
-      </section>
-      <section class="wb-panel">
-        <h2>Подписчики</h2>
-        <p style="color:var(--text-muted); font-size:14px;">Система подписок ещё не реализована — появится отдельным шагом.</p>
-      </section>
+  <div class="wb-outer">
+    <div class="wb-subpage">
+      <nav class="wb-nav wb-nav-static">
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench.html'">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/videos.html'">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
+        <button type="button" class="wb-nav-btn active">🛡️ Актив канала</button>
+      </nav>
+      <div class="wb-subpage-main">
+        <section class="wb-panel">
+          <h2>Заблокированные пользователи</h2>
+          <div id="bansList"></div>
+        </section>
+        <section class="wb-panel">
+          <h2>Подписчики</h2>
+          <p style="color:var(--text-muted); font-size:14px;">Система подписок ещё не реализована — появится отдельным шагом.</p>
+        </section>
+      </div>
     </div>
   </div>
 

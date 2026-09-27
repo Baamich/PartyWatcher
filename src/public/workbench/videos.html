@@ -9,61 +9,40 @@
   <link rel="stylesheet" href="/css/common.css" />
   <link rel="stylesheet" href="/workbench/workbench.css" />
   <title>PartyWatcher — Видеостудия</title>
-  <style>
-    .vod-page { max-width: 920px; margin: 0 auto; padding: 20px 16px 60px; }
-    .vod-page h1 { font-size: 20px; margin: 0 0 8px; }
-    .vod-page .hint { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
-    .vod-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      margin-bottom: 16px;
-    }
-    .vod-card video { width: 100%; max-height: 280px; background: #000; border-radius: 8px; }
-    .vod-card-head { font-weight: 700; margin-bottom: 6px; }
-    .vod-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
-    .vod-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-    .vod-actions input { flex: 1; min-width: 160px; }
-    .vod-card textarea { width: 100%; margin-top: 8px; min-height: 56px; }
-    .badge-pub {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: rgba(34,197,94,.15);
-      color: #22c55e;
-      margin-left: 8px;
-    }
-    .badge-rec {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: rgba(239,68,68,.15);
-      color: #ef4444;
-      margin-left: 8px;
-    }
-  </style>
 </head>
 <body>
   <div class="page-header">
-    <a href="/workbench.html" class="brand">
-      <span class="brand-text">← Творческая студия</span>
+    <a href="/index.html" class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
     </a>
     <div class="header-right">
       <div class="corner-menu">
+        <button class="icon-btn" onclick="location.href='/streamers/' + (window.__streamerName || '')">← Профиль</button>
         <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
       </div>
     </div>
   </div>
 
-  <div class="vod-page">
-    <h1>🎬 Видеостудия</h1>
-    <p class="hint">Записи эфиров хранятся 3 дня (и после публикации тоже удаляются автоматически).</p>
-    <div id="vodList"></div>
+  <div class="wb-outer">
+    <div class="wb-subpage">
+      <nav class="wb-nav wb-nav-static">
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench.html'">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn active">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
+      </nav>
+
+      <div class="wb-subpage-main">
+        <h1 class="wb-subpage-title">🎬 Видеостудия</h1>
+        <p class="wb-subpage-hint">Записи хранятся 3 дня (и после публикации тоже удаляются).</p>
+        <div id="vodList"></div>
+      </div>
+    </div>
   </div>
 
   <script src="/js/api.js"></script>
