@@ -5,11 +5,11 @@ let timeoutTarget = null;
 let hlsPlayer = null;
 
 const DEFAULT_LAYOUT = {
-  keyPanel:       { x: 20,  y: 20,  w: 480, h: 130 },
-  playerPanel:    { x: 20,  y: 170, w: 480, h: 300 },
-  settingsPanel:  { x: 20,  y: 490, w: 480, h: 280 },
-  actionLogPanel: { x: 520, y: 20,  w: 260, h: 420 },
-  chatPanel:      { x: 800, y: 20,  w: 320, h: 680 },
+  keyPanel:       { x: 220,  y: 20,  w: 480, h: 130 },
+  playerPanel:    { x: 220,  y: 170, w: 480, h: 320 },
+  settingsPanel:  { x: 220,  y: 510, w: 480, h: 300 },
+  actionLogPanel: { x: 720,  y: 20,  w: 260, h: 420 },
+  chatPanel:      { x: 1000, y: 20,  w: 320, h: 680 },
 };
 
 let currentLayout = null;
@@ -63,8 +63,21 @@ function makeDraggable(panelId) {
   });
   handle.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    el.style.left = Math.max(0, startLeft + e.clientX - dragStartX) + 'px';
-    el.style.top = Math.max(0, startTop + e.clientY - dragStartY) + 'px';
+    let newLeft = Math.max(0, startLeft + e.clientX - dragStartX);
+    let newTop = Math.max(0, startTop + e.clientY - dragStartY);
+
+    // нельзя перекрывать кнопки навигации — но можно ставить окно НИЖЕ них в той же колонке
+    const navEl = document.getElementById('wbNavFixed');
+    if (navEl) {
+      const navW = navEl.offsetWidth;
+      const navH = navEl.offsetHeight;
+      if (newLeft < navW && newTop < navH) {
+        newTop = navH + 12;
+      }
+    }
+
+    el.style.left = newLeft + 'px';
+    el.style.top = newTop + 'px';
   });
   handle.addEventListener('pointerup', () => {
     if (!dragging) return;

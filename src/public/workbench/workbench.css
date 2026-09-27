@@ -1,18 +1,33 @@
 .wb-outer {
-  display: flex;
-  gap: 24px;
   max-width: 1600px;
   margin: 0 auto;
   padding: 20px 16px 60px;
-  align-items: flex-start;
+}
+
+/* скрываем скроллбар везде, где он не нужен визуально, но колесо мыши продолжает работать */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Edge */
+}
+
+/* ---- холст: единая система координат для нава и окон ---- */
+
+.wb-canvas {
+  position: relative;
+  min-height: 900px;
 }
 
 .wb-nav {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 200px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 200px;
-  flex-shrink: 0;
+  z-index: 2;
 }
 
 .wb-nav-btn {
@@ -31,14 +46,6 @@
 .wb-nav-btn:hover { background: var(--border); color: var(--text); }
 .wb-nav-btn.active { color: var(--text); border-color: var(--accent); }
 
-/* ---- холст с перетаскиваемыми/растягиваемыми окнами ---- */
-
-.wb-canvas {
-  position: relative;
-  flex: 1;
-  min-height: 900px;
-}
-
 .wb-window {
   position: absolute;
   background: var(--surface);
@@ -48,11 +55,12 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 220px;
-  min-height: 120px;
+  min-width: 240px;
+  min-height: 130px;
 }
 
 .wb-window-titlebar {
+  flex-shrink: 0;
   padding: 8px 14px;
   background: var(--surface-alt);
   border-bottom: 1px solid var(--border);
@@ -67,8 +75,12 @@
 
 .wb-window-content {
   flex: 1;
+  min-height: 0; /* критично для флекс-контейнеров: без этого дети не сжимаются, а вылезают за рамки */
   padding: 14px 16px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .wb-resize-handle {
@@ -78,6 +90,7 @@
   width: 16px;
   height: 16px;
   cursor: nwse-resize;
+  z-index: 3;
 }
 
 .wb-resize-handle::after {
@@ -91,46 +104,13 @@
   border-bottom: 2px solid var(--text-muted);
 }
 
+/* ---- содержимое конкретных окон растягивается вместе с окном ---- */
+
 .wb-key-row {
   display: flex;
   gap: 8px;
   align-items: center;
-}
-
-/* ---- журнал действий ---- */
-
-.wb-actionlog-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.wb-actionlog-row {
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-muted);
-}
-
-.wb-actionlog-time {
-  color: var(--text-muted);
-  margin-right: 6px;
-  font-size: 11px;
-}
-
-/* мобильный вид: перетаскивание отключаем, окна идут просто друг под другом */
-@media (max-width: 900px) {
-  .wb-outer { flex-direction: column; }
-  .wb-nav { width: 100%; flex-direction: row; flex-wrap: wrap; }
-  .wb-canvas { min-height: auto; }
-  .wb-window {
-    position: static !important;
-    width: 100% !important;
-    height: auto !important;
-    margin-bottom: 16px;
-  }
-  .wb-window-titlebar { cursor: default; }
-  .wb-resize-handle { display: none; }
+  flex-shrink: 0;
 }
 
 .wb-key-input {
@@ -145,14 +125,22 @@
 }
 
 .wb-hint {
-  margin: 10px 0 0;
+  margin: 0;
   font-size: 12px;
   color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* окно настроек: заголовок и поле названия фиксированные, описание и кнопка тянутся */
+#settingsPanel .wb-window-content {
+  min-height: 0;
 }
 
 #streamDescInput {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  resize: vertical;
+  resize: none; /* размер теперь только через ресайз всего окна */
   font-family: inherit;
   font-size: 15px;
   background: var(--surface);
@@ -162,26 +150,62 @@
   padding: 10px 12px;
 }
 
-/* ---- чат ---- */
-
-.wb-chat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  height: 640px;
-  overflow: hidden;
+/* окно плеера: видео заполняет всё доступное место окна */
+#playerPanel .wb-window-content {
+  padding: 0;
 }
 
-.wb-chat-head {
+.wb-player,
+.wb-player-offline {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  background: #000;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.wb-player {
+  object-fit: contain;
+}
+
+/* ---- журнал действий ---- */
+
+.wb-actionlog-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  overflow-y: auto;
+}
+
+.wb-actionlog-row {
+  padding: 6px 0;
   border-bottom: 1px solid var(--border);
-  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.wb-actionlog-time {
+  color: var(--text-muted);
+  margin-right: 6px;
+  font-size: 11px;
+}
+
+/* ---- чат ---- */
+
+.wb-chat-titlebar {
+  cursor: move;
+}
+
+.wb-chat-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .wb-viewers {
@@ -190,8 +214,18 @@
   font-weight: 500;
 }
 
+.wb-clear-chat-btn {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+#chatPanel .wb-window-content {
+  padding: 0;
+}
+
 .wb-chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px 14px;
   display: flex;
@@ -228,6 +262,7 @@
 }
 
 .wb-chat-input-row {
+  flex-shrink: 0;
   display: flex;
   gap: 8px;
   padding: 10px 14px;
@@ -236,6 +271,26 @@
 
 .wb-chat-input-row input { flex: 1; margin: 0; }
 .wb-chat-input-row button { width: auto; }
+
+/* ---- прочие модалки ---- */
+
+.wb-rtmp-copy-btn {
+  display: inline;
+  width: auto;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.wb-rtmp-copy-btn:hover {
+  background: var(--border);
+}
 
 .wb-timeout-inputs {
   display: flex;
@@ -276,99 +331,18 @@
   color: var(--danger);
 }
 
-.wb-key-input {
-  max-width: 220px; /* было flex:1 на всю ширину — теперь компактнее */
-  flex: none;
-}
-
-.wb-player {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #000;
-  border-radius: var(--radius-sm);
-  display: block;
-}
-
-.wb-player-offline {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #000;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-}
-
-.wb-chat-head-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.wb-clear-chat-btn {
-  font-size: 12px;
-  padding: 4px 8px;
-}
-
-.wb-rtmp-copy-btn {
-  display: inline;
-  width: auto;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-family: monospace;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: none;
-}
-
-.wb-rtmp-copy-btn:hover {
-  background: var(--border);
-}
-
-.wb-chat-titlebar {
-  cursor: move;
-}
-
-.wb-chat-content {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-
-.wb-chat-messages {
-  flex: 1;
-  padding: 10px 14px;
-}
-
-.wb-chat-head-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.wb-clear-chat-btn {
-  padding: 2px 6px;
-  font-size: 12px;
-}
-
-.wb-rtmp-copy-btn {
-  display: inline;
-  width: auto;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-family: monospace;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: none;
-}
-
-.wb-rtmp-copy-btn:hover {
-  background: var(--border);
+/* мобильный вид: перетаскивание отключаем, окна идут просто друг под другом */
+@media (max-width: 900px) {
+  .wb-canvas { min-height: auto; }
+  .wb-nav { position: static; width: 100%; flex-direction: row; flex-wrap: wrap; margin-bottom: 16px; }
+  .wb-window {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    margin-bottom: 16px;
+  }
+  .wb-window-content { overflow: visible; }
+  #streamDescInput { resize: vertical; min-height: 100px; }
+  .wb-window-titlebar { cursor: default; }
+  .wb-resize-handle { display: none; }
 }

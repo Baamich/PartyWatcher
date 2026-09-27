@@ -1,11 +1,13 @@
 const NodeMediaServer = require('node-media-server');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const User = require('../models/User');
 const streamKeyCache = require('./streamKeyCache');
 
 const MEDIA_ROOT = path.join(process.cwd(), 'media');
-fs.mkdirSync(path.join(MEDIA_ROOT, 'live'), { recursive: true }); // страховка: NMS/ffmpeg не всегда создают вложенные папки сами
+const FFMPEG_PATH = '/usr/bin/ffmpeg';
+fs.mkdirSync(path.join(MEDIA_ROOT, 'live'), { recursive: true });
 
 const nmsConfig = {
   rtmp: {
@@ -20,27 +22,54 @@ const nmsConfig = {
     mediaroot: MEDIA_ROOT,
     allow_origin: '*',
   },
-  trans: {
-    ffmpeg: '/usr/bin/ffmpeg',
-    tasks: [
-      {
-        app: 'live',
-        hls: true,
-        hlsFlags: '[hls_time=2:hls_list_size=6:hls_flags=delete_segments]',
-        dash: false,
-      },
-    ],
-  },
+  // trans больше не используем — его внутреннее срабатывание непрозрачно и
+  // молча ничего не делало при живом RTMP-соединении, без единой строки в логах.
+  // Сами запускаем ffmpeg дочерним процессом ниже — так видно любую ошибку.
 };
 
 const nms = new NodeMediaServer(nmsConfig);
+const activeTranscodes = new Map(); // key -> ChildProcess
 
-// ВАЖНО: не трогаем session.publishStreamPath и другие внутренности NMS —
-// в v4.4.3 подмена этого поля ломает внутреннее состояние broadcast_server
-// и вызывает падение процесса при donePublish. Файлы HLS пишутся туда, куда
-// FFmpeg и так пишет по умолчанию (папка = имя ключа); публичный доступ
-// через playbackId организован отдельным Express-роутом в server.js,
-// который ищет нужную папку по обратному соответствию (см. streamKeyCache).
+function startTranscode(key) {
+  if (activeTranscodes.has(key)) return; // уже запущен
+  const outDir = path.join(MEDIA_ROOT, 'live', key);
+  fs.mkdirSync(outDir, { recursive: true });
+  const outputPath = path.join(outDir, 'index.m3u8');
+
+  const args = [
+    '-i', `rtmp://127.0.0.1:1935/live/${key}`,
+    '-c:v', 'copy',
+    '-c:a', 'aac',
+    '-f', 'hls',
+    '-hls_time', '2',
+    '-hls_list_size', '6',
+    '-hls_flags', 'delete_segments',
+    outputPath,
+  ];
+
+  console.log('[rtmp] запускаю ffmpeg для ключа', key);
+  const proc = spawn(FFMPEG_PATH, args);
+  activeTranscodes.set(key, proc);
+
+  proc.stderr.on('data', (chunk) => {
+    console.log(`[ffmpeg:${key}]`, chunk.toString().trim());
+  });
+  proc.on('error', (err) => {
+    console.error(`[ffmpeg:${key}] не удалось запустить процесс`, err);
+  });
+  proc.on('exit', (code, signal) => {
+    console.log(`[rtmp] ffmpeg для ${key} завершился (code=${code}, signal=${signal})`);
+    activeTranscodes.delete(key);
+  });
+}
+
+function stopTranscode(key) {
+  const proc = activeTranscodes.get(key);
+  if (proc) {
+    proc.kill('SIGINT');
+    activeTranscodes.delete(key);
+  }
+}
 
 nms.on('prePublish', (id, streamPath) => {
   try {
@@ -64,10 +93,22 @@ nms.on('prePublish', (id, streamPath) => {
   }
 });
 
+nms.on('postPublish', (id, streamPath) => {
+  try {
+    if (!streamPath) return;
+    const key = streamPath.split('/').pop();
+    startTranscode(key);
+  } catch (err) {
+    console.error('[rtmp] postPublish handler error', err);
+  }
+});
+
 nms.on('donePublish', (id, streamPath) => {
   try {
     if (!streamPath) return;
     const key = streamPath.split('/').pop();
+    stopTranscode(key);
+
     const entry = streamKeyCache.get(key);
     if (entry) {
       User.updateOne({ _id: entry.userId }, { isLive: false }).catch((err) =>

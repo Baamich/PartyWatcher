@@ -32,13 +32,13 @@
   <div id="saveToast" class="save-toast hidden"></div>
 
   <div class="wb-outer">
-    <nav class="wb-nav">
-      <button type="button" class="wb-nav-btn active">📡 Управление трансляцией</button>
-      <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
-      <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
-    </nav>
-
     <div id="wbCanvas" class="wb-canvas">
+
+      <nav id="wbNavFixed" class="wb-nav">
+        <button type="button" class="wb-nav-btn active">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
+      </nav>
 
       <div id="keyPanel" class="wb-window">
         <div class="wb-window-titlebar">Ключ трансляции</div>
@@ -82,7 +82,7 @@
       <div id="actionLogPanel" class="wb-window">
         <div class="wb-window-titlebar">Журнал действий</div>
         <div class="wb-window-content">
-          <div id="actionLogList" class="wb-actionlog-list"></div>
+          <div id="actionLogList" class="wb-actionlog-list no-scrollbar"></div>
         </div>
         <div class="wb-resize-handle"></div>
       </div>
@@ -96,7 +96,7 @@
           </div>
         </div>
         <div class="wb-window-content wb-chat-content">
-          <div id="chatMessages" class="wb-chat-messages"></div>
+          <div id="chatMessages" class="wb-chat-messages no-scrollbar"></div>
           <div class="wb-chat-input-row">
             <input id="chatInput" placeholder="Написать в чат…" onkeydown="handleChatKey(event)" />
             <button type="button" onclick="sendChatMessage()">➤</button>
