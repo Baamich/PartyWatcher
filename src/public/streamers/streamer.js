@@ -168,7 +168,15 @@ function startLiveSession() {
       video.volume = parseInt(document.getElementById('liveVolumeSlider').value, 10) / 100;
       overlay.classList.add('hidden');
     };
-    attachLiveHls(currentStreamer.streamPlaybackId);
+    try {
+      if (typeof Hls === 'undefined') throw new Error('hls.js не загрузился');
+      attachLiveHls(currentStreamer.streamPlaybackId);
+    } catch (e) {
+      console.error('[live] не удалось запустить плеер:', e.message);
+      overlay.classList.add('hidden');
+      offline.classList.remove('hidden');
+      offline.textContent = 'Не удалось загрузить плеер';
+    }
   } else {
     video.classList.add('hidden');
     offline.classList.remove('hidden');
@@ -356,3 +364,45 @@ document.getElementById('liveAuthRegisterBtn')?.addEventListener('click', () => 
 });
 
 document.getElementById('liveChatInput')?.addEventList
+document.getElementById('liveChatInput')?.addEventListener('focus', (e) => {
+  if (!liveIsAuthed) { e.target.blur(); openLiveAuthModal(); }
+});
+
+document.getElementById('liveChatForm')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!liveIsAuthed) { openLiveAuthModal(); return; }
+  const input = document.getElementById('liveChatInput');
+  const text = input.value.trim();
+  if (!text || !liveSocket) return;
+  liveSocket.emit('chat:send', { text });
+  input.value = '';
+});
+
+// ---------- инициализация страницы ----------
+
+async function loadProfile() {
+  const nameLower = getNameFromUrl();
+  if (!nameLower) {
+    document.getElementById('notFound').classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const streamer = await api('/streamers/' + encodeURIComponent(nameLower));
+    currentStreamer = streamer;
+    renderProfile(streamer);
+    await checkOwnership(nameLower);
+    await loadVods(nameLower);
+
+    document.getElementById('pageContent').classList.remove('hidden');
+
+    if (streamer.isLive && streamer.streamPlaybackId) {
+      setTimeout(openLiveStrip, 120);
+    }
+  } catch (err) {
+    console.warn('[loadProfile]', err.message);
+    document.getElementById('notFound').classList.remove('hidden');
+  }
+}
+
+loadProfile();
