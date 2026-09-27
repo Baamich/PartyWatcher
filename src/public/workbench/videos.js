@@ -112,21 +112,29 @@ async function loadVods() {
         </div>
       </div>
       <div class="vod-card-body">
-        <div class="vod-media">
-          ${v.url
-            ? `<video src="${v.url}" controls preload="metadata"></video>`
-            : '<div class="vod-pending">Файл ещё пишется…</div>'}
-        </div>
-        <div class="vod-side">
-          <div class="vod-field"><span class="vod-field-label">Название</span><span class="vod-field-val">${escapeHtml(v.title || '—')}</span></div>
-          <div class="vod-field"><span class="vod-field-label">Описание</span><span class="vod-field-val">${escapeHtml(v.description || '—')}</span></div>
-          <div class="vod-side-actions">
-            <button type="button" class="icon-btn" data-pub ${v.status !== 'ready' ? 'disabled' : ''}>
-              ${v.published ? 'Снять с профиля' : 'Опубликовать'}
-            </button>
-            <button type="button" class="icon-btn" data-edit>Редактировать</button>
-            <button type="button" class="icon-btn vod-btn-danger" data-del>Удалить</button>
+        <div class="vod-main">
+          <div class="vod-media">
+            ${v.url
+              ? `<video src="${v.url}" controls preload="metadata"></video>`
+              : '<div class="vod-pending">Файл ещё пишется…</div>'}
           </div>
+          <div class="vod-meta-fields">
+            <div class="vod-field">
+              <span class="vod-field-label">Название</span>
+              <span class="vod-field-val">${escapeHtml(v.title || '—')}</span>
+            </div>
+            <div class="vod-field">
+              <span class="vod-field-label">Описание</span>
+              <span class="vod-field-val">${escapeHtml(v.description || '—')}</span>
+            </div>
+          </div>
+        </div>
+        <div class="vod-side-actions">
+          <button type="button" class="icon-btn" data-pub ${v.status !== 'ready' ? 'disabled' : ''}>
+            ${v.published ? 'Снять с профиля' : 'Опубликовать'}
+          </button>
+          <button type="button" class="icon-btn" data-edit>Редактировать</button>
+          <button type="button" class="icon-btn vod-btn-danger" data-del>Удалить</button>
         </div>
       </div>
     `;
