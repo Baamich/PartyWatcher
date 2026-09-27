@@ -3,14 +3,17 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const User = require('../models/User');
+const StreamVod = require('../models/StreamVod');
 const streamKeyCache = require('./streamKeyCache');
 
 const MEDIA_ROOT = path.join(process.cwd(), 'media');
+const VOD_ROOT = path.join(MEDIA_ROOT, 'vod');
 const FFMPEG_PATH = '/usr/bin/ffmpeg';
-/** сколько ждать postPublish после donePublish (типичный reconnect OBS) */
 const PUBLISH_GRACE_MS = 12_000;
+const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 дня
 
 fs.mkdirSync(path.join(MEDIA_ROOT, 'live'), { recursive: true });
+fs.mkdirSync(VOD_ROOT, { recursive: true });
 
 const nmsConfig = {
   rtmp: {
@@ -29,63 +32,63 @@ const nmsConfig = {
 
 const nms = new NodeMediaServer(nmsConfig);
 
-/** @type {Map<string, { proc: import('child_process').ChildProcess, gen: number }>} */
+/** @type {Map<string, { proc: import('child_process').ChildProcess, gen: number, vodId: string|null }>} */
 const activeTranscodes = new Map();
-/** generation по ключу */
 const keyGen = new Map();
-/** отложенный полный stop после donePublish */
-const pendingStopTimers = new Map(); // key -> Timeout
+const pendingStopTimers = new Map();
 
 function nextGen(key) {
   const g = (keyGen.get(key) || 0) + 1;
   keyGen.set(key, g);
   return g;
 }
-
 function currentGen(key) {
   return keyGen.get(key) || 0;
 }
-
 function keyFromStreamPath(streamPath) {
   if (!streamPath || typeof streamPath !== 'string') return null;
   const parts = streamPath.replace(/^\//, '').split('/');
   if (parts[0] !== 'live' || !parts[1]) return null;
   return parts[1];
 }
-
 function mediaDir(key) {
   return path.join(MEDIA_ROOT, 'live', key);
 }
-
-function wipeMedia(key) {
+function wipeLiveMedia(key) {
   try {
     fs.rmSync(mediaDir(key), { recursive: true, force: true });
   } catch (_) {}
 }
 
-async function setLive(key, isLive) {
+async function setLiveState(key, { isLive, touchStartedAt }) {
   const entry = streamKeyCache.get(key);
   if (!entry) {
-    console.warn('[rtmp] ключ не в кэше, isLive не обновлён:', key.slice(0, 8), '→', isLive);
-    return;
+    console.warn('[rtmp] ключ не в кэше:', key.slice(0, 8));
+    return null;
+  }
+  const update = { isLive: !!isLive };
+  if (isLive && touchStartedAt) {
+    update.liveStartedAt = new Date();
+  }
+  if (!isLive) {
+    update.liveStartedAt = null;
   }
   try {
-    const r = await User.updateOne(
-      { _id: entry.userId },
-      { $set: { isLive: !!isLive } }
-    );
+    const r = await User.updateOne({ _id: entry.userId }, { $set: update });
     console.log(
-      `[rtmp] isLive=${!!isLive}, key=${key.slice(0, 8)}… matched=${r.matchedCount} modified=${r.modifiedCount}`
+      `[rtmp] isLive=${!!isLive}, startedAt=${touchStartedAt ? 'set' : isLive ? 'keep' : 'clear'}, key=${key.slice(0, 8)}… mod=${r.modifiedCount}`
     );
+    return entry;
   } catch (err) {
-    console.error('[rtmp] isLive update error', err.message);
+    console.error('[rtmp] setLiveState', err.message);
+    return entry;
   }
 }
 
-function killProc(proc) {
+function killProc(proc, signal = 'SIGTERM') {
   if (!proc || proc.killed) return;
   try {
-    proc.kill('SIGKILL');
+    proc.kill(signal);
   } catch (_) {}
 }
 
@@ -97,68 +100,104 @@ function clearPendingStop(key) {
   }
 }
 
-/** полный стоп: kill ffmpeg + wipe + isLive=false */
-function finalizeStop(key) {
+async function finalizeVod(vodId, status = 'ready') {
+  if (!vodId) return;
+  try {
+    await StreamVod.updateOne({ _id: vodId, status: 'recording' }, { $set: { status } });
+  } catch (e) {
+    console.warn('[rtmp] finalizeVod', e.message);
+  }
+}
+
+async function finalizeStop(key) {
   clearPendingStop(key);
-  nextGen(key); // отменить отложенные start
+  nextGen(key);
 
   const entry = activeTranscodes.get(key);
   if (entry) {
-    killProc(entry.proc);
+    // SIGTERM — чтобы mp4 успел закрыться; через 3с — SIGKILL
+    killProc(entry.proc, 'SIGTERM');
+    setTimeout(() => killProc(entry.proc, 'SIGKILL'), 3000);
     activeTranscodes.delete(key);
-    console.log('[rtmp] finalizeStop: убил ffmpeg', key.slice(0, 8) + '…');
+    await finalizeVod(entry.vodId, 'ready');
+    console.log('[rtmp] finalizeStop', key.slice(0, 8) + '…');
   }
 
-  wipeMedia(key);
-  setLive(key, false);
+  wipeLiveMedia(key);
+  await setLiveState(key, { isLive: false, touchStartedAt: false });
 }
 
-/**
- * donePublish: не рвём сразу — ждём grace.
- * Если за это время снова postPublish — таймер снимут, эфир продолжается.
- */
 function scheduleStop(key) {
   clearPendingStop(key);
-  console.log(
-    `[rtmp] donePublish → grace ${PUBLISH_GRACE_MS / 1000}s, жду reconnect:`,
-    key.slice(0, 8) + '…'
-  );
-
+  console.log(`[rtmp] donePublish → grace ${PUBLISH_GRACE_MS / 1000}s`, key.slice(0, 8) + '…');
   const timer = setTimeout(() => {
     pendingStopTimers.delete(key);
-    console.log('[rtmp] grace истёк, полный stop:', key.slice(0, 8) + '…');
+    console.log('[rtmp] grace истёк → stop', key.slice(0, 8) + '…');
     finalizeStop(key);
   }, PUBLISH_GRACE_MS);
-
   pendingStopTimers.set(key, timer);
 }
 
-function startTranscode(key) {
-  // reconnect в пределах grace — не считаем новым эфиром
+async function createVodDoc(key) {
+  const entry = streamKeyCache.get(key);
+  if (!entry) return null;
+  const user = await User.findById(entry.userId).select('streamerNameLower streamTitle streamDescription').lean();
+  if (!user) return null;
+
+  const vodId = new (require('mongoose').Types.ObjectId)();
+  const userDir = path.join(VOD_ROOT, String(entry.userId));
+  fs.mkdirSync(userDir, { recursive: true });
+  const fileRel = `vod/${entry.userId}/${vodId}.mp4`;
+  const abs = path.join(MEDIA_ROOT, fileRel);
+
+  await StreamVod.create({
+    _id: vodId,
+    userId: entry.userId,
+    streamerNameLower: user.streamerNameLower,
+    title: user.streamTitle || 'Запись эфира',
+    description: user.streamDescription || '',
+    fileRel,
+    published: false,
+    status: 'recording',
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + VOD_TTL_MS),
+  });
+
+  return { vodId: String(vodId), abs, fileRel };
+}
+
+async function startTranscode(key) {
   const hadPendingStop = pendingStopTimers.has(key);
   clearPendingStop(key);
 
   const prev = activeTranscodes.get(key);
   if (prev) {
-    // уже есть ffmpeg (reconnect, пока старый play ещё жив) — не трогаем, только isLive
     if (hadPendingStop) {
-      console.log('[rtmp] reconnect в grace — оставляю ffmpeg, isLive=true', key.slice(0, 8) + '…');
-      setLive(key, true);
+      console.log('[rtmp] reconnect в grace — ffmpeg жив', key.slice(0, 8) + '…');
+      // не трогаем liveStartedAt
+      await setLiveState(key, { isLive: true, touchStartedAt: false });
       return;
     }
-    killProc(prev.proc);
+    killProc(prev.proc, 'SIGKILL');
     activeTranscodes.delete(key);
   }
 
   const gen = nextGen(key);
-
-  // wipe только если это не быстрый reconnect (не было pending stop)
-  // при первом старте / после полного stop — чистим
-  if (!hadPendingStop) {
-    wipeMedia(key);
-  }
+  if (!hadPendingStop) wipeLiveMedia(key);
   fs.mkdirSync(mediaDir(key), { recursive: true });
-  const outputPath = path.join(mediaDir(key), 'index.m3u8');
+  const hlsPath = path.join(mediaDir(key), 'index.m3u8');
+
+  // новый VOD только если не reconnect в grace
+  let vodMeta = null;
+  if (!hadPendingStop) {
+    try {
+      vodMeta = await createVodDoc(key);
+    } catch (e) {
+      console.error('[rtmp] createVodDoc', e.message);
+    }
+  } else if (prev?.vodId) {
+    vodMeta = { vodId: prev.vodId };
+  }
 
   const args = [
     '-hide_banner',
@@ -168,6 +207,7 @@ function startTranscode(key) {
     '-probesize', '32',
     '-analyzeduration', '0',
     '-i', `rtmp://127.0.0.1:1935/live/${key}`,
+    // HLS для зрителей
     '-c:v', 'copy',
     '-c:a', 'copy',
     '-f', 'hls',
@@ -175,73 +215,53 @@ function startTranscode(key) {
     '-hls_list_size', '6',
     '-hls_flags', 'delete_segments+omit_endlist+independent_segments',
     '-hls_allow_cache', '0',
-    '-start_number', '0',
-    outputPath,
+    hlsPath,
   ];
 
-  setTimeout(() => {
-    if (currentGen(key) !== gen) {
-      console.log('[rtmp] start отменён (новый gen)', key.slice(0, 8) + '…');
-      return;
-    }
+  // параллельная запись VOD (fragmented mp4 переживает обрыв)
+  if (vodMeta?.abs) {
+    args.push(
+      '-c:v', 'copy',
+      '-c:a', 'copy',
+      '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+      '-f', 'mp4',
+      vodMeta.abs
+    );
+  }
 
-    // на всякий случай: если за 400мс снова успели поставить pending stop — не стартуем
-    if (pendingStopTimers.has(key)) {
-      console.log('[rtmp] start отменён (pending stop)', key.slice(0, 8) + '…');
-      return;
-    }
+  setTimeout(async () => {
+    if (currentGen(key) !== gen) return;
+    if (pendingStopTimers.has(key)) return;
 
-    console.log('[rtmp] запускаю ffmpeg', key.slice(0, 8) + '…', 'gen=', gen, hadPendingStop ? '(после grace-cancel)' : '');
+    console.log('[rtmp] ffmpeg start', key.slice(0, 8) + '…', 'gen=', gen, 'vod=', vodMeta?.vodId || '—');
     const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-    activeTranscodes.set(key, { proc, gen });
+    activeTranscodes.set(key, { proc, gen, vodId: vodMeta?.vodId || null });
 
-    proc.stderr.on('data', (chunk) => {
-      const line = chunk.toString().trim();
+    proc.stderr.on('data', (c) => {
+      const line = c.toString().trim();
       if (line) console.log(`[ffmpeg:${key.slice(0, 8)}]`, line);
     });
-    proc.on('error', (err) => {
-      console.error(`[ffmpeg:${key.slice(0, 8)}] spawn error`, err.message);
-      if (activeTranscodes.get(key)?.gen === gen) activeTranscodes.delete(key);
-    });
     proc.on('exit', (code, signal) => {
-      console.log(`[rtmp] ffmpeg ${key.slice(0, 8)}… exit code=${code} signal=${signal} gen=${gen}`);
+      console.log(`[rtmp] ffmpeg exit ${key.slice(0, 8)}… code=${code} signal=${signal}`);
       const cur = activeTranscodes.get(key);
       if (cur && cur.gen === gen) activeTranscodes.delete(key);
     });
 
-    setLive(key, true);
+    // таймер эфира: только при реальном старте, не при grace-reconnect
+    await setLiveState(key, { isLive: true, touchStartedAt: !hadPendingStop });
   }, 400);
 }
 
 nms.on('postPublish', (session) => {
-  const streamPath = session?.streamPath || '';
-  const key = keyFromStreamPath(streamPath);
-  console.log('[rtmp] postPublish', streamPath);
+  const key = keyFromStreamPath(session?.streamPath || '');
+  console.log('[rtmp] postPublish', session?.streamPath);
   if (key) startTranscode(key);
 });
 
 nms.on('donePublish', (session) => {
-  const streamPath = session?.streamPath || '';
-  const key = keyFromStreamPath(streamPath);
-  console.log('[rtmp] donePublish', streamPath);
+  const key = keyFromStreamPath(session?.streamPath || '');
+  console.log('[rtmp] donePublish', session?.streamPath);
   if (key) scheduleStop(key);
 });
-
-if (typeof nms.on !== 'function') {
-  try {
-    const Context = require('node-media-server/src/core/context.js');
-    Context.eventEmitter.on('postPublish', (session) => {
-      const key = keyFromStreamPath(session?.streamPath);
-      if (key) startTranscode(key);
-    });
-    Context.eventEmitter.on('donePublish', (session) => {
-      const key = keyFromStreamPath(session?.streamPath);
-      if (key) scheduleStop(key);
-    });
-    console.log('[rtmp] подписался на Context.eventEmitter');
-  } catch (e) {
-    console.error('[rtmp] события NMS:', e.message);
-  }
-}
 
 module.exports = nms;

@@ -190,7 +190,7 @@ async function loadSettings() {
     document.getElementById('streamDescInput').value = data.streamDescription || '';
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
     setGenerateBtnState(!!data.streamKeyMasked);
-    updatePlayer(data.isLive, data.streamPlaybackId);
+    updatePlayer(data.isLive, data.streamPlaybackId, data.liveStartedAt);
   } catch (err) {
     console.warn('[loadSettings]', err.message);
   }
@@ -395,7 +395,7 @@ function attachHls(playbackId) {
   });
 }
 
-function updatePlayer(isLive, playbackId) {
+function updatePlayer(isLive, playbackId, liveStartedAt) {
   const stateKey = isLive && playbackId ? `live:${playbackId}` : 'offline';
   const video = document.getElementById('playerVideo');
   const offline = document.getElementById('playerOffline');
@@ -416,6 +416,11 @@ function updatePlayer(isLive, playbackId) {
         video.src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
         video.play().catch(() => {});
       }
+    }
+    // подтянуть таймер с сервера, если пришёл liveStartedAt
+    if (isLive && liveStartedAt) {
+      liveSinceTs = new Date(liveStartedAt).getTime();
+      if (!liveTimerInterval) startLiveTimer();
     }
     return;
   }
@@ -439,7 +444,9 @@ function updatePlayer(isLive, playbackId) {
   video.classList.remove('hidden');
   showReconnectingOverlay(false);
 
-  if (!wasLive || !liveSinceTs) {
+  if (liveStartedAt) {
+    liveSinceTs = new Date(liveStartedAt).getTime();
+  } else if (!wasLive || !liveSinceTs) {
     liveSinceTs = Date.now();
   }
   setLiveBadge('live');
@@ -461,7 +468,7 @@ function startLiveStatusPolling() {
   liveStatusPollTimer = setInterval(async () => {
     try {
       const data = await api('/workbench/me?_=' + Date.now());
-      updatePlayer(!!data.isLive, data.streamPlaybackId);
+      updatePlayer(!!data.isLive, data.streamPlaybackId, data.liveStartedAt);
     } catch (err) {
       console.warn('[liveStatusPoll]', err.message);
     }

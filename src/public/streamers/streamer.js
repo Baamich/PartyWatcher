@@ -59,6 +59,32 @@ async function checkOwnership(nameLower) {
   }
 }
 
+async function loadVods(nameLower) {
+  try {
+    const vods = await api('/streamers/' + encodeURIComponent(nameLower) + '/vods');
+    const section = document.getElementById('vodSection');
+    const grid = document.getElementById('vodGrid');
+    if (!vods.length || !section || !grid) return;
+    section.classList.remove('hidden');
+    grid.innerHTML = '';
+    vods.forEach((v) => {
+      const card = document.createElement('div');
+      card.className = 'vod-card';
+      card.innerHTML = `
+        <video src="${v.url}" controls preload="metadata"></video>
+        <div class="vod-card-body">
+          <div class="vod-card-title"></div>
+          <div class="vod-card-meta"></div>
+        </div>`;
+      card.querySelector('.vod-card-title').textContent = v.title || 'Запись';
+      card.querySelector('.vod-card-meta').textContent = new Date(v.createdAt).toLocaleString('ru-RU');
+      grid.appendChild(card);
+    });
+  } catch (e) {
+    console.warn('[loadVods]', e.message);
+  }
+}
+
 async function loadProfile() {
   const nameLower = getNameFromUrl();
   if (!nameLower) {
@@ -71,6 +97,7 @@ async function loadProfile() {
     renderProfile(streamer);
     document.getElementById('streamerProfile').classList.remove('hidden');
     checkOwnership(nameLower);
+    loadVods(nameLower);
   } catch (err) {
     console.warn('[loadProfile]', err.message);
     document.getElementById('notFound').classList.remove('hidden');

@@ -12,7 +12,8 @@ const userSchema = new mongoose.Schema(
     // ---- стример ----
     streamerName: { type: String, default: null, trim: true },
     streamerNameLower: { type: String, default: null, unique: true, sparse: true },
-    isLive: { type: Boolean, default: false }, // TODO: пока заглушка, потом будет выставляться реальным трекером эфира
+    isLive: { type: Boolean, default: false },
+    liveStartedAt: { type: Date, default: null },
     streamerBio: { type: String, default: '' },
     streamerAvatarUrl: { type: String, default: null },
     streamerBannerUrl: { type: String, default: null },

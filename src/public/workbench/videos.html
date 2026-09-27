@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="/js/theme.js"></script>
+  <script src="/js/favicon.js"></script>
+  <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/workbench/workbench.css" />
+  <title>PartyWatcher — Видеостудия</title>
+  <style>
+    .vod-page { max-width: 920px; margin: 0 auto; padding: 20px 16px 60px; }
+    .vod-page h1 { font-size: 20px; margin: 0 0 8px; }
+    .vod-page .hint { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+    .vod-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .vod-card video { width: 100%; max-height: 280px; background: #000; border-radius: 8px; }
+    .vod-card-head { font-weight: 700; margin-bottom: 6px; }
+    .vod-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+    .vod-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .vod-actions input { flex: 1; min-width: 160px; }
+    .vod-card textarea { width: 100%; margin-top: 8px; min-height: 56px; }
+    .badge-pub {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(34,197,94,.15);
+      color: #22c55e;
+      margin-left: 8px;
+    }
+    .badge-rec {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(239,68,68,.15);
+      color: #ef4444;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <a href="/workbench.html" class="brand">
+      <span class="brand-text">← Творческая студия</span>
+    </a>
+    <div class="header-right">
+      <div class="corner-menu">
+        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="vod-page">
+    <h1>🎬 Видеостудия</h1>
+    <p class="hint">Записи эфиров хранятся 3 дня (и после публикации тоже удаляются автоматически).</p>
+    <div id="vodList"></div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/workbench/videos.js"></script>
+</body>
+</html>

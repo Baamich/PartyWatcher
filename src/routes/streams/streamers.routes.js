@@ -110,6 +110,41 @@ router.patch('/me', auth, async (req, res) => {
   }
 });
 
+const StreamVod = require('../../models/StreamVod');
+
+// GET /streamers/:name/vods — только опубликованные и не истёкшие
+router.get('/:name/vods', async (req, res) => {
+  try {
+    const nameLower = String(req.params.name || '').trim().toLowerCase();
+    if (!nameLower) return res.status(400).json({ error: 'Не указано имя стримера' });
+
+    const vods = await StreamVod.find({
+      streamerNameLower: nameLower,
+      published: true,
+      status: 'ready',
+      expiresAt: { $gt: new Date() },
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('title description fileRel createdAt durationSec')
+      .lean();
+
+    res.json(
+      vods.map((v) => ({
+        id: v._id,
+        title: v.title,
+        description: v.description,
+        createdAt: v.createdAt,
+        durationSec: v.durationSec,
+        url: `/media/${v.fileRel}`,
+      }))
+    );
+  } catch (err) {
+    console.error('[GET /streamers/:name/vods]', err);
+    res.status(500).json({ error: 'Не удалось загрузить записи' });
+  }
+});
+
 // GET /streamers/:name — публичные данные одного стримера (регистр не важен)
 router.get('/:name', async (req, res) => {
   try {

@@ -9,6 +9,7 @@ const config = require('./config');
 const connectDB = require('./db/mongoose');
 const registerRoomSocket = require('./sockets/roomSocket');
 require('./services/roomCleanup');
+require('./services/vodCleanup');
 
 const authRoutes = require('./routes/auth.routes');
 const roomRoutes = require('./routes/room.routes');
@@ -51,9 +52,8 @@ async function start() {
   app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir)));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
+  app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
 
-  // Раздача HLS по публичному playbackId: реальные файлы FFmpeg пишет в папку
-  // с именем секретного streamKey — секретный ключ никогда не попадает в URL зрителя.
   const streamKeyCache = require('./services/streamKeyCache');
   app.get('/media/live/:playbackId/:file', (req, res) => {
     const key = streamKeyCache.keyByPlaybackId(req.params.playbackId);

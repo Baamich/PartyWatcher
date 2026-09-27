@@ -9,6 +9,7 @@ const WorkbenchLayout = require('../../models/WorkbenchLayout');
 const ChannelActionLog = require('../../models/ChannelActionLog');
 const auth = require('../../middleware/auth');
 const streamKeyCache = require('../../services/streamKeyCache');
+const StreamVod = require('../../models/StreamVod');
 
 // Проверяем реальность по диску: обновляется ли index.m3u8 прямо сейчас,
 // а не полагаемся только на флаг isLive в базе (который мог не долететь/не записаться).
@@ -43,6 +44,7 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
   // подчищаем рассинхрон флага в базе, раз уж всё равно проверили диск
   if (liveNow !== me.isLive) {
     me.isLive = liveNow;
+    if (!liveNow) me.liveStartedAt = null;
     await me.save();
   }
 
@@ -52,8 +54,11 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     streamKeyMasked: maskKey(me.streamKey),
     streamPlaybackId: me.streamPlaybackId || null,
     isLive: liveNow,
+    liveStartedAt: liveNow ? (me.liveStartedAt || null) : null,
   });
 });
+
+
 
 // POST /workbench/stream-key/generate — сгенерировать (или перевыпустить) пару ключ+playbackId
 router.post('/stream-key/generate', auth, requireStreamer, async (req, res) => {
@@ -142,6 +147,48 @@ router.get('/action-log', auth, requireStreamer, async (req, res) => {
     .limit(100)
     .lean();
   res.json(entries);
+});
+// GET /workbench/vods
+router.get('/vods', auth, requireStreamer, async (req, res) => {
+  const vods = await StreamVod.find({ userId: req.streamerUser._id })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .lean();
+  res.json(
+    vods.map((v) => ({
+      id: v._id,
+      title: v.title,
+      description: v.description,
+      published: v.published,
+      status: v.status,
+      createdAt: v.createdAt,
+      expiresAt: v.expiresAt,
+      durationSec: v.durationSec,
+      url: v.status === 'ready' ? `/media/${v.fileRel}` : null,
+    }))
+  );
+});
+
+// PATCH /workbench/vods/:id
+router.patch('/vods/:id', auth, requireStreamer, async (req, res) => {
+  const vod = await StreamVod.findOne({ _id: req.params.id, userId: req.streamerUser._id });
+  if (!vod) return res.status(404).json({ error: 'Не найдено' });
+  if (req.body.title !== undefined) vod.title = String(req.body.title).slice(0, 140);
+  if (req.body.description !== undefined) vod.description = String(req.body.description).slice(0, 2000);
+  if (req.body.published !== undefined) vod.published = !!req.body.published;
+  await vod.save();
+  res.json({ ok: true, published: vod.published, title: vod.title, description: vod.description });
+});
+
+// DELETE /workbench/vods/:id
+router.delete('/vods/:id', auth, requireStreamer, async (req, res) => {
+  const vod = await StreamVod.findOne({ _id: req.params.id, userId: req.streamerUser._id });
+  if (!vod) return res.status(404).json({ error: 'Не найдено' });
+  try {
+    fs.unlinkSync(path.join(process.cwd(), 'media', vod.fileRel));
+  } catch (_) {}
+  await vod.deleteOne();
+  res.json({ ok: true });
 });
 
 module.exports = router;

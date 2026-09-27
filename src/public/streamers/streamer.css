@@ -126,3 +126,33 @@
   color: var(--text-muted);
   font-size: 16px;
 }
+
+.vod-section {
+  max-width: 1100px;
+  margin: 28px auto 0;
+  padding: 0 16px 40px;
+}
+.vod-section h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+.vod-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.vod-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.vod-card video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  display: block;
+}
+.vod-card-body { padding: 10px 12px; }
+.vod-card-title { font-weight: 700; font-size: 14px; margin: 0 0 4px; }
+.vod-card-meta { font-size: 12px; color: var(--text-muted); }
