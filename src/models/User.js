@@ -33,11 +33,6 @@ userSchema.pre('validate', function (next) {
     this.usernameLower = this.username.toLowerCase();
   }
 
-  // при регистрации стример-ник = username, если не задан
-  if (!this.streamerName && this.username) {
-    this.streamerName = this.username;
-  }
-
   if (this.streamerName) {
     this.streamerNameLower = this.streamerName.toLowerCase();
   } else {
