@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 
 const config = require('./config');
 const connectDB = require('./db/mongoose');
+const User = require('./models/User');
 const registerRoomSocket = require('./sockets/roomSocket');
 require('./services/roomCleanup');
 require('./services/vodCleanup');
@@ -34,6 +35,14 @@ const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails
 async function start() {
   await connectDB();
 
+  const staleReset = await User.updateMany(
+    { isLive: true },
+    { $set: { isLive: false, liveStartedAt: null } }
+  );
+  if (staleReset.modifiedCount) {
+    console.log(`[boot] сброшено зависших isLive: ${staleReset.modifiedCount}`);
+  }
+
   const app = express();
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: '*' } });
@@ -55,12 +64,17 @@ async function start() {
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
 
   const streamKeyCache = require('./services/streamKeyCache');
-  app.get('/media/live/:playbackId/:file', (req, res) => {
+  app.get('/media/live/:playbackId/*', (req, res) => {
     const key = streamKeyCache.keyByPlaybackId(req.params.playbackId);
     if (!key) return res.status(404).end();
 
-    const safeFile = path.basename(req.params.file); // защита от path traversal
-    const filePath = path.join(process.cwd(), 'media', 'live', key, safeFile);
+    const liveDir = path.join(process.cwd(), 'media', 'live', key);
+    const rel = path.normalize(req.params[0] || '').replace(/^(\.\.[/\\])+/, '');
+    const filePath = path.join(liveDir, rel);
+
+    // защита от path traversal — итоговый путь обязан остаться внутри папки этого ключа
+    if (filePath !== liveDir && !filePath.startsWith(liveDir + path.sep)) return res.status(400).end();
+
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) res.status(404).end();
     });

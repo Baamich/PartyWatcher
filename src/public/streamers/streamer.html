@@ -54,16 +54,23 @@
             <button id="liveStartBtn" class="hidden">🔊 Включить звук</button>
           </div>
 
+          <button id="liveChatToggleBtn" class="live-fs-btn hidden" type="button" title="Чат">💬</button>
           <button id="liveVolumeBtn" class="live-fs-btn" title="Громкость">🔊</button>
           <div id="liveVolumePopup" class="hidden">
             <input id="liveVolumeSlider" type="range" min="0" max="100" value="50">
           </div>
           <button id="liveFullscreenBtn" class="live-fs-btn" title="Полноэкранный режим">⛶</button>
+
+          <button id="liveQualityBtn" class="live-fs-btn live-quality-btn" title="Настройки качества">⚙️</button>
+          <div id="liveQualityPopup" class="hidden"></div>
+
+          <!-- плавающий чат в fullscreen (тот же #liveChatSide, просто перестилизуется в CSS) -->
         </div>
 
         <div id="liveChatSide" class="live-chat-side">
           <div class="live-chat-header">
             <span id="liveViewers" class="live-viewers">👁 0</span>
+            <button type="button" id="liveClearChatBtn" class="live-clear-chat-btn hidden" title="Очистить чат">🧹</button>
           </div>
           <div id="liveMessages"></div>
           <form id="liveChatForm">
@@ -75,6 +82,11 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ===== кнопка-шеврон между эфиром и профилем ===== -->
+    <div class="live-toggle-wrap">
+      <button type="button" id="liveToggleChevronBtn" class="live-toggle-chevron" title="Показать/скрыть эфир">⌄</button>
     </div>
 
     <!-- ===== профиль + (когда открыт эфир) колонка записей ===== -->
@@ -133,7 +145,7 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+  <script src="/vendor/hls.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/js/api.js"></script>

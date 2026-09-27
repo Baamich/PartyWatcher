@@ -71,7 +71,7 @@ async function checkOwnership(nameLower) {
   }
 }
 
-// ---------- записи (сетка снизу / колонка сбоку — одни и те же данные) ----------
+// ---------- записи ----------
 
 function vodEscapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -83,6 +83,7 @@ function renderVodGrid(vods) {
   vods.forEach((v) => {
     const card = document.createElement('div');
     card.className = 'vod-card';
+    card.dataset.url = v.url;
     card.innerHTML = `
       <video src="${v.url}" controls preload="metadata"></video>
       <div class="vod-card-body">
@@ -99,13 +100,30 @@ function renderVodColumn(vods) {
   const list = document.getElementById('vodColumnList');
   list.innerHTML = '';
   vods.forEach((v) => {
-    const row = document.createElement('div');
-    row.className = 'vod-column-item';
-    row.innerHTML = `
-      <span class="vod-column-title">${vodEscapeHtml(v.title || 'Запись')}</span>
-      <span class="vod-column-meta">${new Date(v.createdAt).toLocaleString('ru-RU')}</span>`;
-    row.onclick = () => window.open(v.url, '_blank');
-    list.appendChild(row);
+    const card = document.createElement('div');
+    card.className = 'vod-card';
+    card.innerHTML = `
+      <video src="${v.url}" preload="metadata" muted></video>
+      <div class="vod-card-body">
+        <div class="vod-card-title"></div>
+        <div class="vod-card-meta"></div>
+      </div>`;
+    card.querySelector('.vod-card-title').textContent = v.title || 'Запись';
+    card.querySelector('.vod-card-meta').textContent = new Date(v.createdAt).toLocaleString('ru-RU');
+    card.onclick = () => switchToVodPlayback(v);
+    list.appendChild(card);
+  });
+}
+
+function switchToVodPlayback(v) {
+  closeLiveStrip();
+  requestAnimationFrame(() => {
+    const grid = document.getElementById('vodGrid');
+    const target = grid.querySelector(`.vod-card[data-url="${CSS.escape(v.url)}"] video`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.play().catch(() => {});
+    }
   });
 }
 
@@ -139,6 +157,7 @@ function openLiveStrip() {
   if (liveOpen) return;
   liveOpen = true;
   document.getElementById('liveStrip').classList.add('open');
+  document.getElementById('liveToggleChevronBtn').classList.add('open');
   switchVodLayout(true);
   startLiveSession();
 }
@@ -147,6 +166,7 @@ function closeLiveStrip() {
   if (!liveOpen) return;
   liveOpen = false;
   document.getElementById('liveStrip').classList.remove('open');
+  document.getElementById('liveToggleChevronBtn').classList.remove('open');
   switchVodLayout(false);
   stopLiveSession();
 }
@@ -185,7 +205,10 @@ function startLiveSession() {
 
   connectLiveChat(getNameFromUrl());
 
-  if (isOwnerFlag) document.getElementById('liveOwnerBar').classList.remove('hidden');
+  if (isOwnerFlag) {
+    document.getElementById('liveOwnerBar').classList.remove('hidden');
+    document.getElementById('liveClearChatBtn').classList.remove('hidden');
+  }
 }
 
 function stopLiveSession() {
@@ -211,12 +234,14 @@ function stopLiveSession() {
 
   document.getElementById('liveMessages').innerHTML = '';
   document.getElementById('liveVolumePopup').classList.add('hidden');
+  document.getElementById('liveQualityPopup').classList.add('hidden');
 }
 
 document.getElementById('profileAvatarBtn')?.addEventListener('click', toggleLiveStrip);
 document.getElementById('profileNameBtn')?.addEventListener('click', toggleLiveStrip);
+document.getElementById('liveToggleChevronBtn')?.addEventListener('click', toggleLiveStrip);
 
-// ---------- HLS-плеер ----------
+// ---------- HLS-плеер + качество ----------
 
 function lockToLiveEdge(video) {
   if (video.dataset.liveLockAttached) return;
@@ -229,11 +254,43 @@ function lockToLiveEdge(video) {
   });
 }
 
+function populateQualityMenu(levels) {
+  const popup = document.getElementById('liveQualityPopup');
+  popup.innerHTML = '';
+
+  const makeOption = (label, levelIndex) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'live-quality-option';
+    btn.textContent = label;
+    if ((levelIndex === -1 && liveHls.currentLevel === -1) || liveHls.currentLevel === levelIndex) {
+      btn.classList.add('active');
+    }
+    btn.onclick = () => {
+      liveHls.currentLevel = levelIndex;
+      popup.querySelectorAll('.live-quality-option').forEach((el) => el.classList.remove('active'));
+      btn.classList.add('active');
+      popup.classList.add('hidden');
+    };
+    return btn;
+  };
+
+  popup.appendChild(makeOption('Авто', -1));
+
+  const sorted = levels
+    .map((lvl, idx) => ({ idx, height: lvl.height || 0 }))
+    .sort((a, b) => b.height - a.height);
+
+  sorted.forEach(({ idx, height }) => {
+    popup.appendChild(makeOption(height ? `${height}p` : `Уровень ${idx}`, idx));
+  });
+}
+
 function attachLiveHls(playbackId) {
   const video = document.getElementById('liveVideo');
   lockToLiveEdge(video);
 
-  const src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+  const src = `/media/live/${playbackId}/master.m3u8?t=${Date.now()}`;
 
   liveHls = new Hls({
     enableWorker: true,
@@ -252,16 +309,17 @@ function attachLiveHls(playbackId) {
   liveHls.loadSource(src);
   liveHls.attachMedia(video);
 
-  liveHls.on(Hls.Events.MANIFEST_PARSED, () => {
+  liveHls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
     document.getElementById('liveOverlay').classList.add('hidden');
     video.classList.remove('hidden');
     video.play().catch(() => {});
+    populateQualityMenu(data.levels || []);
   });
 
   livePlayerReconnect = createReconnectScheduler(
     () => new Promise((resolve) => {
       if (!liveHls) return resolve(false);
-      const retrySrc = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+      const retrySrc = `/media/live/${playbackId}/master.m3u8?t=${Date.now()}`;
       liveHls.loadSource(retrySrc);
       const onParsed = () => { cleanup(); video.play().catch(() => {}); resolve(true); };
       const timer = setTimeout(() => { cleanup(); resolve(false); }, 4000);
@@ -281,19 +339,89 @@ function attachLiveHls(playbackId) {
 }
 
 document.getElementById('liveVolumeBtn')?.addEventListener('click', () => {
+  document.getElementById('liveQualityPopup').classList.add('hidden');
   document.getElementById('liveVolumePopup').classList.toggle('hidden');
 });
 document.getElementById('liveVolumeSlider')?.addEventListener('input', (e) => {
   document.getElementById('liveVideo').volume = parseInt(e.target.value, 10) / 100;
 });
+document.getElementById('liveQualityBtn')?.addEventListener('click', () => {
+  document.getElementById('liveVolumePopup').classList.add('hidden');
+  document.getElementById('liveQualityPopup').classList.toggle('hidden');
+});
+
+// ---------- фуллскрин: убираем докнутый чат, показываем кнопку + плавающую панель ----------
+
+function liveIsFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
 document.getElementById('liveFullscreenBtn')?.addEventListener('click', () => {
   const wrap = document.querySelector('.live-strip-inner');
-  if (document.fullscreenElement || document.webkitFullscreenElement) {
+  if (liveIsFullscreen()) {
     (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
   } else {
     (wrap.requestFullscreen || wrap.webkitRequestFullscreen)?.call(wrap);
   }
 });
+
+document.addEventListener('fullscreenchange', onLiveFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onLiveFullscreenChange);
+
+function onLiveFullscreenChange() {
+  const wrap = document.querySelector('.live-strip-inner');
+  const chatToggle = document.getElementById('liveChatToggleBtn');
+  const chatSide = document.getElementById('liveChatSide');
+  const isFs = liveIsFullscreen();
+
+  wrap?.classList.toggle('fs-active', isFs);
+  chatToggle?.classList.toggle('hidden', !isFs);
+
+  if (!isFs) {
+    chatSide?.classList.remove('fs-open');
+  }
+}
+
+document.getElementById('liveChatToggleBtn')?.addEventListener('click', () => {
+  document.getElementById('liveChatSide')?.classList.toggle('fs-open');
+});
+
+// перетаскивание плавающей панели чата в fullscreen (только за шапку)
+(function initLiveChatDrag() {
+  const panel = document.getElementById('liveChatSide');
+  const handle = document.querySelector('#liveChatSide .live-chat-header');
+  if (!panel || !handle) return;
+
+  let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (!liveIsFullscreen() || e.target.closest('button')) return;
+    const rect = panel.getBoundingClientRect();
+    const parentRect = panel.parentElement.getBoundingClientRect();
+    origLeft = rect.left - parentRect.left;
+    origTop = rect.top - parentRect.top;
+    startX = e.clientX; startY = e.clientY;
+    dragging = true;
+    try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const parentRect = panel.parentElement.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    let newLeft = Math.max(0, Math.min(origLeft + (e.clientX - startX), parentRect.width - panelRect.width));
+    let newTop = Math.max(0, Math.min(origTop + (e.clientY - startY), parentRect.height - panelRect.height));
+    panel.style.left = newLeft + 'px';
+    panel.style.top = newTop + 'px';
+  });
+
+  handle.addEventListener('pointerup', (e) => {
+    dragging = false;
+    try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+  });
+})();
+
 document.getElementById('liveOwnerSettingsBtn')?.addEventListener('click', () => {
   location.href = '/workbench.html';
 });
@@ -304,17 +432,48 @@ function liveEscapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function buildLiveMessageHtml(msg) {
+  if (msg.deleted) return `<span style="color:var(--text-muted);font-style:italic;">Сообщение удалено</span>`;
+
+  const modBtns = isOwnerFlag ? `
+    <button type="button" class="live-mod-btn" title="Удалить" onclick="liveDeleteMessage('${msg._id}')">🗑️</button>
+    <button type="button" class="live-mod-btn" title="Заблокировать" onclick="liveBanUser('${msg.senderId}', '${liveEscapeHtml(msg.senderUsername)}')">🚫</button>
+    <button type="button" class="live-mod-btn" title="Ограничить чат" onclick="liveTimeoutUser('${msg.senderId}', '${liveEscapeHtml(msg.senderUsername)}')">⏱️</button>
+  ` : '';
+
+  return `${modBtns}<b>${liveEscapeHtml(msg.senderUsername)}:</b> ${liveEscapeHtml(msg.text)}`;
+}
+
 function renderLiveMessage(msg) {
   const box = document.getElementById('liveMessages');
   if (!box) return;
   const row = document.createElement('div');
   row.dataset.id = msg._id;
-  row.innerHTML = msg.deleted
-    ? `<span style="color:var(--text-muted);font-style:italic;">Сообщение удалено</span>`
-    : `<b>${liveEscapeHtml(msg.senderUsername)}:</b> ${liveEscapeHtml(msg.text)}`;
+  row.innerHTML = buildLiveMessageHtml(msg);
   box.appendChild(row);
   box.scrollTop = box.scrollHeight;
 }
+
+function liveDeleteMessage(messageId) {
+  liveSocket?.emit('chat:delete', { messageId });
+}
+function liveBanUser(userId, username) {
+  if (!confirm(`Заблокировать ${username} в этом канале навсегда?`)) return;
+  liveSocket?.emit('chat:ban', { userId, username });
+}
+function liveTimeoutUser(userId, username) {
+  const secStr = prompt(`На сколько секунд ограничить чат для ${username}?`, '300');
+  const seconds = parseInt(secStr, 10);
+  if (!seconds || seconds <= 0) return;
+  liveSocket?.emit('chat:timeout', { userId, username, seconds });
+}
+window.liveDeleteMessage = liveDeleteMessage;
+window.liveBanUser = liveBanUser;
+window.liveTimeoutUser = liveTimeoutUser;
+
+document.getElementById('liveClearChatBtn')?.addEventListener('click', () => {
+  if (confirm('Очистить весь чат для всех зрителей?')) liveSocket?.emit('chat:clear');
+});
 
 function connectLiveChat(nameLower) {
   liveSocket = io('/chat', { reconnection: false });
@@ -363,7 +522,6 @@ document.getElementById('liveAuthRegisterBtn')?.addEventListener('click', () => 
   location.href = '/index.html?mode=register&returnTo=' + encodeURIComponent(location.pathname);
 });
 
-document.getElementById('liveChatInput')?.addEventList
 document.getElementById('liveChatInput')?.addEventListener('focus', (e) => {
   if (!liveIsAuthed) { e.target.blur(); openLiveAuthModal(); }
 });

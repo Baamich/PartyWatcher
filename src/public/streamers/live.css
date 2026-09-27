@@ -1,4 +1,4 @@
-/* ===== аккордеон эфира: анимация сверху вниз через grid-template-rows ===== */
+/* ===== аккордеон эфира ===== */
 
 .live-strip {
   display: grid;
@@ -72,6 +72,8 @@
 }
 #liveOverlay button { width: auto; padding: 14px 28px; font-size: 16px; }
 
+/* ===== круглые кнопки над плеером ===== */
+
 .live-fs-btn {
   position: absolute;
   z-index: 6;
@@ -88,6 +90,14 @@
 }
 #liveFullscreenBtn { right: 10px; }
 #liveVolumeBtn { right: 56px; }
+#liveChatToggleBtn { right: 102px; }
+
+/* кнопка качества — внизу справа, отдельно от верхних */
+.live-quality-btn {
+  top: auto;
+  bottom: 10px;
+  right: 10px;
+}
 
 #liveVolumePopup {
   position: absolute;
@@ -102,19 +112,38 @@
 #liveVolumePopup.hidden { display: none; }
 #liveVolumePopup input { width: 100px; }
 
-/* фуллскрин на весь блок (видео+чат вместе) */
-.live-strip-inner:fullscreen,
-.live-strip-inner:-webkit-full-screen {
-  background: var(--bg);
-  padding: 16px;
-  box-sizing: border-box;
+#liveQualityPopup {
+  position: absolute;
+  z-index: 7;
+  bottom: 56px;
+  right: 10px;
+  min-width: 120px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.live-strip-inner:fullscreen .live-player-wrap,
-.live-strip-inner:-webkit-full-screen .live-player-wrap {
-  aspect-ratio: auto;
+#liveQualityPopup.hidden { display: none; }
+.live-quality-option {
+  background: none;
+  border: none;
+  color: #fff;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+}
+.live-quality-option.active {
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 700;
 }
 
-/* ===== чат сбоку от плеера ===== */
+/* ===== чат в обычном режиме — сбоку, докнут ===== */
 
 .live-chat-side {
   width: 320px;
@@ -134,7 +163,23 @@
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
+.live-clear-chat-btn {
+  width: auto;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  box-shadow: none;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.live-clear-chat-btn.hidden { display: none; }
 
 #liveMessages {
   flex: 1;
@@ -147,6 +192,18 @@
   flex-direction: column;
   gap: 4px;
 }
+
+.live-mod-btn {
+  width: auto;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 2px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 2px;
+}
+.live-mod-btn:hover { background: none; }
 
 #liveChatForm {
   flex-shrink: 0;
@@ -166,7 +223,87 @@
 #liveOwnerBar.hidden { display: none; }
 #liveOwnerBar button { width: 100%; }
 
-/* ===== профиль + колонка записей рядом ===== */
+/* ===== fullscreen: докнутый чат прячем, вместо него — плавающая стеклянная панель ===== */
+
+.live-strip-inner:fullscreen,
+.live-strip-inner:-webkit-full-screen {
+  background: var(--bg);
+  padding: 16px;
+  box-sizing: border-box;
+}
+.live-strip-inner:fullscreen .live-player-wrap,
+.live-strip-inner:-webkit-full-screen .live-player-wrap {
+  aspect-ratio: auto;
+}
+
+.live-strip-inner.fs-active .live-chat-side {
+  position: absolute;
+  z-index: 8;
+  top: 60px;
+  left: 16px;
+  width: min(340px, calc(100% - 24px));
+  height: min(440px, calc(100% - 24px));
+  min-width: 220px;
+  min-height: 200px;
+  background: rgba(28, 28, 32, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  border-radius: 16px;
+  display: none;
+}
+.live-strip-inner.fs-active .live-chat-side.fs-open {
+  display: flex;
+}
+.live-strip-inner.fs-active .live-chat-header {
+  cursor: move;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.75);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px 16px 0 0;
+}
+.live-strip-inner.fs-active #liveMessages { color: #fff; }
+.live-strip-inner.fs-active #liveChatForm {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+}
+.live-strip-inner.fs-active #liveChatForm input {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+}
+
+/* ===== шеврон-переключатель между эфиром и профилем ===== */
+
+.live-toggle-wrap {
+  display: flex;
+  justify-content: center;
+  margin: -14px 0 6px;
+  position: relative;
+  z-index: 3;
+}
+
+.live-toggle-chevron {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease;
+}
+.live-toggle-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* ===== профиль + колонка записей рядом (без подсветки при наведении) ===== */
 
 .profile-row {
   display: flex;
@@ -196,7 +333,6 @@
   cursor: pointer;
   display: block;
 }
-.profile-name-btn:hover .profile-name { color: var(--accent); }
 
 .vod-column {
   width: 260px;
@@ -211,24 +347,25 @@
   color: var(--text-muted);
 }
 
-.vod-column-item {
+#vodColumnList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
+  gap: 10px;
 }
-.vod-column-item:hover .vod-column-title { color: var(--accent); }
 
-.vod-column-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
+/* карточка записи в узкой колонке — переиспользуем .vod-card, просто компактнее */
+.vod-column .vod-card {
+  cursor: pointer;
+  margin-bottom: 0;
 }
-.vod-column-meta {
+.vod-column .vod-card video {
+  pointer-events: none; /* клик всегда идёт на карточку целиком, не открывает нативные controls */
+}
+.vod-column .vod-card-title {
+  font-size: 12px;
+}
+.vod-column .vod-card-meta {
   font-size: 11px;
-  color: var(--text-muted);
 }
 
 @media (max-width: 900px) {

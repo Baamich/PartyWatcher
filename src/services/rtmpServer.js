@@ -12,6 +12,12 @@ const FFMPEG_PATH = '/usr/bin/ffmpeg';
 const GRACE_AT_MS = [5_000, 7_000, 12_000, 20_000];
 const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
+const RENDITIONS = [
+  { name: 'source', copy: true },
+  { name: '1080', height: 1080, vBitrate: '4500k', vMaxrate: '5000k', vBufsize: '9000k', aBitrate: '160k' },
+  { name: '480', height: 480, vBitrate: '1400k', vMaxrate: '1500k', vBufsize: '2800k', aBitrate: '96k' },
+];
+
 fs.mkdirSync(path.join(MEDIA_ROOT, 'live'), { recursive: true });
 fs.mkdirSync(VOD_ROOT, { recursive: true });
 
@@ -34,7 +40,6 @@ const nms = new NodeMediaServer(nmsConfig);
 
 /** @type {Map<string, { proc: import('child_process').ChildProcess, gen: number, vodId: string|null }>} */
 const activeTranscodes = new Map();
-/** текущая сессия эфира: один VOD на весь эфир, пока не finalizeStop */
 const sessionMeta = new Map(); // key -> { vodId, abs }
 const keyGen = new Map();
 const pendingStopTimers = new Map();
@@ -79,7 +84,6 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
     }
 
     if (touchStartedAt) {
-      // liveStartedAt ставим ТОЛЬКО если ещё null — иначе таймер не сбрасывается
       const r = await User.updateOne(
         { _id: entry.userId },
         [
@@ -145,7 +149,6 @@ async function finalizeStop(key) {
     await finalizeVod(entry.vodId, 'ready');
     console.log('[rtmp] finalizeStop', key.slice(0, 8) + '…', 'vod=', entry.vodId || '—');
   } else {
-    // ffmpeg уже умер, но VOD сессии ещё recording
     const meta = sessionMeta.get(key);
     if (meta?.vodId) await finalizeVod(meta.vodId, 'ready');
   }
@@ -176,7 +179,6 @@ function scheduleStop(key) {
 
     const delay = Math.max(0, GRACE_AT_MS[step] - (Date.now() - t0));
     const timer = setTimeout(() => {
-      // postPublish мог снять таймер через clearPendingStop
       if (!pendingStopTimers.has(key)) return;
 
       step += 1;
@@ -230,7 +232,11 @@ async function createVodDoc(key) {
   return { vodId: String(vodId), abs, fileRel };
 }
 
-function spawnFfmpeg(key, gen, hlsPath, vodAbs, vodId) {
+/** Собирает аргументы ffmpeg под всю ABR-лестницу + master-плейлист + (опционально) VOD-запись. */
+function buildFfmpegArgs(key, hlsRootDir, vodAbs) {
+  const inputUrl = `rtmp://127.0.0.1:1935/live/${key}`;
+  const transcodeRenditions = RENDITIONS.filter((r) => !r.copy);
+
   const args = [
     '-hide_banner',
     '-loglevel', 'error',
@@ -238,19 +244,61 @@ function spawnFfmpeg(key, gen, hlsPath, vodAbs, vodId) {
     '-flags', 'low_delay',
     '-probesize', '32',
     '-analyzeduration', '0',
-    '-i', `rtmp://127.0.0.1:1935/live/${key}`,
-    '-c:v', 'copy',
-    '-c:a', 'copy',
+    '-i', inputUrl,
+  ];
+
+  if (transcodeRenditions.length) {
+    const splitOutputs = transcodeRenditions.map((_, i) => `[t${i}]`).join('');
+    const filterParts = [`[0:v]split=${transcodeRenditions.length}${splitOutputs}`];
+    transcodeRenditions.forEach((r, i) => {
+      filterParts.push(`[t${i}]scale=-2:${r.height}[s${i}]`);
+    });
+    args.push('-filter_complex', filterParts.join('; '));
+  }
+
+  const varStreamMapParts = [];
+  let vIdx = 0;
+  let aIdx = 0;
+
+  RENDITIONS.forEach((r) => {
+    if (r.copy) {
+      args.push('-map', '0:v', `-c:v:${vIdx}`, 'copy');
+      args.push('-map', '0:a', `-c:a:${aIdx}`, 'copy');
+    } else {
+      const si = transcodeRenditions.indexOf(r);
+      args.push(
+        '-map', `[s${si}]`,
+        `-c:v:${vIdx}`, 'libx264',
+        '-preset', 'veryfast',
+        '-tune', 'zerolatency',
+        `-b:v:${vIdx}`, r.vBitrate,
+        `-maxrate:v:${vIdx}`, r.vMaxrate,
+        `-bufsize:v:${vIdx}`, r.vBufsize,
+        `-force_key_frames:v:${vIdx}`, 'expr:gte(t,n_forced*1)'
+      );
+      args.push('-map', '0:a', `-c:a:${aIdx}`, 'aac', `-b:a:${aIdx}`, r.aBitrate);
+    }
+    varStreamMapParts.push(`v:${vIdx},a:${aIdx},name:${r.name}`);
+    vIdx += 1;
+    aIdx += 1;
+  });
+
+  args.push(
     '-f', 'hls',
     '-hls_time', '1',
     '-hls_list_size', '4',
     '-hls_flags', 'delete_segments+omit_endlist+independent_segments',
     '-hls_allow_cache', '0',
-    hlsPath,
-  ];
+    '-master_pl_name', 'master.m3u8',
+    '-var_stream_map', varStreamMapParts.join(' '),
+    '-hls_segment_filename', path.join(hlsRootDir, '%v', 'seg_%d.ts'),
+    path.join(hlsRootDir, '%v', 'index.m3u8')
+  );
 
   if (vodAbs) {
     args.push(
+      '-map', '0:v',
+      '-map', '0:a',
       '-c:v', 'copy',
       '-c:a', 'copy',
       '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
@@ -258,6 +306,17 @@ function spawnFfmpeg(key, gen, hlsPath, vodAbs, vodId) {
       vodAbs
     );
   }
+
+  return args;
+}
+
+function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId) {
+  // папки под каждый уровень качества — ffmpeg их сам не создаёт
+  RENDITIONS.forEach((r) => {
+    fs.mkdirSync(path.join(hlsRootDir, r.name), { recursive: true });
+  });
+
+  const args = buildFfmpegArgs(key, hlsRootDir, vodAbs);
 
   console.log('[rtmp] ffmpeg start', key.slice(0, 8) + '…', 'gen=', gen, 'vod=', vodId || '—');
   const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -273,7 +332,6 @@ function spawnFfmpeg(key, gen, hlsPath, vodAbs, vodId) {
     const cur = activeTranscodes.get(key);
     if (cur && cur.gen === gen) {
       activeTranscodes.delete(key);
-      // RTMP оборвался без donePublish — даём grace, вдруг OBS переподключится
       if (!pendingStopTimers.has(key)) {
         scheduleStop(key);
       }
@@ -282,11 +340,9 @@ function spawnFfmpeg(key, gen, hlsPath, vodAbs, vodId) {
 }
 
 async function startTranscode(key) {
-  // отменяем отложенный stop (reconnect)
   const hadPendingStop = pendingStopTimers.has(key);
   clearPendingStop(key);
 
-  // Уже крутится ffmpeg — лишний postPublish / "already has a publisher"
   const prev = activeTranscodes.get(key);
   if (prev) {
     console.log('[rtmp] ffmpeg уже есть → skip postPublish', key.slice(0, 8) + '…');
@@ -295,16 +351,14 @@ async function startTranscode(key) {
   }
 
   const gen = nextGen(key);
-  fs.mkdirSync(mediaDir(key), { recursive: true });
-  const hlsPath = path.join(mediaDir(key), 'index.m3u8');
+  const hlsRootDir = mediaDir(key);
 
-  // Один VOD на сессию эфира
   let meta = sessionMeta.get(key);
   const isNewSession = !meta;
 
   if (isNewSession) {
     wipeLiveMedia(key);
-    fs.mkdirSync(mediaDir(key), { recursive: true });
+    fs.mkdirSync(hlsRootDir, { recursive: true });
     try {
       meta = await createVodDoc(key);
       if (meta) sessionMeta.set(key, meta);
@@ -314,15 +368,8 @@ async function startTranscode(key) {
     }
   } else {
     console.log('[rtmp] продолжаю сессию VOD', key.slice(0, 8) + '…', meta.vodId);
-    // тот же VOD, но файл уже мог закрыться — пишем в новый файл? 
-    // для простоты: при реконнекте после смерти ffmpeg дописывать в тот же frag-mp4 часто ломает файл.
-    // Помечаем старый ready и НЕ создаём новый документ — зритель видит одну карточку только если мы не плодим docs.
-    // Здесь просто рестарт HLS; VOD-файл сессии уже финализируем как ready, новый кусок не пишем
-    // (иначе несколько «идёт запись»). Запись VOD = с начала сессии до первого обрыва.
-    // Если нужен один длинный файл — ниже можно сменить стратегию.
   }
 
-  // Для VOD: пишем только пока первая непрерывная сессия; после реконнекта только HLS
   const vodAbs = isNewSession ? meta?.abs : null;
   const vodId = meta?.vodId || null;
 
@@ -331,9 +378,8 @@ async function startTranscode(key) {
     if (pendingStopTimers.has(key)) return;
     if (activeTranscodes.has(key)) return;
 
-    spawnFfmpeg(key, gen, hlsPath, vodAbs, vodId);
+    spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId);
 
-    // touchStartedAt только если это реально новый эфир (не было liveStartedAt)
     await setLiveState(key, {
       isLive: true,
       touchStartedAt: isNewSession && !hadPendingStop,
@@ -353,4 +399,4 @@ nms.on('donePublish', (session) => {
   if (key) scheduleStop(key);
 });
 
-module.exports = nms;
+module.exports = nms; 

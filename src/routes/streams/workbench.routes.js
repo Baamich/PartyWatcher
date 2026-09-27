@@ -16,9 +16,9 @@ const StreamVod = require('../../models/StreamVod');
 function isCurrentlyLive(streamKey) {
   if (!streamKey) return false;
   try {
-    const file = path.join(process.cwd(), 'media', 'live', streamKey, 'index.m3u8');
+    const file = path.join(process.cwd(), 'media', 'live', streamKey, 'master.m3u8');
     const stat = fs.statSync(file);
-    return Date.now() - stat.mtimeMs < 15000; // hls_time=2с — файл должен обновляться каждые ~2 секунды
+    return Date.now() - stat.mtimeMs < 15000;
   } catch {
     return false;
   }

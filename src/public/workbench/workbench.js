@@ -334,7 +334,7 @@ function attachHls(playbackId) {
   const video = document.getElementById('playerVideo');
   const offline = document.getElementById('playerOffline');
   lockToLiveEdge(video);
-  const src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+  const src = `/media/live/${playbackId}/master.m3u8?t=${Date.now()}`;
 
   hlsPlayer = new Hls({
     enableWorker: true,
@@ -365,7 +365,7 @@ function attachHls(playbackId) {
         if (!hlsPlayer) return resolve(false);
         setLiveBadge('reconnecting');
         showReconnectingOverlay(true);
-        const retrySrc = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+        const retrySrc = `/media/live/${playbackId}/master.m3u8?t=${Date.now()}`;
         hlsPlayer.loadSource(retrySrc);
         const onParsed = () => {
           cleanup();
@@ -430,7 +430,7 @@ function updatePlayer(isLive, playbackId, liveStartedAt) {
       if (window.Hls && Hls.isSupported()) {
         attachHls(playbackId);
       } else {
-        video.src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+        video.src = `/media/live/${playbackId}/master.m3u8?t=${Date.now()}`;
         video.play().catch(() => {});
       }
     }
@@ -479,7 +479,7 @@ function updatePlayer(isLive, playbackId, liveStartedAt) {
   if (window.Hls && Hls.isSupported()) {
     attachHls(playbackId);
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = `/media/live/${playbackId}/index.m3u8?t=${Date.now()}`;
+    video.src = `/media/live/${playbackId}/master.m3u8?t=${Date.now()}`;
     video.play().catch(() => {});
   }
   video.play().catch(() => {});
