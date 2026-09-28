@@ -254,6 +254,7 @@
 
 .live-strip-inner.fs-active .live-chat-side {
   position: absolute;
+  overflow: hidden;
   z-index: 8;
   top: 60px;
   left: 16px;
@@ -430,4 +431,24 @@
   z-index: 10;
 }
 
+/* ресайз-ручка чата (только в fullscreen) */
+#liveChatResizeHandle {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 5;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.35) 50%);
+  border-radius: 0 0 16px 0;
+}
 
+.live-strip-inner.fs-active .live-chat-side.fs-open #liveChatResizeHandle {
+  display: block;
+}
+
+.live-strip-inner.fs-active .live-chat-side.resizing {
+  user-select: none;
+}

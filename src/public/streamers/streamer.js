@@ -401,6 +401,15 @@ function onLiveFullscreenChange() {
 
   if (!isFs) {
     chatSide?.classList.remove('fs-open');
+    // сбрасываем inline-стили, чтобы докнутый чат снова жил по CSS
+    if (chatSide) {
+      chatSide.style.left = '';
+      chatSide.style.top = '';
+      chatSide.style.right = '';
+      chatSide.style.bottom = '';
+      chatSide.style.width = '';
+      chatSide.style.height = '';
+    }
   }
 }
 
@@ -412,15 +421,46 @@ document.getElementById('liveChatToggleBtn')?.addEventListener('click', () => {
 (function initLiveChatDrag() {
   const panel = document.getElementById('liveChatSide');
   const handle = document.querySelector('#liveChatSide .live-chat-header');
+  const resizeHandle = document.getElementById('liveChatResizeHandle');
   if (!panel || !handle) return;
 
-  const STORAGE_KEY = 'pw-pos:live:chatPanel:fullscreen';
+  const POS_KEY = 'pw-pos:live:chatPanel:fullscreen';
+  const SIZE_KEY = 'pw-size:live:chatPanel:fullscreen';
+  const MIN_W = 220;
+  const MIN_H = 200;
 
   let dragging = false;
+  let resizing = false;
   let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+  let startXR = 0, startYR = 0, startW = 0, startH = 0;
 
   function clamp(val, min, max) {
     return Math.max(min, Math.min(val, max));
+  }
+
+  function applySavedSize() {
+    if (!liveIsFullscreen() || !panel.classList.contains('fs-open')) return;
+
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(SIZE_KEY) || 'null');
+    } catch (_) {}
+
+    const parent = panel.parentElement;
+    if (!parent) return;
+    const parentRect = parent.getBoundingClientRect();
+
+    if (!saved || typeof saved.width !== 'number' || typeof saved.height !== 'number') {
+      return; // оставим CSS-дефолт
+    }
+
+    const maxW = Math.max(MIN_W, parentRect.width - 16);
+    const maxH = Math.max(MIN_H, parentRect.height - 16);
+    const width = clamp(saved.width, MIN_W, maxW);
+    const height = clamp(saved.height, MIN_H, maxH);
+
+    panel.style.width = width + 'px';
+    panel.style.height = height + 'px';
   }
 
   function applySavedPosition() {
@@ -428,7 +468,7 @@ document.getElementById('liveChatToggleBtn')?.addEventListener('click', () => {
 
     let saved = null;
     try {
-      saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
     } catch (_) {}
 
     const parent = panel.parentElement;
@@ -438,7 +478,6 @@ document.getElementById('liveChatToggleBtn')?.addEventListener('click', () => {
     const panelH = panel.offsetHeight || 400;
 
     if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') {
-      // дефолт: слева сверху, как в CSS
       panel.style.left = '16px';
       panel.style.top = '60px';
       panel.style.right = 'auto';
@@ -455,10 +494,12 @@ document.getElementById('liveChatToggleBtn')?.addEventListener('click', () => {
     panel.style.bottom = 'auto';
   }
 
-  function savePosition(left, top) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ left, top }));
+  function applySaved() {
+    applySavedSize();
+    applySavedPosition();
   }
 
+  // --- drag по шапке ---
   handle.addEventListener('pointerdown', (e) => {
     if (!liveIsFullscreen() || e.target.closest('button')) return;
 
@@ -495,21 +536,76 @@ document.getElementById('liveChatToggleBtn')?.addEventListener('click', () => {
     dragging = false;
     try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
 
-    const left = parseFloat(panel.style.left) || 0;
-    const top = parseFloat(panel.style.top) || 0;
-    savePosition(left, top);
+    localStorage.setItem(POS_KEY, JSON.stringify({
+      left: parseFloat(panel.style.left) || 0,
+      top: parseFloat(panel.style.top) || 0,
+    }));
   });
 
-  // восстанавливаем позицию при открытии чата и при входе/выходе из fullscreen
+  // --- resize за угол ---
+  resizeHandle?.addEventListener('pointerdown', (e) => {
+    if (!liveIsFullscreen()) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = panel.getBoundingClientRect();
+    startW = rect.width;
+    startH = rect.height;
+    startXR = e.clientX;
+    startYR = e.clientY;
+    resizing = true;
+    panel.classList.add('resizing');
+    try { resizeHandle.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  resizeHandle?.addEventListener('pointermove', (e) => {
+    if (!resizing) return;
+    e.preventDefault();
+
+    const parentRect = panel.parentElement.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const leftOffset = panelRect.left - parentRect.left;
+    const topOffset = panelRect.top - parentRect.top;
+
+    const maxW = Math.max(MIN_W, parentRect.width - leftOffset - 8);
+    const maxH = Math.max(MIN_H, parentRect.height - topOffset - 8);
+
+    let newW = startW + (e.clientX - startXR);
+    let newH = startH + (e.clientY - startYR);
+
+    newW = clamp(newW, MIN_W, maxW);
+    newH = clamp(newH, MIN_H, maxH);
+
+    panel.style.width = newW + 'px';
+    panel.style.height = newH + 'px';
+  });
+
+  function endResize(e) {
+    if (!resizing) return;
+    resizing = false;
+    panel.classList.remove('resizing');
+    try { resizeHandle.releasePointerCapture(e.pointerId); } catch (_) {}
+
+    const rect = panel.getBoundingClientRect();
+    localStorage.setItem(SIZE_KEY, JSON.stringify({
+      width: rect.width,
+      height: rect.height,
+    }));
+  }
+
+  resizeHandle?.addEventListener('pointerup', endResize);
+  resizeHandle?.addEventListener('pointercancel', endResize);
+
+  // восстановить при открытии чата / входе в FS
   document.getElementById('liveChatToggleBtn')?.addEventListener('click', () => {
-    requestAnimationFrame(applySavedPosition);
+    requestAnimationFrame(applySaved);
   });
 
   document.addEventListener('fullscreenchange', () => {
-    if (liveIsFullscreen()) requestAnimationFrame(applySavedPosition);
+    if (liveIsFullscreen()) requestAnimationFrame(applySaved);
   });
   document.addEventListener('webkitfullscreenchange', () => {
-    if (liveIsFullscreen()) requestAnimationFrame(applySavedPosition);
+    if (liveIsFullscreen()) requestAnimationFrame(applySaved);
   });
 })();
 
