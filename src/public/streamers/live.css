@@ -17,7 +17,23 @@
   overflow: hidden;
   display: flex;
   gap: 16px;
-  padding-bottom: 16px;
+  visibility: hidden;
+  transition: visibility 0s linear 0.35s; /* прячем только после окончания анимации сворачивания */
+}
+.live-strip.open .live-strip-inner {
+  visibility: visible;
+  transition-delay: 0s;
+}
+/* отступ снизу — на детях, а не padding'ом контейнера: так он схлопывается вместе с 0fr */
+.live-strip-inner > .live-player-wrap,
+.live-strip-inner > .live-chat-side {
+  margin-bottom: 16px;
+}
+.live-strip-inner:fullscreen > .live-player-wrap,
+.live-strip-inner:fullscreen > .live-chat-side,
+.live-strip-inner:-webkit-full-screen > .live-player-wrap,
+.live-strip-inner:-webkit-full-screen > .live-chat-side {
+  margin-bottom: 0;
 }
 
 .live-player-wrap {
@@ -279,28 +295,46 @@
 .live-toggle-wrap {
   display: flex;
   justify-content: center;
-  margin: -14px 0 6px;
+  margin: 22px 0 14px; /* было -14px 0 6px — кнопка липла к шапке */
   position: relative;
   z-index: 3;
 }
 
 .live-toggle-chevron {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
+  padding: 0; /* глобальный button даёт 10px 14px и сдвигает содержимое */
   border-radius: 50%;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   color: var(--text-muted);
-  font-size: 18px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.25s ease;
 }
+.live-toggle-chevron svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
 .live-toggle-chevron.open {
   transform: rotate(180deg);
+}
+
+/* перебиваем глобальные button:hover / button:active из common.css */
+.live-toggle-chevron:hover {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.live-toggle-chevron:active {
+  transform: scale(0.94);
+  box-shadow: var(--shadow);
+}
+.live-toggle-chevron.open:active {
+  transform: rotate(180deg) scale(0.94);
 }
 
 /* ===== профиль + колонка записей рядом (без подсветки при наведении) ===== */
