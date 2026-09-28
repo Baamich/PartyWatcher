@@ -41,11 +41,58 @@ function getUserFromSocket(socket) {
 module.exports = function registerChatSocket(io) {
   const nsp = io.of('/chat');
 
+  // streamerNameLower → Map<socketId, { username, userId }>
+  const presence = new Map();
+
+  function getRoomPresence(nameLower) {
+    if (!presence.has(nameLower)) presence.set(nameLower, new Map());
+    return presence.get(nameLower);
+  }
+
+  function buildViewersPayload(nameLower) {
+    const room = getRoomPresence(nameLower);
+    // уникальные: залогиненные по userId, гости — по socketId
+    const seenUsers = new Set();
+    const list = [];
+    let guestCount = 0;
+
+    for (const [, info] of room) {
+      if (info.userId) {
+        if (seenUsers.has(info.userId)) continue;
+        seenUsers.add(info.userId);
+        list.push({ username: info.username, isGuest: false });
+      } else {
+        guestCount += 1;
+      }
+    }
+
+    if (guestCount > 0) {
+      list.push({
+        username: guestCount === 1 ? 'Гость' : `Гости (${guestCount})`,
+        isGuest: true,
+      });
+    }
+
+    return { count: list.length, viewers: list };
+  }
+
+  function emitViewers(nameLower) {
+    const payload = buildViewersPayload(nameLower);
+    nsp.to(roomName(nameLower)).emit('chat:viewers', payload);
+  }
+
   nsp.on('connection', (socket) => {
     const authUser = getUserFromSocket(socket);
     let currentStreamerNameLower = null;
 
     socket.on('chat:join', async ({ streamerName }) => {
+      // если уже были в другой комнате — выходим
+      if (currentStreamerNameLower) {
+        getRoomPresence(currentStreamerNameLower).delete(socket.id);
+        socket.leave(roomName(currentStreamerNameLower));
+        emitViewers(currentStreamerNameLower);
+      }
+
       currentStreamerNameLower = String(streamerName || '').toLowerCase();
       if (!currentStreamerNameLower) return;
 
@@ -54,10 +101,12 @@ module.exports = function registerChatSocket(io) {
       const streamer = await User.findOne({ streamerNameLower: currentStreamerNameLower }).select('_id').lean();
       socket.data.isOwner = !!(authUser && streamer && String(streamer._id) === String(authUser.id));
 
-      const count = nsp.adapter.rooms.get(roomName(currentStreamerNameLower))?.size || 0;
-      nsp.to(roomName(currentStreamerNameLower)).emit('chat:viewers', count);
+      getRoomPresence(currentStreamerNameLower).set(socket.id, {
+        username: authUser?.username || null,
+        userId: authUser?.id ? String(authUser.id) : null,
+      });
+      emitViewers(currentStreamerNameLower);
 
-      // только живые сообщения — удалённые и после clear не попадают в историю
       const history = await StreamChatMessage.find({
         streamerNameLower: currentStreamerNameLower,
         deleted: { $ne: true },
@@ -142,9 +191,11 @@ module.exports = function registerChatSocket(io) {
     });
 
     socket.on('disconnect', () => {
-      if (currentStreamerNameLower) {
-        const count = Math.max((nsp.adapter.rooms.get(roomName(currentStreamerNameLower))?.size || 1) - 1, 0);
-        nsp.to(roomName(currentStreamerNameLower)).emit('chat:viewers', count);
+      if (!currentStreamerNameLower) return;
+      getRoomPresence(currentStreamerNameLower).delete(socket.id);
+      emitViewers(currentStreamerNameLower);
+      if (getRoomPresence(currentStreamerNameLower).size === 0) {
+        presence.delete(currentStreamerNameLower);
       }
     });
   });

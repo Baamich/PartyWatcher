@@ -29,7 +29,7 @@
       </div>
       <div id="ownerControls" class="owner-controls hidden">
         <button class="icon-btn" onclick="location.href='/streamers/edit.html'">✏️ Редактировать</button>
-        <button class="icon-btn" onclick="location.href='/workbench.html'">🛠️ Творческая студия</button>
+        <button class="icon-btn" id="ownerWorkbenchBtn" onclick="location.href='/workbench.html'">🛠️ Творческая студия</button>
       </div>
     </div>
   </div>
@@ -69,7 +69,9 @@
 
         <div id="liveChatSide" class="live-chat-side">
           <div class="live-chat-header">
-            <span id="liveViewers" class="live-viewers">👁 0</span>
+            <button type="button" id="liveViewersBtn" class="live-viewers-btn" title="Зрители">
+              👁 <span id="liveViewersCount">0</span>
+            </button>
             <button type="button" id="liveClearChatBtn" class="live-clear-chat-btn hidden" title="Очистить чат">🧹</button>
           </div>
           <div id="liveMessages"></div>
@@ -81,6 +83,14 @@
             <button type="button" id="liveOwnerSettingsBtn" class="icon-btn">🛠️ Настройки трансляции</button>
           </div>
           <div id="liveChatResizeHandle" title="Потяни, чтобы изменить размер"></div>
+
+          <div id="liveViewersPanel" class="live-viewers-panel">
+            <div class="live-viewers-panel-header">
+              <span>Зрители</span>
+              <button type="button" id="liveViewersClose" class="live-viewers-close" aria-label="Закрыть">×</button>
+            </div>
+            <div id="liveViewersList" class="live-viewers-list"></div>
+          </div>
         </div>
       </div>
     </div>

@@ -158,6 +158,7 @@ function openLiveStrip() {
   liveOpen = true;
   document.getElementById('liveStrip').classList.add('open');
   document.getElementById('liveToggleChevronBtn').classList.add('open');
+  document.getElementById('ownerWorkbenchBtn')?.classList.add('live-hidden');
   switchVodLayout(true);
   startLiveSession();
 }
@@ -167,6 +168,7 @@ function closeLiveStrip() {
   liveOpen = false;
   document.getElementById('liveStrip').classList.remove('open');
   document.getElementById('liveToggleChevronBtn').classList.remove('open');
+  document.getElementById('ownerWorkbenchBtn')?.classList.remove('live-hidden');
   switchVodLayout(false);
   stopLiveSession();
 }
@@ -235,6 +237,10 @@ function stopLiveSession() {
   document.getElementById('liveMessages').innerHTML = '';
   document.getElementById('liveVolumePopup').classList.add('hidden');
   document.getElementById('liveQualityPopup').classList.add('hidden');
+  document.getElementById('liveViewersPanel')?.classList.remove('open');
+  document.getElementById('liveViewersBtn')?.classList.remove('active');
+  setViewersCount(0);
+  renderViewersList([]);
 }
 
 document.getElementById('profileAvatarBtn')?.addEventListener('click', toggleLiveStrip);
@@ -662,6 +668,48 @@ document.getElementById('liveClearChatBtn')?.addEventListener('click', () => {
   if (confirm('Очистить весь чат для всех зрителей?')) liveSocket?.emit('chat:clear');
 });
 
+function toggleViewersPanel() {
+  const panel = document.getElementById('liveViewersPanel');
+  const btn = document.getElementById('liveViewersBtn');
+  if (!panel) return;
+  const open = panel.classList.toggle('open');
+  btn?.classList.toggle('active', open);
+}
+
+document.getElementById('liveViewersBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleViewersPanel();
+});
+document.getElementById('liveViewersClose')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('liveViewersPanel')?.classList.remove('open');
+  document.getElementById('liveViewersBtn')?.classList.remove('active');
+});
+
+let liveViewersCache = [];
+
+function renderViewersList(viewers) {
+  liveViewersCache = viewers || [];
+  const list = document.getElementById('liveViewersList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!liveViewersCache.length) {
+    list.innerHTML = '<div class="live-viewer-row guest">Никого нет</div>';
+    return;
+  }
+  liveViewersCache.forEach((v) => {
+    const row = document.createElement('div');
+    row.className = 'live-viewer-row' + (v.isGuest ? ' guest' : '');
+    row.textContent = v.username;
+    list.appendChild(row);
+  });
+}
+
+function setViewersCount(count) {
+  const el = document.getElementById('liveViewersCount');
+  if (el) el.textContent = String(count ?? 0);
+}
+
 function connectLiveChat(nameLower) {
   liveSocket = io('/chat', { reconnection: false });
 
@@ -676,8 +724,14 @@ function connectLiveChat(nameLower) {
     });
   });
   liveSocket.on('chat:cleared', () => { document.getElementById('liveMessages').innerHTML = ''; });
-  liveSocket.on('chat:viewers', (count) => {
-    document.getElementById('liveViewers').textContent = '👁 ' + count;
+
+  liveSocket.on('chat:viewers', (payload) => {
+    if (typeof payload === 'number') {
+      setViewersCount(payload);
+      return;
+    }
+    setViewersCount(payload?.count ?? 0);
+    renderViewersList(payload?.viewers || []);
   });
 
   liveSocket.on('connect', () => {
