@@ -137,10 +137,20 @@ button:active {
   color: var(--text);
   width: auto;
   padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: none;
+  min-height: 0;
 }
 
 .icon-btn:hover {
   background: var(--border);
+  box-shadow: none;
+}
+
+.icon-btn:active {
+  transform: none;
+  box-shadow: none;
 }
 
 .corner-menu {
@@ -247,10 +257,12 @@ button:active {
 [data-theme="dark"] .icon-btn {
   background: #2a2825;
   border-color: #3f3c38;
+  box-shadow: none;
 }
 
 [data-theme="dark"] .icon-btn:hover {
   background: #35322e;
+  box-shadow: none;
 }
 
 [data-theme="dark"] .modal {

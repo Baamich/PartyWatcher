@@ -115,6 +115,7 @@
 
 .owner-controls {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-top: 6px;
 }
@@ -194,17 +195,34 @@
   opacity: 0.85;
 }
 
+/* те же размеры, что у «Вернуться» / темы */
+.owner-controls .icon-btn {
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.owner-controls .icon-btn:hover {
+  box-shadow: none;
+}
+
 #ownerWorkbenchBtn {
-  transition: opacity 0.2s ease, transform 0.2s ease, width 0.2s ease, padding 0.2s ease, margin 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+  white-space: nowrap;
 }
 #ownerWorkbenchBtn.live-hidden {
   opacity: 0;
   transform: translateY(-4px);
   pointer-events: none;
+  position: absolute;
+  /* убираем из потока — «Редактировать» не растягивается и не прыгает */
   width: 0;
-  padding-left: 0;
-  padding-right: 0;
+  height: 0;
+  padding: 0;
   margin: 0;
-  overflow: hidden;
   border: none;
 }
