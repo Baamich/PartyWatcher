@@ -159,6 +159,7 @@ function openLiveStrip() {
   document.getElementById('liveStrip').classList.add('open');
   document.getElementById('liveToggleChevronBtn').classList.add('open');
   document.getElementById('ownerWorkbenchBtn')?.classList.add('live-hidden');
+  document.getElementById('ownerEditBtn')?.classList.add('live-hidden');
   switchVodLayout(true);
   startLiveSession();
 }
@@ -169,6 +170,7 @@ function closeLiveStrip() {
   document.getElementById('liveStrip').classList.remove('open');
   document.getElementById('liveToggleChevronBtn').classList.remove('open');
   document.getElementById('ownerWorkbenchBtn')?.classList.remove('live-hidden');
+  document.getElementById('ownerEditBtn')?.classList.remove('live-hidden');
   switchVodLayout(false);
   stopLiveSession();
 }

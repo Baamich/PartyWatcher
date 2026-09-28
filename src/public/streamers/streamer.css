@@ -209,17 +209,18 @@
   box-shadow: none;
 }
 
-#ownerWorkbenchBtn {
+#ownerWorkbenchBtn,
+#ownerEditBtn {
   transition: opacity 0.2s ease, transform 0.2s ease;
   overflow: hidden;
   white-space: nowrap;
 }
-#ownerWorkbenchBtn.live-hidden {
+#ownerWorkbenchBtn.live-hidden,
+#ownerEditBtn.live-hidden {
   opacity: 0;
   transform: translateY(-4px);
   pointer-events: none;
   position: absolute;
-  /* убираем из потока — «Редактировать» не растягивается и не прыгает */
   width: 0;
   height: 0;
   padding: 0;
