@@ -368,6 +368,20 @@
   display: block;
 }
 
+/* Перебиваем глобальный button:hover / :active / :focus */
+.profile-avatar-wrap:hover,
+.profile-avatar-wrap:active,
+.profile-avatar-wrap:focus,
+.profile-name-btn:hover,
+.profile-name-btn:active,
+.profile-name-btn:focus {
+  background: none;
+  box-shadow: none;
+  outline: none;
+  transform: none;
+  color: inherit;
+}
+
 .vod-column {
   width: 260px;
   flex-shrink: 0;

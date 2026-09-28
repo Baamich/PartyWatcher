@@ -156,3 +156,40 @@
 .vod-card-body { padding: 10px 12px; }
 .vod-card-title { font-weight: 700; font-size: 14px; margin: 0 0 4px; }
 .vod-card-meta { font-size: 12px; color: var(--text-muted); }
+
+/* Сброс стилей кнопок профиля — только курсор, без цвета/фона */
+.profile-avatar-wrap,
+.profile-name-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  border-radius: 0;
+  transition: none;
+}
+
+.profile-avatar-wrap:hover,
+.profile-name-btn:hover,
+.profile-avatar-wrap:active,
+.profile-name-btn:active,
+.profile-avatar-wrap:focus,
+.profile-name-btn:focus {
+  background: none;
+  box-shadow: none;
+  outline: none;
+  transform: none;
+  color: inherit;
+}
+
+/* Чуть заметнее, что можно кликнуть (опционально) */
+.profile-avatar-wrap:hover .profile-avatar {
+  filter: brightness(1.08);
+}
+
+.profile-name-btn:hover .profile-name {
+  opacity: 0.85;
+}
