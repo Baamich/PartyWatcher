@@ -185,7 +185,7 @@ function startLiveSession() {
     startBtn.classList.remove('hidden');
     startBtn.onclick = () => {
       video.muted = false;
-      video.volume = parseInt(document.getElementById('liveVolumeSlider').value, 10) / 100;
+      applyVolumeToLive(getSavedVolume());
       overlay.classList.add('hidden');
     };
     try {
@@ -289,6 +289,7 @@ function populateQualityMenu(levels) {
 function attachLiveHls(playbackId) {
   const video = document.getElementById('liveVideo');
   lockToLiveEdge(video);
+  applyVolumeToLive(getSavedVolume());
 
   const src = `/media/live/${playbackId}/master.m3u8?t=${Date.now()}`;
 
@@ -338,12 +339,33 @@ function attachLiveHls(playbackId) {
   });
 }
 
+const VOLUME_STORAGE_KEY = 'pw_volume';
+
+function getSavedVolume() {
+  const v = parseInt(localStorage.getItem(VOLUME_STORAGE_KEY), 10);
+  return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 50;
+}
+
+function saveVolume(v) {
+  localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+}
+
+function applyVolumeToLive(v) {
+  const video = document.getElementById('liveVideo');
+  if (video) video.volume = v / 100;
+  const slider = document.getElementById('liveVolumeSlider');
+  if (slider) slider.value = v;
+}
+
 document.getElementById('liveVolumeBtn')?.addEventListener('click', () => {
   document.getElementById('liveQualityPopup').classList.add('hidden');
   document.getElementById('liveVolumePopup').classList.toggle('hidden');
 });
+
 document.getElementById('liveVolumeSlider')?.addEventListener('input', (e) => {
-  document.getElementById('liveVideo').volume = parseInt(e.target.value, 10) / 100;
+  const v = parseInt(e.target.value, 10);
+  saveVolume(v);
+  applyVolumeToLive(v);
 });
 document.getElementById('liveQualityBtn')?.addEventListener('click', () => {
   document.getElementById('liveVolumePopup').classList.add('hidden');
@@ -562,5 +584,169 @@ async function loadProfile() {
     document.getElementById('notFound').classList.remove('hidden');
   }
 }
+
+function makeLiveDraggable(el, storageKey) {
+  if (!el) return;
+
+  const container = document.getElementById('livePlayerWrap');
+  if (!container) return;
+
+  const LONG_PRESS_MS = 450;
+  const MOVE_CANCEL_THRESHOLD = 6;
+
+  let longPressTimer = null;
+  let dragging = false;
+  let moved = false;
+  let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+  function currentMode() {
+    return liveIsFullscreen() ? 'fullscreen' : 'normal';
+  }
+
+  function storageFullKey() {
+    return `pw-pos:live:${storageKey}:${currentMode()}`;
+  }
+
+  function resetPosition() {
+    el.style.left = '';
+    el.style.top = '';
+    el.style.right = '';
+    el.style.bottom = '';
+  }
+
+  function applySavedPosition() {
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null');
+    } catch (_) {}
+
+    if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') {
+      resetPosition();
+      return;
+    }
+
+    const p = container.getBoundingClientRect();
+    if (!p.width || !p.height) return;
+
+    const w = el.offsetWidth || 40;
+    const h = el.offsetHeight || 40;
+
+    if (
+      saved.left < 0 ||
+      saved.top < 0 ||
+      saved.left > p.width - w ||
+      saved.top > p.height - h
+    ) {
+      resetPosition();
+      return;
+    }
+
+    el.style.left = saved.left + 'px';
+    el.style.top = saved.top + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+  }
+
+  function savePosition(left, top) {
+    localStorage.setItem(storageFullKey(), JSON.stringify({ left, top }));
+  }
+
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button != null && e.button !== 0) return;
+    moved = false;
+    dragging = false;
+
+    // на тач-устройствах drag отключаем (как в room.js)
+    const isTouchUI =
+      window.matchMedia('(pointer: coarse)').matches ||
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      window.innerWidth <= 768;
+    if (isTouchUI) return;
+
+    const rect = el.getBoundingClientRect();
+    const parentRect = container.getBoundingClientRect();
+    origLeft = rect.left - parentRect.left;
+    origTop = rect.top - parentRect.top;
+    startX = e.clientX;
+    startY = e.clientY;
+
+    longPressTimer = setTimeout(() => {
+      dragging = true;
+      el.classList.add('dragging');
+      el.style.touchAction = 'none';
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch (_) {}
+    }, LONG_PRESS_MS);
+  });
+
+  el.addEventListener('pointermove', (e) => {
+    if (!dragging) {
+      if (
+        Math.abs(e.clientX - startX) > MOVE_CANCEL_THRESHOLD ||
+        Math.abs(e.clientY - startY) > MOVE_CANCEL_THRESHOLD
+      ) {
+        clearTimeout(longPressTimer);
+      }
+      return;
+    }
+
+    moved = true;
+    e.preventDefault();
+
+    const parentRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    let newLeft = origLeft + (e.clientX - startX);
+    let newTop = origTop + (e.clientY - startY);
+
+    newLeft = Math.max(0, Math.min(newLeft, parentRect.width - elRect.width));
+    newTop = Math.max(0, Math.min(newTop, parentRect.height - elRect.height));
+
+    el.style.left = newLeft + 'px';
+    el.style.top = newTop + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+  });
+
+  function endDrag() {
+    clearTimeout(longPressTimer);
+    if (!dragging) return;
+
+    dragging = false;
+    el.classList.remove('dragging');
+    el.style.touchAction = '';
+
+    if (moved) {
+      savePosition(parseFloat(el.style.left), parseFloat(el.style.top));
+      // гасим следующий click после drag
+      const suppressNextClick = (ce) => {
+        ce.stopPropagation();
+        ce.preventDefault();
+        el.removeEventListener('click', suppressNextClick, true);
+      };
+      el.addEventListener('click', suppressNextClick, true);
+    }
+  }
+
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
+
+  const onFsForPos = () => requestAnimationFrame(applySavedPosition);
+  document.addEventListener('fullscreenchange', onFsForPos);
+  document.addEventListener('webkitfullscreenchange', onFsForPos);
+  window.addEventListener('resize', applySavedPosition);
+  applySavedPosition();
+}
+
+try {
+  makeLiveDraggable(document.getElementById('liveFullscreenBtn'), 'fullscreenBtn');
+  makeLiveDraggable(document.getElementById('liveVolumeBtn'), 'volumeBtn');
+  makeLiveDraggable(document.getElementById('liveQualityBtn'), 'qualityBtn');
+  makeLiveDraggable(document.getElementById('liveChatToggleBtn'), 'chatToggleBtn');
+} catch (e) {
+  console.error('[makeLiveDraggable]', e);
+}
+
+applyVolumeToLive(getSavedVolume());
 
 loadProfile();

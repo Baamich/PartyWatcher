@@ -422,3 +422,12 @@
   .profile-row { flex-direction: column; }
   .vod-column { width: 100%; }
 }
+
+
+.live-fs-btn.dragging {
+  opacity: 0.85;
+  cursor: grabbing;
+  z-index: 10;
+}
+
+
