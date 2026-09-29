@@ -383,18 +383,19 @@ button {
   height: 56px;
   border-radius: 50%;
   border: none;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--btn-grad-start), var(--btn-grad-end));
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--btn-glow);
   padding: 0;
   margin: 0;
 }
 .support-fab:hover {
-  background: var(--accent-hover);
+  background: linear-gradient(135deg, var(--btn-grad-start-hover), var(--btn-grad-end-hover));
+  box-shadow: var(--btn-glow-hover);
   transform: scale(1.05);
 }
 .support-modal-content {
@@ -609,7 +610,7 @@ button {
 .intro {
   position: absolute;
   top: 50%;
-  left: 6vw;
+  right: calc(50% + 248px); 
   transform: translateY(-50%);
   width: 340px;
   text-align: left;
@@ -644,6 +645,7 @@ button {
 @media (max-width: 1300px) {
   .intro {
     top: 24px;
+    right: auto;
     left: 50%;
     transform: translateX(-50%);
     width: 100%;
