@@ -607,10 +607,15 @@ button {
 }
 
 .intro {
-  max-width: 480px;
-  margin: 0 auto 20px;
+  position: absolute;
+  top: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 520px;
   text-align: center;
   padding: 0 16px;
+  box-sizing: border-box;
 }
 .intro h1 {
   font-size: 22px;
@@ -621,4 +626,8 @@ button {
   line-height: 1.5;
   color: var(--text-muted);
   margin: 0;
+}
+
+@media (max-height: 640px) {
+  .intro { display: none; }
 }
