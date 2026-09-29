@@ -453,9 +453,12 @@ async function startTranscode(key) {
 
   const prev = activeTranscodes.get(key);
   if (prev) {
-    console.log('[rtmp] ffmpeg уже есть → skip postPublish', key.slice(0, 8) + '…');
-    await setLiveState(key, { isLive: true, touchStartedAt: false });
-    return;
+    // RTMP переподключился, а старый ffmpeg ещё жив — перезапускаем
+    console.log('[rtmp] ffmpeg уже есть → restart', key.slice(0, 8) + '…');
+    killProc(prev.proc, 'SIGTERM');
+    setTimeout(() => killProc(prev.proc, 'SIGKILL'), 2000);
+    activeTranscodes.delete(key);
+    // дальше обычный старт нового ffmpeg (не return)
   }
 
   const gen = nextGen(key);
