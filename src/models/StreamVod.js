@@ -12,7 +12,7 @@ const streamVodSchema = new mongoose.Schema(
     published: { type: Boolean, default: false, index: true },
     status: {
       type: String,
-      enum: ['recording', 'ready', 'failed'],
+      enum: ['recording', 'processing', 'ready', 'failed'],
       default: 'recording',
     },
     createdAt: { type: Date, default: Date.now, index: true },

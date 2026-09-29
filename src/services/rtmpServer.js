@@ -9,6 +9,7 @@ const streamKeyCache = require('./streamKeyCache');
 const MEDIA_ROOT = path.join(process.cwd(), 'media');
 const VOD_ROOT = path.join(MEDIA_ROOT, 'vod');
 const FFMPEG_PATH = '/usr/bin/ffmpeg';
+const FFPROBE_PATH = '/usr/bin/ffprobe';
 const GRACE_AT_MS = [5_000, 7_000, 12_000, 20_000];
 const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -125,15 +126,107 @@ function clearPendingStop(key) {
   }
 }
 
-async function finalizeVod(vodId, status = 'ready') {
+async function finalizeVod(vodId, status = 'ready', extra = {}) {
   if (!vodId) return;
   try {
     await StreamVod.updateOne(
-      { _id: vodId, status: 'recording' },
-      { $set: { status } }
+      { _id: vodId, status: { $in: ['recording', 'processing'] } },
+      { $set: { status, ...extra } }
     );
   } catch (e) {
     console.warn('[rtmp] finalizeVod', e.message);
+  }
+}
+
+/** Дожим VOD: max 720p, CRF 28, AAC 128k, preset medium */
+function compressVodFile(absPath) {
+  return new Promise((resolve, reject) => {
+    if (!absPath || !fs.existsSync(absPath)) {
+      return reject(new Error('VOD file missing'));
+    }
+    const st = fs.statSync(absPath);
+    if (!st.size) return reject(new Error('VOD file empty'));
+
+    const tmpPath = absPath + '.compressing.mp4';
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+
+    const args = [
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-y',
+      '-i', absPath,
+      // не апскейлим: если ниже 720 — оставляем как есть
+      '-vf', "scale=-2:'min(720,ih)'",
+      '-c:v', 'libx264',
+      '-preset', 'medium',
+      '-crf', '28',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-ac', '2',
+      '-movflags', '+faststart',
+      tmpPath,
+    ];
+
+    console.log('[rtmp] compress start', path.basename(absPath));
+    const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+
+    let errBuf = '';
+    proc.stderr.on('data', (c) => {
+      errBuf += c.toString();
+    });
+
+    proc.on('exit', (code) => {
+      if (code !== 0) {
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        return reject(new Error(errBuf.trim() || `ffmpeg exit ${code}`));
+      }
+      try {
+        fs.renameSync(tmpPath, absPath);
+        console.log('[rtmp] compress done', path.basename(absPath));
+        resolve();
+      } catch (e) {
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        reject(e);
+      }
+    });
+  });
+}
+
+function probeDurationSec(absPath) {
+  return new Promise((resolve) => {
+    const proc = spawn(
+      FFMPEG_PATH,
+      [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        absPath,
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    let out = '';
+    proc.stdout.on('data', (c) => { out += c.toString(); });
+    proc.on('exit', () => {
+      const n = parseFloat(out);
+      resolve(Number.isFinite(n) ? Math.round(n) : 0);
+    });
+  });
+}
+
+async function processVodAfterStop(vodId, absPath) {
+  if (!vodId || !absPath) return;
+
+  await finalizeVod(vodId, 'processing');
+
+  try {
+    // даём ffmpeg-записи закрыть файл после SIGTERM
+    await new Promise((r) => setTimeout(r, 1500));
+    await compressVodFile(absPath);
+    const durationSec = await probeDurationSec(absPath);
+    await finalizeVod(vodId, 'ready', durationSec ? { durationSec } : {});
+  } catch (e) {
+    console.error('[rtmp] compress failed', vodId, e.message);
+    await finalizeVod(vodId, 'failed');
   }
 }
 
@@ -141,21 +234,36 @@ async function finalizeStop(key) {
   clearPendingStop(key);
   nextGen(key);
 
+  let vodId = null;
+  let absPath = null;
+
   const entry = activeTranscodes.get(key);
   if (entry) {
+    vodId = entry.vodId;
     killProc(entry.proc, 'SIGTERM');
     setTimeout(() => killProc(entry.proc, 'SIGKILL'), 3000);
     activeTranscodes.delete(key);
-    await finalizeVod(entry.vodId, 'ready');
-    console.log('[rtmp] finalizeStop', key.slice(0, 8) + '…', 'vod=', entry.vodId || '—');
-  } else {
-    const meta = sessionMeta.get(key);
-    if (meta?.vodId) await finalizeVod(meta.vodId, 'ready');
+    console.log('[rtmp] finalizeStop', key.slice(0, 8) + '…', 'vod=', vodId || '—');
+  }
+
+  const meta = sessionMeta.get(key);
+  if (meta) {
+    vodId = vodId || meta.vodId;
+    absPath = meta.abs;
   }
 
   sessionMeta.delete(key);
   wipeLiveMedia(key);
   await setLiveState(key, { isLive: false, touchStartedAt: false });
+
+  // сжатие в фоне — не блокируем RTMP-пайплайн
+  if (vodId && absPath) {
+    processVodAfterStop(vodId, absPath).catch((e) => {
+      console.error('[rtmp] processVodAfterStop', e.message);
+    });
+  } else if (vodId) {
+    await finalizeVod(vodId, 'ready');
+  }
 }
 
 function scheduleStop(key) {
