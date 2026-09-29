@@ -14,6 +14,7 @@ const FFMPEG_PATH = '/usr/bin/ffmpeg';
 const FFPROBE_PATH = '/usr/bin/ffprobe';
 const GRACE_AT_MS = [5_000, 7_000, 12_000, 20_000];
 const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+const MERGE_WINDOW_MS = 60_000; // вернулся за минуту → та же запись
 
 const RENDITIONS = [
   { name: 'source', copy: true },
@@ -46,6 +47,7 @@ const activeTranscodes = new Map();
 const sessionMeta = new Map(); // key -> { vodId, abs }
 const keyGen = new Map();
 const pendingStopTimers = new Map();
+const pendingVods = new Map(); // key -> { vodId, abs, parts, timer }
 
 function nextGen(key) {
   const g = (keyGen.get(key) || 0) + 1;
@@ -285,6 +287,25 @@ async function processVodAfterStop(vodId, absPath, parts) {
   }
 }
 
+/** Держим запись минуту: если стример вернётся, продолжим её, иначе сожмём */
+function holdVodForMerge(key, { vodId, abs, parts }) {
+  const prev = pendingVods.get(key);
+  if (prev) clearTimeout(prev.timer);
+
+  // 'processing', чтобы finalizeStuckRecordings не пометил запись готовой
+  finalizeVod(vodId, 'processing');
+
+  const timer = setTimeout(() => {
+    pendingVods.delete(key);
+    processVodAfterStop(vodId, abs, parts).catch((e) => {
+      console.error('[rtmp] processVodAfterStop', e.message);
+    });
+  }, MERGE_WINDOW_MS);
+
+  pendingVods.set(key, { vodId, abs, parts, timer });
+  console.log('[rtmp] жду возврата стримера', MERGE_WINDOW_MS / 1000, 'с', key.slice(0, 8) + '…');
+}
+
 async function finalizeStop(key) {
   clearPendingStop(key);
   nextGen(key);
@@ -313,11 +334,9 @@ async function finalizeStop(key) {
   wipeLiveMedia(key);
   await setLiveState(key, { isLive: false, touchStartedAt: false });
 
-  // сжатие в фоне — не блокируем RTMP-пайплайн
+  // не сжимаем сразу: ждём минуту, вдруг стример переподключится
   if (vodId && absPath) {
-    processVodAfterStop(vodId, absPath, parts).catch((e) => {
-      console.error('[rtmp] processVodAfterStop', e.message);
-    });
+    holdVodForMerge(key, { vodId, abs: absPath, parts });
   } else if (vodId) {
     await finalizeVod(vodId, 'ready');
   }
@@ -521,6 +540,18 @@ async function startTranscode(key) {
   const gen = nextGen(key);
   const hlsRootDir = mediaDir(key);
 
+  // вернулись в течение минуты после конца прошлого эфира → продолжаем ту же запись
+  let resumed = false;
+  const pending = pendingVods.get(key);
+  if (pending) {
+    clearTimeout(pending.timer);
+    pendingVods.delete(key);
+    sessionMeta.set(key, { vodId: pending.vodId, abs: pending.abs, parts: pending.parts });
+    finalizeVod(pending.vodId, 'recording');
+    resumed = true;
+    console.log('[rtmp] стример вернулся, продолжаю запись', key.slice(0, 8) + '…', pending.vodId);
+  }
+
   let meta = sessionMeta.get(key);
   const isNewSession = !meta;
 
@@ -560,7 +591,7 @@ async function startTranscode(key) {
 
     await setLiveState(key, {
       isLive: true,
-      touchStartedAt: isNewSession && !hadPendingStop,
+      touchStartedAt: (isNewSession || resumed) && !hadPendingStop,
     });
   }, 300);
 }
