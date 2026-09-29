@@ -173,7 +173,12 @@ function compressVodFile(absPath) {
     ];
 
     console.log('[rtmp] compress start', path.basename(absPath));
-    const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn('nice', ['-n', '19', FFMPEG_PATH, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+    proc.on('error', (e) => {
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+      reject(e);
+    });
 
     let errBuf = '';
     proc.stderr.on('data', (c) => {
@@ -186,8 +191,11 @@ function compressVodFile(absPath) {
         return reject(new Error(errBuf.trim() || `ffmpeg exit ${code}`));
       }
       try {
+        const before = st.size;
         fs.renameSync(tmpPath, absPath);
-        console.log('[rtmp] compress done', path.basename(absPath));
+        const after = fs.statSync(absPath).size;
+        const mb = (n) => (n / 1024 / 1024).toFixed(1);
+        console.log(`[rtmp] compress done ${path.basename(absPath)}: ${mb(before)} МБ → ${mb(after)} МБ`);
         resolve();
       } catch (e) {
         try { fs.unlinkSync(tmpPath); } catch (_) {}
