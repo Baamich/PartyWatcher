@@ -262,20 +262,45 @@ function lockToLiveEdge(video) {
   });
 }
 
+const QUALITY_STORAGE_KEY = 'pw_quality'; // 'auto' | 'source' | '720' | '480'
+
+function getSavedQuality() {
+  try { return localStorage.getItem(QUALITY_STORAGE_KEY) || 'auto'; } catch (_) { return 'auto'; }
+}
+
+function saveQuality(v) {
+  try { localStorage.setItem(QUALITY_STORAGE_KEY, v); } catch (_) {}
+}
+
+// имя уровня из master-плейлиста: source / 720 / 480
+function levelKey(lvl) {
+  if (lvl.name) return String(lvl.name);
+  const uri = lvl.uri || (Array.isArray(lvl.url) ? lvl.url[0] : lvl.url) || '';
+  const m = String(uri).match(/([^/]+)\/index\.m3u8/);
+  return m ? m[1] : '';
+}
+
 function populateQualityMenu(levels) {
   const popup = document.getElementById('liveQualityPopup');
   popup.innerHTML = '';
 
-  const makeOption = (label, levelIndex) => {
+  const items = levels.map((lvl, idx) => ({ idx, key: levelKey(lvl), height: lvl.height || 0 }));
+
+  // применяем сохранённое качество (если такого уровня нет — авто)
+  let saved = getSavedQuality();
+  const savedItem = items.find((i) => i.key === saved);
+  if (saved !== 'auto' && !savedItem) saved = 'auto';
+  liveHls.currentLevel = saved === 'auto' ? -1 : savedItem.idx;
+
+  const makeOption = (label, key, levelIndex) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'live-quality-option';
     btn.textContent = label;
-    if ((levelIndex === -1 && liveHls.currentLevel === -1) || liveHls.currentLevel === levelIndex) {
-      btn.classList.add('active');
-    }
+    if (key === saved) btn.classList.add('active');
     btn.onclick = () => {
       liveHls.currentLevel = levelIndex;
+      saveQuality(key);
       popup.querySelectorAll('.live-quality-option').forEach((el) => el.classList.remove('active'));
       btn.classList.add('active');
       popup.classList.add('hidden');
@@ -283,14 +308,16 @@ function populateQualityMenu(levels) {
     return btn;
   };
 
-  popup.appendChild(makeOption('Авто', -1));
+  popup.appendChild(makeOption('Авто', 'auto', -1));
 
-  const sorted = levels
-    .map((lvl, idx) => ({ idx, height: lvl.height || 0 }))
-    .sort((a, b) => b.height - a.height);
+  // сначала источник, дальше по убыванию высоты
+  items.sort((a, b) => (b.key === 'source') - (a.key === 'source') || b.height - a.height);
 
-  sorted.forEach(({ idx, height }) => {
-    popup.appendChild(makeOption(height ? `${height}p` : `Уровень ${idx}`, idx));
+  items.forEach(({ idx, key, height }) => {
+    const label = key === 'source'
+      ? (height ? `Источник (${height}p)` : 'Источник')
+      : (height ? `${height}p` : `Уровень ${idx}`);
+    popup.appendChild(makeOption(label, key || `lvl${idx}`, idx));
   });
 }
 

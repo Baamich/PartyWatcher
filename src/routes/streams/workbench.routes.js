@@ -16,7 +16,7 @@ const StreamVod = require('../../models/StreamVod');
 function isCurrentlyLive(streamKey) {
   if (!streamKey) return false;
   const base = path.join(process.cwd(), 'media', 'live', streamKey);
-  for (const rel of ['source/index.m3u8', '1080/index.m3u8', '480/index.m3u8']) {
+  for (const rel of ['source/index.m3u8', '720/index.m3u8', '480/index.m3u8']) {
     try {
       if (Date.now() - fs.statSync(path.join(base, rel)).mtimeMs < 15000) return true;
     } catch (_) {}

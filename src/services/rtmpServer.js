@@ -18,7 +18,7 @@ const MERGE_WINDOW_MS = 60_000; // вернулся за минуту → та �
 
 const RENDITIONS = [
   { name: 'source', copy: true },
-  { name: '1080', height: 1080, vBitrate: '4500k', vMaxrate: '5000k', vBufsize: '9000k', aBitrate: '160k' },
+  { name: '720', height: 720, vBitrate: '2500k', vMaxrate: '2800k', vBufsize: '5000k', aBitrate: '128k' },
   { name: '480', height: 480, vBitrate: '1400k', vMaxrate: '1500k', vBufsize: '2800k', aBitrate: '96k' },
 ];
 
