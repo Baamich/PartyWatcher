@@ -57,13 +57,19 @@ async function start() {
     next();
   });
   
+  // /index.html -> / (сохраняем query, чтобы не ломались ?returnTo=... и ?mode=register)
+  app.get('/index.html', (req, res) => {
+    const i = req.originalUrl.indexOf('?');
+    const qs = i === -1 ? '' : req.originalUrl.slice(i);
+    res.redirect(302, '/' + qs);
+  });
+
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir)));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
 
-  const streamKeyCache = require('./services/streamKeyCache');
   app.get('/media/live/:playbackId/*', (req, res) => {
     const key = streamKeyCache.keyByPlaybackId(req.params.playbackId);
     if (!key) return res.status(404).end();
