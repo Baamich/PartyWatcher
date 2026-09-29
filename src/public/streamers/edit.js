@@ -19,7 +19,7 @@ async function init() {
     me = await api('/auth/me');
   } catch {
     alert('Сначала войди в аккаунт');
-    location.href = '/index.html';
+    location.href = '/';
     return;
   }
 
@@ -131,7 +131,7 @@ async function goToOwnProfile() {
     const me = await api('/auth/me');
     if (me.streamerName) location.href = `/streamers/${encodeURIComponent(me.streamerName.toLowerCase())}`;
   } catch {
-    location.href = '/index.html';
+    location.href = '/';
   }
 }
 

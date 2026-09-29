@@ -786,10 +786,10 @@ document.getElementById('liveAuthModal')?.addEventListener('click', (e) => {
 });
 document.getElementById('liveAuthModalClose')?.addEventListener('click', closeLiveAuthModal);
 document.getElementById('liveAuthLoginBtn')?.addEventListener('click', () => {
-  location.href = '/index.html?returnTo=' + encodeURIComponent(location.pathname);
+  location.href = '/?returnTo=' + encodeURIComponent(location.pathname);
 });
 document.getElementById('liveAuthRegisterBtn')?.addEventListener('click', () => {
-  location.href = '/index.html?mode=register&returnTo=' + encodeURIComponent(location.pathname);
+  location.href = '/?mode=register&returnTo=' + encodeURIComponent(location.pathname);
 });
 
 document.getElementById('liveChatInput')?.addEventListener('focus', (e) => {

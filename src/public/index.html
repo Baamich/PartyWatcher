@@ -8,14 +8,25 @@
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css" />
   <link rel="stylesheet" href="/css/index.css" />
-  <title>PartyWatcher</title>
+  <title>PartyWatcher — смотреть фильмы и видео вместе онлайн</title>
+  <meta name="description" content="PartyWatcher — бесплатный сервис для совместного просмотра. Создай комнату, отправь ссылку друзьям и смотри YouTube, Twitch и другие видео синхронно, с чатом и голосом.">
+  <link rel="canonical" href="https://partywatcher.de/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="PartyWatcher" />
+  <meta property="og:title" content="PartyWatcher — смотреть фильмы и видео вместе онлайн" />
+  <meta property="og:description" content="Создай комнату, отправь ссылку друзьям и смотри видео синхронно с чатом и голосом." />
+  <meta property="og:url" content="https://partywatcher.de/" />
 </head>
 <body>
   <div id="authBox">
+    <section class="intro">
+      <h1>Смотри фильмы и видео вместе с друзьями</h1>
+      <p>PartyWatcher — сервис для совместного просмотра онлайн. Создай комнату, отправь ссылку, и все будут смотреть одно и то же видео синхронно: YouTube, Twitch, Google Диск и другие источники. В комнате есть чат и голосовая связь.</p>
+    </section>
     <div class="auth-card">
       <!-- ВХОД -->
       <div id="loginPanel">
-        <h1 class="auth-title">Вход</h1>
+        <h2 class="auth-title">Вход</h2>
         <div id="loginError" class="auth-error hidden"></div>
 
         <label class="auth-label" for="loginInput">Логин или email</label>
@@ -37,7 +48,7 @@
 
       <!-- РЕГИСТРАЦИЯ -->
         <div id="registerPanel" class="hidden">
-        <h1 class="auth-title">Регистрация</h1>
+        <h2 class="auth-title">Регистрация</h2>
         <div id="registerError" class="auth-error hidden"></div>
 
         <label class="auth-label" for="regUsername">Логин</label>
@@ -79,7 +90,7 @@
       </div>
     </div><!-- /auth-card -->
   </div><!-- /authBox -->
-  <div id="appBox" class="hidden">
+  <div id="appBox" class="hidden" data-nosnippet>
     <div class="page-header">
       <div class="brand">
         <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -107,7 +118,7 @@
 
     <div class="layout">
       <nav class="nav-sidebar">
-        <button type="button" class="page-nav-btn active" onclick="navigateWithFade('/index.html')">🏠 Комнаты</button>
+        <button type="button" class="page-nav-btn active" onclick="navigateWithFade('/')">🏠 Комнаты</button>
         <button type="button" class="page-nav-btn" onclick="navigateWithFade('/streams.html')">📡 Прямые трансляции</button>
       </nav>
 
@@ -177,7 +188,7 @@
     </svg>
   </button>
 
-  <div id="supportModal" class="modal hidden">
+  <div id="supportModal" class="modal hidden" data-nosnippet>
     <div class="modal-content support-modal-content">
       <button type="button" class="modal-close" id="supportModalClose" aria-label="Закрыть">×</button>
       <h3 class="support-modal-title">Служба поддержки</h3>

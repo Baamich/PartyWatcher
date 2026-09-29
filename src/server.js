@@ -61,7 +61,7 @@ async function start() {
   app.get('/index.html', (req, res) => {
     const i = req.originalUrl.indexOf('?');
     const qs = i === -1 ? '' : req.originalUrl.slice(i);
-    res.redirect(302, '/' + qs);
+    res.redirect(301, '/' + qs);
   });
 
   app.use(express.static(path.join(__dirname, 'public')));

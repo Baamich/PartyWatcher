@@ -30,7 +30,7 @@ async function goProfile() {
       location.href = '/streamers/edit.html';
     }
   } catch {
-    location.href = '/index.html';
+    location.href = '/';
   }
 }
 
@@ -230,7 +230,7 @@ async function init() {
   try {
     await api('/auth/me');
   } catch {
-    location.href = '/index.html';
+    location.href = '/';
     return;
   }
   loadVods();

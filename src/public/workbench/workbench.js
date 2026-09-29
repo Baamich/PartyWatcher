@@ -671,7 +671,7 @@ async function init() {
   try {
     me = await api('/auth/me');
   } catch {
-    location.href = '/index.html';
+    location.href = '/';
     return;
   }
   if (!me.streamerName) {

@@ -1164,7 +1164,7 @@ window.changeVideoUrl = changeVideoUrl;
 
 async function init() {
   const me = await api('/auth/me').catch(() => null);
-  if (!me) return (location.href = '/index.html');
+  if (!me) return (location.href = '/');
 
   document.getElementById('roomCodeValue').textContent = code;
   document.getElementById('roomCodeValue').onclick = () => copyText(code, 'Код');
@@ -1308,17 +1308,17 @@ window.__onCapturePlayerReload = (player) => {
 
   socket.on('room:kicked', () => {
     alert('Вас кикнули из этой комнаты — доступ заблокирован');
-    location.href = '/index.html';
+    location.href = '/';
   });
 
   socket.on('room:banned', () => {
     alert('Вы заблокированы в этой комнате');
-    location.href = '/index.html';
+    location.href = '/';
   });
 
   socket.on('room:deleted', () => {
     alert('Комната удалена владельцем');
-    location.href = '/index.html';
+    location.href = '/';
   });
 
   socket.on('room:video-changed', async ({ video, playback, by }) => {
@@ -2222,7 +2222,7 @@ function leaveRoom() {
       socket.disconnect();
     }
   } catch (_) {}
-  window.location.replace('/index.html');
+  window.location.replace('/');
 }
 
 function bindTap(el, handler) {
