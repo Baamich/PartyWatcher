@@ -145,6 +145,24 @@ router.get('/:name/vods', async (req, res) => {
   }
 });
 
+// GET /streamers/:name/live-status — только isLive + playbackId, без +1 просмотра
+router.get('/:name/live-status', async (req, res) => {
+  try {
+    const nameLower = String(req.params.name || '').trim().toLowerCase();
+    if (!nameLower) return res.status(400).json({ error: 'Не указано имя стримера' });
+
+    const streamer = await User.findOne({ streamerNameLower: nameLower })
+      .select('isLive streamPlaybackId -_id')
+      .lean();
+
+    if (!streamer) return res.status(404).json({ error: 'Стример не найден' });
+    res.json(streamer);
+  } catch (err) {
+    console.error('[GET /streamers/:name/live-status]', err);
+    res.status(500).json({ error: 'Ошибка' });
+  }
+});
+
 // GET /streamers/:name — публичные данные одного стримера (регистр не важен)
 router.get('/:name', async (req, res) => {
   try {
@@ -167,5 +185,6 @@ router.get('/:name', async (req, res) => {
     res.status(500).json({ error: 'Не удалось загрузить профиль стримера' });
   }
 });
+
 
 module.exports = router;

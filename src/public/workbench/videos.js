@@ -76,85 +76,146 @@ async function confirmDelVod() {
   loadVods();
 }
 
-async function loadVods() {
+function vodStatusLabel(v) {
+  if (v.status === 'recording') return '<span class="badge-rec">идёт запись</span>';
+  if (v.status === 'processing') return '<span class="badge-rec">сжимается…</span>';
+  if (v.published) return '<span class="badge-pub">на профиле</span>';
+  return '';
+}
+
+function buildVodCard(v) {
+  const card = document.createElement('div');
+  card.className = 'vod-card';
+  card.dataset.id = v.id;
+  card.dataset.status = v.status;
+
+  card.innerHTML = `
+    <div class="vod-card-top">
+      <div class="vod-card-head">Запись стрима ${escapeHtml(fmtDay(v.createdAt))}<span class="vod-status-slot">${vodStatusLabel(v)}</span></div>
+      <div class="vod-meta">${escapeHtml(fmt(v.createdAt))} — ${escapeHtml(fmt(v.expiresAt))}
+        <span class="vod-meta-note">(после срока удалится, в том числе с профиля)</span>
+      </div>
+    </div>
+    <div class="vod-card-body">
+      <div class="vod-main">
+        <div class="vod-media">
+          ${v.url
+            ? `<video src="${v.url}" controls preload="metadata"></video>`
+            : '<div class="vod-pending">Файл ещё пишется…</div>'}
+        </div>
+        <div class="vod-meta-fields">
+          <div class="vod-field">
+            <span class="vod-field-label">Название</span>
+            <span class="vod-field-val">${escapeHtml(v.title || '—')}</span>
+          </div>
+          <div class="vod-field">
+            <span class="vod-field-label">Описание</span>
+            <span class="vod-field-val">${escapeHtml(v.description || '—')}</span>
+          </div>
+        </div>
+      </div>
+      <div class="vod-side-actions">
+        <button type="button" class="icon-btn" data-pub ${v.status !== 'ready' ? 'disabled' : ''}>
+          ${v.published ? 'Снять с профиля' : 'Опубликовать'}
+        </button>
+        <button type="button" class="icon-btn" data-edit>Редактировать</button>
+        <button type="button" class="icon-btn vod-btn-danger" data-del>Удалить</button>
+      </div>
+    </div>
+  `;
+
+  card.querySelector('[data-pub]').onclick = async () => {
+    await api('/workbench/vods/' + v.id, {
+      method: 'PATCH',
+      body: { published: !v.published },
+    });
+    loadVods({ silent: false });
+  };
+  card.querySelector('[data-edit]').onclick = () => openEditVod(v);
+  card.querySelector('[data-del]').onclick = () => openDelVod(v.id);
+  return card;
+}
+
+/** Тихо обновить одну карточку, если status/url изменились — без сброса остальных video */
+function patchVodCard(card, v) {
+  const prev = card.dataset.status;
+  if (prev === v.status && (v.status !== 'ready' || card.querySelector('video'))) {
+    // только бейдж published мог смениться — обновим кнопку
+    const pubBtn = card.querySelector('[data-pub]');
+    if (pubBtn && v.status === 'ready') {
+      pubBtn.disabled = false;
+      pubBtn.textContent = v.published ? 'Снять с профиля' : 'Опубликовать';
+    }
+    return;
+  }
+
+  card.dataset.status = v.status;
+  const slot = card.querySelector('.vod-status-slot');
+  if (slot) slot.innerHTML = vodStatusLabel(v);
+
+  const media = card.querySelector('.vod-media');
+  if (media && v.url && !card.querySelector('video')) {
+    media.innerHTML = `<video src="${v.url}" controls preload="metadata"></video>`;
+  }
+
+  const pubBtn = card.querySelector('[data-pub]');
+  if (pubBtn) {
+    pubBtn.disabled = v.status !== 'ready';
+    if (v.status === 'ready') {
+      pubBtn.textContent = v.published ? 'Снять с профиля' : 'Опубликовать';
+    }
+  }
+}
+
+async function loadVods({ silent = false } = {}) {
   const list = document.getElementById('vodList');
   let vods;
   try {
     vods = await api('/workbench/vods');
   } catch (e) {
-    list.innerHTML = `<p style="color:var(--danger)">${escapeHtml(e.message)}</p>`;
+    if (!silent) list.innerHTML = `<p style="color:var(--danger)">${escapeHtml(e.message)}</p>`;
     return;
   }
 
   if (!vods.length) {
-    list.innerHTML = '<p class="wb-subpage-hint">Записей пока нет — они появятся после эфира.</p>';
+    if (!silent) list.innerHTML = '<p class="wb-subpage-hint">Записей пока нет — они появятся после эфира.</p>';
     return;
   }
 
-  const hasRecording = vods.some((v) => v.status === 'recording');
-  list.innerHTML = '';
+  const hasBusy = vods.some((v) => v.status === 'recording' || v.status === 'processing');
 
-  vods.forEach((v) => {
-    const card = document.createElement('div');
-    card.className = 'vod-card';
-    const statusBadge =
-      v.status === 'recording'
-        ? '<span class="badge-rec">идёт запись</span>'
-        : v.published
-          ? '<span class="badge-pub">на профиле</span>'
-          : '';
+  if (!silent || !list.querySelector('.vod-card')) {
+    // первая отрисовка
+    list.innerHTML = '';
+    vods.forEach((v) => list.appendChild(buildVodCard(v)));
+  } else {
+    // тихий апдейт: патчим существующие, добавляем новые в начало
+    const existing = new Map();
+    list.querySelectorAll('.vod-card[data-id]').forEach((el) => {
+      existing.set(el.dataset.id, el);
+    });
 
-    card.innerHTML = `
-      <div class="vod-card-top">
-        <div class="vod-card-head">Запись стрима ${escapeHtml(fmtDay(v.createdAt))}${statusBadge}</div>
-        <div class="vod-meta">${escapeHtml(fmt(v.createdAt))} — ${escapeHtml(fmt(v.expiresAt))}
-          <span class="vod-meta-note">(после срока удалится, в том числе с профиля)</span>
-        </div>
-      </div>
-      <div class="vod-card-body">
-        <div class="vod-main">
-          <div class="vod-media">
-            ${v.url
-              ? `<video src="${v.url}" controls preload="metadata"></video>`
-              : '<div class="vod-pending">Файл ещё пишется…</div>'}
-          </div>
-          <div class="vod-meta-fields">
-            <div class="vod-field">
-              <span class="vod-field-label">Название</span>
-              <span class="vod-field-val">${escapeHtml(v.title || '—')}</span>
-            </div>
-            <div class="vod-field">
-              <span class="vod-field-label">Описание</span>
-              <span class="vod-field-val">${escapeHtml(v.description || '—')}</span>
-            </div>
-          </div>
-        </div>
-        <div class="vod-side-actions">
-          <button type="button" class="icon-btn" data-pub ${v.status !== 'ready' ? 'disabled' : ''}>
-            ${v.published ? 'Снять с профиля' : 'Опубликовать'}
-          </button>
-          <button type="button" class="icon-btn" data-edit>Редактировать</button>
-          <button type="button" class="icon-btn vod-btn-danger" data-del>Удалить</button>
-        </div>
-      </div>
-    `;
+    const seen = new Set();
+    vods.forEach((v) => {
+      const id = String(v.id);
+      seen.add(id);
+      const card = existing.get(id);
+      if (card) {
+        patchVodCard(card, v);
+      } else {
+        list.insertBefore(buildVodCard(v), list.firstChild);
+      }
+    });
 
-    card.querySelector('[data-pub]').onclick = async () => {
-      await api('/workbench/vods/' + v.id, {
-        method: 'PATCH',
-        body: { published: !v.published },
-      });
-      loadVods();
-    };
-    card.querySelector('[data-edit]').onclick = () => openEditVod(v);
-    card.querySelector('[data-del]').onclick = () => openDelVod(v.id);
-    list.appendChild(card);
-  });
+    // удалить карточки, которых больше нет
+    existing.forEach((el, id) => {
+      if (!seen.has(id)) el.remove();
+    });
+  }
 
-  // автообновление, пока есть «идёт запись»
   clearInterval(pollTimer);
-  if (hasRecording) {
-    pollTimer = setInterval(loadVods, 5000);
+  if (hasBusy) {
+    pollTimer = setInterval(() => loadVods({ silent: true }), 5000);
   }
 }
 

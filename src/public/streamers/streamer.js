@@ -806,6 +806,55 @@ async function loadProfile() {
   }
 }
 
+let liveStatusPollTimer = null;
+
+async function pollStreamerLiveStatus() {
+  const nameLower = getNameFromUrl();
+  if (!nameLower) return;
+
+  try {
+    // лёгкий запрос — тот же профиль, но без лишнего UI
+    const data = await api('/streamers/' + encodeURIComponent(nameLower) + '/live-status');
+    // profileViews++ при каждом poll плохо — лучше отдельный endpoint (см. ниже)
+    const wasLive = !!(currentStreamer?.isLive && currentStreamer?.streamPlaybackId);
+    const nowLive = !!(data.isLive && data.streamPlaybackId);
+
+    currentStreamer = { ...currentStreamer, ...data };
+    document.getElementById('liveBadge')?.classList.toggle('hidden', !data.isLive);
+
+    if (nowLive && !wasLive) {
+      // стрим только что начался — открыть плеер без F5
+      if (!liveOpen) openLiveStrip();
+      else {
+        // уже открыт офлайн-экран — перезапустить сессию
+        stopLiveSession();
+        startLiveSession();
+      }
+    } else if (!nowLive && wasLive) {
+      // эфир кончился — показать «Эфира нет», чат можно оставить
+      const video = document.getElementById('liveVideo');
+      const offline = document.getElementById('liveOffline');
+      if (liveHls) {
+        try { liveHls.destroy(); } catch (_) {}
+        liveHls = null;
+      }
+      if (video) {
+        try { video.pause(); video.removeAttribute('src'); video.load(); } catch (_) {}
+        video.classList.add('hidden');
+      }
+      offline?.classList.remove('hidden');
+      document.getElementById('liveOverlay')?.classList.add('hidden');
+    }
+  } catch (e) {
+    console.warn('[pollStreamerLiveStatus]', e.message);
+  }
+}
+
+function startStreamerLivePolling() {
+  clearInterval(liveStatusPollTimer);
+  liveStatusPollTimer = setInterval(pollStreamerLiveStatus, 5000);
+}
+
 function makeLiveDraggable(el, storageKey) {
   if (!el) return;
 
@@ -971,3 +1020,4 @@ try {
 applyVolumeToLive(getSavedVolume());
 
 loadProfile();
+startStreamerLivePolling();

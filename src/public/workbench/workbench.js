@@ -628,8 +628,9 @@ function initChat(streamerNameLower) {
       if (row) row.innerHTML = buildMessageHtml({ deleted: true });
     });
 
-    socket.on('chat:viewers', (count) => {
-      document.getElementById('viewersCount').textContent = count;
+    socket.on('chat:viewers', (payload) => {
+      const n = typeof payload === 'number' ? payload : (payload?.count ?? 0);
+      document.getElementById('viewersCount').textContent = n;
     });
 
     socket.on('chat:cleared', () => {
