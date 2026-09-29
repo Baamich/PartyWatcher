@@ -15,13 +15,13 @@ const StreamVod = require('../../models/StreamVod');
 // а не полагаемся только на флаг isLive в базе (который мог не долететь/не записаться).
 function isCurrentlyLive(streamKey) {
   if (!streamKey) return false;
-  try {
-    const file = path.join(process.cwd(), 'media', 'live', streamKey, 'master.m3u8');
-    const stat = fs.statSync(file);
-    return Date.now() - stat.mtimeMs < 15000;
-  } catch {
-    return false;
+  const base = path.join(process.cwd(), 'media', 'live', streamKey);
+  for (const rel of ['source/index.m3u8', '1080/index.m3u8', '480/index.m3u8']) {
+    try {
+      if (Date.now() - fs.statSync(path.join(base, rel)).mtimeMs < 15000) return true;
+    } catch (_) {}
   }
+  return false;
 }
 
 async function requireStreamer(req, res, next) {

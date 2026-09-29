@@ -1,3 +1,5 @@
+// rtmpServer.js
+
 const NodeMediaServer = require('node-media-server');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -115,7 +117,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
 }
 
 function killProc(proc, signal = 'SIGTERM') {
-  if (!proc || proc.killed) return;
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
   try {
     proc.kill(signal);
   } catch (_) {}
