@@ -69,9 +69,12 @@ function wipeLiveMedia(key) {
 }
 
 async function setLiveState(key, { isLive, touchStartedAt }) {
-  const entry = streamKeyCache.get(key);
+  let entry = streamKeyCache.get(key);
   if (!entry) {
     console.warn('[rtmp] ключ не в кэше:', key.slice(0, 8));
+    if (!isLive) {
+      return null;
+    }
     return null;
   }
   try {
@@ -195,7 +198,7 @@ function compressVodFile(absPath) {
 function probeDurationSec(absPath) {
   return new Promise((resolve) => {
     const proc = spawn(
-      FFMPEG_PATH,
+      FFPROBE_PATH,
       [
         '-v', 'error',
         '-show_entries', 'format=duration',
