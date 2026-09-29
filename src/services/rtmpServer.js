@@ -226,7 +226,43 @@ function probeDurationSec(absPath) {
   });
 }
 
-async function processVodAfterStop(vodId, absPath) {
+/** Склеивает куски записи (после переподключений) в один файл без пересжатия */
+function mergeVodParts(parts, absPath) {
+  return new Promise((resolve, reject) => {
+    const listPath = absPath + '.list.txt';
+    const tmpPath = absPath + '.merging.mp4';
+    fs.writeFileSync(listPath, parts.map((p) => `file '${p}'`).join('\n'));
+
+    const proc = spawn(
+      FFMPEG_PATH,
+      ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', tmpPath],
+      { stdio: ['ignore', 'ignore', 'pipe'] }
+    );
+
+    let errBuf = '';
+    proc.stderr.on('data', (c) => { errBuf += c.toString(); });
+    proc.on('error', (e) => {
+      try { fs.unlinkSync(listPath); } catch (_) {}
+      reject(e);
+    });
+    proc.on('exit', (code) => {
+      try { fs.unlinkSync(listPath); } catch (_) {}
+      if (code !== 0) {
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        return reject(new Error(errBuf.trim() || `ffmpeg exit ${code}`));
+      }
+      try {
+        fs.renameSync(tmpPath, absPath);
+        parts.forEach((p) => { if (p !== absPath) { try { fs.unlinkSync(p); } catch (_) {} } });
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+}
+
+async function processVodAfterStop(vodId, absPath, parts) {
   if (!vodId || !absPath) return;
 
   await finalizeVod(vodId, 'processing');
@@ -234,6 +270,12 @@ async function processVodAfterStop(vodId, absPath) {
   try {
     // даём ffmpeg-записи закрыть файл после SIGTERM
     await new Promise((r) => setTimeout(r, 1500));
+    const existing = (parts && parts.length ? parts : [absPath]).filter((p) => {
+      try { return fs.statSync(p).size > 0; } catch (_) { return false; }
+    });
+    if (existing.length && (existing.length > 1 || existing[0] !== absPath)) {
+      await mergeVodParts(existing, absPath);
+    }
     await compressVodFile(absPath);
     const durationSec = await probeDurationSec(absPath);
     await finalizeVod(vodId, 'ready', durationSec ? { durationSec } : {});
@@ -249,6 +291,7 @@ async function finalizeStop(key) {
 
   let vodId = null;
   let absPath = null;
+  let parts = [];
 
   const entry = activeTranscodes.get(key);
   if (entry) {
@@ -263,6 +306,7 @@ async function finalizeStop(key) {
   if (meta) {
     vodId = vodId || meta.vodId;
     absPath = meta.abs;
+    parts = meta.parts || [meta.abs];
   }
 
   sessionMeta.delete(key);
@@ -271,7 +315,7 @@ async function finalizeStop(key) {
 
   // сжатие в фоне — не блокируем RTMP-пайплайн
   if (vodId && absPath) {
-    processVodAfterStop(vodId, absPath).catch((e) => {
+    processVodAfterStop(vodId, absPath, parts).catch((e) => {
       console.error('[rtmp] processVodAfterStop', e.message);
     });
   } else if (vodId) {
@@ -485,7 +529,10 @@ async function startTranscode(key) {
     fs.mkdirSync(hlsRootDir, { recursive: true });
     try {
       meta = await createVodDoc(key);
-      if (meta) sessionMeta.set(key, meta);
+      if (meta) {
+        meta.parts = [meta.abs];
+        sessionMeta.set(key, meta);
+      }
     } catch (e) {
       console.error('[rtmp] createVodDoc', e.message);
       meta = null;
@@ -494,7 +541,14 @@ async function startTranscode(key) {
     console.log('[rtmp] продолжаю сессию VOD', key.slice(0, 8) + '…', meta.vodId);
   }
 
-  const vodAbs = isNewSession ? meta?.abs : null;
+  let vodAbs = null;
+  if (isNewSession) {
+    vodAbs = meta?.abs || null;
+  } else if (meta) {
+    // переподключение: пишем в новый кусок, склеим при остановке
+    vodAbs = meta.abs.replace(/\.mp4$/, `.part${meta.parts.length + 1}.mp4`);
+    meta.parts.push(vodAbs);
+  }
   const vodId = meta?.vodId || null;
 
   setTimeout(async () => {
