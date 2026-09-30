@@ -24,6 +24,7 @@ router.get('/ice-servers', auth, (req, res) => {
       .update(username)
       .digest('base64');
 
+    iceServers.push({ urls: `stun:${turnUrl}` }); // запасной STUN: у Google он доступен не везде
     iceServers.push({
       urls: [`turn:${turnUrl}?transport=udp`, `turn:${turnUrl}?transport=tcp`],
       username,

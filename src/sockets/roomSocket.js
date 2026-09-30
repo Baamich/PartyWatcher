@@ -20,6 +20,7 @@ function getVoiceParticipants(code) {
     socketId,
     username: info.username,
     isOwner: info.isOwner,
+    muted: !!info.muted,
   }));
 }
 
@@ -151,6 +152,7 @@ function registerRoomSocket(io) {
         playback: room.playback,
         isOwner: socket.data.isOwner,
         name: room.name,
+        username: socket.user.username,
       });
       socket.to(code).emit('room:user-joined', { username: socket.user.username });
       broadcastParticipants(io, code);
@@ -159,7 +161,7 @@ function registerRoomSocket(io) {
       socket.emit('voice:participants', getVoiceParticipants(code));
     });
 
-    const MAX_VOICE_PARTICIPANTS = 15;
+    const MAX_VOICE_PARTICIPANTS = 8;
 
     socket.on('voice:join', ({ code }) => {
       if (socket.data.roomCode !== code) return;
@@ -187,8 +189,19 @@ function registerRoomSocket(io) {
       removeFromVoice(io, socket, code);
     });
 
+    socket.on('voice:mute', ({ code, muted }) => {
+      if (socket.data.roomCode !== code) return;
+      const info = voiceRooms.get(code)?.get(socket.id);
+      if (!info) return;
+      info.muted = !!muted;
+      broadcastVoiceParticipants(io, code);
+    });
+
     socket.on('voice:signal', ({ code, to, data }) => {
-      if (socket.data.roomCode !== code || !to) return;
+      if (socket.data.roomCode !== code || !to || !data) return;
+      // сигналить можно только тем, кто сейчас в звонке этой же комнаты
+      const map = voiceRooms.get(code);
+      if (!map || !map.has(socket.id) || !map.has(to)) return;
       io.to(to).emit('voice:signal', { from: socket.id, data });
     });
 
@@ -310,8 +323,13 @@ function registerRoomSocket(io) {
       });
     });
 
+    let lastChatAt = 0;
     socket.on('chat:message', async ({ code, text }) => {
-      const trimmed = text?.trim();
+      if (socket.data.roomCode !== code) return;
+      const now = Date.now();
+      if (now - lastChatAt < 300) return; // антифлуд
+      lastChatAt = now;
+      const trimmed = String(text ?? '').trim().slice(0, 500);
       if (!trimmed) return;
 
       if (socket.data.roomId) {

@@ -21,8 +21,8 @@ const roomSchema = new mongoose.Schema(
         voices: { type: [String], default: [] },
         currentVoice: { type: String, default: null },
       },
-      ageConfirmed: { type: Boolean, default: false }, 
     },
+    ageConfirmed: { type: Boolean, default: false },
     isPublic: { type: Boolean, default: false },
     thumbnailUrl: { type: String, default: null },
     playback: {

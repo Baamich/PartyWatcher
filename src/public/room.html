@@ -91,6 +91,7 @@
         <button id="btnShowVideo" onclick="setViewMode('video')">Видео</button>
       </div>
       <button type="button" id="voiceCallBtn" class="voice-call-btn" title="Голосовая связь" onclick="onVoiceCallBtnClick()">📞</button>
+      <button type="button" id="voiceSettingsBtn" class="voice-call-btn voice-settings-btn" title="Настройки звука">🎚️</button>
     </div>
 
     <div id="voiceCallPanel" class="voice-call-panel hidden">
@@ -100,6 +101,7 @@
       <div class="voice-call-side">
         <div id="voiceAvatars" class="voice-avatars"></div>
         <span id="voiceCountText" class="voice-count-text">В звонке: 0</span>
+        <button type="button" id="voiceMuteBtn" class="voice-mute-btn hidden" title="Выключить микрофон (M)">🎙️</button>
         <button type="button" id="voiceHangupBtn" class="voice-hangup-btn hidden" title="Выйти из звонка">📴</button>
       </div>
     </div>
@@ -189,6 +191,34 @@
         <button type="button" id="voiceCallConfirmBtn">Да, начать</button>
         <button type="button" id="voiceCallCancelBtn" class="icon-btn">Отмена</button>
       </div>
+    </div>
+  </div>
+
+  <div id="voiceSettingsModal" class="modal hidden">
+    <div class="modal-content voice-settings-content">
+      <button class="modal-close" onclick="closeModal('voiceSettingsModal')">✕</button>
+      <h3>Настройки звука</h3>
+
+      <label for="micSelect">Микрофон</label>
+      <select id="micSelect"></select>
+
+      <label for="micGainSlider">Громкость микрофона: <b id="micGainValue">100%</b></label>
+      <input id="micGainSlider" type="range" min="50" max="400" value="100">
+      <div class="mic-level"><div id="micLevelBar"></div></div>
+      <div class="voice-settings-hint">
+        Полоска показывает, как тебя слышат. Когда говоришь обычным голосом, она должна доходить хотя бы до середины.
+        Если еле двигается, подними громкость. Работает во время звонка.
+      </div>
+
+      <label class="voice-settings-check">
+        <input id="duckToggle" type="checkbox" checked>
+        Приглушать видео, пока кто-то говорит
+      </label>
+      <label for="duckSlider">Насколько приглушать: <b id="duckValue">65%</b></label>
+      <input id="duckSlider" type="range" min="0" max="90" value="65">
+
+      <label>Качество связи (обновляется каждые 2 сек)</label>
+      <div id="voiceStatsList" class="voice-stats">Появится, когда зайдёшь в звонок.</div>
     </div>
   </div>
 

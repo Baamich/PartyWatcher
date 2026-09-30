@@ -1097,3 +1097,131 @@ video::-webkit-media-controls-fullscreen-button {
   padding: 9px 12px;
   font-size: 14px;
 }
+
+.voice-mute-btn {
+  width: auto;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.voice-mute-btn.muted {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.voice-mute-btn.hidden {
+  display: none !important;
+}
+
+.voice-avatar.speaking {
+  box-shadow: 0 0 0 2px #3ddc84;
+}
+.voice-settings-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.voice-settings-btn:hover {
+  background: var(--surface-alt);
+  box-shadow: none;
+}
+
+.voice-settings-content {
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voice-settings-content label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.voice-settings-content label b {
+  color: var(--text);
+}
+
+.voice-settings-content select {
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.voice-settings-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.voice-settings-content input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.mic-level {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+#micLevelBar {
+  height: 100%;
+  width: 0%;
+  background: #3ddc84;
+  transition: width 0.08s linear;
+}
+
+.voice-settings-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.voice-avatar.muted {
+  opacity: 0.55;
+}
+
+.voice-avatar.muted::after {
+  content: '🔇';
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.voice-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.voice-stat-row {
+  padding: 4px 8px;
+  border-left: 3px solid var(--border);
+  background: var(--surface-alt);
+  border-radius: 4px;
+}
+
+.voice-stat-row.ok { border-left-color: #3ddc84; }
+.voice-stat-row.warn { border-left-color: #f5b301; }
+.voice-stat-row.bad { border-left-color: var(--danger); }
+
+.voice-settings-content { max-width: min(380px, 90vw); }

@@ -20,12 +20,23 @@ function withLiveStatus(room, io) {
   return { ...room.toObject(), viewerCount };
 }
 
+function validateVideo(video) {
+  const t = video?.type;
+  const u = String(video?.url || '').trim();
+  if ((t === 'direct' || t === 'player_capture') && !/^https?:\/\//i.test(u)) {
+    return 'Нужна полная ссылка (http/https)';
+  }
+  return null;
+}
+
 router.post('/', auth, async (req, res) => {
   try {
     const { name, video, isPublic } = req.body;
     if (!name || !video?.type || !video?.url) {
       return res.status(400).json({ error: 'Нужно имя комнаты и видео' });
     }
+    const videoError = validateVideo(video);
+    if (videoError) return res.status(400).json({ error: videoError });
 
     let code;
     do {

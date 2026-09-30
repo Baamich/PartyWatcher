@@ -17,103 +17,277 @@ let voiceParticipants = [];
 let inVoiceCall = false;
 let localStream = null;
 let peerConnections = {};
-let remoteAudioEls = {};
-let voiceAudioCtx = null;
+let voiceAudioCtx = null; // больше не используется, но на него ссылается leaveRoom
 let rawLocalStream = null;
 
-const MAX_VOICE_PARTICIPANTS = 15; // mesh: каждый держит N-1 P2P-соединений, больше — начинает тормозить
-const VOICE_WARN_THRESHOLD = 8;
+let localMuted = false;
+let localMeter = null;
+let voiceDuck = 1;
+let voiceLoopTimer = null;
+let voiceStarting = false;
+let roomStateKey = null;
+let myUsername = null;
+const SPEAK_THRESHOLD = 0.02; // порог «человек говорит»
+
+// цепочка микрофона: mic → gain → limiter → destination (этот поток уходит собеседникам)
+let micSourceNode = null;
+let micGainNode = null;
+let micLimiterNode = null;
+let micDestNode = null;
+
+const MIC_GAIN_KEY = 'pw_mic_gain';
+const MIC_DEVICE_KEY = 'pw_mic_device';
+const DUCK_ON_KEY = 'pw_duck_on';
+const DUCK_AMOUNT_KEY = 'pw_duck_amount';
+
+function getMicGainPct() {
+  const v = parseInt(localStorage.getItem(MIC_GAIN_KEY), 10);
+  return Number.isFinite(v) && v >= 50 && v <= 400 ? v : 100;
+}
+
+// приглушение видео, пока кто-то говорит: вкл/выкл и на сколько процентов
+let duckEnabled = localStorage.getItem(DUCK_ON_KEY) !== '0';
+let duckAmount = (() => {
+  const v = parseInt(localStorage.getItem(DUCK_AMOUNT_KEY), 10);
+  return Number.isFinite(v) && v >= 0 && v <= 90 ? v : 65;
+})();
+
+function makeRoomStateKey(video) {
+  return `${video?.type}|${video?.url}|${video?.meta?.currentSeason}|${video?.meta?.currentEpisode}`;
+}
+
+const MAX_VOICE_PARTICIPANTS = 8; // mesh: каждый держит N-1 P2P-соединений, 15 слишком много
+const VOICE_WARN_THRESHOLD = 5;
 
 function voiceVolKey(username) {
   return `pw_voice_vol:${username}`;
 }
 
+const MAX_USER_VOICE_VOLUME = 300;
+
 function getUserVoiceVolume(username) {
   const v = parseInt(localStorage.getItem(voiceVolKey(username)), 10);
-  return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 100;
+  return Number.isFinite(v) && v >= 0 && v <= MAX_USER_VOICE_VOLUME ? v : 100;
 }
 
 function setUserVoiceVolume(username, vol) {
-  const clamped = Math.max(0, Math.min(100, Number(vol) || 0));
+  const clamped = Math.max(0, Math.min(MAX_USER_VOICE_VOLUME, Number(vol) || 0));
   localStorage.setItem(voiceVolKey(username), String(clamped));
   voiceParticipants.forEach((p) => {
-    if (p.username === username && remoteAudioEls[p.socketId]) {
-      remoteAudioEls[p.socketId].volume = clamped / 100;
-    }
+    if (p.username === username) applyRemoteGain(p.socketId, clamped / 100);
   });
 }
 
-async function createProcessedLocalStream() {
-  const raw = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      channelCount: 1,
-      // Chrome: доп. изоляция голоса, если поддерживается
-      voiceIsolation: true,
-    },
-    video: false,
-  });
+// ---- воспроизведение через Web Audio: GainNode позволяет громкость больше 100% ----
+let playbackCtx = null;
+let playbackLimiter = null;
+const remoteAudio = {}; // socketId -> { el, source, gain, meter, streamId }
 
-  rawLocalStream = raw;
-
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  const ctx = new Ctx();
-  voiceAudioCtx = ctx;
-
-  const source = ctx.createMediaStreamSource(raw);
-
-  // срезаем гул/дыхание/низкий шум
-  const highpass = ctx.createBiquadFilter();
-  highpass.type = 'highpass';
-  highpass.frequency.value = 100;
-  highpass.Q.value = 0.7;
-
-  // чуть приглушаем очень тихие шумы, усиливает речь
-  const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.value = -45;
-  compressor.knee.value = 30;
-  compressor.ratio.value = 10;
-  compressor.attack.value = 0.003;
-  compressor.release.value = 0.2;
-
-  // мягкий noise gate: тише порога — почти mute
-  const gate = ctx.createGain();
-  gate.gain.value = 1;
-
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 2048;
-  const data = new Uint8Array(analyser.fftSize);
-
-  const dest = ctx.createMediaStreamDestination();
-
-  source.connect(highpass);
-  highpass.connect(compressor);
-  compressor.connect(analyser);
-  analyser.connect(gate);
-  gate.connect(dest);
-
-  const GATE_THRESHOLD = 15; // 18–25 (глушит сильнее, но может глотать тихую речь).
-  const GATE_FLOOR = 0.02;
-
-  function tickGate() {
-    if (!voiceAudioCtx) return;
-    analyser.getByteTimeDomainData(data);
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) {
-      const v = data[i] - 128;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / data.length);
-    const target = rms < GATE_THRESHOLD ? GATE_FLOOR : 1;
-    const current = gate.gain.value;
-    gate.gain.value = current + (target - current) * 0.15;
-    requestAnimationFrame(tickGate);
+function getPlaybackCtx() {
+  if (!playbackCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    playbackCtx = new Ctx({ latencyHint: 'balanced' }); // чуть больший буфер: меньше щелчков, пока грузится HLS/декодер видео
+    // через этот контекст теперь идёт и микрофон: если браузер его усыпил, будим обратно
+    playbackCtx.onstatechange = () => {
+      if (playbackCtx.state === 'suspended' || playbackCtx.state === 'interrupted') {
+        playbackCtx.resume().catch(() => {});
+      }
+    };
+    // лимитер, чтобы при 200–300% не было клиппинга и хрипа
+    playbackLimiter = playbackCtx.createDynamicsCompressor();
+    playbackLimiter.threshold.value = -6;
+    playbackLimiter.knee.value = 0;
+    playbackLimiter.ratio.value = 20;
+    playbackLimiter.attack.value = 0.003;
+    playbackLimiter.release.value = 0.1;
+    playbackLimiter.connect(playbackCtx.destination);
   }
-  tickGate();
+  if (playbackCtx.state === 'suspended') playbackCtx.resume().catch(() => {});
+  return playbackCtx;
+}
 
-  return dest.stream;
+function resumePlaybackCtx() {
+  if (playbackCtx && playbackCtx.state !== 'running' && playbackCtx.state !== 'closed') {
+    playbackCtx.resume().catch(() => {});
+  }
+}
+document.addEventListener('pointerdown', resumePlaybackCtx);
+document.addEventListener('visibilitychange', resumePlaybackCtx);
+
+// во время звонка экран телефона не гаснет (иначе звонок обрывается)
+let wakeLock = null;
+async function acquireWakeLock() {
+  try {
+    if (!('wakeLock' in navigator) || wakeLock) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (_) {}
+}
+function releaseWakeLock() {
+  try { wakeLock?.release(); } catch (_) {}
+  wakeLock = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && inVoiceCall) acquireWakeLock();
+});
+
+function applyRemoteGain(socketId, factor) {
+  const r = remoteAudio[socketId];
+  if (r) r.gain.gain.value = factor;
+}
+
+// измеритель уровня: нужен для подсветки говорящего и приглушения видео
+function makeMeter(source) {
+  const ctx = playbackCtx;
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  source.connect(analyser);
+  const silent = ctx.createGain();
+  silent.gain.value = 0;
+  analyser.connect(silent);
+  silent.connect(ctx.destination); // без выхода некоторые браузеры не обрабатывают узел
+  return {
+    analyser,
+    buf: new Float32Array(analyser.fftSize),
+    lastLoud: 0,
+    floor: 0.01, // оценка фонового шума этого источника
+    dispose() {
+      try { analyser.disconnect(); } catch (_) {}
+      try { silent.disconnect(); } catch (_) {}
+    },
+  };
+}
+
+function meterLevel(m) {
+  m.analyser.getFloatTimeDomainData(m.buf);
+  let s = 0;
+  for (let i = 0; i < m.buf.length; i++) s += m.buf[i] * m.buf[i];
+  return Math.sqrt(s / m.buf.length);
+}
+
+// «говорит» = заметно громче собственного фонового шума источника
+// (у друга шумный фон или колонки: фильтр сам подстроится, а не будет глушить видео постоянно)
+function meterSpeaking(m) {
+  const level = meterLevel(m);
+  m.floor = Math.min(level, m.floor * 1.005 + 0.00001);
+  return { level, speaking: level > Math.max(SPEAK_THRESHOLD * 0.75, m.floor * 3) };
+}
+
+function attachRemoteStream(socketId, stream) {
+  const existing = remoteAudio[socketId];
+  if (existing && existing.streamId === stream.id) return;
+  detachRemoteAudio(socketId);
+
+  const ctx = getPlaybackCtx();
+
+  // Chrome не «раскручивает» удалённый поток, пока он не привязан к media-элементу,
+  // поэтому держим muted <audio>, а реальный звук идёт через WebAudio
+  const el = document.createElement('audio');
+  el.srcObject = stream;
+  el.autoplay = true;
+  el.muted = true;
+  document.getElementById('voiceAudioContainer')?.appendChild(el);
+  el.play?.().catch(() => {});
+
+  const source = ctx.createMediaStreamSource(stream);
+  const gain = ctx.createGain();
+  source.connect(gain);
+  gain.connect(playbackLimiter);
+  const meter = makeMeter(gain); // после gain: если человека заглушили слайдером, видео из-за него не приглушается
+
+  const peer = voiceParticipants.find((p) => p.socketId === socketId);
+  gain.gain.value = peer ? getUserVoiceVolume(peer.username) / 100 : 1;
+
+  remoteAudio[socketId] = { el, source, gain, meter, streamId: stream.id };
+}
+
+function detachRemoteAudio(socketId) {
+  const r = remoteAudio[socketId];
+  if (!r) return;
+  try { r.source.disconnect(); } catch (_) {}
+  try { r.gain.disconnect(); } catch (_) {}
+  if (r.meter) r.meter.dispose();
+  try { r.el.srcObject = null; } catch (_) {}
+  r.el.remove();
+  delete remoteAudio[socketId];
+}
+
+async function getMicStream(deviceId) {
+  const audio = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: 1,
+    sampleRate: 48000,
+  };
+  if (deviceId) audio.deviceId = { exact: deviceId };
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio, video: false });
+  } catch (e) {
+    if (deviceId) {
+      // сохранённый микрофон пропал — берём тот, что по умолчанию
+      localStorage.removeItem(MIC_DEVICE_KEY);
+      return getMicStream(null);
+    }
+    throw e;
+  }
+}
+
+function watchMicTrack(raw) {
+  const track = raw.getAudioTracks()[0];
+  if (!track) return;
+  track.onended = () => {
+    if (!inVoiceCall) return;
+    alert('Микрофон отключился — звонок завершён');
+    leaveVoiceCall();
+  };
+}
+
+// собирает цепочку mic → gain → limiter → destination и возвращает поток, который уходит собеседникам
+async function buildLocalStream() {
+  const raw = await getMicStream(localStorage.getItem(MIC_DEVICE_KEY));
+  rawLocalStream = raw;
+  watchMicTrack(raw);
+
+  const ctx = getPlaybackCtx();
+  micSourceNode = ctx.createMediaStreamSource(raw);
+
+  micGainNode = ctx.createGain();
+  micGainNode.gain.value = getMicGainPct() / 100;
+
+  // лимитер, чтобы при усилении 200–400% не было клиппинга
+  micLimiterNode = ctx.createDynamicsCompressor();
+  micLimiterNode.threshold.value = -3;
+  micLimiterNode.knee.value = 0;
+  micLimiterNode.ratio.value = 20;
+  micLimiterNode.attack.value = 0.002;
+  micLimiterNode.release.value = 0.1;
+
+  micDestNode = ctx.createMediaStreamDestination();
+
+  micSourceNode.connect(micGainNode);
+  micGainNode.connect(micLimiterNode);
+  micLimiterNode.connect(micDestNode);
+
+  return micDestNode.stream;
+}
+
+// смена микрофона прямо во время звонка: поток к собеседникам не прерывается
+async function switchMic(deviceId) {
+  const raw = await getMicStream(deviceId);
+  try { micSourceNode.disconnect(); } catch (_) {}
+  if (rawLocalStream) rawLocalStream.getTracks().forEach((t) => t.stop());
+  rawLocalStream = raw;
+  micSourceNode = getPlaybackCtx().createMediaStreamSource(raw);
+  micSourceNode.connect(micGainNode);
+  watchMicTrack(raw);
+}
+
+function teardownMicGraph() {
+  [micSourceNode, micGainNode, micLimiterNode, micDestNode].forEach((n) => {
+    try { if (n) n.disconnect(); } catch (_) {}
+  });
+  micSourceNode = micGainNode = micLimiterNode = micDestNode = null;
 }
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
@@ -279,7 +453,7 @@ function isAgeConfirmedLocally() {
     ytPlayer = null;
     }
     const container = document.getElementById('player');
-    container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${url}"></video>`;
+    container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${escapeHTML(url)}"></video>`;
     videoEl = document.getElementById('videoEl');
     videoEl.volume = getSavedVolume() / 100;
     currentVideoType = 'direct';
@@ -356,7 +530,7 @@ function isAgeConfirmedLocally() {
     const isRawVideoFile = /\.(mp4|webm|ogg|m3u8)(\?|$)/i.test(video.url);
 
     if (isRawVideoFile) {
-      container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${video.url}"></video>`;
+      container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${escapeHTML(video.url)}"></video>`;
       videoEl = document.getElementById('videoEl');
       videoEl.volume = getSavedVolume() / 100;
       playerReady = true;
@@ -377,7 +551,7 @@ function isAgeConfirmedLocally() {
     videoEl = null;
     container.innerHTML = '';
     const iframe = document.createElement('iframe');
-    iframe.src = video.url;
+    iframe.src = /^https?:\/\//i.test(video.url) ? video.url : 'about:blank';
     iframe.allow = 'autoplay; fullscreen; picture-in-picture';
     iframe.style.width = '100%';
     iframe.style.height = '100%';
@@ -479,7 +653,7 @@ function isAgeConfirmedLocally() {
   }
 
   const videoSrc = video.type === 'drive' ? `/api/drive/stream/${video.url}` : video.url;
-  container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${videoSrc}"></video>`;
+  container.innerHTML = `<video id="videoEl" ${isOwner ? 'controls controlsList="nofullscreen noremoteplayback"' : ''} src="${escapeHTML(videoSrc)}"></video>`;
   videoEl = document.getElementById('videoEl');
   videoEl.volume = getSavedVolume() / 100;
   playerReady = true;
@@ -933,7 +1107,7 @@ function renderParticipantRowsInto(container, list) {
   if (!container) return;
   container.innerHTML = '';
 
-  const myName = socket?.user?.username || null;
+  const myName = myUsername;
 
   list.forEach((p) => {
     const row = document.createElement('div');
@@ -944,13 +1118,13 @@ function renderParticipantRowsInto(container, list) {
 
     row.innerHTML = `
       <div class="participant-row-main">
-        <span>${p.username}${p.isOwner ? ' (Хост)' : ''}${isMe ? ' (вы)' : ''}</span>
+        <span>${escapeHTML(p.username)}${p.isOwner ? ' (Хост)' : ''}${isMe ? ' (вы)' : ''}</span>
         ${isOwner && !p.isOwner ? '<button type="button" class="kick-btn">Кикнуть</button>' : ''}
       </div>
       ${!isMe ? `
         <div class="participant-vol">
           <span class="participant-vol-label">🔊</span>
-          <input type="range" class="participant-vol-slider" min="0" max="100" value="${vol}" data-username="${p.username}">
+          <input type="range" class="participant-vol-slider" min="0" max="300" value="${vol}" data-username="${escapeHTML(p.username)}">
           <span class="participant-vol-value">${vol}%</span>
         </div>
       ` : ''}`;
@@ -1014,7 +1188,7 @@ function renderBannedRowsInto(container, list) {
   list.forEach((u) => {
     const row = document.createElement('div');
     row.className = 'participant-row';
-    row.innerHTML = `<span>${u.username}</span><button class="unban-btn">Разблокировать</button>`;
+    row.innerHTML = `<span>${escapeHTML(u.username)}</span><button class="unban-btn">Разблокировать</button>`;
     row.querySelector('.unban-btn').onclick = () => socket.emit('room:unban', { code, userId: u.id });
     container.appendChild(row);
   });
@@ -1116,6 +1290,7 @@ async function applyNewVideo(video, playback) {
   window.__captureVideoUrl = video?.url || null;
   window.__lastVideoUrl = video?.url || null;
   currentVideoType = video?.type || null;
+  roomStateKey = makeRoomStateKey(video);
   lastState = playback || { isPlaying: false, positionSeconds: 0 };
   updateVideoChangeModeLabel(video?.type);
 
@@ -1165,6 +1340,7 @@ window.changeVideoUrl = changeVideoUrl;
 async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/');
+  myUsername = me.username || me.user?.username || null;
 
   document.getElementById('roomCodeValue').textContent = code;
   document.getElementById('roomCodeValue').onclick = () => copyText(code, 'Код');
@@ -1175,7 +1351,7 @@ async function init() {
   initChatInputPlaceholder();
   initLockButtonsControl();
 
-  socket = io();
+  socket = io({ transports: ['websocket', 'polling'] }); // через туннель длинные polling-запросы чаще рвутся, WebSocket стабильнее
   socket.on('connect', () => socket.emit('room:join', { code }));
 
   window.socket = socket;
@@ -1195,7 +1371,18 @@ async function init() {
     renderDirectVideoUrl(url);
   });
 
-  socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name }) => {
+  socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name, username }) => {
+    if (username) myUsername = username;
+    const stateKey = makeRoomStateKey(video);
+    if (roomStateKey === stateKey && playerReady) {
+      // сокет переподключился, а видео то же самое — плеер не трогаем
+      isOwner = ownerFlag;
+      if (playback) lastState = playback;
+      if (!started && !isOwner) updateWaitingOverlayText();
+      return;
+    }
+    roomStateKey = stateKey;
+
     isOwner = ownerFlag;
     window.__captureVideoUrl = video?.url || window.__captureVideoUrl || null;
     window.__lastVideoUrl = video?.url || null;
@@ -1384,27 +1571,52 @@ window.__onCapturePlayerReload = (player) => {
   socket.on('room:error', (err) => alert(err.error));
 
   socket.on('voice:participants', (list) => {
+    const prevIds = new Set(voiceParticipants.map((p) => p.socketId));
+    const nowIds = new Set(list.map((p) => p.socketId));
     voiceParticipants = list;
+
+    // громкости могли прийти позже, чем трек, поэтому переприменяем
+    list.forEach((p) => applyRemoteGain(p.socketId, getUserVoiceVolume(p.username) / 100));
+
+    // звук входа/выхода из звонка
+    if (inVoiceCall) {
+      if (list.some((p) => p.socketId !== socket.id && !prevIds.has(p.socketId))) beep(880);
+      else if ([...prevIds].some((id) => id !== socket.id && !nowIds.has(id))) beep(440);
+    }
     renderVoicePanel();
   });
 
   socket.on('voice:existing-participants', (list) => {
     // я только что зашёл в звонок — сам звоню каждому, кто уже там
-    list.forEach((p) => callPeer(p.socketId));
+    list.forEach((p) => {
+      callPeer(p.socketId).catch((e) => console.warn('[voice] call error', e));
+    });
   });
 
   socket.on('voice:user-left', ({ socketId }) => {
-    const pc = peerConnections[socketId];
-    if (pc) {
-      try { pc.close(); } catch (_) {}
-      delete peerConnections[socketId];
-    }
-    remoteAudioEls[socketId]?.remove();
-    delete remoteAudioEls[socketId];
+    closePeer(socketId);
   });
 
+  // очередь: offer/answer/кандидаты от одного пира не обгоняют друг друга
   socket.on('voice:signal', (payload) => {
-    handleVoiceSignal(payload).catch((e) => console.warn('[voice] signal error', e));
+    const id = payload.from;
+    signalQueues[id] = (signalQueues[id] || Promise.resolve())
+      .then(() => handleVoiceSignal(payload))
+      .catch((e) => console.warn('[voice] signal error', e));
+  });
+
+  // сервер отказал (звонок полный): раньше клиент навсегда «висел» в звонке
+  socket.on('voice:join-rejected', ({ max }) => {
+    leaveVoiceCall();
+    alert(`Звонок заполнен (максимум ${max} человек)`);
+  });
+
+  // после переподключения сокета сервер уже выкинул нас из звонка — заходим заново
+  socket.on('room:state', () => {
+    if (!inVoiceCall) return;
+    stopAllPeerConnections();
+    socket.emit('voice:join', { code });
+    if (localMuted) socket.emit('voice:mute', { code, muted: true });
   });
 
   initViewMode();
@@ -1812,9 +2024,10 @@ function saveVolume(v) {
 }
 
 function applyVolumeToActivePlayer(v) {
-  const frac = v / 100;
+  const eff = v * voiceDuck; // voiceDuck = 1 обычно, DUCK_LEVEL пока кто-то говорит
+  const frac = eff / 100;
   if (currentVideoType === 'youtube' && ytPlayer) {
-    try { ytPlayer.setVolume(v); } catch (_) {}
+    try { ytPlayer.setVolume(Math.round(eff)); } catch (_) {}
   } else if (currentVideoType === 'twitch' && twitchPlayer) {
     try { twitchPlayer.setVolume(frac); } catch (_) {}
   } else {
@@ -1978,6 +2191,7 @@ function renderVoicePanel() {
   const avatarsEl = document.getElementById('voiceAvatars');
   const countEl = document.getElementById('voiceCountText');
   const hangupBtn = document.getElementById('voiceHangupBtn');
+  const muteBtn = document.getElementById('voiceMuteBtn');
   const callBtn = document.getElementById('voiceCallBtn');
   if (!panel) return;
 
@@ -1993,11 +2207,19 @@ function renderVoicePanel() {
     ? `В звонке: ${count} (может тормозить)`
     : `В звонке: ${count}`;
   hangupBtn.classList.toggle('hidden', !inVoiceCall);
+  if (muteBtn) {
+    muteBtn.classList.toggle('hidden', !inVoiceCall);
+    muteBtn.classList.toggle('muted', localMuted);
+    muteBtn.textContent = localMuted ? '🔇' : '🎙️';
+  }
 
   avatarsEl.innerHTML = '';
   voiceParticipants.slice(0, 5).forEach((p) => {
     const av = document.createElement('div');
     av.className = 'voice-avatar';
+    av.dataset.sid = p.socketId; // для подсветки говорящего
+    if (p.muted) av.classList.add('muted');
+    if (lastSpeakingIds.has(p.socketId)) av.classList.add('speaking');
     av.style.background = usernameColor(p.username);
     av.textContent = usernameInitial(p.username);
     av.title = p.username;
@@ -2036,70 +2258,150 @@ window.onVoiceCallBtnClick = onVoiceCallBtnClick;
 
 async function startVoiceCall() {
   closeVoiceConfirmModal();
-  if (inVoiceCall) return;
-
-  if (voiceParticipants.length >= MAX_VOICE_PARTICIPANTS) {
-    alert(`Звонок уже заполнен (максимум ${MAX_VOICE_PARTICIPANTS} человек) — попробуй позже.`);
-    return;
-  }
+  if (inVoiceCall || voiceStarting) return;
+  voiceStarting = true;
 
   try {
-    localStream = await createProcessedLocalStream();
-  } catch (e) {
-    // voiceIsolation может не поддерживаться — пробуем без него
-    try {
-      const raw = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-        video: false,
-      });
-      rawLocalStream = raw;
-      localStream = raw;
-    } catch (e2) {
-      alert('Не удалось получить доступ к микрофону: ' + (e2.message || e2));
+    getPlaybackCtx(); // сразу, пока жив «клик пользователя», иначе AudioContext останется suspended
+
+    if (voiceParticipants.length >= MAX_VOICE_PARTICIPANTS) {
+      alert(`Звонок уже заполнен (максимум ${MAX_VOICE_PARTICIPANTS} человек) — попробуй позже.`);
       return;
     }
+
+    try {
+      localStream = await buildLocalStream();
+    } catch (e) {
+      alert('Не удалось получить доступ к микрофону: ' + (e.message || e));
+      return;
+    }
+
+    localMeter = makeMeter(micLimiterNode); // уровень того, что реально уходит собеседникам
+
+    await getIceServers(); // прогреваем кэш заранее, до прихода первого offer/answer
+    inVoiceCall = true;
+    socket.emit('voice:join', { code });
+    startVoiceLoop();
+    acquireWakeLock();
+    renderVoicePanel();
+  } finally {
+    voiceStarting = false;
   }
-
-  await getIceServers(); // прогреваем кэш заранее, до прихода первого offer/answer
-  inVoiceCall = true;
-  socket.emit('voice:join', { code });
-  renderVoicePanel();
-}
-
-function stopAllPeerConnections() {
-  Object.keys(peerConnections).forEach((id) => {
-    try { peerConnections[id].close(); } catch (_) {}
-    delete peerConnections[id];
-  });
-  Object.keys(remoteAudioEls).forEach((id) => {
-    remoteAudioEls[id]?.remove();
-    delete remoteAudioEls[id];
-  });
 }
 
 function leaveVoiceCall() {
   if (!inVoiceCall) return;
   inVoiceCall = false;
   socket.emit('voice:leave', { code });
+  stopVoiceLoop();
+  releaseWakeLock();
+  localMuted = false;
   if (localStream) {
     localStream.getTracks().forEach((t) => t.stop());
     localStream = null;
   }
   if (rawLocalStream) {
+    // это настоящий микрофон, его обязательно отпускаем (иначе значок записи в браузере остаётся)
     rawLocalStream.getTracks().forEach((t) => t.stop());
     rawLocalStream = null;
   }
-  if (voiceAudioCtx) {
-    try { voiceAudioCtx.close(); } catch (_) {}
-    voiceAudioCtx = null;
+  if (localMeter) {
+    localMeter.dispose();
+    localMeter = null;
   }
+  teardownMicGraph();
+  const bar = document.getElementById('micLevelBar');
+  if (bar) bar.style.width = '0%';
   stopAllPeerConnections();
   renderVoicePanel();
+}
+
+function toggleMute() {
+  if (!inVoiceCall || !localStream) return;
+  localMuted = !localMuted;
+  localStream.getAudioTracks().forEach((t) => { t.enabled = !localMuted; });
+  socket.emit('voice:mute', { code, muted: localMuted }); // остальные увидят 🔇 на аватарке
+  renderVoicePanel();
+}
+
+// цикл раз в 100 мс: подсветка говорящих + приглушение видео.
+// setInterval, а не requestAnimationFrame, чтобы работало и в неактивной вкладке
+let lastSpeakingIds = new Set(); // чтобы подсветка не мигала при перерисовке панели
+
+function startVoiceLoop() {
+  if (voiceLoopTimer) return;
+  let duckReapplyAt = 0;
+  voiceLoopTimer = setInterval(() => {
+    const now = Date.now();
+    const speakingIds = new Set();
+    let othersSpeaking = false;
+
+    for (const [id, r] of Object.entries(remoteAudio)) {
+      if (meterSpeaking(r.meter).speaking) r.meter.lastLoud = now;
+      if (now - r.meter.lastLoud < 500) {
+        speakingIds.add(id);
+        othersSpeaking = true;
+      }
+    }
+
+    let localLevel = 0;
+    if (localMeter) {
+      const s = meterSpeaking(localMeter);
+      localLevel = s.level;
+      if (!localMuted) {
+        if (s.speaking) localMeter.lastLoud = now;
+        if (now - localMeter.lastLoud < 500) speakingIds.add(socket.id);
+      }
+    }
+
+    lastSpeakingIds = speakingIds;
+    document.querySelectorAll('.voice-avatar[data-sid]').forEach((el) => {
+      el.classList.toggle('speaking', speakingIds.has(el.dataset.sid));
+    });
+
+    // полоска уровня микрофона в окне «Настройки звука»
+    const modal = document.getElementById('voiceSettingsModal');
+    if (modal && !modal.classList.contains('hidden')) {
+      const bar = document.getElementById('micLevelBar');
+      if (bar) bar.style.width = Math.min(100, localLevel * 500) + '%';
+    }
+
+    const target = othersSpeaking && duckEnabled ? 1 - duckAmount / 100 : 1;
+    if (Math.abs(voiceDuck - target) > 0.01) {
+      voiceDuck += (target - voiceDuck) * 0.4;
+      if (Math.abs(voiceDuck - target) <= 0.01) voiceDuck = target;
+      applyVolumeToActivePlayer(getSavedVolume());
+      duckReapplyAt = now;
+    } else if (voiceDuck !== 1 && now - duckReapplyAt > 1000) {
+      // пока видео приглушено, раз в секунду переприменяем (на случай, если плеер пересоздался)
+      applyVolumeToActivePlayer(getSavedVolume());
+      duckReapplyAt = now;
+    }
+  }, 100);
+}
+
+function stopVoiceLoop() {
+  clearInterval(voiceLoopTimer);
+  voiceLoopTimer = null;
+  voiceDuck = 1;
+  applyVolumeToActivePlayer(getSavedVolume());
+  document.querySelectorAll('.voice-avatar.speaking').forEach((el) => el.classList.remove('speaking'));
+}
+
+// короткий звук входа/выхода из звонка
+function beep(freq, dur = 0.12) {
+  const ctx = getPlaybackCtx();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+  o.connect(g);
+  g.connect(ctx.destination);
+  o.start();
+  o.stop(ctx.currentTime + dur + 0.02);
 }
 window.leaveVoiceCall = leaveVoiceCall;
 
@@ -2123,10 +2425,91 @@ async function getIceServers() {
   return cachedIceServers;
 }
 
+const pendingCandidates = {}; // кандидаты, пришедшие раньше remoteDescription
+const disconnectTimers = {};
+const signalQueues = {};      // сигналы одного пира обрабатываются строго по очереди
+
+// Opus: FEC включён, DTX выключен (DTX «глотает» слова), моно, ~64 кбит/с
+function tuneOpusSdp(sdp) {
+  const m = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/);
+  if (!m) return sdp;
+  const pt = m[1];
+  const wanted = ['useinbandfec=1', 'usedtx=0', 'stereo=0', 'sprop-stereo=0', 'maxaveragebitrate=64000'];
+  const fmtpRe = new RegExp(`a=fmtp:${pt} ([^\\r\\n]*)`);
+  if (fmtpRe.test(sdp)) {
+    return sdp.replace(fmtpRe, (_, params) => {
+      const kept = params
+        .split(';')
+        .map((s) => s.trim())
+        .filter((p) => p && !/^(useinbandfec|usedtx|stereo|sprop-stereo|maxaveragebitrate)=/.test(p));
+      return `a=fmtp:${pt} ${[...kept, ...wanted].join(';')}`;
+    });
+  }
+  return sdp.replace(m[0], `${m[0]}\r\na=fmtp:${pt} ${wanted.join(';')}`);
+}
+
+function boostSenders(pc) {
+  pc.getSenders().forEach((sender) => {
+    if (!sender.track || sender.track.kind !== 'audio') return;
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+      params.encodings[0].maxBitrate = 64000;
+      params.encodings[0].priority = 'high';
+      params.encodings[0].networkPriority = 'high';
+      sender.setParameters(params).catch(() => {});
+    } catch (_) {}
+  });
+}
+
+function closePeer(socketId) {
+  clearTimeout(disconnectTimers[socketId]);
+  delete disconnectTimers[socketId];
+  delete pendingCandidates[socketId];
+  delete signalQueues[socketId];
+  delete voiceStatsPrev[socketId];
+  const pc = peerConnections[socketId];
+  if (pc) {
+    pc.onicecandidate = null;
+    pc.ontrack = null;
+    pc.onconnectionstatechange = null;
+    try { pc.close(); } catch (_) {}
+    delete peerConnections[socketId];
+  }
+  detachRemoteAudio(socketId);
+}
+
+function stopAllPeerConnections() {
+  Object.keys(peerConnections).forEach(closePeer);
+  Object.keys(remoteAudio).forEach(detachRemoteAudio);
+}
+
+// ICE-restart делает только тот, кто звонил (иначе будут встречные offer'ы)
+async function restartIce(socketId) {
+  const pc = peerConnections[socketId];
+  if (!pc || !inVoiceCall) return;
+  if (!pc._isCaller) {
+    // перезапускать ICE может только тот, кто звонил, поэтому просим его
+    socket.emit('voice:signal', { code, to: socketId, data: { type: 'need-restart' } });
+    return;
+  }
+  if (pc.signalingState !== 'stable') return;
+  try {
+    const offer = await pc.createOffer({ iceRestart: true });
+    offer.sdp = tuneOpusSdp(offer.sdp);
+    await pc.setLocalDescription(offer);
+    socket.emit('voice:signal', { code, to: socketId, data: { type: 'offer', sdp: offer } });
+  } catch (e) {
+    console.warn('[voice] ICE restart failed', e);
+  }
+}
+
 function getOrCreatePeerConnection(remoteSocketId, iceServers) {
   if (peerConnections[remoteSocketId]) return peerConnections[remoteSocketId];
 
-  const pc = new RTCPeerConnection({ iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
+  const pc = new RTCPeerConnection({
+    iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }],
+  });
   peerConnections[remoteSocketId] = pc;
 
   if (localStream) {
@@ -2135,31 +2518,33 @@ function getOrCreatePeerConnection(remoteSocketId, iceServers) {
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
-      socket.emit('voice:signal', { code, to: remoteSocketId, data: { type: 'ice-candidate', candidate: e.candidate } });
+      socket.emit('voice:signal', {
+        code,
+        to: remoteSocketId,
+        data: { type: 'ice-candidate', candidate: e.candidate },
+      });
     }
   };
 
   pc.ontrack = (e) => {
-    let audioEl = remoteAudioEls[remoteSocketId];
-    if (!audioEl) {
-      audioEl = document.createElement('audio');
-      audioEl.autoplay = true;
-      document.getElementById('voiceAudioContainer')?.appendChild(audioEl);
-      remoteAudioEls[remoteSocketId] = audioEl;
-    }
-    audioEl.srcObject = e.streams[0];
-    const peer = voiceParticipants.find((p) => p.socketId === remoteSocketId);
-    if (peer) {
-      audioEl.volume = getUserVoiceVolume(peer.username) / 100;
-    }
+    if (e.streams && e.streams[0]) attachRemoteStream(remoteSocketId, e.streams[0]);
   };
 
   pc.onconnectionstatechange = () => {
-    if (['closed', 'failed', 'disconnected'].includes(pc.connectionState)) {
-      try { pc.close(); } catch (_) {}
-      delete peerConnections[remoteSocketId];
-      remoteAudioEls[remoteSocketId]?.remove();
-      delete remoteAudioEls[remoteSocketId];
+    const st = pc.connectionState;
+    if (st === 'connected') {
+      clearTimeout(disconnectTimers[remoteSocketId]);
+      boostSenders(pc);
+    } else if (st === 'disconnected') {
+      // часто временный сбой: 4 сек на самовосстановление, потом ICE restart
+      clearTimeout(disconnectTimers[remoteSocketId]);
+      disconnectTimers[remoteSocketId] = setTimeout(() => {
+        if (pc.connectionState !== 'connected') restartIce(remoteSocketId);
+      }, 4000);
+    } else if (st === 'failed') {
+      restartIce(remoteSocketId);
+    } else if (st === 'closed') {
+      closePeer(remoteSocketId);
     }
   };
 
@@ -2169,25 +2554,137 @@ function getOrCreatePeerConnection(remoteSocketId, iceServers) {
 async function callPeer(remoteSocketId) {
   const iceServers = await getIceServers();
   const pc = getOrCreatePeerConnection(remoteSocketId, iceServers);
+  pc._isCaller = true;
   const offer = await pc.createOffer();
+  offer.sdp = tuneOpusSdp(offer.sdp);
   await pc.setLocalDescription(offer);
   socket.emit('voice:signal', { code, to: remoteSocketId, data: { type: 'offer', sdp: offer } });
 }
 
+async function flushCandidates(socketId, pc) {
+  const list = pendingCandidates[socketId];
+  if (!list) return;
+  delete pendingCandidates[socketId];
+  for (const c of list) {
+    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (_) {}
+  }
+}
+
 async function handleVoiceSignal({ from, data }) {
+  if (!inVoiceCall) return;
+  if (data.type === 'need-restart') {
+    if (peerConnections[from]?._isCaller) restartIce(from);
+    return;
+  }
   const iceServers = await getIceServers();
   const pc = getOrCreatePeerConnection(from, iceServers);
 
   if (data.type === 'offer') {
     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    await flushCandidates(from, pc);
     const answer = await pc.createAnswer();
+    answer.sdp = tuneOpusSdp(answer.sdp);
     await pc.setLocalDescription(answer);
     socket.emit('voice:signal', { code, to: from, data: { type: 'answer', sdp: answer } });
   } else if (data.type === 'answer') {
     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    await flushCandidates(from, pc);
   } else if (data.type === 'ice-candidate' && data.candidate) {
-    try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (_) {}
+    if (pc.remoteDescription) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (_) {}
+    } else {
+      (pendingCandidates[from] = pendingCandidates[from] || []).push(data.candidate);
+    }
   }
+}
+
+// сеть вернулась или сменилась (Wi-Fi ↔ LTE): перезапускаем ICE у всех соединений
+window.addEventListener('online', () => {
+  if (!inVoiceCall) return;
+  setTimeout(() => {
+    Object.keys(peerConnections).forEach((id) => restartIce(id));
+  }, 1500);
+});
+
+// ---------- статистика качества связи ----------
+const voiceStatsPrev = {}; // socketId -> { recv, lost }
+
+async function collectVoiceStats() {
+  const rows = [];
+  for (const [id, pc] of Object.entries(peerConnections)) {
+    const peer = voiceParticipants.find((p) => p.socketId === id);
+    const row = { name: peer ? peer.username : '?', state: pc.connectionState, rtt: null, loss: null, jitter: null, route: '—' };
+    try {
+      const stats = await pc.getStats();
+      let pair = null;
+      stats.forEach((r) => {
+        if (r.type === 'transport' && r.selectedCandidatePairId) pair = stats.get(r.selectedCandidatePairId);
+      });
+      if (!pair) {
+        stats.forEach((r) => {
+          if (r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r;
+        });
+      }
+      if (pair) {
+        if (typeof pair.currentRoundTripTime === 'number') row.rtt = Math.round(pair.currentRoundTripTime * 1000);
+        const l = stats.get(pair.localCandidateId);
+        const rm = stats.get(pair.remoteCandidateId);
+        row.route = (l && l.candidateType === 'relay') || (rm && rm.candidateType === 'relay') ? 'через TURN' : 'напрямую';
+      }
+      stats.forEach((r) => {
+        if (r.type !== 'inbound-rtp' || r.kind !== 'audio') return;
+        const recv = r.packetsReceived || 0;
+        const lost = r.packetsLost || 0;
+        const prev = voiceStatsPrev[id];
+        if (prev) {
+          const dRecv = recv - prev.recv;
+          const dLost = Math.max(0, lost - prev.lost);
+          if (dRecv + dLost > 0) row.loss = (dLost / (dRecv + dLost)) * 100; // потери за последние ~2 сек
+        }
+        voiceStatsPrev[id] = { recv, lost };
+        if (typeof r.jitter === 'number') row.jitter = Math.round(r.jitter * 1000);
+      });
+    } catch (_) {}
+    rows.push(row);
+  }
+  return rows;
+}
+
+function voiceQualityClass(r) {
+  if (r.state !== 'connected') return 'bad';
+  if ((r.loss ?? 0) > 8 || (r.rtt ?? 0) > 400) return 'bad';
+  if ((r.loss ?? 0) > 2 || (r.rtt ?? 0) > 200 || (r.jitter ?? 0) > 60) return 'warn';
+  return 'ok';
+}
+
+let voiceStatsTimer = null;
+
+async function refreshVoiceStats() {
+  const modal = document.getElementById('voiceSettingsModal');
+  const box = document.getElementById('voiceStatsList');
+  if (!box || !modal || modal.classList.contains('hidden')) {
+    clearInterval(voiceStatsTimer);
+    voiceStatsTimer = null;
+    return;
+  }
+  if (!inVoiceCall) {
+    box.textContent = 'Появится, когда зайдёшь в звонок.';
+    return;
+  }
+  const rows = await collectVoiceStats();
+  if (!rows.length) {
+    box.textContent = 'Пока ни с кем не соединён.';
+    return;
+  }
+  box.innerHTML = '';
+  rows.forEach((r) => {
+    const div = document.createElement('div');
+    div.className = 'voice-stat-row ' + voiceQualityClass(r);
+    div.textContent = r.state === 'connected'
+      ? `${r.name}: ${r.route}, пинг ${r.rtt ?? '?'} мс, потери ${r.loss == null ? '?' : r.loss.toFixed(1) + '%'}, джиттер ${r.jitter ?? '?'} мс`
+      : `${r.name}: соединяется…`;
+    box.appendChild(div);
+  });
 }
 
 function leaveRoom() {
@@ -2650,6 +3147,100 @@ document.getElementById('voiceCallCancelBtn')?.addEventListener('click', closeVo
 document.getElementById('voiceHangupBtn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   leaveVoiceCall();
+});
+document.getElementById('voiceMuteBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleMute();
+});
+
+// M = вкл/выкл микрофон (если не печатаешь в поле)
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyM' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!inVoiceCall) return;
+  const el = document.activeElement;
+  const tag = el?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+  toggleMute();
+});
+
+// ---------- окно «Настройки звука» ----------
+async function fillMicList() {
+  const sel = document.getElementById('micSelect');
+  if (!sel) return;
+  let devices = [];
+  try {
+    devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+  } catch (_) {}
+
+  const saved = localStorage.getItem(MIC_DEVICE_KEY) || '';
+  sel.innerHTML = '';
+
+  const def = document.createElement('option');
+  def.value = '';
+  def.textContent = 'По умолчанию';
+  sel.appendChild(def);
+
+  devices.forEach((d, i) => {
+    if (!d.deviceId || d.deviceId === 'default' || d.deviceId === 'communications') return;
+    const opt = document.createElement('option');
+    opt.value = d.deviceId;
+    opt.textContent = d.label || `Микрофон ${i + 1}`;
+    sel.appendChild(opt);
+  });
+
+  sel.value = [...sel.options].some((o) => o.value === saved) ? saved : '';
+}
+
+function openVoiceSettings() {
+  const gain = getMicGainPct();
+  document.getElementById('micGainSlider').value = gain;
+  document.getElementById('micGainValue').textContent = gain + '%';
+  document.getElementById('duckToggle').checked = duckEnabled;
+  document.getElementById('duckSlider').value = duckAmount;
+  document.getElementById('duckValue').textContent = duckAmount + '%';
+  document.getElementById('voiceSettingsModal').classList.remove('hidden');
+  fillMicList();
+  refreshVoiceStats();
+  clearInterval(voiceStatsTimer);
+  voiceStatsTimer = setInterval(refreshVoiceStats, 2000);
+}
+
+// подключили/отключили наушники: обновляем список микрофонов, пока окно открыто
+navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+  const modal = document.getElementById('voiceSettingsModal');
+  if (modal && !modal.classList.contains('hidden')) fillMicList();
+});
+
+document.getElementById('voiceSettingsBtn')?.addEventListener('click', openVoiceSettings);
+
+document.getElementById('micGainSlider')?.addEventListener('input', (e) => {
+  const v = parseInt(e.target.value, 10);
+  localStorage.setItem(MIC_GAIN_KEY, String(v));
+  document.getElementById('micGainValue').textContent = v + '%';
+  if (micGainNode) micGainNode.gain.value = v / 100;
+});
+
+document.getElementById('micSelect')?.addEventListener('change', async (e) => {
+  const id = e.target.value;
+  if (id) localStorage.setItem(MIC_DEVICE_KEY, id);
+  else localStorage.removeItem(MIC_DEVICE_KEY);
+  if (!inVoiceCall) return;
+  try {
+    await switchMic(id || null);
+  } catch (err) {
+    alert('Не удалось переключить микрофон: ' + (err.message || err));
+  }
+});
+
+document.getElementById('duckToggle')?.addEventListener('change', (e) => {
+  duckEnabled = e.target.checked;
+  localStorage.setItem(DUCK_ON_KEY, duckEnabled ? '1' : '0');
+});
+
+document.getElementById('duckSlider')?.addEventListener('input', (e) => {
+  duckAmount = parseInt(e.target.value, 10);
+  localStorage.setItem(DUCK_AMOUNT_KEY, String(duckAmount));
+  document.getElementById('duckValue').textContent = duckAmount + '%';
 });
 document.getElementById('voiceCallJoinArea')?.addEventListener('click', () => {
   if (!inVoiceCall) startVoiceCall();
