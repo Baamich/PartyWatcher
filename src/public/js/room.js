@@ -2694,8 +2694,74 @@ function leaveRoom() {
       heartbeatTimer = null;
     }
   } catch (_) {}
+
   stopThumbnailCapture();
+
+  // полный выход из голосового звонка (сервер + локальный звук + микрофон)
   try {
+    if (inVoiceCall) {
+      leaveVoiceCall();
+    } else {
+      // стейт мог сбиться — всё равно гасим остатки
+      stopVoiceLoop();
+      releaseWakeLock();
+      if (localStream) {
+        localStream.getTracks().forEach((t) => t.stop());
+        localStream = null;
+      }
+      if (rawLocalStream) {
+        rawLocalStream.getTracks().forEach((t) => t.stop());
+        rawLocalStream = null;
+      }
+      teardownMicGraph();
+      stopAllPeerConnections();
+    }
+  } catch (_) {}
+
+  // видео тоже останавливаем до навигации (иначе вкладка ещё «говорит»)
+  try {
+    if (ytPlayer) {
+      try { ytPlayer.stopVideo?.(); } catch (_) {}
+      try { ytPlayer.pauseVideo?.(); } catch (_) {}
+    }
+    if (twitchPlayer) {
+      try { twitchPlayer.pause(); } catch (_) {}
+    }
+    if (videoEl) {
+      try { videoEl.pause(); } catch (_) {}
+      try { videoEl.removeAttribute('src'); videoEl.load(); } catch (_) {}
+    }
+    if (capturePlayer?.videoEl) {
+      try { capturePlayer.videoEl.pause(); } catch (_) {}
+      try {
+        capturePlayer.videoEl.removeAttribute('src');
+        capturePlayer.videoEl.load();
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  try {
+    if (capturePlayer?.destroy) capturePlayer.destroy();
+  } catch (_) {}
+
+  try {
+    if (socket) {
+      socket.removeAllListeners();
+      socket.disconnect();
+    }
+  } catch (_) {}
+
+  window.location.replace('/');
+}
+
+function cleanupVoiceOnUnload() {
+  try {
+    if (inVoiceCall) {
+      inVoiceCall = false;
+      try { socket?.emit('voice:leave', { code }); } catch (_) {}
+    }
+    stopVoiceLoop();
+    releaseWakeLock();
     if (localStream) {
       localStream.getTracks().forEach((t) => t.stop());
       localStream = null;
@@ -2704,23 +2770,13 @@ function leaveRoom() {
       rawLocalStream.getTracks().forEach((t) => t.stop());
       rawLocalStream = null;
     }
-    if (voiceAudioCtx) {
-      try { voiceAudioCtx.close(); } catch (_) {}
-      voiceAudioCtx = null;
-    }
+    teardownMicGraph();
     stopAllPeerConnections();
   } catch (_) {}
-  try {
-    if (capturePlayer?.destroy) capturePlayer.destroy();
-  } catch (_) {}
-  try {
-    if (socket) {
-      socket.removeAllListeners();
-      socket.disconnect();
-    }
-  } catch (_) {}
-  window.location.replace('/');
 }
+
+window.addEventListener('pagehide', cleanupVoiceOnUnload);
+window.addEventListener('beforeunload', cleanupVoiceOnUnload);
 
 function bindTap(el, handler) {
   if (!el) return;
