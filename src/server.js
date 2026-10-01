@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 const { Server } = require('socket.io');
 
@@ -62,6 +63,20 @@ async function start() {
     const i = req.originalUrl.indexOf('?');
     const qs = i === -1 ? '' : req.originalUrl.slice(i);
     res.redirect(301, '/' + qs);
+  });
+
+  // страница админки: только админу, остальным 404 (и не индексируется)
+  app.use((req, res, next) => {
+    if (!/^\/admin(\.html)?\/?$/i.test(req.path)) return next();
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    try {
+      const token = req.cookies?.token;
+      const user = token && jwt.verify(token, config.jwt.secret);
+      if (user && user.role === 'admin') {
+        return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+      }
+    } catch (_) {}
+    return res.status(404).send('Not found');
   });
 
   app.use(express.static(path.join(__dirname, 'public')));
