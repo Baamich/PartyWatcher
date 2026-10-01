@@ -3153,9 +3153,13 @@ document.getElementById('voiceMuteBtn')?.addEventListener('click', (e) => {
   toggleMute();
 });
 
-// M = вкл/выкл микрофон (если не печатаешь в поле)
 document.addEventListener('keydown', (e) => {
-  if (e.code !== 'KeyM' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  const isMute =
+    e.code === 'KeyM' ||
+    k === 'м' || k === 'М' ||
+    k === 'm' || k === 'M';
+  if (!isMute || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
   if (!inVoiceCall) return;
   const el = document.activeElement;
   const tag = el?.tagName;
