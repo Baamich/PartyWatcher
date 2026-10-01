@@ -641,16 +641,21 @@ button {
   margin: 0;
 }
 
-/* узкие экраны: блок наверх по центру, чтобы не наезжал на карточку */
+/* узкие экраны: блок над карточкой в обычном потоке, а не поверх неё */
 @media (max-width: 1300px) {
+  #authBox {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 20px;
+    padding-top: 28px;
+  }
   .intro {
-    top: 24px;
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
+    position: static;
+    transform: none;
     width: 100%;
-    max-width: 520px;
-    padding: 0 16px;
+    max-width: 400px;
+    padding: 0;
     text-align: center;
   }
   .intro-brand {
@@ -662,5 +667,11 @@ button {
   }
   .intro-brand .brand-text {
     font-size: 26px;
+  }
+  .intro h1 {
+    font-size: 20px;
+  }
+  .intro p {
+    font-size: 13px;
   }
 }
