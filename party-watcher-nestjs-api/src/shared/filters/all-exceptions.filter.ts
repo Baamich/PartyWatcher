@@ -14,6 +14,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   public catch(exception: unknown, host: ArgumentsHost) {
     const reply = host.switchToHttp().getResponse<FastifyReply>()
+    reply.header('Cache-Control', 'no-store, must-revalidate')
 
     if (!(exception instanceof HttpException)) {
       this.logger.error(exception)

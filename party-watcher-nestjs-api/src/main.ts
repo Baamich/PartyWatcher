@@ -16,6 +16,7 @@ import { EnvParam } from './shared/enums/env.enum.js'
 import { LoggerScope } from './shared/enums/logger-scope.enum.js'
 import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter.js'
 import { formatedlogscope } from './shared/helpers/utils.js'
+import { NoCacheInterceptor } from './shared/interceptors/no-cache.interceptor.js'
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -43,6 +44,7 @@ async function bootstrap() {
     }),
   )
   app.useGlobalFilters(new AllExceptionsFilter())
+  app.useGlobalInterceptors(new NoCacheInterceptor())
 
   const document = SwaggerModule.createDocument(
     app,

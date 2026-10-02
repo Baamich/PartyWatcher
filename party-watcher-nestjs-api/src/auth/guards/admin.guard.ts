@@ -20,7 +20,11 @@ export class AdminGuard implements CanActivate {
   ) {}
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {
-    const { user } = context.switchToHttp().getRequest<{ user: AuthUser }>()
+    const { user } = context.switchToHttp().getRequest<{ user?: AuthUser }>()
+
+    if (!user?.id || !ObjectId.isValid(user.id)) {
+      throw new ForbiddenException('Admin only')
+    }
 
     const dbUser = await this.userRepository.findOne({
       where: { _id: new ObjectId(user.id) },
