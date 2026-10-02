@@ -15,6 +15,10 @@ async function start() {
   const app = express();
 
   app.use(cors());
+  app.use((req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    next();
+  });
   app.use(express.json());
   app.use(cookieParser());
 

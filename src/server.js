@@ -65,18 +65,21 @@ async function start() {
     res.redirect(301, '/' + qs);
   });
 
-  // страница админки: только админу, остальным 404 (и не индексируется)
+  const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin\.js|css\/admin\.css)\/?$/i;
   app.use((req, res, next) => {
-    if (!/^\/admin(\.html)?\/?$/i.test(req.path)) return next();
+    if (!ADMIN_PATHS.test(req.path)) return next();
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.setHeader('Cache-Control', 'no-store');
+    let isAdmin = false;
     try {
-      const token = req.cookies?.token;
-      const user = token && jwt.verify(token, config.jwt.secret);
-      if (user && user.role === 'admin') {
-        return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-      }
+      const t = req.cookies && req.cookies.token;
+      isAdmin = !!t && jwt.verify(t, config.jwt.secret).role === 'admin';
     } catch (_) {}
-    return res.status(404).send('Not found');
+    if (!isAdmin) return res.status(404).send('Not found');
+    if (/^\/admin(\.html)?\/?$/i.test(req.path)) {
+      return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    }
+    next();
   });
 
   app.use(express.static(path.join(__dirname, 'public')));
