@@ -13,6 +13,7 @@ import { ConfigValidationService } from './config/config-validation.service.js'
 import { DatabaseModule } from './database/database.module.js'
 import { EventsModule } from './events/events.module.js'
 import { LoggerModule } from './logger/logger.module.js'
+import { RoomsModule } from './rooms/rooms.module.js'
 import { THROTTLE_LIMIT, THROTTLE_TTL } from './shared/constants.js'
 import { EnvParam } from './shared/enums/env.enum.js'
 
@@ -68,6 +69,7 @@ import { EnvParam } from './shared/enums/env.enum.js'
     LoggerModule,
     DatabaseModule,
     AuthModule,
+    RoomsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
