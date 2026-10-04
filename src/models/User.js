@@ -24,6 +24,9 @@ const userSchema = new mongoose.Schema(
     streamDescription: { type: String, default: '' },
     streamKey: { type: String, default: undefined, unique: true, sparse: true },
     streamPlaybackId: { type: String, default: undefined, unique: true, sparse: true },
+
+    // ---- API чата (OBS-оверлей, боты, мосты) ----
+    chatApiKey: { type: String, default: undefined, unique: true, sparse: true },
   },
   { versionKey: false }
 );

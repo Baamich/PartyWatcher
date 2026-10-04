@@ -1,0 +1,114 @@
+<h1>Стилизация чата</h1>
+<p class="docs-lead">Как изменить вид чата в OBS: цвета, шрифт, фон, размер. Есть два способа: простой (через ссылку) и гибкий (через свой CSS).</p>
+
+<h2>Способ 1. Параметры в ссылке (самый простой)</h2>
+<p>Возьми ссылку для OBS (кнопка «Ссылка для OBS» в блоке «API чата») и допиши в её конец нужные параметры. Каждый параметр начинается с <code>&amp;</code>. Потом вставь ссылку в источник OBS: правый клик на источнике → <b>Свойства</b> → поле <b>URL</b>.</p>
+
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Допиши</th><th>Что делает</th></tr>
+  <tr><td><code>&amp;size=30</code></td><td>Размер текста, число от 10 до 80. Обычный: 22.</td></tr>
+  <tr><td><code>&amp;font=Arial</code></td><td>Шрифт. Подойдёт любой шрифт, установленный на твоём компьютере. Пробелы пиши как есть: <code>&amp;font=Comic Sans MS</code>.</td></tr>
+  <tr><td><code>&amp;color=ffe066</code></td><td>Цвет текста. 6 символов цвета <b>без решётки</b>.</td></tr>
+  <tr><td><code>&amp;bg=000000</code></td><td>Цвет фона под каждым сообщением (чёрный). Без решётки.</td></tr>
+  <tr><td><code>&amp;bgalpha=55</code></td><td>Насколько фон непрозрачный: 0 — невидимый, 100 — сплошной. Если указан <code>bg</code>, а <code>bgalpha</code> нет, будет 60.</td></tr>
+  <tr><td><code>&amp;owner=7c3aed</code></td><td>Цвет плашки на твоём нике (по умолчанию красный). Без решётки.</td></tr>
+  <tr><td><code>&amp;shadow=0</code></td><td>Убрать тень у текста.</td></tr>
+  <tr><td><code>&amp;fade=40</code></td><td>Сообщение пропадает через 40 секунд. 0 — не пропадает.</td></tr>
+  <tr><td><code>&amp;max=15</code></td><td>Сколько сообщений держать на экране (от 5 до 100).</td></tr>
+</table>
+</div>
+
+<div class="docs-note">
+  <p><b>Где взять цвет.</b> Открой в браузере любой «выбор цвета» (поищи «color picker»), выбери цвет и скопируй его код вида <code>#ffe066</code>. В ссылку пиши без значка <code>#</code>: <code>ffe066</code>.</p>
+</div>
+
+<p>Пример готовой ссылки (ключ замени на свой):</p>
+<pre><code>https://partywatcher.de/overlay/chat.html#key=pwc_...&amp;size=28&amp;color=ffe066&amp;bg=000000&amp;bgalpha=55&amp;owner=7c3aed&amp;fade=40</code></pre>
+
+<h2>Способ 2. Свой CSS (для тех, кто хочет больше)</h2>
+<p>CSS это «правила оформления». В OBS для них есть специальное поле.</p>
+<ol>
+  <li>В OBS правый клик на источнике с чатом → <b>Свойства</b>.</li>
+  <li>Найди поле <b>Пользовательский CSS</b> (по-английски <b>Custom CSS</b>). В нём уже что-то написано, <b>не удаляй это</b>.</li>
+  <li>Допиши свои правила <b>в конец</b> (с новой строки).</li>
+  <li>Нажми <b>ОК</b>. Если вид не поменялся, снова открой Свойства и нажми <b>«Обновить кэш текущей страницы»</b>.</li>
+</ol>
+
+<h3>Из чего состоит чат (названия, которые можно менять)</h3>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Название</th><th>Что это</th></tr>
+  <tr><td><code>#chat</code></td><td>Весь список сообщений целиком</td></tr>
+  <tr><td><code>.msg</code></td><td>Одно сообщение целиком (ник и текст)</td></tr>
+  <tr><td><code>.nick</code></td><td>Ник</td></tr>
+  <tr><td><code>.nick--owner</code></td><td>Ник владельца канала (с плашкой)</td></tr>
+  <tr><td><code>.sep</code></td><td>Двоеточие после ника</td></tr>
+  <tr><td><code>.text</code></td><td>Текст сообщения</td></tr>
+  <tr><td><code>.src</code></td><td>Метка источника, например TWITCH или BOT</td></tr>
+</table>
+</div>
+
+<h3>Переменные: самый простой способ в CSS</h3>
+<p>Можно поменять одну «настройку» вместо целого правила:</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Переменная</th><th>Что меняет</th></tr>
+  <tr><td><code>--fs</code></td><td>Размер текста, например <code>30px</code></td></tr>
+  <tr><td><code>--font</code></td><td>Шрифт, например <code>"Impact", sans-serif</code></td></tr>
+  <tr><td><code>--text</code></td><td>Цвет текста</td></tr>
+  <tr><td><code>--msg-bg</code></td><td>Фон сообщения, например <code>rgba(0, 0, 0, 0.5)</code></td></tr>
+  <tr><td><code>--owner-bg</code></td><td>Цвет плашки ника владельца</td></tr>
+  <tr><td><code>--text-shadow</code></td><td>Тень текста (<code>none</code> — без тени)</td></tr>
+  <tr><td><code>--gap</code></td><td>Расстояние между сообщениями, например <code>12px</code></td></tr>
+</table>
+</div>
+<pre><code>:root {
+  --fs: 30px;
+  --text: #ffe066;
+  --msg-bg: rgba(0, 0, 0, 0.5);
+}</code></pre>
+
+<h3>Готовые рецепты (копируй и вставляй)</h3>
+
+<p><b>Тёмные «плашки» под сообщениями:</b></p>
+<pre><code>.msg {
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  padding: 4px 12px;
+}</code></pre>
+
+<p><b>Убрать метки TWITCH / BOT:</b></p>
+<pre><code>.src { display: none; }</code></pre>
+
+<p><b>Показывать только текст, без ников:</b></p>
+<pre><code>.nick, .sep { display: none; }</code></pre>
+
+<p><b>Ник крупнее и цветной:</b></p>
+<pre><code>.nick {
+  color: #ffd166 !important;
+  font-size: 1.15em;
+}</code></pre>
+
+<p><b>Чат шириной 500 пикселей, прижатый вправо:</b></p>
+<pre><code>#chat {
+  left: auto;
+  width: 500px;
+}</code></pre>
+
+<p><b>Сообщения прижать к правому краю:</b></p>
+<pre><code>.msg {
+  align-self: flex-end;
+  text-align: right;
+}</code></pre>
+
+<p><b>Больше воздуха между сообщениями:</b></p>
+<pre><code>:root { --gap: 14px; }</code></pre>
+
+<div class="docs-note">
+  <p><b>Если правило не сработало</b>, допиши в его конце <code>!important</code> перед точкой с запятой, например <code>color: red !important;</code>.</p>
+  <p><b>Про шрифты.</b> Работают только те шрифты, которые уже стоят на компьютере с OBS. Скачать новый шрифт и поставить его в Windows можно за минуту, после этого перезапусти OBS.</p>
+  <p><b>Ссылка и CSS вместе.</b> Если параметр указан в ссылке (например, <code>size</code>), он сильнее, чем <code>--fs</code> в CSS. Используй что-то одно для каждой настройки.</p>
+</div>
+
+<p>Дальше: <a href="#chat-reference">Справочник API</a>.</p>

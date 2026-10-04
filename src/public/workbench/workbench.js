@@ -25,12 +25,17 @@ function applyLayout(layout) {
   });
 }
 
+let chatApiOpen = false;
+let chatApiExtraH = 0;
+
 function readCurrentRect(el) {
+  // пока API-блок раскрыт, окно чата выше на его высоту — в layout это не сохраняем
+  const extra = el.id === 'chatPanel' && chatApiOpen ? chatApiExtraH : 0;
   return {
     x: parseInt(el.style.left, 10) || 0,
     y: parseInt(el.style.top, 10) || 0,
     w: el.offsetWidth,
-    h: el.offsetHeight,
+    h: Math.max(120, el.offsetHeight - extra),
   };
 }
 
@@ -136,6 +141,14 @@ async function confirmResetLayout() {
   }
   currentLayout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
   applyLayout(currentLayout);
+
+  // API-блок над чатом сворачиваем без пересчёта высоты: applyLayout уже вернул окну исходный размер
+  if (chatApiOpen) {
+    document.getElementById('chatApiBlock')?.classList.add('hidden');
+    document.getElementById('chatApiToggle')?.classList.remove('open');
+    chatApiOpen = false;
+    chatApiExtraH = 0;
+  }
 }
 
 function escapeHtml(s) {
@@ -190,6 +203,7 @@ async function loadSettings() {
     document.getElementById('streamDescInput').value = data.streamDescription || '';
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
     setGenerateBtnState(!!data.streamKeyMasked);
+    setChatApiKeyUi(data.chatApiKeyMasked);
     updatePlayer(data.isLive, data.streamPlaybackId, data.liveStartedAt);
   } catch (err) {
     console.warn('[loadSettings]', err.message);
@@ -531,11 +545,30 @@ function escapeHtml(s) {
 
 function buildMessageHtml(msg) {
   if (msg.deleted) return `<span class="wb-msg-deleted">Сообщение удалено администратором</span>`;
+
+  // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick
+  const delBtn = `<button type="button" class="wb-mod-btn" title="Удалить" data-act="del" data-id="${escapeHtml(msg._id)}">🗑️</button>`;
+
+  // бан и таймаут — только для сообщений реальных юзеров (у сообщений из API юзера нет)
+  const userBtns = !msg.external && msg.senderId ? `
+    <button type="button" class="wb-mod-btn" title="Заблокировать" data-act="ban" data-uid="${escapeHtml(msg.senderId)}" data-name="${escapeHtml(msg.senderUsername)}">🚫</button>
+    <button type="button" class="wb-mod-btn" title="Ограничить чат" data-act="timeout" data-uid="${escapeHtml(msg.senderId)}" data-name="${escapeHtml(msg.senderUsername)}">⏱️</button>
+  ` : '';
+
+  // метка источника у внешних сообщений видна всегда — выдать бота за зрителя незаметно нельзя
+  const src = msg.external
+    ? `<span class="wb-msg-src">${escapeHtml(msg.source || 'api')}</span>`
+    : '';
+
+  const nickCls = 'wb-msg-author' + (msg.isOwner ? ' wb-msg-author--owner' : '');
+  const nickStyle = !msg.isOwner && /^#[0-9a-f]{6}$/i.test(msg.nickColor || '')
+    ? ` style="color:${msg.nickColor}"`
+    : '';
+
   return `
-    <button type="button" class="wb-mod-btn" title="Удалить" onclick="deleteMessage('${msg._id}')">🗑️</button>
-    <button type="button" class="wb-mod-btn" title="Заблокировать" onclick="openBanConfirm('${msg.senderId}', '${escapeHtml(msg.senderUsername)}')">🚫</button>
-    <button type="button" class="wb-mod-btn" title="Ограничить чат" onclick="openTimeoutModal('${msg.senderId}', '${escapeHtml(msg.senderUsername)}')">⏱️</button>
-    <span class="wb-msg-author">${escapeHtml(msg.senderUsername)}:</span>
+    ${delBtn}${userBtns}
+    ${src}
+    <span class="wb-msg-author-wrap"><span class="${nickCls}"${nickStyle}>${escapeHtml(msg.senderUsername)}</span>:</span>
     <span class="wb-msg-text">${escapeHtml(msg.text)}</span>
   `;
 }
@@ -569,10 +602,13 @@ function deleteMessage(messageId) {
   socket?.emit('chat:delete', { messageId });
 }
 
-function onClearChatClick() {
-  if (confirm('Очистить весь чат для всех зрителей?')) {
-    socket?.emit('chat:clear');
-  }
+async function onClearChatClick() {
+  const ok = await PW.confirm('Все сообщения исчезнут у всех зрителей.', {
+    title: 'Очистить чат?',
+    okText: 'Очистить',
+    danger: true,
+  });
+  if (ok) socket?.emit('chat:clear');
 }
 
 function copyRtmpUrl() {
@@ -581,10 +617,13 @@ function copyRtmpUrl() {
     .catch(() => showToast('error', 'Не удалось скопировать'));
 }
 
-function openBanConfirm(userId, username) {
-  if (confirm(`Заблокировать пользователя ${username} навсегда?`)) {
-    socket?.emit('chat:ban', { userId, username });
-  }
+async function openBanConfirm(userId, username) {
+  const ok = await PW.confirm(`${username} не сможет писать в чат канала.`, {
+    title: 'Заблокировать пользователя?',
+    okText: 'Заблокировать',
+    danger: true,
+  });
+  if (ok) socket?.emit('chat:ban', { userId, username });
 }
 
 function openTimeoutModal(userId, username) {
@@ -629,8 +668,12 @@ function initChat(streamerNameLower) {
     });
 
     socket.on('chat:viewers', (payload) => {
-      const n = typeof payload === 'number' ? payload : (payload?.count ?? 0);
-      document.getElementById('viewersCount').textContent = n;
+      if (typeof payload === 'number') {
+        setViewersCount(payload);
+        return;
+      }
+      setViewersCount(payload?.count ?? 0);
+      renderViewersList(payload?.viewers || []);
     });
 
     socket.on('chat:cleared', () => {
@@ -687,5 +730,173 @@ async function init() {
   initChat(myStreamerNameLower);
   startLiveStatusPolling();
 }
+
+// ---- API чата ----
+
+let chatApiFullKey = null;
+
+function setChatApiKeyUi(masked) {
+  const input = document.getElementById('chatApiKeyInput');
+  const btn = document.getElementById('chatApiGenerateBtn');
+  if (input) input.value = masked || '';
+  if (btn) btn.textContent = masked ? '🔄' : '🔄 Сгенерировать';
+}
+
+function toggleChatApi() {
+  const panel = document.getElementById('chatPanel');
+  const block = document.getElementById('chatApiBlock');
+  const toggle = document.getElementById('chatApiToggle');
+  if (!panel || !block || !toggle) return;
+
+  if (!chatApiOpen) {
+    block.classList.remove('hidden');
+    chatApiExtraH = block.offsetHeight;
+    chatApiOpen = true;
+    panel.style.height = (panel.offsetHeight + chatApiExtraH) + 'px'; // удлиняем чат на высоту блока
+  } else {
+    panel.style.height = Math.max(120, panel.offsetHeight - chatApiExtraH) + 'px';
+    block.classList.add('hidden');
+    chatApiOpen = false;
+    chatApiExtraH = 0;
+  }
+
+  toggle.classList.toggle('open', chatApiOpen);
+  toggle.setAttribute('aria-expanded', String(chatApiOpen));
+}
+
+function onChatApiGenerateClick() {
+  if (document.getElementById('chatApiKeyInput').value) {
+    document.getElementById('chatKeyRegenModal').classList.remove('hidden');
+  } else {
+    doGenerateChatKey();
+  }
+}
+
+function closeChatKeyRegen() {
+  document.getElementById('chatKeyRegenModal').classList.add('hidden');
+}
+
+function confirmChatKeyRegen() {
+  closeChatKeyRegen();
+  doGenerateChatKey();
+}
+
+async function doGenerateChatKey() {
+  try {
+    const data = await api('/workbench/chat-key/generate', { method: 'POST' });
+    chatApiFullKey = data.chatApiKey;
+    setChatApiKeyUi(data.chatApiKeyMasked);
+    showToast('success', 'Ключ чата сгенерирован — скопируй его или ссылку для OBS');
+  } catch (err) {
+    showToast('error', err.message || 'Не удалось сгенерировать ключ чата');
+  }
+}
+
+async function getChatApiKey() {
+  if (!chatApiFullKey) {
+    const data = await api('/workbench/chat-key/reveal', { method: 'POST' });
+    chatApiFullKey = data.chatApiKey;
+  }
+  return chatApiFullKey;
+}
+
+async function copyChatApiKey() {
+  try {
+    const key = await getChatApiKey();
+    await navigator.clipboard.writeText(key);
+    showToast('success', 'API-ключ чата скопирован');
+  } catch (err) {
+    showToast('error', err.message || 'Не удалось скопировать — возможно, ключ ещё не создан');
+  }
+}
+
+async function copyChatOverlayUrl() {
+  try {
+    const key = await getChatApiKey();
+    const url = `${location.origin}/overlay/chat.html#key=${encodeURIComponent(key)}`;
+    await navigator.clipboard.writeText(url);
+    showToast('success', 'Ссылка для OBS скопирована');
+  } catch (err) {
+    showToast('error', err.message || 'Не удалось скопировать — возможно, ключ ещё не создан');
+  }
+}
+
+// ---- список зрителей ----
+
+function setViewersCount(count) {
+  const el = document.getElementById('viewersCount');
+  if (el) el.textContent = String(count ?? 0);
+}
+
+function renderViewersList(viewers) {
+  const list = document.getElementById('wbViewersList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!viewers || !viewers.length) {
+    list.innerHTML = '<div class="wb-viewer-row guest">Никого нет</div>';
+    return;
+  }
+  viewers.forEach((v) => {
+    const row = document.createElement('div');
+    row.className = 'wb-viewer-row' + (v.isGuest ? ' guest' : '');
+    row.textContent = v.username;
+    list.appendChild(row);
+  });
+}
+
+function toggleViewersPanel(e) {
+  e?.stopPropagation();
+  const panel = document.getElementById('wbViewersPanel');
+  const btn = document.getElementById('wbViewersBtn');
+  if (!panel) return;
+  const open = panel.classList.toggle('open');
+  btn?.classList.toggle('active', open);
+}
+
+// ---- мини-окно (Picture-in-Picture): тот же <video>, без второго потока ----
+
+async function togglePip() {
+  const video = document.getElementById('playerVideo');
+  if (!video) return;
+
+  if (document.pictureInPictureElement === video) {
+    await document.exitPictureInPicture().catch(() => {});
+    return;
+  }
+
+  const err = await PWMini.enterPip({
+    video,
+    streamer: myStreamerNameLower,
+    returnPath: '/workbench.html',
+  });
+  if (err) showToast('error', err);
+}
+
+function bindPip() {
+  const video = document.getElementById('playerVideo');
+  const btn = document.getElementById('pipBtn');
+  if (!video || !btn) return;
+
+  const sync = () => {
+    const on = document.pictureInPictureElement === video;
+    btn.classList.toggle('active', on);
+    btn.textContent = on ? '⧉ Вернуть в плеер' : '⧉ Мини-окно';
+  };
+
+  video.addEventListener('enterpictureinpicture', sync);
+  video.addEventListener('leavepictureinpicture', sync);
+}
+
+bindPip();
+
+// кнопки модерации в чате: имя берётся из data-атрибута как обычный текст, выполнить код оно не может
+document.getElementById('chatMessages')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.wb-mod-btn');
+  if (!btn) return;
+  const { act, id, uid, name } = btn.dataset;
+  if (act === 'del') deleteMessage(id);
+  else if (act === 'ban') openBanConfirm(uid, name);
+  else if (act === 'timeout') openTimeoutModal(uid, name);
+});
 
 init();

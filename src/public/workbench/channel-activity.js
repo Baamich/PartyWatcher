@@ -31,7 +31,7 @@ async function loadBans() {
       box.appendChild(row);
     });
   } catch (err) {
-    box.innerHTML = `<p style="color:var(--danger); font-size:14px;">${err.message}</p>`;
+    box.innerHTML = `<p style="color:var(--danger); font-size:14px;">${escapeHtml(err.message)}</p>`;
   }
 }
 

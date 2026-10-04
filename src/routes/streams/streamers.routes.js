@@ -3,6 +3,8 @@ const router = express.Router();
 const User = require('../../models/User');
 const auth = require('../../middleware/auth');
 
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
+
 function validateStreamerName(name) {
   if (typeof name !== 'string') return 'Некорректное имя';
   const v = name.trim();
@@ -20,7 +22,7 @@ router.get('/', async (req, res) => {
 
     const match = { $ne: null };
     if (q) {
-      match.$regex = q;
+      match.$regex = escapeRegex(q);
       match.$options = 'i';
     }
 
@@ -82,16 +84,28 @@ router.patch('/me', auth, async (req, res) => {
       me.streamerBio = String(streamerBio).trim();
     }
 
+    const IMAGE_DATA_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
     if (streamerAvatarUrl !== undefined) {
-      if (streamerAvatarUrl && streamerAvatarUrl.length > MAX_IMAGE_CHARS) {
-        return res.status(400).json({ error: 'Аватар слишком большой (максимум ~4 МБ)' });
+      if (streamerAvatarUrl) {
+        if (typeof streamerAvatarUrl !== 'string' || !IMAGE_DATA_RE.test(streamerAvatarUrl)) {
+          return res.status(400).json({ error: 'Аватар: нужна картинка PNG, JPEG, WebP или GIF' });
+        }
+        if (streamerAvatarUrl.length > MAX_IMAGE_CHARS) {
+          return res.status(400).json({ error: 'Аватар слишком большой (максимум ~4 МБ)' });
+        }
       }
       me.streamerAvatarUrl = streamerAvatarUrl || null;
     }
 
     if (streamerBannerUrl !== undefined) {
-      if (streamerBannerUrl && streamerBannerUrl.length > MAX_IMAGE_CHARS) {
-        return res.status(400).json({ error: 'Баннер слишком большой (максимум ~4 МБ)' });
+      if (streamerBannerUrl) {
+        if (typeof streamerBannerUrl !== 'string' || !IMAGE_DATA_RE.test(streamerBannerUrl)) {
+          return res.status(400).json({ error: 'Баннер: нужна картинка PNG, JPEG, WebP или GIF' });
+        }
+        if (streamerBannerUrl.length > MAX_IMAGE_CHARS) {
+          return res.status(400).json({ error: 'Баннер слишком большой (максимум ~4 МБ)' });
+        }
       }
       me.streamerBannerUrl = streamerBannerUrl || null;
     }

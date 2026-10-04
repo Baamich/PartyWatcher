@@ -551,3 +551,27 @@
 }
 .live-strip-inner.fs-active .live-viewer-row { color: #fff; }
 .live-strip-inner.fs-active .live-viewer-row.guest { color: rgba(255,255,255,0.55); }
+
+/* ник владельца канала: красная «плашка» (цвет потом станет настраиваемым) */
+.live-nick--owner {
+  background: var(--danger);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.live-src {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  padding: 0 5px;
+  margin-right: 4px;
+  border-radius: 4px;
+}
+
+/* кнопка мини-окна: сверху по центру плеера */
+#liveMiniBtn { left: calc(50% - 20px); }
+#liveMiniBtn.active { border-color: var(--accent); }

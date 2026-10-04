@@ -53,8 +53,8 @@ function showIframeBlockedMessage(container, url) {
       </p>
       <a href="${url}" target="_blank" style="
         padding:12px 24px;
-        background:#7c3aed;
-        color:#fff;
+        background:var(--accent, #7c3aed);
+        color:var(--accent-contrast, #fff);
         border-radius:8px;
         text-decoration:none;
       ">Открыть в новой вкладке</a>

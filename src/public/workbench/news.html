@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="/js/theme.js"></script>
+  <script src="/js/favicon.js"></script>
+  <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/workbench/workbench.css" />
+  <link rel="stylesheet" href="/workbench/news.css" />
+  <title>PartyWatcher — Новости</title>
+</head>
+<body>
+  <div class="page-header">
+    <a href="/streams.html" class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span class="brand-stack">
+        <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+        <span class="brand-live-tag">LIVE</span>
+      </span>
+    </a>
+    <div class="header-right">
+      <div class="corner-menu">
+        <button class="icon-btn" onclick="goProfile()">← Профиль</button>
+        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wb-outer">
+    <div class="wb-subpage">
+      <nav class="wb-nav wb-nav-static">
+        <button type="button" class="wb-nav-btn active">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench.html'">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/videos.html'">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/docs.html'">📚 Документация</button>
+      </nav>
+
+      <div class="wb-subpage-main">
+        <section class="news-head">
+          <div>
+            <h1 class="wb-subpage-title">📰 Новости</h1>
+            <div class="news-filter">
+              <label>С <input type="date" id="newsFrom" /></label>
+              <label>По <input type="date" id="newsTo" /></label>
+              <button type="button" class="icon-btn" id="newsResetBtn">Сбросить</button>
+            </div>
+          </div>
+          <button type="button" class="icon-btn news-create-btn hidden" id="newsCreateBtn">＋ Создать новость</button>
+        </section>
+
+        <div id="newsList" class="news-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="newsModal" class="modal hidden">
+    <div class="modal-content news-modal-content">
+      <button type="button" class="modal-close" onclick="closeNewsModal()">×</button>
+      <h3 id="newsModalTitle" style="margin:0 0 6px">Новая новость</h3>
+      <p class="wb-hint" id="newsDateInfo"></p>
+
+      <label class="auth-label" for="newsTitleInput">Заголовок</label>
+      <input id="newsTitleInput" maxlength="140" spellcheck="true" lang="ru" placeholder="Что нового?" />
+      <div id="newsTitleSpell" class="news-spell"></div>
+
+      <label class="auth-label">Картинка-превью (необязательно)</label>
+      <div class="news-image-row">
+        <input type="file" id="newsImageInput" accept="image/png,image/jpeg,image/webp" />
+        <button type="button" class="icon-btn hidden" id="newsImageRemove">Убрать</button>
+      </div>
+      <img id="newsImagePreview" class="news-image-preview hidden" alt="" />
+
+      <label class="auth-label" for="newsBodyInput">Описание</label>
+      <textarea id="newsBodyInput" rows="8" maxlength="5000" spellcheck="true" lang="ru" placeholder="Что изменилось"></textarea>
+      <div id="newsBodySpell" class="news-spell"></div>
+
+      <p id="newsFormError" class="news-form-error hidden"></p>
+      <button type="button" class="auth-submit" id="newsPublishBtn" onclick="publishNews()">Опубликовать</button>
+    </div>
+  </div>
+
+  <div id="delNewsModal" class="modal hidden">
+    <div class="modal-content" style="min-width:min(360px,92vw)">
+      <button type="button" class="modal-close" onclick="closeDelNews()">×</button>
+      <h3 style="margin:0 0 10px">Удалить новость?</h3>
+      <p class="wb-subpage-hint" style="margin-bottom:16px">Она исчезнет у всех.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="icon-btn vod-btn-danger" onclick="confirmDelNews()">Да, удалить</button>
+        <button type="button" class="icon-btn" onclick="closeDelNews()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/minipip.js"></script>
+  <script src="/workbench/news.js"></script>
+</body>
+</html>

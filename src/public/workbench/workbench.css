@@ -683,3 +683,183 @@
     border-top: 1px solid var(--border);
   }
 }
+
+/* ---- чат: API-блок, список зрителей, ник владельца ---- */
+
+.wb-chat-content {
+  position: relative;
+  gap: 0;
+  overflow: hidden; /* прокручивается только список сообщений; иначе выехавшая панель зрителей даёт горизонтальный скролл */
+}
+
+.wb-chatapi-bar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wb-chatapi-toggle {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 2px 10px;
+  border-radius: 6px;
+}
+.wb-chatapi-toggle:hover {
+  color: var(--text);
+  background: var(--surface-alt);
+}
+.wb-chatapi-toggle svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+}
+.wb-chatapi-toggle.open svg {
+  transform: rotate(180deg);
+}
+
+.wb-chatapi-block {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+.wb-chatapi-block.hidden { display: none; }
+.wb-chatapi-obs-btn { align-self: flex-start; }
+
+.wb-viewers-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.wb-viewers-btn:hover,
+.wb-viewers-btn.active {
+  color: var(--text);
+  background: var(--border);
+}
+
+.wb-viewers-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 200px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 4;
+  pointer-events: none;
+}
+.wb-viewers-panel.open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.wb-viewers-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.wb-viewers-close {
+  all: unset;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+.wb-viewers-close:hover { color: var(--text); }
+
+.wb-viewers-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wb-viewer-row { color: var(--text); }
+.wb-viewer-row.guest { color: var(--text-muted); font-style: italic; }
+
+/* ник владельца канала: красная «плашка» (цвет потом станет настраиваемым) */
+.wb-msg-author--owner {
+  background: var(--danger);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.wb-msg-src {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  padding: 0 5px;
+  border-radius: 4px;
+}
+
+/* ---- ссылка на документацию рядом с «API чата» ---- */
+.wb-chatapi-bar {
+  align-items: center;
+  gap: 14px;
+}
+.wb-chatapi-doc {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+  text-decoration: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.wb-chatapi-doc:hover { background: var(--surface-alt); }
+
+/* ---- кнопка мини-плеера: сверху по центру окна «Трансляция» ---- */
+.wb-mini-btn {
+  all: unset;
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 4px 10px;
+  border-radius: 999px;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+.wb-mini-btn:hover,
+.wb-mini-btn.active { opacity: 1; }
+.wb-mini-btn.active { border-color: var(--accent); }

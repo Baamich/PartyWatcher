@@ -19,16 +19,16 @@
     
     <div id="overlay">
       <span id="overlayText">Загрузка комнаты...</span>
-      <button id="startBtn" class="hidden" onclick="startWatching()">▶ Начать просмотр</button>
+      <button id="startBtn" class="hidden">▶ Начать просмотр</button>
     </div>
 
     <button id="fsChatToggleBtn" class="fs-draggable hidden" type="button" title="Чат (зажми, чтобы передвинуть)">💬</button>
-    <button id="ccBtn" class="fs-draggable" onclick="toggleSubtitles()" title="Субтитры">CC</button>
+    <button id="ccBtn" class="fs-draggable" title="Субтитры">CC</button>
     <button id="volumeBtn" class="fs-draggable" title="Громкость (зажми, чтобы передвинуть)">🔊</button>
     <div id="volumePopup" class="hidden">
       <input id="volumeSlider" type="range" min="0" max="100" value="30">
     </div>
-    <button id="fullscreenBtn" class="fs-draggable" onclick="toggleFullscreen()" title="Полноэкранный режим (зажми, чтобы передвинуть)">⛶</button>
+    <button id="fullscreenBtn" class="fs-draggable" title="Полноэкранный режим (зажми, чтобы передвинуть)">⛶</button>
 
     <div id="fsChatPanel" class="hidden">
       <div id="fsChatHandle">
@@ -137,7 +137,7 @@
       </div>
     </div>
 
-    <button onclick="resync()">🔄 Синхронизировать</button>
+    <button class="btn-mono" onclick="resync()">🔄 Синхронизировать</button>
 
     <div id="messages"></div>
     <form id="chatForm" onsubmit="return sendMessage(event)">
@@ -202,6 +202,15 @@
 
       <label for="micSelect">Микрофон</label>
       <select id="micSelect"></select>
+      <div id="micBtHint" class="voice-settings-hint voice-bt-hint hidden"></div>
+
+      <label class="voice-settings-check">
+        <input id="micProcToggle" type="checkbox" checked>
+        Шумо- и эхоподавление браузера
+      </label>
+      <div class="voice-settings-hint">
+        Если голос звучит «как в банке», попробуй выключить. На колонках (без наушников) лучше оставить включённым.
+      </div>
 
       <label for="micGainSlider">Громкость микрофона: <b id="micGainValue">100%</b></label>
       <input id="micGainSlider" type="range" min="50" max="400" value="100">
@@ -227,6 +236,7 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>
-  <script src="/js/room.js"></script>
+  <script src="/js/wakelock.js"></script>
+  <script src="/js/room.js?v=2"></script>
 </body>
 </html>

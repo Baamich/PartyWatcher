@@ -657,13 +657,27 @@ function liveEscapeHtml(s) {
 function buildLiveMessageHtml(msg) {
   if (msg.deleted) return `<span style="color:var(--text-muted);font-style:italic;">Сообщение удалено</span>`;
 
-  const modBtns = isOwnerFlag ? `
-    <button type="button" class="live-mod-btn" title="Удалить" onclick="liveDeleteMessage('${msg._id}')">🗑️</button>
-    <button type="button" class="live-mod-btn" title="Заблокировать" onclick="liveBanUser('${msg.senderId}', '${liveEscapeHtml(msg.senderUsername)}')">🚫</button>
-    <button type="button" class="live-mod-btn" title="Ограничить чат" onclick="liveTimeoutUser('${msg.senderId}', '${liveEscapeHtml(msg.senderUsername)}')">⏱️</button>
+  // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick
+  const delBtn = isOwnerFlag
+    ? `<button type="button" class="live-mod-btn" title="Удалить" data-act="del" data-id="${liveEscapeHtml(msg._id)}">🗑️</button>`
+    : '';
+
+  // бан и таймаут — только для сообщений реальных юзеров
+  const userBtns = isOwnerFlag && !msg.external && msg.senderId ? `
+    <button type="button" class="live-mod-btn" title="Заблокировать" data-act="ban" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">🚫</button>
+    <button type="button" class="live-mod-btn" title="Ограничить чат" data-act="timeout" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">⏱️</button>
   ` : '';
 
-  return `${modBtns}<b>${liveEscapeHtml(msg.senderUsername)}:</b> ${liveEscapeHtml(msg.text)}`;
+  const src = msg.external
+    ? `<span class="live-src">${liveEscapeHtml(msg.source || 'api')}</span>`
+    : '';
+
+  const nickCls = 'live-nick' + (msg.isOwner ? ' live-nick--owner' : '');
+  const nickStyle = !msg.isOwner && /^#[0-9a-f]{6}$/i.test(msg.nickColor || '')
+    ? ` style="color:${msg.nickColor}"`
+    : '';
+
+  return `${delBtn}${userBtns}${src}<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(msg.senderUsername)}</b>: ${liveEscapeHtml(msg.text)}`;
 }
 
 function renderLiveMessage(msg) {
@@ -679,12 +693,22 @@ function renderLiveMessage(msg) {
 function liveDeleteMessage(messageId) {
   liveSocket?.emit('chat:delete', { messageId });
 }
-function liveBanUser(userId, username) {
-  if (!confirm(`Заблокировать ${username} в этом канале навсегда?`)) return;
+async function liveBanUser(userId, username) {
+  const ok = await PW.confirm(`${username} не сможет писать в чат канала.`, {
+    title: 'Заблокировать пользователя?',
+    okText: 'Заблокировать',
+    danger: true,
+  });
+  if (!ok) return;
   liveSocket?.emit('chat:ban', { userId, username });
 }
-function liveTimeoutUser(userId, username) {
-  const secStr = prompt(`На сколько секунд ограничить чат для ${username}?`, '300');
+async function liveTimeoutUser(userId, username) {
+  const secStr = await PW.prompt(`На сколько секунд ограничить чат для ${username}?`, {
+    title: 'Ограничить чат',
+    defaultValue: '300',
+    inputType: 'number',
+    okText: 'Ограничить',
+  });
   const seconds = parseInt(secStr, 10);
   if (!seconds || seconds <= 0) return;
   liveSocket?.emit('chat:timeout', { userId, username, seconds });
@@ -693,8 +717,13 @@ window.liveDeleteMessage = liveDeleteMessage;
 window.liveBanUser = liveBanUser;
 window.liveTimeoutUser = liveTimeoutUser;
 
-document.getElementById('liveClearChatBtn')?.addEventListener('click', () => {
-  if (confirm('Очистить весь чат для всех зрителей?')) liveSocket?.emit('chat:clear');
+document.getElementById('liveClearChatBtn')?.addEventListener('click', async () => {
+  const ok = await PW.confirm('Все сообщения исчезнут у всех зрителей.', {
+    title: 'Очистить чат?',
+    okText: 'Очистить',
+    danger: true,
+  });
+  if (ok) liveSocket?.emit('chat:clear');
 });
 
 function toggleViewersPanel() {
@@ -1045,6 +1074,56 @@ try {
 }
 
 applyVolumeToLive(getSavedVolume());
+
+// ---- мини-окно (Picture-in-Picture): тот же <video>, без второго потока ----
+(function initLiveMini() {
+  const video = document.getElementById('liveVideo');
+  const btn = document.getElementById('liveMiniBtn');
+  if (!video || !btn || !window.PWMini || !PWMini.pipSupported()) return;
+
+  const sync = () => {
+    const on = document.pictureInPictureElement === video;
+    btn.classList.toggle('active', on);
+    btn.textContent = on ? '↩' : '⧉';
+    btn.title = on ? 'Вернуть в плеер' : 'Мини-окно поверх всех окон';
+  };
+
+  // кнопка видна, только пока в плеере реально есть эфир
+  video.addEventListener('loadedmetadata', () => btn.classList.remove('hidden'));
+  video.addEventListener('emptied', () => btn.classList.add('hidden'));
+  video.addEventListener('enterpictureinpicture', sync);
+  video.addEventListener('leavepictureinpicture', sync);
+
+  btn.addEventListener('click', async () => {
+    if (document.pictureInPictureElement === video) {
+      await document.exitPictureInPicture().catch(() => {});
+      return;
+    }
+    const err = await PWMini.enterPip({
+      video,
+      streamer: getNameFromUrl(),
+      returnPath: location.pathname,
+    });
+    if (err) console.warn('[mini]', err);
+  });
+})();
+
+// ---- кнопки модерации в чате: данные в data-атрибутах, а не в onclick ----
+document.getElementById('liveMessages')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.live-mod-btn');
+  if (!btn) return;
+  const { act, id, uid, name } = btn.dataset;
+  if (act === 'del') liveDeleteMessage(id);
+  else if (act === 'ban') liveBanUser(uid, name);
+  else if (act === 'timeout') liveTimeoutUser(uid, name);
+});
+
+// ---- не даём экрану и компьютеру уснуть, пока идёт эфир ----
+setInterval(() => {
+  const v = document.getElementById('liveVideo');
+  const playing = !!v && liveOpen && !v.classList.contains('hidden') && !v.paused && !v.ended && v.readyState > 2;
+  window.PWWake?.set('live', playing);
+}, 4000);
 
 loadProfile();
 startStreamerLivePolling();

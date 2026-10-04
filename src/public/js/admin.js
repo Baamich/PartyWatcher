@@ -70,9 +70,14 @@ async function runUpdate(hash) {
   pollStatus(log);
 }
 
-function revertToCommit() {
+async function revertToCommit() {
   if (!selectedHash) return;
-  if (!confirm('Откатить проект на выбранный коммит?')) return;
+  const ok = await PW.confirm('Проект вернётся на выбранный коммит, сервер перезапустится.', {
+    title: 'Откатить проект?',
+    okText: 'Откатить',
+    danger: true,
+  });
+  if (!ok) return;
   runUpdate(selectedHash);
 }
 

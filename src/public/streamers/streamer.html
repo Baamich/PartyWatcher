@@ -63,6 +63,7 @@
             <input id="liveVolumeSlider" type="range" min="0" max="100" value="50">
           </div>
           <button id="liveFullscreenBtn" class="live-fs-btn" title="Полноэкранный режим">⛶</button>
+          <button id="liveMiniBtn" class="live-fs-btn hidden" type="button" title="Мини-окно поверх всех окон">⧉</button>
 
           <button id="liveQualityBtn" class="live-fs-btn live-quality-btn" title="Настройки качества">⚙️</button>
           <div id="liveQualityPopup" class="hidden"></div>
@@ -167,6 +168,8 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/wakelock.js"></script>
+  <script src="/js/minipip.js"></script>
   <script src="/streamers/streamer.js"></script>
 </body>
 </html>

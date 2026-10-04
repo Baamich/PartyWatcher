@@ -9,6 +9,8 @@ const StreamVod = require('../models/StreamVod');
 const streamKeyCache = require('./streamKeyCache');
 
 const MEDIA_ROOT = path.join(process.cwd(), 'media');
+// ключ стрима — ровно 40 символов 0-9a-f (crypto.randomBytes(20).toString('hex') в workbench.routes.js)
+const STREAM_KEY_RE = /^[a-f0-9]{40}$/;
 const VOD_ROOT = path.join(MEDIA_ROOT, 'vod');
 const FFMPEG_PATH = '/usr/bin/ffmpeg';
 const FFPROBE_PATH = '/usr/bin/ffprobe';
@@ -60,10 +62,12 @@ function currentGen(key) {
 function keyFromStreamPath(streamPath) {
   if (!streamPath || typeof streamPath !== 'string') return null;
   const parts = streamPath.replace(/^\//, '').split('/');
-  if (parts[0] !== 'live' || !parts[1]) return null;
-  return parts[1];
+  if (parts.length !== 2 || parts[0] !== 'live') return null;
+  // только настоящий формат ключа: иначе имя вроде «..» позволяло бы стереть папку media
+  return STREAM_KEY_RE.test(parts[1]) ? parts[1] : null;
 }
 function mediaDir(key) {
+  if (!STREAM_KEY_RE.test(String(key))) throw new Error('bad stream key'); // страховка от выхода из media/live
   return path.join(MEDIA_ROOT, 'live', key);
 }
 function wipeLiveMedia(key) {
@@ -524,6 +528,11 @@ function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId) {
 }
 
 async function startTranscode(key) {
+  // ffmpeg и запись на диск только для существующего ключа
+  if (!STREAM_KEY_RE.test(String(key)) || !streamKeyCache.get(key)) {
+    console.warn('[rtmp] startTranscode: неизвестный ключ, игнорирую');
+    return;
+  }
   const hadPendingStop = pendingStopTimers.has(key);
   clearPendingStop(key);
 
@@ -596,10 +605,32 @@ async function startTranscode(key) {
   }, 300);
 }
 
+function rejectSession(session) {
+  try {
+    if (typeof session?.reject === 'function') return session.reject();
+    if (typeof session?.stop === 'function') return session.stop();
+  } catch (e) {
+    console.warn('[rtmp] reject:', e.message);
+  }
+}
+
+// кто угодно может подключиться по RTMP с любым ключом, поэтому проверяем его ДО запуска ffmpeg
+nms.on('prePublish', (session) => {
+  const key = keyFromStreamPath(session?.streamPath || '');
+  if (!key || !streamKeyCache.get(key)) {
+    console.warn('[rtmp] отклонён неизвестный ключ:', String(session?.streamPath || '').slice(0, 60));
+    rejectSession(session);
+  }
+});
+
 nms.on('postPublish', (session) => {
   const key = keyFromStreamPath(session?.streamPath || '');
-  console.log('[rtmp] postPublish', session?.streamPath);
-  if (key) startTranscode(key);
+  console.log('[rtmp] postPublish', String(session?.streamPath || '').slice(0, 60));
+  if (!key || !streamKeyCache.get(key)) {
+    rejectSession(session);
+    return;
+  }
+  startTranscode(key);
 });
 
 nms.on('donePublish', (session) => {

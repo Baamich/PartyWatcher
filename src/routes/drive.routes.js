@@ -6,6 +6,10 @@ const config = require('../config');
 
 router.get('/stream/:fileId', auth, async (req, res) => {
   const { fileId } = req.params;
+  // id файла: только буквы, цифры, _ и -. Иначе в адрес запроса (с твоим API-ключом) можно подмешать чужой путь
+  if (!/^[A-Za-z0-9_-]{10,100}$/.test(fileId)) {
+    return res.status(400).json({ error: 'Некорректный id файла' });
+  }
   const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${config.drive.apiKey}`;
 
   try {

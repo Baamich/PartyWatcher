@@ -1,0 +1,216 @@
+<h1>Бот на C#</h1>
+<p class="docs-lead">Мы сделаем бота: он читает чат, видит команды (например, <code>!рулетка 30</code>) и отвечает в чат. Пошагово, начиная с нуля.</p>
+
+<h2>Что получится</h2>
+<ul>
+  <li>Зритель пишет <code>!топы</code>, и бот отвечает списком.</li>
+  <li>Зритель пишет <code>!рулетка 30</code>, бот пишет «запускаю рулетку», ждёт 5 секунд и называет число от 1 до 30.</li>
+</ul>
+<p>Чтобы добавить свои команды, достаточно скопировать готовый кусок кода (есть ниже).</p>
+
+<h2>Шаг 0. Что нужно установить</h2>
+<ol>
+  <li><b>.NET SDK</b> (версия 8 или новее). Скачать бесплатно: <a href="https://dotnet.microsoft.com/download" target="_blank" rel="noopener">dotnet.microsoft.com/download</a>. Нажми большую кнопку <b>.NET SDK</b> и поставь программу, как обычную.</li>
+  <li>Проверка: открой <b>Терминал</b> (на Windows нажми <code>Win+R</code>, напиши <code>cmd</code>, <code>Enter</code>) и напиши:
+<pre><code>dotnet --version</code></pre>
+  Должно показать число, например <code>8.0.404</code>. Если пишет «команда не найдена», перезагрузи компьютер и попробуй ещё раз.</li>
+</ol>
+
+<h2>Шаг 1. Получи ключ чата</h2>
+<p>Сделай шаги 1 и 2 из <a href="#chat-obs">Чат в OBS</a>. Ключ начинается с <code>pwc_</code>. Скопировать его целиком можно кнопкой <b>📋</b> рядом с полем ключа в блоке «API чата».</p>
+
+<h2>Шаг 2. Создай проект бота</h2>
+<p>В том же терминале напиши эти команды <b>по одной</b>, после каждой нажимай <code>Enter</code>:</p>
+<pre><code>mkdir ChatBot
+cd ChatBot
+dotnet new console
+dotnet add package SocketIOClient</code></pre>
+<p>Что это значит: создали папку <code>ChatBot</code>, зашли в неё, создали пустую программу и добавили кусочек, который умеет слушать чат. Папка <code>ChatBot</code> появится там, где открыт терминал (на Windows обычно <code>C:\Users\ТвоёИмя</code>).</p>
+
+<h2>Шаг 3. Вставь код бота</h2>
+<ol>
+  <li>Открой папку <code>ChatBot</code> и найди в ней файл <code>Program.cs</code>.</li>
+  <li>Открой его любым редактором (подойдёт даже Блокнот).</li>
+  <li><b>Удали всё, что там написано.</b></li>
+  <li>Вставь код ниже (кнопка «Копировать» в углу блока).</li>
+  <li>Найди строку с <code>ApiKey</code> и замени <code>pwc_СЮДА_ВСТАВЬ_СВОЙ_КЛЮЧ</code> на свой ключ. Кавычки <code>"</code> вокруг ключа оставь на месте.</li>
+  <li>Сохрани файл (<code>Ctrl+S</code>).</li>
+</ol>
+
+<pre><code>// ===== 1. Подключаем нужные «кусочки» =====
+using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using SocketIOClient;
+
+// ===== 2. НАСТРОЙКИ. Менять нужно только ApiKey =====
+const string BaseUrl = "https://partywatcher.de";      // адрес сайта, не трогай
+const string ApiKey  = "pwc_СЮДА_ВСТАВЬ_СВОЙ_КЛЮЧ";   // твой ключ чата, внутри кавычек
+
+// ===== 3. Через это бот ОТПРАВЛЯЕТ сообщения в чат =====
+using var http = new HttpClient { BaseAddress = new Uri(BaseUrl) };
+http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
+
+// ===== 4. Память для рулетки: кто и когда её запускал (чтобы не спамили) =====
+var cooldowns = new ConcurrentDictionary&lt;string, DateTime&gt;();
+
+// ===== 5. Через это бот СЛУШАЕТ чат =====
+var client = new SocketIO(BaseUrl + "/chat");
+
+// Когда подключились, говорим сайту: «я бот этого канала».
+// Если связь пропадёт, бот сам переподключится и снова сюда зайдёт.
+client.OnConnected += async (_, _) =&gt;
+{
+    Console.WriteLine("Подключён к чату. Жду команды...");
+    await client.EmitAsync("chat:join", new { chatKey = ApiKey });
+};
+
+client.OnDisconnected += (_, reason) =&gt; Console.WriteLine("Связь пропала: " + reason);
+
+// ===== 6. Сюда прилетает КАЖДОЕ новое сообщение из чата =====
+client.On("chat:message", async response =&gt;
+{
+    try
+    {
+        var msg = response.GetValue&lt;ChatMessage&gt;();
+
+        // Свои же сообщения не читаем, иначе бот начнёт отвечать сам себе.
+        if (msg.External &amp;&amp; msg.Source == "bot") return;
+
+        var text = msg.Text.Trim();   // текст сообщения без пробелов по краям
+
+        // ---------- ПРИМЕР 1 и 2: команда !топы ----------
+        // Пример 1: бот ВИДИТ команду (пишет в чёрное окно на твоём компьютере).
+        // Пример 2: бот ОТВЕЧАЕТ в чат.
+        if (text.Equals("!топы", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"{msg.SenderUsername} написал !топы");
+            await SendAsync("🏆 Топ зрителей: 1) Вася  2) Петя  3) Коля");
+            return;
+        }
+
+        // ---------- ПРИМЕР 3: команда !рулетка 30 ----------
+        // Режем сообщение на слова: "!рулетка" и "30".
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 2
+            &amp;&amp; parts[0].Equals("!рулетка", StringComparison.OrdinalIgnoreCase)
+            &amp;&amp; int.TryParse(parts[1], out var max)     // второе слово должно быть числом
+            &amp;&amp; max &gt;= 2 &amp;&amp; max &lt;= 1_000_000)           // и разумным
+        {
+            // Не чаще раза в 15 секунд от одного человека.
+            var now = DateTime.UtcNow;
+            if (cooldowns.TryGetValue(msg.SenderUsername, out var last)
+                &amp;&amp; now - last &lt; TimeSpan.FromSeconds(15)) return;
+            cooldowns[msg.SenderUsername] = now;
+
+            var who = msg.SenderUsername;
+            await SendAsync($"🎲 {who} запускает рулетку 1–{max}… результат через 5 секунд!");
+
+            // Ждём 5 секунд «в сторонке», чтобы бот не завис и читал остальной чат.
+            _ = Task.Run(async () =&gt;
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5));
+                var n = Random.Shared.Next(1, max + 1);   // случайное число от 1 до max
+                await SendAsync($"🎲 {who}, выпало {n} (из {max})");
+            });
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Ошибка: " + ex.Message);
+    }
+});
+
+// ===== 7. Запускаем и не выключаемся =====
+await client.ConnectAsync();
+await Task.Delay(Timeout.Infinite);
+
+// ===== 8. Функция «написать в чат» =====
+async Task SendAsync(string text, string username = "Бот")
+{
+    var resp = await http.PostAsJsonAsync("/api/chat/send", new { text, username, source = "bot" });
+    if (!resp.IsSuccessStatusCode)
+        Console.WriteLine($"Не отправилось ({(int)resp.StatusCode}): {await resp.Content.ReadAsStringAsync()}");
+}
+
+// ===== 9. Как выглядит сообщение, которое присылает сайт =====
+class ChatMessage
+{
+    [JsonPropertyName("senderUsername")] public string SenderUsername { get; set; } = "";
+    [JsonPropertyName("text")]           public string Text { get; set; } = "";
+    [JsonPropertyName("isOwner")]        public bool IsOwner { get; set; }
+    [JsonPropertyName("external")]       public bool External { get; set; }
+    [JsonPropertyName("source")]         public string? Source { get; set; }
+}</code></pre>
+
+<h2>Шаг 4. Запусти бота</h2>
+<ol>
+  <li>В терминале (он должен быть в папке <code>ChatBot</code>) напиши:
+<pre><code>dotnet run</code></pre></li>
+  <li>Подожди несколько секунд. Должна появиться строка <b>«Подключён к чату. Жду команды...»</b>. Значит, всё работает.</li>
+  <li><b>Не закрывай окно</b> терминала: пока оно открыто, бот работает. Чтобы выключить бота, нажми в нём <code>Ctrl+C</code>.</li>
+</ol>
+
+<h2>Шаг 5. Проверь</h2>
+<ol>
+  <li>Открой свой чат, например <code>https://partywatcher.de/streamers/baamich</code>.</li>
+  <li>Напиши <code>!топы</code>. Бот должен ответить списком.</li>
+  <li>Напиши <code>!рулетка 30</code>. Бот напишет «запускает рулетку», а через 5 секунд назовёт число от 1 до 30.</li>
+</ol>
+
+<h2>Как добавить свою команду</h2>
+<p>Скопируй этот кусок и вставь в код <b>сразу под строкой</b> <code>var text = msg.Text.Trim();</code> (выше «ПРИМЕР 1 и 2»):</p>
+<pre><code>if (text.Equals("!привет", StringComparison.OrdinalIgnoreCase))
+{
+    await SendAsync($"Привет, {msg.SenderUsername}! 👋");
+    return;
+}</code></pre>
+<p>Что менять: <code>!привет</code> на свою команду, а текст в <code>SendAsync(...)</code> на свой ответ. <code>{msg.SenderUsername}</code> вставит имя того, кто написал. После изменений останови бота (<code>Ctrl+C</code>) и запусти снова (<code>dotnet run</code>).</p>
+
+<h2>Не работает?</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Что видишь</th><th>Что делать</th></tr>
+  <tr><td><code>dotnet</code> не найден</td><td>Установи .NET SDK (шаг 0) и перезагрузи компьютер.</td></tr>
+  <tr><td>Бот не пишет «Подключён к чату»</td><td>Проверь интернет и что в <code>BaseUrl</code> написано ровно <code>https://partywatcher.de</code>. Если всё верно, проверь версию пакета: в папке бота напиши <code>dotnet add package SocketIOClient</code>, чтобы обновить его.</td></tr>
+  <tr><td>«Не отправилось (401)»</td><td>Ключ неверный. Скопируй его заново из студии (📋) и вставь между кавычками, без пробелов.</td></tr>
+  <tr><td>«Не отправилось (429)»</td><td>Бот пишет слишком часто. Подожди несколько секунд.</td></tr>
+  <tr><td>Бот подключён, но молчит на команды</td><td>Команда должна быть написана точно: <code>!топы</code>, без лишних слов. Перезапусти бота после правок кода.</td></tr>
+</table>
+</div>
+
+<h2>Если ты пишешь на JavaScript, а не на C#</h2>
+<ol>
+  <li>Установи Node.js (версия 18 или новее): <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>.</li>
+  <li>В терминале:
+<pre><code>mkdir chatbot
+cd chatbot
+npm init -y
+npm install socket.io-client</code></pre></li>
+  <li>Создай файл <code>bot.js</code>, вставь код, подставь свой ключ и запусти командой <code>node bot.js</code>:
+<pre><code>const { io } = require('socket.io-client');
+
+const BASE = 'https://partywatcher.de';
+const KEY = 'pwc_СЮДА_ВСТАВЬ_СВОЙ_КЛЮЧ';
+
+const socket = io(BASE + '/chat');
+socket.on('connect', () =&gt; {
+  console.log('Подключён к чату');
+  socket.emit('chat:join', { chatKey: KEY });
+});
+
+socket.on('chat:message', async (m) =&gt; {
+  if (m.external &amp;&amp; m.source === 'bot') return; // свои сообщения не читаем
+  if (m.text.trim().toLowerCase() === '!топы') {
+    await fetch(BASE + '/api/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY },
+      body: JSON.stringify({ text: 'Топ зрителей: ...', username: 'Бот', source: 'bot' }),
+    });
+  }
+});</code></pre></li>
+</ol>
+
+<p>Дальше: <a href="#chat-style">Стилизация чата</a>.</p>

@@ -38,10 +38,11 @@
     <div id="wbCanvas" class="wb-canvas">
 
       <nav id="wbNavFixed" class="wb-nav">
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/news.html'">📰 Новости</button>
         <button type="button" class="wb-nav-btn active">📡 Управление трансляцией</button>
         <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/videos.html'">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
         <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/docs.html'">📚 Документация</button>
       </nav>
 
       <div id="keyPanel" class="wb-window">
@@ -70,6 +71,7 @@
           </div>
         </div>
         <div class="wb-window-content wb-player-content">
+          <button type="button" id="pipBtn" class="wb-mini-btn" title="Мини-окно поверх всех окон" onclick="togglePip()">⧉ Мини-окно</button>
           <div id="playerOffline" class="wb-player-offline">Стрим сейчас офлайн</div>
           <video id="playerVideo" class="wb-player hidden" controls muted playsinline></video>
           <div id="playerReconnecting" class="wb-player-reconnecting hidden">Переподключение…</div>
@@ -103,7 +105,9 @@
         <div class="wb-window-titlebar wb-chat-titlebar">
           <span>Чат</span>
           <div class="wb-chat-head-right">
-            <span class="wb-viewers">👁 <span id="viewersCount">0</span></span>
+            <button type="button" id="wbViewersBtn" class="wb-viewers-btn" title="Зрители" onclick="toggleViewersPanel(event)">
+              👁 <span id="viewersCount">0</span>
+            </button>
             <div class="wb-tooltip-wrap">
               <button type="button" class="wb-clear-chat-btn" onclick="onClearChatClick()">🧹</button>
               <span class="wb-tooltip">Очистить чат</span>
@@ -111,10 +115,38 @@
           </div>
         </div>
         <div class="wb-window-content wb-chat-content">
+          <div class="wb-chatapi-bar">
+            <button type="button" id="chatApiToggle" class="wb-chatapi-toggle" title="API чата" aria-expanded="false" onclick="toggleChatApi()">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span>API чата</span>
+            </button>
+            <a class="wb-chatapi-doc" href="/workbench/docs.html#chat-obs" title="Открыть документацию по чату">📖 Документация</a>
+          </div>
+
+          <div id="chatApiBlock" class="wb-chatapi-block hidden">
+            <div class="wb-key-row">
+              <input id="chatApiKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
+              <button type="button" class="icon-btn" title="Скопировать ключ" onclick="copyChatApiKey()">📋</button>
+              <button type="button" id="chatApiGenerateBtn" class="icon-btn" onclick="onChatApiGenerateClick()">🔄 Сгенерировать</button>
+            </div>
+            <button type="button" class="wb-rtmp-copy-btn wb-chatapi-obs-btn" onclick="copyChatOverlayUrl()">Ссылка для OBS (Browser Source) 📋</button>
+            <p class="wb-hint">Отправка в чат: <code>POST /api/chat/send</code> с заголовком <code>Authorization: Bearer ключ</code></p>
+          </div>
+
           <div id="chatMessages" class="wb-chat-messages no-scrollbar"></div>
           <div class="wb-chat-input-row">
             <input id="chatInput" placeholder="Написать в чат…" onkeydown="handleChatKey(event)" />
             <button type="button" onclick="sendChatMessage()">➤</button>
+          </div>
+
+          <div id="wbViewersPanel" class="wb-viewers-panel">
+            <div class="wb-viewers-panel-header">
+              <span>Зрители</span>
+              <button type="button" class="wb-viewers-close" aria-label="Закрыть" onclick="toggleViewersPanel(event)">×</button>
+            </div>
+            <div id="wbViewersList" class="wb-viewers-list no-scrollbar"></div>
           </div>
         </div>
         <div class="wb-resize-handle"></div>
@@ -156,10 +188,21 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+  <div id="chatKeyRegenModal" class="modal hidden">
+    <div class="modal-content">
+      <button type="button" class="modal-close" onclick="closeChatKeyRegen()">×</button>
+      <h3>Сгенерировать новый ключ чата?</h3>
+      <p class="wb-hint">Старый ключ перестанет работать: оверлей в OBS, боты и мосты придётся перенастроить на новый.</p>
+      <button type="button" class="auth-submit" onclick="confirmChatKeyRegen()">Да, сгенерировать</button>
+      <button type="button" class="icon-btn" onclick="closeChatKeyRegen()">Отмена</button>
+    </div>
+  </div>
+
+  <script src="/vendor/hls.min.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/minipip.js"></script>
   <script src="/workbench/workbench.js"></script>
 </body>
 </html>

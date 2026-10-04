@@ -5,6 +5,7 @@ const ChannelBan = require('../models/ChannelBan');
 const ChannelTimeout = require('../models/ChannelTimeout');
 const ChannelActionLog = require('../models/ChannelActionLog');
 const User = require('../models/User');
+const chatBus = require('../services/chatBus');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
@@ -40,6 +41,7 @@ function getUserFromSocket(socket) {
 
 module.exports = function registerChatSocket(io) {
   const nsp = io.of('/chat');
+  chatBus.init(nsp);
 
   // streamerNameLower → Map<socketId, { username, userId }>
   const presence = new Map();
@@ -85,40 +87,72 @@ module.exports = function registerChatSocket(io) {
     const authUser = getUserFromSocket(socket);
     let currentStreamerNameLower = null;
 
-    socket.on('chat:join', async ({ streamerName }) => {
+    socket.on('chat:join', async ({ streamerName, chatKey } = {}) => {
       // если уже были в другой комнате — выходим
       if (currentStreamerNameLower) {
-        getRoomPresence(currentStreamerNameLower).delete(socket.id);
+        if (!socket.data.isOverlay) getRoomPresence(currentStreamerNameLower).delete(socket.id);
         socket.leave(roomName(currentStreamerNameLower));
         emitViewers(currentStreamerNameLower);
       }
 
-      currentStreamerNameLower = String(streamerName || '').toLowerCase();
-      if (!currentStreamerNameLower) return;
+      socket.data.isOverlay = false;
+      socket.data.isOwner = false;
+      currentStreamerNameLower = null;
 
-      socket.join(roomName(currentStreamerNameLower));
+      let streamer = null;
+      const keyStr = String(chatKey || '').trim();
 
-      const streamer = await User.findOne({ streamerNameLower: currentStreamerNameLower }).select('_id').lean();
-      socket.data.isOwner = !!(authUser && streamer && String(streamer._id) === String(authUser.id));
+      if (keyStr) {
+        // вход по API-ключу (OBS-оверлей, бот): только чтение, в списке зрителей не светится
+        streamer = await User.findOne({ chatApiKey: keyStr }).select('_id streamerNameLower').lean();
+        if (!streamer || !streamer.streamerNameLower) {
+          return socket.emit('chat:overlay-error', { error: 'Неверный ключ чата' });
+        }
+        currentStreamerNameLower = streamer.streamerNameLower;
+        socket.data.isOverlay = true;
+      } else {
+        const name = String(streamerName || '').toLowerCase();
+        if (!name) return;
+        currentStreamerNameLower = name;
+        streamer = await User.findOne({ streamerNameLower: name }).select('_id').lean();
+        socket.data.isOwner = !!(authUser && streamer && String(streamer._id) === String(authUser.id));
+      }
 
-      getRoomPresence(currentStreamerNameLower).set(socket.id, {
-        username: authUser?.username || null,
-        userId: authUser?.id ? String(authUser.id) : null,
-      });
-      emitViewers(currentStreamerNameLower);
+      // отключился, пока искали стримера, — не оставляем «призрака» в комнате и в списке зрителей
+      if (socket.disconnected) return;
+
+      const room = currentStreamerNameLower;
+      socket.join(roomName(room));
+
+      if (!socket.data.isOverlay) {
+        getRoomPresence(room).set(socket.id, {
+          username: authUser?.username || null,
+          userId: authUser?.id ? String(authUser.id) : null,
+        });
+        emitViewers(room);
+      }
+
+      const ownerId = streamer ? String(streamer._id) : null;
 
       const history = await StreamChatMessage.find({
-        streamerNameLower: currentStreamerNameLower,
+        streamerNameLower: room,
         deleted: { $ne: true },
       })
         .sort({ createdAt: -1 })
         .limit(50)
         .lean();
-      socket.emit('chat:history', history.reverse());
+
+      socket.emit(
+        'chat:history',
+        history.reverse().map((m) => ({
+          ...m,
+          isOwner: !!ownerId && String(m.senderId) === ownerId,
+        }))
+      );
     });
 
     socket.on('chat:send', async ({ text }) => {
-      if (!authUser || !currentStreamerNameLower) return;
+      if (!authUser || !currentStreamerNameLower || socket.data.isOverlay) return;
       const trimmed = String(text || '').trim().slice(0, 500);
       if (!trimmed) return;
 
@@ -142,6 +176,7 @@ module.exports = function registerChatSocket(io) {
         text: msg.text,
         deleted: false,
         createdAt: msg.createdAt,
+        isOwner: !!socket.data.isOwner,
       });
     });
 

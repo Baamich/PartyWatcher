@@ -1,7 +1,7 @@
 function getReturnTo() {
   const v = new URLSearchParams(location.search).get('returnTo');
   // разрешаем только относительные внутренние пути — защита от открытого редиректа на чужой домен
-  if (v && v.startsWith('/') && !v.startsWith('//')) return v;
+  if (v && v.startsWith('/') && !v.startsWith('//') && !v.includes('\\')) return v;
   return null;
 }
 
@@ -370,9 +370,9 @@ async function createRoom() {
   } catch (err) {
     console.error('[createRoom]', err);
     if (err.name === 'AbortError') {
-      alert('Сервер не ответил за 15 секунд. Проверь логи pm2 / MongoDB.');
+      PW.toast('Сервер не ответил за 15 секунд. Попробуй ещё раз.', 'error');
     } else {
-      alert(err.message || 'Не удалось создать комнату');
+      PW.toast(err.message || 'Не удалось создать комнату', 'error');
     }
   }
 }
@@ -381,10 +381,10 @@ async function joinByCode() {
   const code = document.getElementById('joinCodeInput').value.trim();
   if (!code) return;
   try {
-    await api('/rooms/' + code);
-    location.href = `/room.html?code=${code}`;
+    await api('/rooms/' + encodeURIComponent(code));
+    location.href = `/room.html?code=${encodeURIComponent(code)}`;
   } catch {
-    alert('Комната не найдена или уже удалена');
+    PW.toast('Комната не найдена или уже удалена', 'error');
   }
 }
 
@@ -416,11 +416,18 @@ function deletionLabel(room) {
 
 async function deleteRoom(code, ev) {
   ev.stopPropagation();
-  if (!confirm('Удалить комнату?')) return;
+  const ok = await PW.confirm('Комната и её чат будут удалены. Это нельзя отменить.', {
+    title: 'Удалить комнату?',
+    okText: 'Удалить',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api('/rooms/' + code, { method: 'DELETE' });
     loadMyRooms();
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    PW.toast(err.message || 'Не удалось удалить комнату', 'error');
+  }
 }
 
 function escapeHtml(s) {
@@ -429,12 +436,19 @@ function escapeHtml(s) {
   }[c]));
 }
 
+// Корзина в SVG: выглядит одинаково на любом устройстве
+// (эмодзи 🗑️ у некоторых показывается белым и пропадает на светлой теме)
+const TRASH_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>' +
+  '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
+
 function renderRoomCard(room, { showDelete }) {
   const thumb = roomThumbnail(room);
   const card = document.createElement('div');
   card.className = 'room-card';
   card.innerHTML = `
-    ${showDelete ? '<button class="delete-btn" title="Удалить комнату">🗑️</button>' : ''}
+    ${showDelete ? `<button type="button" class="delete-btn" title="Удалить комнату" aria-label="Удалить комнату">${TRASH_SVG}</button>` : ''}
     ${thumb ? `<img class="room-thumb" src="${escapeHtml(thumb)}" loading="lazy" />` : `<div class="room-thumb-placeholder">🎬</div>`}
     <div class="room-info">
       <span class="room-name" title="${escapeHtml(room.name)}">${escapeHtml(room.name)}</span>

@@ -36,6 +36,11 @@ function maskKey(key) {
   return '•'.repeat(Math.max(key.length - 4, 8)) + key.slice(-4);
 }
 
+function maskChatKey(key) {
+  if (!key) return null;
+  return '****' + key.slice(-4);
+}
+
 // GET /workbench/me — текущие настройки (ключ только замаскированный)
 router.get('/me', auth, requireStreamer, async (req, res) => {
   const me = req.streamerUser;
@@ -52,6 +57,7 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     streamTitle: me.streamTitle || '',
     streamDescription: me.streamDescription || '',
     streamKeyMasked: maskKey(me.streamKey),
+    chatApiKeyMasked: maskChatKey(me.chatApiKey),
     streamPlaybackId: me.streamPlaybackId || null,
     isLive: liveNow,
     // отдаём всегда, пока finalizeStop не обнулил — чтобы таймер пережил краткий offline
@@ -190,6 +196,20 @@ router.delete('/vods/:id', auth, requireStreamer, async (req, res) => {
   } catch (_) {}
   await vod.deleteOne();
   res.json({ ok: true });
+});
+
+// POST /workbench/chat-key/generate — сгенерировать (или перевыпустить) API-ключ чата
+router.post('/chat-key/generate', auth, requireStreamer, async (req, res) => {
+  const key = 'pwc_' + crypto.randomBytes(24).toString('hex');
+  req.streamerUser.chatApiKey = key;
+  await req.streamerUser.save();
+  res.json({ chatApiKey: key, chatApiKeyMasked: maskChatKey(key) });
+});
+
+// POST /workbench/chat-key/reveal — получить полный ключ для копирования
+router.post('/chat-key/reveal', auth, requireStreamer, async (req, res) => {
+  if (!req.streamerUser.chatApiKey) return res.status(404).json({ error: 'Ключ чата ещё не создан' });
+  res.json({ chatApiKey: req.streamerUser.chatApiKey });
 });
 
 module.exports = router;

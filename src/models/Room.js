@@ -14,6 +14,7 @@ const roomSchema = new mongoose.Schema(
       url: { type: String, required: true },
       title: { type: String },
       ageRestricted: { type: Boolean, default: false },
+      directUrl: { type: String, default: null }, // скачанная копия для видео 18+ (/media/yt-cache/...)
       meta: {
         seasons: { type: [Number], default: [] },
         currentSeason: { type: Number, default: null },

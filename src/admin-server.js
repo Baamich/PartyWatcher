@@ -8,12 +8,15 @@ const connectDB = require('./db/mongoose');
 const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');
 const supportRoutes = require('./routes/support.routes');
+const cspRoutes = require('./routes/csp.routes');
+const securityHeaders = require('./middleware/securityHeaders');
 
 async function start() {
   await connectDB();
 
   const app = express();
 
+  app.use(securityHeaders());
   app.use(cors());
   app.use((req, res, next) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -26,6 +29,8 @@ async function start() {
   app.use('/api/support', supportRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/csp-report', cspRoutes);
+  
 
   // Статика БЕЗ автоматической отдачи index.html
   app.use(express.static(path.join(__dirname, 'public'), {

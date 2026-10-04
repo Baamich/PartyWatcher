@@ -23,6 +23,8 @@ try {
 }
 
 const playerCaptureCache = require('../services/playerCaptureCache');
+const Room = require('../models/Room');
+const { assertPublicHttpUrl } = require('../services/ssrfGuard');
 const siteAdapters = require('../services/site-adapters');
 const {
   findPlayerContext,
@@ -241,8 +243,24 @@ router.post('/extract', auth, async (req, res) => {
   const { url, roomCode } = req.body;
   let requestedEpisodeForCache = req.body.episode ? Number(req.body.episode) : null;
 
-  if (!url || !url.startsWith('http')) {
+  if (typeof url !== 'string' || url.length > 2000 || !url.startsWith('http')) {
     return res.status(400).json({ error: 'Нужна валидная ссылка' });
+  }
+  try {
+    await assertPublicHttpUrl(url);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+
+  // запускать Chromium может только хост комнаты и только по ссылке этой комнаты
+  let mayExtract = false;
+  if (roomCode) {
+    const room = await Room.findOne({ code: String(roomCode) }).select('owner video').lean();
+    mayExtract =
+      !!room &&
+      String(room.owner) === String(req.user.id) &&
+      room.video?.type === 'player_capture' &&
+      room.video?.url === url;
   }
 
   // если episode не передали в body — пробуем вытащить из хеша Rezka:
@@ -284,6 +302,17 @@ router.post('/extract', auth, async (req, res) => {
     }
   }
 
+  // дальше начинается тяжёлая часть (Chromium): допускаем только хоста; остальные получают лишь кэш (выше)
+  if (!mayExtract) {
+    return res.json({
+      success: false,
+      error: 'Поток ещё не готов — подожди хоста',
+      streams: [],
+      playerIframes: [],
+      meta: null,
+    });
+  }
+
   // если для этой же комнаты+серии уже выполняется extract прямо сейчас —
   // не запускаем второй Puppeteer параллельно, а просто ждём результат первого
   const inFlightKey = roomCode ? `${roomCode}:${requestedEpisodeForCache || 1}` : null;
@@ -307,9 +336,9 @@ router.post('/extract', auth, async (req, res) => {
   }
 
   // прокси Webshare — вынесено в переменные окружения, см. .env
-  const PROXY_SERVER = process.env.PROXY_SERVER;   // например "31.58.9.4:6077"
-  const PROXY_USER = process.env.PROXY_USER;        // "ksiyitlp"
-  const PROXY_PASS = process.env.PROXY_PASS;        // "oiv7evgr7rk3"
+  const PROXY_SERVER = process.env.PROXY_SERVER;   
+  const PROXY_USER = process.env.PROXY_USER;        
+  const PROXY_PASS = process.env.PROXY_PASS;       
 
   /**
    * Одна попытка извлечения потоков — с прокси или без.

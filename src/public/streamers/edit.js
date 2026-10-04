@@ -18,7 +18,7 @@ async function init() {
   try {
     me = await api('/auth/me');
   } catch {
-    alert('Сначала войди в аккаунт');
+    await PW.alert('Чтобы редактировать профиль, нужно войти в аккаунт.', { title: 'Нужен вход' });
     location.href = '/';
     return;
   }

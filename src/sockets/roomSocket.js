@@ -10,6 +10,10 @@ const SupportTicket = require('../models/SupportTicket');
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
 if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
 
+const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
+// ключ комнаты — ровно 6 символов 0-9a-f (см. generateCode в room.routes.js)
+const ROOM_CODE_RE = /^[a-f0-9]{6}$/;
+
 // code -> Map(socketId -> { username, isOwner }) — кто сейчас в голосовом звонке этой комнаты
 const voiceRooms = new Map();
 
@@ -124,7 +128,13 @@ function registerRoomSocket(io) {
       socket.leave('lobby');
     });
 
-    socket.on('room:join', async ({ code }) => {
+    socket.on('room:join', async (payload) => {
+      const code = payload && payload.code;
+      // Только строка из 6 символов. Объект вроде { $regex: '^a' } иначе позволил бы перебором
+      // «угадать» чужую приватную комнату и прочитать её чат и ссылку на видео.
+      if (typeof code !== 'string' || !ROOM_CODE_RE.test(code)) {
+        return socket.emit('room:error', { error: 'Комната не найдена' });
+      }
       const room = await Room.findOne({ code });
       if (!room) return socket.emit('room:error', { error: 'Комната не найдена' });
 
@@ -206,6 +216,7 @@ function registerRoomSocket(io) {
     });
 
     socket.on('room:participants', ({ code }) => {
+      if (socket.data.roomCode !== code) return; // список участников видят только те, кто сидит в этой комнате
       socket.emit('room:participants', getParticipants(io, code));
     });
 
@@ -279,8 +290,12 @@ function registerRoomSocket(io) {
       });
     });
 
-    socket.on('youtube:age-restricted-stream', ({ code, url }) => {
+    // адрес берём из базы, а не из запроса хоста: клиент не может подсунуть зрителям чужую ссылку
+    socket.on('youtube:age-restricted-stream', async ({ code }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+      const room = await Room.findOne({ code }).select('video.directUrl').lean();
+      const url = room?.video?.directUrl;
+      if (!url) return;
       socket.to(code).emit('youtube:age-restricted-stream', { url });
     });
 
@@ -315,6 +330,7 @@ function registerRoomSocket(io) {
     });
 
     socket.on('room:resync', async ({ code }) => {
+      if (socket.data.roomCode !== code) return; // только для своей комнаты (заодно закрывает подмену кода объектом)
       const room = await Room.findOne({ code });
       if (!room) return;
       socket.emit('playback:update', {

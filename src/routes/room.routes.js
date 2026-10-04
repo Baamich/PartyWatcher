@@ -5,11 +5,14 @@ const router = express.Router();
 const Room = require('../models/Room');
 const auth = require('../middleware/auth');
 const ChatMessage = require('../models/ChatMessage');
+const { extractYoutubeId } = require('../services/ytdlpAgeGate');
 
 const fs = require('fs');
 const path = require('path');
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
 
+
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
 
 function generateCode() {
   return crypto.randomBytes(3).toString('hex');
@@ -25,6 +28,10 @@ function validateVideo(video) {
   const u = String(video?.url || '').trim();
   if ((t === 'direct' || t === 'player_capture') && !/^https?:\/\//i.test(u)) {
     return 'Нужна полная ссылка (http/https)';
+  }
+  // ссылка на YouTube должна содержать настоящий id видео (потом её обрабатывает yt-dlp на сервере)
+  if (t === 'youtube' && !extractYoutubeId(u)) {
+    return 'Не удалось распознать ссылку YouTube';
   }
   return null;
 }
@@ -43,7 +50,14 @@ router.post('/', auth, async (req, res) => {
       code = generateCode();
     } while (await Room.findOne({ code }));
 
-    const room = await Room.create({ name, code, owner: req.user.id, video, isPublic: !!isPublic });
+    // из запроса берём только тип и ссылку: остальное (ageRestricted, directUrl, meta) выставляет сервер
+    const room = await Room.create({
+      name: String(name).trim().slice(0, 100),
+      code,
+      owner: req.user.id,
+      video: { type: video.type, url: String(video.url).trim() },
+      isPublic: !!isPublic,
+    });
 
     // мгновенно обновляем списки у всех, кто на главной
     const io = req.app.get('io');
@@ -82,7 +96,7 @@ router.get('/public', auth, async (req, res) => {
   }
 
   if (q) {
-    filter.name = { $regex: q, $options: 'i' };
+    filter.name = { $regex: escapeRegex(q), $options: 'i' };
   }
 
   let sortOption = { createdAt: -1 };
@@ -122,7 +136,7 @@ router.get('/mine', auth, async (req, res) => {
 
 router.get('/search', auth, async (req, res) => {
   const io = req.app.get('io');
-  const q = req.query.q || '';
+  const q = escapeRegex(req.query.q || '');
   const rooms = await Room.find({ owner: req.user.id, name: { $regex: q, $options: 'i' } }).sort({ createdAt: -1 });
   res.json(rooms.map((r) => withLiveStatus(r, io)));
 });
@@ -173,7 +187,7 @@ router.post('/:code/change-video', auth, async (req, res) => {
     let url = rawUrl;
 
     if (type === 'youtube') {
-      if (!/youtube\.com|youtu\.be/.test(rawUrl)) {
+      if (!extractYoutubeId(rawUrl)) {
         return res.status(400).json({ error: 'Нужна ссылка YouTube (режим комнаты — youtube)' });
       }
     } else if (type === 'twitch') {
@@ -197,6 +211,7 @@ router.post('/:code/change-video', auth, async (req, res) => {
     room.video.url = url;
     room.video.title = undefined;
     room.video.ageRestricted = false;
+    room.video.directUrl = null;
     room.ageConfirmed = false;
     if (room.video.meta) {
       room.video.meta.currentSeason = null;

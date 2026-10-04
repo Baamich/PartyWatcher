@@ -4,6 +4,15 @@ import { createIframePlayer } from './iframeManager.js';
 import { detectMeta } from './detector.js';
 import { showEpisodeControls, hideEpisodeControls } from './controls.js';
 
+const HLS_CONFIG = {
+  enableWorker: true,
+  maxBufferLength: 30,
+  maxMaxBufferLength: 60,
+  maxBufferHole: 0.5, // небольшие «дырки» в буфере (разрывы таймкодов у CDN) перепрыгиваем, а не зависаем
+  nudgeMaxRetry: 6,   // сколько раз подтолкнуть воспроизведение, прежде чем считать это ошибкой
+  nudgeOffset: 0.1,
+};
+
 function parseStreamExpiry(url) {
   const m = url.match(/:(\d{10}):/);
   if (!m) return null;
@@ -254,15 +263,35 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
   };
 }
 
-function loadHlsScript() {
+// hls.js грузим с нашего же сервера (/vendor/hls.min.js): быстрее, не зависит от CDN
+// и не вызывает «Tracking Prevention blocked access to storage» в Edge и Safari.
+// Если локального файла вдруг нет — запасной вариант с CDN.
+let hlsLoadPromise = null;
+
+function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
-    if (window.Hls) return resolve(window.Hls);
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
-    s.onload = () => resolve(window.Hls);
-    s.onerror = () => reject(new Error('Не удалось загрузить hls.js'));
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => {
+      s.remove();
+      reject(new Error('Не удалось загрузить ' + src));
+    };
     document.head.appendChild(s);
   });
+}
+
+function loadHlsScript() {
+  if (window.Hls) return Promise.resolve(window.Hls);
+  if (!hlsLoadPromise) {
+    hlsLoadPromise = loadScriptOnce('/vendor/hls.min.js')
+      .then(() => window.Hls)
+      .catch((e) => {
+        hlsLoadPromise = null;
+        throw e;
+      });
+  }
+  return hlsLoadPromise;
 }
 
 function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStreams }) {
@@ -333,11 +362,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
       if (isHls) {
         const Hls = await loadHlsScript();
         if (Hls.isSupported()) {
-          hlsInstance = new Hls({
-            enableWorker: true,
-            maxBufferLength: 30,
-            maxMaxBufferLength: 60,
-          });
+          hlsInstance = new Hls(HLS_CONFIG);
 
           if (streamToPlay.playlist) {
             const blob = new Blob([toAbsolutePlaylist(streamToPlay.playlist)], {
@@ -350,8 +375,12 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
 
           hlsInstance.attachMedia(videoEl);
           hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-            console.error('[capture] hls error', data);
-            if (!data.fatal) return;
+            if (!data.fatal) {
+              // bufferStalledError и подобное hls.js лечит сам, в консоль не шумим
+              console.debug('[capture] hls (не фатально):', data.details);
+              return;
+            }
+            console.error('[capture] hls fatal:', data.type, data.details, data.response?.code || '');
 
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
               consecutiveNetworkErrors++;
