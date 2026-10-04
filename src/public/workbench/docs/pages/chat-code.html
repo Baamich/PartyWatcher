@@ -56,14 +56,14 @@ http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer
 var cooldowns = new ConcurrentDictionary&lt;string, DateTime&gt;();
 
 // ===== 5. Через это бот СЛУШАЕТ чат =====
-var client = new SocketIO(BaseUrl + "/chat");
+var client = new SocketIO(new Uri(BaseUrl + "/chat"));
 
 // Когда подключились, говорим сайту: «я бот этого канала».
 // Если связь пропадёт, бот сам переподключится и снова сюда зайдёт.
 client.OnConnected += async (_, _) =&gt;
 {
     Console.WriteLine("Подключён к чату. Жду команды...");
-    await client.EmitAsync("chat:join", new { chatKey = ApiKey });
+    await client.EmitAsync("chat:join", new object[] { new { chatKey = ApiKey } });
 };
 
 client.OnDisconnected += (_, reason) =&gt; Console.WriteLine("Связь пропала: " + reason);
@@ -73,7 +73,7 @@ client.On("chat:message", async response =&gt;
 {
     try
     {
-        var msg = response.GetValue&lt;ChatMessage&gt;();
+        var msg = response.GetValue&lt;ChatMessage&gt;(0);
 
         // Свои же сообщения не читаем, иначе бот начнёт отвечать сам себе.
         if (msg.External &amp;&amp; msg.Source == "bot") return;
@@ -180,37 +180,5 @@ class ChatMessage
   <tr><td>Бот подключён, но молчит на команды</td><td>Команда должна быть написана точно: <code>!топы</code>, без лишних слов. Перезапусти бота после правок кода.</td></tr>
 </table>
 </div>
-
-<h2>Если ты пишешь на JavaScript, а не на C#</h2>
-<ol>
-  <li>Установи Node.js (версия 18 или новее): <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>.</li>
-  <li>В терминале:
-<pre><code>mkdir chatbot
-cd chatbot
-npm init -y
-npm install socket.io-client</code></pre></li>
-  <li>Создай файл <code>bot.js</code>, вставь код, подставь свой ключ и запусти командой <code>node bot.js</code>:
-<pre><code>const { io } = require('socket.io-client');
-
-const BASE = 'https://partywatcher.de';
-const KEY = 'pwc_СЮДА_ВСТАВЬ_СВОЙ_КЛЮЧ';
-
-const socket = io(BASE + '/chat');
-socket.on('connect', () =&gt; {
-  console.log('Подключён к чату');
-  socket.emit('chat:join', { chatKey: KEY });
-});
-
-socket.on('chat:message', async (m) =&gt; {
-  if (m.external &amp;&amp; m.source === 'bot') return; // свои сообщения не читаем
-  if (m.text.trim().toLowerCase() === '!топы') {
-    await fetch(BASE + '/api/chat/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY },
-      body: JSON.stringify({ text: 'Топ зрителей: ...', username: 'Бот', source: 'bot' }),
-    });
-  }
-});</code></pre></li>
-</ol>
 
 <p>Дальше: <a href="#chat-style">Стилизация чата</a>.</p>
