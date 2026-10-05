@@ -23,15 +23,15 @@ function buildDirectives() {
 
   const directives = {
     defaultSrc: ["'self'"],
-    // 'unsafe-inline' нужен, пока в HTML есть onclick="..." (этап 2 — убрать его)
+    // строгий режим: inline-скриптов и onclick="..." на сайте больше нет
     scriptSrc: [
       "'self'",
-      "'unsafe-inline'",
       'https://www.youtube.com',   // YouTube IFrame API
       'https://s.ytimg.com',
       'https://embed.twitch.tv',   // Twitch embed
       'https://player.twitch.tv',
     ],
+    scriptSrcAttr: ["'none'"],     // onclick="..." и подобное запрещено полностью
     styleSrc: ["'self'", "'unsafe-inline'"], // style="..." в разметке и в JS
     imgSrc: ["'self'", 'data:', 'blob:', 'https://img.youtube.com', 'https://i.ytimg.com'],
     mediaSrc: ["'self'", 'blob:', 'https:'], // «прямая ссылка» на видео может вести на любой https-хост

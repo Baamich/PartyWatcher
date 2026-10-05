@@ -1,6 +1,10 @@
 <h1>Стилизация чата</h1>
 <p class="docs-lead">Как изменить вид чата в OBS: цвета, шрифт, фон, размер. Есть два способа: простой (через ссылку) и гибкий (через свой CSS).</p>
 
+<div class="docs-note">
+  <p>Проще без кода: открой <a href="#constructor-chat">Конструктор чата</a>, там всё настраивается мышкой, а ссылка собирается сама.</p>
+</div>
+
 <h2>Способ 1. Параметры в ссылке (самый простой)</h2>
 <p>Возьми ссылку для OBS (кнопка «Ссылка для OBS» в блоке «API чата») и допиши в её конец нужные параметры. Каждый параметр начинается с <code>&amp;</code>. Потом вставь ссылку в источник OBS: правый клик на источнике → <b>Свойства</b> → поле <b>URL</b>.</p>
 
@@ -16,6 +20,14 @@
   <tr><td><code>&amp;shadow=0</code></td><td>Убрать тень у текста.</td></tr>
   <tr><td><code>&amp;fade=40</code></td><td>Сообщение пропадает через 40 секунд. 0 — не пропадает.</td></tr>
   <tr><td><code>&amp;max=15</code></td><td>Сколько сообщений держать на экране (от 5 до 100).</td></tr>
+  <tr><td><code>&amp;weight=700</code></td><td>Толщина текста: 400, 500, 700 или 800.</td></tr>
+  <tr><td><code>&amp;stroke=000000&amp;strokew=3</code></td><td>Контур букв: цвет и толщина (1–6).</td></tr>
+  <tr><td><code>&amp;bg2=7c3aed</code></td><td>Второй цвет фона: фон станет градиентом (нужен <code>bg</code>).</td></tr>
+  <tr><td><code>&amp;blur=12</code></td><td>Размытие под плашкой (нужен <code>bg</code>).</td></tr>
+  <tr><td><code>&amp;radius=12</code>, <code>&amp;pad=12</code>, <code>&amp;gap=8</code></td><td>Скругление углов, отступ внутри, расстояние между сообщениями.</td></tr>
+  <tr><td><code>&amp;bc=ffffff&amp;bw=2</code></td><td>Рамка: цвет и толщина.</td></tr>
+  <tr><td><code>&amp;align=right</code></td><td>Прижать сообщения вправо.</td></tr>
+  <tr><td><code>&amp;anim=pop</code></td><td>Анимация: <code>pop</code>, <code>fade</code> или <code>none</code>.</td></tr>
 </table>
 </div>
 

@@ -13,8 +13,8 @@
 </head>
 <body>
   <div class="corner-menu">
-    <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-    <button class="icon-btn" onclick="location.href='/'">← Назад</button>
+    <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+    <button class="icon-btn" data-href="/">← Назад</button>
         <button class="icon-btn support-admin-btn" id="supportAdminBtn" type="button">
       Жалобы
       <span class="support-badge" id="supportBadge">0</span>
@@ -26,7 +26,7 @@
   <div class="admin-grid">
     <div class="panel panel-update">
       <h3>Обновление</h3>
-      <button onclick="runUpdate()">Обновить с GitHub (последний коммит)</button>
+      <button data-click="runUpdate">Обновить с GitHub (последний коммит)</button>
       <div id="log"></div>
     </div>
 
@@ -36,10 +36,10 @@
         type="text"
         id="commitSearch"
         placeholder="Поиск по хэшу или сообщению..."
-        oninput="filterCommits()"
+        data-input="filterCommits"
       />
       <div id="commitList" class="commit-list">Загрузка...</div>
-      <button id="revertBtn" onclick="revertToCommit()" disabled>Вернуться к коммиту</button>
+      <button id="revertBtn" data-click="revertToCommit" disabled>Вернуться к коммиту</button>
     </div>
   </div>
 
@@ -60,6 +60,7 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/js/admin.js"></script>
 </body>
 </html>

@@ -24,7 +24,7 @@
         </span>
       </a>
       <div class="header-right">
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
       </div>
     </div>
 
@@ -39,7 +39,7 @@
         <div id="createNameError" class="auth-error hidden"></div>
         <label class="auth-label" for="newStreamerName">Имя стримера</label>
         <input id="newStreamerName" placeholder="Например, Baamich" maxlength="32" />
-        <button type="button" class="auth-submit" onclick="submitStreamerName()">Создать</button>
+        <button type="button" class="auth-submit" data-click="submitStreamerName">Создать</button>
       </section>
 
       <!-- Шаг 2: редактирование профиля (показывается, если имя уже есть) -->
@@ -53,24 +53,25 @@
         <div id="bannerPreviewWrap" class="image-preview-wrap">
           <div id="bannerPreview" class="image-preview banner-preview"></div>
         </div>
-        <input id="bannerFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'banner')" />
+        <input id="bannerFileInput" type="file" accept="image/*" data-change="onImageSelected" data-event data-arg="banner" />
 
         <label class="auth-label" for="avatarFileInput">Аватар</label>
         <div id="avatarPreviewWrap" class="image-preview-wrap">
           <div id="avatarPreview" class="image-preview avatar-preview"></div>
         </div>
-        <input id="avatarFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'avatar')" />
+        <input id="avatarFileInput" type="file" accept="image/*" data-change="onImageSelected" data-event data-arg="avatar" />
 
         <label class="auth-label" for="bioInput">Описание</label>
         <textarea id="bioInput" rows="6" maxlength="2000" placeholder="Расскажи о себе (до 2000 символов)"></textarea>
 
-        <button type="button" class="auth-submit" onclick="submitProfile()">Сохранить</button>
-        <button type="button" class="icon-btn" id="backToProfileBtn" onclick="goToOwnProfile()">Открыть профиль</button>
+        <button type="button" class="auth-submit" data-click="submitProfile">Сохранить</button>
+        <button type="button" class="icon-btn" id="backToProfileBtn" data-click="goToOwnProfile">Открыть профиль</button>
       </section>
 
     </div>
 
     <script src="/js/api.js"></script>
+    <script src="/js/actions.js?v=3"></script>
     <script src="/streamers/edit.js"></script>
   </body>
   </html>

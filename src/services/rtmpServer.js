@@ -149,68 +149,6 @@ async function finalizeVod(vodId, status = 'ready', extra = {}) {
   }
 }
 
-/** Дожим VOD: max 720p, CRF 28, AAC 128k, preset medium */
-function compressVodFile(absPath) {
-  return new Promise((resolve, reject) => {
-    if (!absPath || !fs.existsSync(absPath)) {
-      return reject(new Error('VOD file missing'));
-    }
-    const st = fs.statSync(absPath);
-    if (!st.size) return reject(new Error('VOD file empty'));
-
-    const tmpPath = absPath + '.compressing.mp4';
-    try { fs.unlinkSync(tmpPath); } catch (_) {}
-
-    const args = [
-      '-hide_banner',
-      '-loglevel', 'error',
-      '-y',
-      '-i', absPath,
-      // не апскейлим: если ниже 720 — оставляем как есть
-      '-vf', "scale=-2:'min(720,ih)'",
-      '-c:v', 'libx264',
-      '-preset', 'medium',
-      '-crf', '28',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-ac', '2',
-      '-movflags', '+faststart',
-      tmpPath,
-    ];
-
-    console.log('[rtmp] compress start', path.basename(absPath));
-    const proc = spawn('nice', ['-n', '19', FFMPEG_PATH, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-    proc.on('error', (e) => {
-      try { fs.unlinkSync(tmpPath); } catch (_) {}
-      reject(e);
-    });
-
-    let errBuf = '';
-    proc.stderr.on('data', (c) => {
-      errBuf += c.toString();
-    });
-
-    proc.on('exit', (code) => {
-      if (code !== 0) {
-        try { fs.unlinkSync(tmpPath); } catch (_) {}
-        return reject(new Error(errBuf.trim() || `ffmpeg exit ${code}`));
-      }
-      try {
-        const before = st.size;
-        fs.renameSync(tmpPath, absPath);
-        const after = fs.statSync(absPath).size;
-        const mb = (n) => (n / 1024 / 1024).toFixed(1);
-        console.log(`[rtmp] compress done ${path.basename(absPath)}: ${mb(before)} МБ → ${mb(after)} МБ`);
-        resolve();
-      } catch (e) {
-        try { fs.unlinkSync(tmpPath); } catch (_) {}
-        reject(e);
-      }
-    });
-  });
-}
-
 function probeDurationSec(absPath) {
   return new Promise((resolve) => {
     const proc = spawn(
@@ -232,40 +170,49 @@ function probeDurationSec(absPath) {
   });
 }
 
-/** Склеивает куски записи (после переподключений) в один файл без пересжатия */
-function mergeVodParts(parts, absPath) {
+function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
-    const listPath = absPath + '.list.txt';
-    const tmpPath = absPath + '.merging.mp4';
-    fs.writeFileSync(listPath, parts.map((p) => `file '${p}'`).join('\n'));
-
-    const proc = spawn(
-      FFMPEG_PATH,
-      ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', tmpPath],
-      { stdio: ['ignore', 'ignore', 'pipe'] }
-    );
-
+    const proc = spawn('nice', ['-n', '19', FFMPEG_PATH, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
     let errBuf = '';
-    proc.stderr.on('data', (c) => { errBuf += c.toString(); });
-    proc.on('error', (e) => {
-      try { fs.unlinkSync(listPath); } catch (_) {}
-      reject(e);
-    });
-    proc.on('exit', (code) => {
-      try { fs.unlinkSync(listPath); } catch (_) {}
-      if (code !== 0) {
-        try { fs.unlinkSync(tmpPath); } catch (_) {}
-        return reject(new Error(errBuf.trim() || `ffmpeg exit ${code}`));
-      }
-      try {
-        fs.renameSync(tmpPath, absPath);
-        parts.forEach((p) => { if (p !== absPath) { try { fs.unlinkSync(p); } catch (_) {} } });
-        resolve();
-      } catch (e) {
-        reject(e);
-      }
-    });
+    proc.stderr.on('data', (c) => { errBuf = (errBuf + c).slice(-4000); });
+    proc.on('error', reject);
+    proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(errBuf.trim() || `ffmpeg exit ${code}`))));
   });
+}
+
+const fileSize = (p) => { try { return fs.statSync(p).size; } catch (_) { return 0; } };
+const rmQuiet = (p) => { try { fs.unlinkSync(p); } catch (_) {} };
+const mb = (n) => (n / 1024 / 1024).toFixed(1);
+
+// файл годится, только если он не пустой и у него видна длительность
+async function isGoodMp4(p) {
+  return fileSize(p) > 10 * 1024 && (await probeDurationSec(p)) > 0;
+}
+
+// сжатие (max 720p, CRF 28) из любого входа; пустой результат считается ошибкой
+async function encodeVod(inputArgs, outPath) {
+  await runFfmpeg([
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-fflags', '+genpts',
+    ...inputArgs,
+    '-vf', "scale=-2:'min(720,ih)'",
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '28',
+    '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+    '-movflags', '+faststart',
+    outPath,
+  ]);
+  if (!(await isGoodMp4(outPath))) {
+    rmQuiet(outPath);
+    throw new Error('ffmpeg вернул пустой файл');
+  }
+}
+
+async function concatCopy(listPath, outPath) {
+  await runFfmpeg(['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', outPath]);
+  if (fileSize(outPath) === 0) {
+    rmQuiet(outPath);
+    throw new Error('склейка вернула пустой файл');
+  }
 }
 
 async function processVodAfterStop(vodId, absPath, parts) {
@@ -273,21 +220,62 @@ async function processVodAfterStop(vodId, absPath, parts) {
 
   await finalizeVod(vodId, 'processing');
 
+  const tmp = absPath + '.compressing.mp4';
+  const listPath = absPath + '.list.txt';
+
   try {
-    // даём ffmpeg-записи закрыть файл после SIGTERM
-    await new Promise((r) => setTimeout(r, 1500));
-    const existing = (parts && parts.length ? parts : [absPath]).filter((p) => {
-      try { return fs.statSync(p).size > 0; } catch (_) { return false; }
-    });
-    if (existing.length && (existing.length > 1 || existing[0] !== absPath)) {
-      await mergeVodParts(existing, absPath);
+    await new Promise((r) => setTimeout(r, 1500)); // ffmpeg-запись закрывает файл после SIGTERM
+    const list = [...new Set(parts && parts.length ? parts : [absPath])].filter((p) => fileSize(p) > 0);
+    if (!list.length) throw new Error('нет данных записи');
+
+    const before = list.reduce((s, p) => s + fileSize(p), 0);
+    let result = null; // путь готового файла
+
+    // 1) склейка и сжатие за один проход
+    try {
+      if (list.length === 1) {
+        await encodeVod(['-i', list[0]], tmp);
+      } else {
+        fs.writeFileSync(listPath, list.map((p) => `file '${p}'`).join('\n'));
+        await encodeVod(['-f', 'concat', '-safe', '0', '-i', listPath], tmp);
+      }
+      result = tmp;
+      console.log(`[rtmp] compress done ${path.basename(absPath)}: ${mb(before)} МБ → ${mb(fileSize(tmp))} МБ (кусков: ${list.length})`);
+    } catch (e) {
+      console.warn('[rtmp] сжатие не вышло:', e.message);
+      rmQuiet(tmp);
     }
-    await compressVodFile(absPath);
+
+    // 2) запасной путь: склеить без пересжатия
+    if (!result && list.length > 1) {
+      try {
+        fs.writeFileSync(listPath, list.map((p) => `file '${p}'`).join('\n'));
+        await concatCopy(listPath, tmp);
+        result = tmp;
+        console.log('[rtmp] склеено без пересжатия', path.basename(absPath));
+      } catch (e) {
+        console.warn('[rtmp] склейка не вышла:', e.message);
+        rmQuiet(tmp);
+      }
+    }
+
+    // 3) совсем не вышло — оставляем самый большой кусок как есть, запись не пропадает
+    if (!result) {
+      result = list.reduce((a, b) => (fileSize(a) >= fileSize(b) ? a : b));
+      console.warn('[rtmp] оставляю исходный кусок без сжатия:', path.basename(result));
+    }
+
+    if (result !== absPath) fs.renameSync(result, absPath);
+    list.forEach((p) => { if (p !== absPath) rmQuiet(p); });
+
     const durationSec = await probeDurationSec(absPath);
     await finalizeVod(vodId, 'ready', durationSec ? { durationSec } : {});
   } catch (e) {
     console.error('[rtmp] compress failed', vodId, e.message);
+    rmQuiet(tmp);
     await finalizeVod(vodId, 'failed');
+  } finally {
+    rmQuiet(listPath);
   }
 }
 

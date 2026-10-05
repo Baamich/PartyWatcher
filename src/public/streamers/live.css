@@ -575,3 +575,19 @@
 /* кнопка мини-окна: сверху по центру плеера */
 #liveMiniBtn { left: calc(50% - 20px); }
 #liveMiniBtn.active { border-color: var(--accent); }
+
+.live-chat-blocked {
+  flex-shrink: 0;
+  padding: 14px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(207, 85, 89, 0.08);
+  color: var(--danger);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.live-strip-inner.fs-active .live-chat-blocked {
+  border-top-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+}

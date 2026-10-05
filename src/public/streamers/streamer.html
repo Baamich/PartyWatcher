@@ -27,12 +27,12 @@
 
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-        <button class="icon-btn" onclick="location.href='/streams.html'">Вернуться</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+        <button class="icon-btn" data-href="/streams.html">Вернуться</button>
       </div>
       <div id="ownerControls" class="owner-controls hidden">
-        <button class="icon-btn" id="ownerEditBtn" onclick="location.href='/streamers/edit.html'">✏️ Редактировать</button>
-        <button class="icon-btn" id="ownerWorkbenchBtn" onclick="location.href='/workbench.html'">🛠️ Творческая студия</button>
+        <button class="icon-btn" id="ownerEditBtn" data-href="/streamers/edit.html">✏️ Редактировать</button>
+        <button class="icon-btn" id="ownerWorkbenchBtn" data-href="/workbench.html">🛠️ Творческая студия</button>
       </div>
     </div>
   </div>
@@ -83,6 +83,7 @@
             <input id="liveChatInput" placeholder="Сообщение..." autocomplete="off" maxlength="500">
             <button type="submit">➤</button>
           </form>
+          <div id="liveChatBlocked" class="live-chat-blocked hidden"></div>
           <div id="liveOwnerBar" class="hidden">
             <button type="button" id="liveOwnerSettingsBtn" class="icon-btn">🛠️ Настройки трансляции</button>
           </div>
@@ -124,7 +125,7 @@
               <h1 id="profileName" class="profile-name"></h1>
             </button>
             <p id="profileBioShort" class="profile-bio-short"></p>
-            <button type="button" id="bioExpandBtn" class="bio-expand-btn hidden" onclick="openBioModal()">…ещё</button>
+            <button type="button" id="bioExpandBtn" class="bio-expand-btn hidden" data-click="openBioModal">…ещё</button>
           </div>
         </div>
       </div>
@@ -145,7 +146,7 @@
 
   <div id="bioModal" class="modal hidden">
     <div class="modal-content bio-modal-content">
-      <button type="button" class="modal-close" onclick="closeBioModal()" aria-label="Закрыть">×</button>
+      <button type="button" class="modal-close" data-click="closeBioModal" aria-label="Закрыть">×</button>
       <h3 id="bioModalName" class="bio-modal-name"></h3>
       <p id="bioModalText" class="bio-modal-text"></p>
     </div>
@@ -168,6 +169,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/js/wakelock.js"></script>
   <script src="/js/minipip.js"></script>
   <script src="/streamers/streamer.js"></script>

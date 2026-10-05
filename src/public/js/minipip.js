@@ -9,6 +9,7 @@
   const SS_KEY = 'pw_mini_session';
   const LS_POS = 'pw_mini_pos';
   const LS_W = 'pw_mini_w';
+  const LS_SND = 'pw_mini_sound'; // запомненный звук мини-плеера: { muted, volume }
   const HLS_URL = '/vendor/hls.min.js'; // свой файл: не зависит от CDN и нужен для строгой CSP
   const POLL_MS = 5000;
   const MIN_W = 240;
@@ -16,6 +17,9 @@
 
   let leaving = false;
   let pausedByMini = null;
+  let volSlider = null;
+  let quietVol = false;   // программное изменение громкости — в настройку не сохраняем
+  let wantSound = false;  // хотим звук, но браузер мог его не дать
 
   let session = null;
   let root = null;
@@ -42,6 +46,16 @@
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
   function clamp(v, min, max) { return Math.max(min, Math.min(v, max)); }
+  function sndGet() {
+    try {
+      const o = JSON.parse(lsGet(LS_SND) || 'null');
+      if (o && typeof o.volume === 'number') return { muted: !!o.muted, volume: clamp(o.volume, 0, 1) };
+    } catch (_) {}
+    return null;
+  }
+  function sndSet(muted, volume) {
+    lsSet(LS_SND, JSON.stringify({ muted: !!muted, volume: clamp(volume, 0, 1) }));
+  }
 
   function normPath(p) {
     let s = String(p || '');
@@ -77,12 +91,15 @@
 
     // запоминаем звук, чтобы на следующей странице мини-плеер заиграл так же
     v.addEventListener('volumechange', () => {
+      if (quietVol) return;
       if (!alwaysTrack && document.pictureInPictureElement !== v) return;
       const s = ssGet();
-      if (!s) return;
-      s.muted = v.muted;
-      s.volume = v.volume;
-      ssSet(s);
+      if (s) {
+        s.muted = v.muted;
+        s.volume = v.volume;
+        ssSet(s);
+      }
+      sndSet(v.muted, v.volume); // что выбрал человек, то и будет по умолчанию
     });
 
     v.addEventListener('leavepictureinpicture', () => {
@@ -113,11 +130,12 @@
 
     if (root) destroyFloating(); // на этой странице уже был угловой мини-плеер другого стрима — заменяем
 
+    const pref = sndGet();
     ssSet({
       streamer: String(streamer || '').toLowerCase(),
       returnPath: String(returnPath || '/'),
-      muted: v.muted,
-      volume: v.volume,
+      muted: pref ? pref.muted : v.muted,
+      volume: pref ? pref.volume : v.volume,
     });
     watchPip(v, { onClosed: () => ssSet(null) }); // закрыли окно на этой же странице — всё вернулось в плеер
     return null;
@@ -144,6 +162,9 @@
       .pwmini-btn { all: unset; width: 22px; height: 22px; display: flex; align-items: center;
         justify-content: center; border-radius: 6px; font-size: 13px; color: #fff; cursor: pointer; }
       .pwmini-btn:hover { background: rgba(255,255,255,.18); }
+      .pwmini .pwmini-vol { width: 64px; height: 4px; margin: 0 4px; padding: 0; border: 0;
+        background: transparent; box-shadow: none; accent-color: #fff; cursor: pointer; }
+      .pwmini .pwmini-vol:focus { background: transparent; box-shadow: none; }
       .pwmini-body { position: relative; aspect-ratio: 16 / 9; background: #000; }
       .pwmini-body video { width: 100%; height: 100%; object-fit: contain; display: block; }
       .pwmini-hidden { visibility: hidden; }
@@ -194,7 +215,7 @@
     let sx = 0, sy = 0, ol = 0, ot = 0;
 
     head.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('button')) return;
+      if (e.target.closest('button, input')) return;
       const r = root.getBoundingClientRect();
       ol = r.left; ot = r.top; sx = e.clientX; sy = e.clientY;
       dragging = true;
@@ -248,7 +269,24 @@
   }
 
   function updateMuteIcon() {
-    if (muteBtn && video) muteBtn.textContent = video.muted ? '🔇' : '🔊';
+    if (!muteBtn || !video) return;
+    muteBtn.textContent = video.muted || video.volume === 0 ? '🔇' : '🔊';
+    if (volSlider) volSlider.value = String(Math.round(video.volume * 100));
+  }
+
+  // браузер не дал стартовать со звуком: включим при первом клике/клавише на странице
+  function armSoundOnGesture() {
+    const once = (ev) => {
+      document.removeEventListener('pointerdown', once, true);
+      document.removeEventListener('keydown', once, true);
+      if (root && ev.target instanceof Node && root.contains(ev.target)) return; // кликнули по самому мини-плееру — управляют сами
+      if (video && wantSound && video.muted) {
+        video.muted = false;
+        updateMuteIcon();
+      }
+    };
+    document.addEventListener('pointerdown', once, true);
+    document.addEventListener('keydown', once, true);
   }
 
   function playVideo() {
@@ -257,9 +295,12 @@
       p.catch((err) => {
         // после перехода браузер может не дать стартовать со звуком — стартуем без звука, включить можно кнопкой 🔊
         if (err && err.name === 'NotAllowedError' && !video.muted) {
+          quietVol = true; // это не выбор человека, в настройку не пишем
           video.muted = true;
+          setTimeout(() => { quietVol = false; }, 100);
           updateMuteIcon();
           video.play().catch(() => {});
+          armSoundOnGesture();
         }
       });
     }
@@ -274,6 +315,7 @@
       <div class="pwmini-head">
         <span class="pwmini-dot"></span>
         <span class="pwmini-title"></span>
+        <input type="range" class="pwmini-vol" min="0" max="100" title="Громкость">
         <button type="button" class="pwmini-btn" data-act="mute" title="Звук">🔇</button>
         <button type="button" class="pwmini-btn" data-act="pip" title="Мини-окно поверх всех окон">⧉</button>
         <button type="button" class="pwmini-btn" data-act="back" title="К плееру">↩</button>
@@ -292,9 +334,13 @@
     offlineEl = root.querySelector('.pwmini-offline');
     muteBtn = root.querySelector('[data-act="mute"]');
     const pipBtn = root.querySelector('[data-act="pip"]');
+    volSlider = root.querySelector('.pwmini-vol');
 
-    video.volume = typeof session.volume === 'number' ? clamp(session.volume, 0, 1) : 0.5;
-    video.muted = !!session.muted;
+    // запомненная настройка важнее: звук включали в мини-плеере — он включён сразу
+    const pref = sndGet();
+    video.volume = pref ? pref.volume : typeof session.volume === 'number' ? clamp(session.volume, 0, 1) : 0.5;
+    video.muted = pref ? pref.muted : !!session.muted;
+    wantSound = !video.muted;
     updateMuteIcon();
     video.addEventListener('volumechange', updateMuteIcon);
 
@@ -308,7 +354,17 @@
     muteBtn.addEventListener('click', () => {
       video.muted = !video.muted;
       if (!video.muted && video.volume === 0) video.volume = 0.5;
+      wantSound = !video.muted;
+      sndSet(video.muted, video.volume);
       updateMuteIcon();
+    });
+
+    volSlider.addEventListener('input', () => {
+      const v = parseInt(volSlider.value, 10) / 100;
+      video.volume = v;
+      if (v > 0 && video.muted) video.muted = false;
+      wantSound = !video.muted && v > 0;
+      sndSet(video.muted, v);
     });
 
     if (!pipSupported()) {
@@ -361,6 +417,7 @@
 
       if (H && H.isSupported()) {
         hls = new H({
+          capLevelToPlayerSize: true, // маленькое окно — берём качество поменьше, меньше лагов на слабом интернете
           lowLatencyMode: false,
           liveSyncDurationCount: 2,
           liveMaxLatencyDurationCount: 4,
@@ -454,6 +511,7 @@
     video = null;
     offlineEl = null;
     muteBtn = null;
+    volSlider = null;
     currentPlaybackId = undefined;
   }
 

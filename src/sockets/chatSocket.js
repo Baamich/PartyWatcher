@@ -6,6 +6,7 @@ const ChannelTimeout = require('../models/ChannelTimeout');
 const ChannelActionLog = require('../models/ChannelActionLog');
 const User = require('../models/User');
 const chatBus = require('../services/chatBus');
+const ChatCommand = require('../models/ChatCommand');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
@@ -37,6 +38,23 @@ function getUserFromSocket(socket) {
   } catch {
     return null;
   }
+}
+
+async function getRestriction(streamerNameLower, userId) {
+  const [ban, to] = await Promise.all([
+    ChannelBan.findOne({ streamerNameLower, userId }).lean(),
+    ChannelTimeout.findOne({ streamerNameLower, userId }).lean(),
+  ]);
+  if (ban) return { type: 'ban' };
+  if (to && to.until > new Date()) return { type: 'timeout', until: to.until };
+  return { type: 'none' };
+}
+
+function formatUptime(startedAt, isLive) {
+  if (!isLive || !startedAt) return 'офлайн';
+  const m = Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000);
+  const h = Math.floor(m / 60);
+  return h > 0 ? `${h}ч ${m % 60}м` : `${m}м`;
 }
 
 module.exports = function registerChatSocket(io) {
@@ -83,8 +101,65 @@ module.exports = function registerChatSocket(io) {
     nsp.to(roomName(nameLower)).emit('chat:viewers', payload);
   }
 
+    const COMMAND_COOLDOWN_MS = 3000;
+  const commandLastUsed = new Map(); // `${канал}:${команда}` → время последнего ответа
+
+  async function runChatCommand(nameLower, text, username) {
+    if (text[0] !== '!') return;
+    const [head, ...rest] = text.slice(1).split(/\s+/);
+    const name = String(head || '').toLowerCase();
+    if (!name) return;
+
+    const key = `${nameLower}:${name}`;
+    const now = Date.now();
+    if (now - (commandLastUsed.get(key) || 0) < COMMAND_COOLDOWN_MS) return; // защита от спама
+    const cmd = await ChatCommand.findOne({ streamerNameLower: nameLower, name, enabled: { $ne: false } }).lean();
+    if (!cmd) return;
+    if (commandLastUsed.size > 500) commandLastUsed.clear();
+    commandLastUsed.set(key, now);
+
+    const streamer = await User.findOne({ streamerNameLower: nameLower })
+      .select('streamerName streamTitle isLive liveStartedAt')
+      .lean();
+    const vars = {
+      user: username,
+      streamer: streamer?.streamerName || nameLower,
+      title: streamer?.streamTitle || '',
+      viewers: String(buildViewersPayload(nameLower).count),
+      uptime: formatUptime(streamer?.liveStartedAt, streamer?.isLive),
+      random: String(1 + Math.floor(Math.random() * 100)),
+      args: rest.join(' '),
+    };
+    const out = cmd.response
+      .replace(/\{(\w+)\}/g, (m, k) => (Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : m))
+      .slice(0, 500);
+    if (!out.trim()) return;
+
+    const msg = await StreamChatMessage.create({
+      streamerNameLower: nameLower,
+      senderId: null,
+      senderUsername: 'Бот',
+      text: out,
+      external: true,
+      source: 'bot',
+    });
+    nsp.to(roomName(nameLower)).emit('chat:message', {
+      _id: msg._id,
+      senderId: null,
+      senderUsername: 'Бот',
+      text: out,
+      deleted: false,
+      createdAt: msg.createdAt,
+      external: true,
+      source: 'bot',
+      nickColor: null,
+      isOwner: false,
+    });
+  }
+
   nsp.on('connection', (socket) => {
     const authUser = getUserFromSocket(socket);
+    socket.data.userId = authUser?.id ? String(authUser.id) : null;
     let currentStreamerNameLower = null;
 
     socket.on('chat:join', async ({ streamerName, chatKey } = {}) => {
@@ -149,6 +224,10 @@ module.exports = function registerChatSocket(io) {
           isOwner: !!ownerId && String(m.senderId) === ownerId,
         }))
       );
+
+      if (authUser && !socket.data.isOverlay) {
+        socket.emit('chat:restriction', await getRestriction(room, authUser.id));
+      }
     });
 
     socket.on('chat:send', async ({ text }) => {
@@ -156,11 +235,8 @@ module.exports = function registerChatSocket(io) {
       const trimmed = String(text || '').trim().slice(0, 500);
       if (!trimmed) return;
 
-      const banned = await ChannelBan.findOne({ streamerNameLower: currentStreamerNameLower, userId: authUser.id });
-      if (banned) return socket.emit('chat:banned');
-
-      const timeout = await ChannelTimeout.findOne({ streamerNameLower: currentStreamerNameLower, userId: authUser.id });
-      if (timeout && timeout.until > new Date()) return socket.emit('chat:timeout-active', { until: timeout.until });
+      const restriction = await getRestriction(currentStreamerNameLower, authUser.id);
+      if (restriction.type !== 'none') return socket.emit('chat:restriction', restriction);
 
       const msg = await StreamChatMessage.create({
         streamerNameLower: currentStreamerNameLower,
@@ -178,6 +254,10 @@ module.exports = function registerChatSocket(io) {
         createdAt: msg.createdAt,
         isOwner: !!socket.data.isOwner,
       });
+
+      runChatCommand(currentStreamerNameLower, trimmed, authUser.username).catch((e) =>
+        console.warn('[chat command]', e.message)
+      );
     });
 
     socket.on('chat:delete', async ({ messageId }) => {
@@ -195,25 +275,34 @@ module.exports = function registerChatSocket(io) {
 
     socket.on('chat:ban', async ({ userId, username }) => {
       if (!socket.data.isOwner || !currentStreamerNameLower) return;
+      userId = String(userId || '');
+      if (!/^[a-f0-9]{24}$/i.test(userId)) return;
+      username = String(username || '').slice(0, 32);
       await ChannelBan.findOneAndUpdate(
         { streamerNameLower: currentStreamerNameLower, userId },
         { streamerNameLower: currentStreamerNameLower, userId, username, bannedAt: new Date() },
         { upsert: true }
       );
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:user-banned', { userId });
+      chatBus.emitToUser(currentStreamerNameLower, userId, 'chat:restriction', { type: 'ban' });
       logAction(nsp, currentStreamerNameLower, authUser.username, 'ban', username);
     });
 
     socket.on('chat:timeout', async ({ userId, username, seconds }) => {
       if (!socket.data.isOwner || !currentStreamerNameLower) return;
-      const until = new Date(Date.now() + Math.max(1, Number(seconds) || 0) * 1000);
+      userId = String(userId || '');
+      if (!/^[a-f0-9]{24}$/i.test(userId)) return;
+      username = String(username || '').slice(0, 32);
+      const sec = Math.min(30 * 24 * 3600, Math.max(1, Math.floor(Number(seconds) || 0)));
+      const until = new Date(Date.now() + sec * 1000);
       await ChannelTimeout.findOneAndUpdate(
         { streamerNameLower: currentStreamerNameLower, userId },
         { streamerNameLower: currentStreamerNameLower, userId, username, until },
         { upsert: true }
       );
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:user-timeout', { userId, until });
-      const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
+      chatBus.emitToUser(currentStreamerNameLower, userId, 'chat:restriction', { type: 'timeout', until });
+      const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
       logAction(nsp, currentStreamerNameLower, authUser.username, 'timeout', username, `${h}ч ${m}м ${s}с`);
     });
 

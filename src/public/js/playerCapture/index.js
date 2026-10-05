@@ -1,6 +1,5 @@
 // index.js (playerCapture)
 
-import { createIframePlayer } from './iframeManager.js';
 import { detectMeta } from './detector.js';
 import { showEpisodeControls, hideEpisodeControls } from './controls.js';
 
@@ -12,6 +11,17 @@ const HLS_CONFIG = {
   nudgeMaxRetry: 6,   // сколько раз подтолкнуть воспроизведение, прежде чем считать это ошибкой
   nudgeOffset: 0.1,
 };
+
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function showLoading(container, text) {
+  container.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;flex-direction:column;gap:12px;">' +
+    '<div style="font-size:32px;">⏳</div><div class="pc-loading-text"></div></div>';
+  container.querySelector('.pc-loading-text').textContent = text; // только как текст
+}
 
 function parseStreamExpiry(url) {
   const m = url.match(/:(\d{10}):/);
@@ -86,15 +96,7 @@ try {
         tried.add(label);
 
         console.log('[playerCapture] нет streams, пробую плеер:', label);
-        container.innerHTML = `
-          <div style="
-            display:flex;align-items:center;justify-content:center;
-            height:100%;color:#fff;background:#111;flex-direction:column;gap:12px;
-          ">
-            <div style="font-size:32px;">⏳</div>
-            <div>Пробуем плеер «${label}»...</div>
-          </div>
-        `;
+        showLoading(container, `Пробуем плеер «${label}»...`);
 
         const resNext = await fetch('/api/player-capture/extract', {
           method: 'POST',
@@ -174,7 +176,7 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
   container.innerHTML = '';
   
   const iframe = document.createElement('iframe');
-  iframe.src = playerUrl;
+  iframe.src = /^https?:\/\//i.test(playerUrl) ? playerUrl : 'about:blank'; // javascript: в iframe запрещаем
   iframe.allow = 'autoplay; fullscreen; picture-in-picture';
   iframe.style.width = '100%';
   iframe.style.height = '100%';
@@ -187,11 +189,7 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
 
   if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
     const reloadWithEpisode = async (episode, playerLabel) => {
-      container.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
-          <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
-        </div>
-      `;
+      showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
 
       const res = await fetch('/api/player-capture/extract', {
         method: 'POST',
@@ -295,7 +293,7 @@ function loadHlsScript() {
 }
 
 function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStreams }) {
-  container.innerHTML = '';
+  showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
   const videoEl = document.createElement('video');
   videoEl.id = 'captureVideo';
   videoEl.controls = isOwner;
@@ -764,7 +762,7 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
       <div style="font-size:48px; margin-bottom:16px;">🎬</div>
       <h3 style="margin:0 0 8px;">Не удалось встроить плеер</h3>
       <p style="opacity:0.7; margin:0 0 12px; max-width:420px; line-height:1.5;">
-        ${errorMessage || 'Сайт использует сильную защиту'}
+        ${escHtml(errorMessage || 'Сайт использует сильную защиту')}
       </p>
       <p style="opacity:0.5; font-size:13px; max-width:420px;">
         Если есть выбор плеера (например «4К Качество») — переключи его справа<br>
@@ -778,11 +776,7 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
 
   if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
     const reloadWithEpisode = async (episode, playerLabel) => {
-      container.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
-          <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
-        </div>
-      `;
+      showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
 
       const res = await fetch('/api/player-capture/extract', {
         method: 'POST',

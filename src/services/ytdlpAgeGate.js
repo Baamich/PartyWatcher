@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+const YTDLP = process.env.YT_DLP_PATH || 'yt-dlp';
 const COOKIES_PATH = process.env.YT_COOKIES_PATH || '/home/ubuntu/PartyWatcher/yt-cookies.txt';
 const CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 const MAX_HEIGHT = parseInt(process.env.YT_MAX_HEIGHT, 10) || 720; // 720p качается заметно быстрее 1080p
@@ -92,6 +93,7 @@ function friendlyError(raw) {
   if (/Requested format is not available|n challenge|nsig|JS runtime/i.test(s)) {
     return 'yt-dlp не смог расшифровать ссылки: обнови yt-dlp и проверь JS-runtime (deno)';
   }
+  if (/no such option/i.test(s)) return 'yt-dlp на сервере устарел: pip3 install -U yt-dlp --break-system-packages';
   if (/403/i.test(s)) return 'YouTube отклонил загрузку (403): обнови yt-dlp и cookies';
   if (/таймаут/i.test(s)) return 'Загрузка зависла и была остановлена';
   return 'Не удалось скачать видео (подробности в логах сервера)';
@@ -99,13 +101,30 @@ function friendlyError(raw) {
 
 // ---------- запуск yt-dlp ----------
 
-function buildArgs(videoUrl, outFile, client) {
+// старые yt-dlp не знают --remote-components и падают: проверяем один раз
+let remoteComponentsSupported = null;
+function detectRemoteComponents() {
+  if (remoteComponentsSupported !== null) return Promise.resolve(remoteComponentsSupported);
+  return new Promise((resolve) => {
+    let out = '';
+    const child = spawn(YTDLP, ['--help'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    child.stdout.on('data', (b) => { out += b; });
+    child.on('error', () => { remoteComponentsSupported = false; resolve(false); });
+    child.on('close', () => {
+      remoteComponentsSupported = out.includes('--remote-components');
+      if (!remoteComponentsSupported) console.warn('[ytdlpAgeGate] yt-dlp устарел (нет --remote-components): pip3 install -U yt-dlp --break-system-packages');
+      resolve(remoteComponentsSupported);
+    });
+  });
+}
+
+function buildArgs(videoUrl, outFile, client, withRemote) {
   const args = [
     '-f', `bestvideo[height<=${MAX_HEIGHT}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${MAX_HEIGHT}][ext=mp4]/best[height<=${MAX_HEIGHT}]/best`,
     '--merge-output-format', 'mp4',
     '--no-playlist',
     '--newline', // прогресс построчно, чтобы его можно было читать
-    '--remote-components', 'ejs:github',
+    ...(withRemote ? ['--remote-components', 'ejs:github'] : []),
     '-o', outFile,
   ];
   if (client && client !== 'default') args.push('--extractor-args', `youtube:player_client=${client}`);
@@ -116,9 +135,9 @@ function buildArgs(videoUrl, outFile, client) {
   return args;
 }
 
-function runYtDlp(videoUrl, outFile, client, onProgress) {
+function runYtDlp(videoUrl, outFile, client, onProgress, withRemote) {
   return new Promise((resolve, reject) => {
-    const child = spawn('yt-dlp', buildArgs(videoUrl, outFile, client), { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(YTDLP, buildArgs(videoUrl, outFile, client, withRemote), { stdio: ['ignore', 'pipe', 'pipe'] });
     let errText = '';
     let timedOut = false;
 
@@ -164,10 +183,11 @@ async function runJob(job, id) {
   job.status = 'running';
 
   let lastErr = null;
+  const withRemote = await detectRemoteComponents();
   for (const client of CLIENTS) {
     try {
       job.progress = null;
-      await runYtDlp(videoUrl, outFile, client, (p) => { job.progress = p; });
+      await runYtDlp(videoUrl, outFile, client, (p) => { job.progress = p; }, withRemote);
       if (fs.existsSync(outFile)) {
         console.log(`[ytdlpAgeGate] ${id}: успех через client=${client}`);
         cleanupPartials(id);

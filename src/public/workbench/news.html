@@ -26,8 +26,8 @@
     </a>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" onclick="goProfile()">← Профиль</button>
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+        <button class="icon-btn" data-click="goProfile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
       </div>
     </div>
   </div>
@@ -35,11 +35,12 @@
   <div class="wb-outer">
     <div class="wb-subpage">
       <nav class="wb-nav wb-nav-static">
-        <button type="button" class="wb-nav-btn active">📰 Новости</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench.html'">📡 Управление трансляцией</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/videos.html'">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/docs.html'">📚 Документация</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
       </nav>
 
       <div class="wb-subpage-main">
@@ -62,7 +63,7 @@
 
   <div id="newsModal" class="modal hidden">
     <div class="modal-content news-modal-content">
-      <button type="button" class="modal-close" onclick="closeNewsModal()">×</button>
+      <button type="button" class="modal-close" data-click="closeNewsModal">×</button>
       <h3 id="newsModalTitle" style="margin:0 0 6px">Новая новость</h3>
       <p class="wb-hint" id="newsDateInfo"></p>
 
@@ -82,23 +83,24 @@
       <div id="newsBodySpell" class="news-spell"></div>
 
       <p id="newsFormError" class="news-form-error hidden"></p>
-      <button type="button" class="auth-submit" id="newsPublishBtn" onclick="publishNews()">Опубликовать</button>
+      <button type="button" class="auth-submit" id="newsPublishBtn" data-click="publishNews">Опубликовать</button>
     </div>
   </div>
 
   <div id="delNewsModal" class="modal hidden">
     <div class="modal-content" style="min-width:min(360px,92vw)">
-      <button type="button" class="modal-close" onclick="closeDelNews()">×</button>
+      <button type="button" class="modal-close" data-click="closeDelNews">×</button>
       <h3 style="margin:0 0 10px">Удалить новость?</h3>
       <p class="wb-subpage-hint" style="margin-bottom:16px">Она исчезнет у всех.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" class="icon-btn vod-btn-danger" onclick="confirmDelNews()">Да, удалить</button>
-        <button type="button" class="icon-btn" onclick="closeDelNews()">Отмена</button>
+        <button type="button" class="icon-btn vod-btn-danger" data-click="confirmDelNews">Да, удалить</button>
+        <button type="button" class="icon-btn" data-click="closeDelNews">Отмена</button>
       </div>
     </div>
   </div>
 
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/js/minipip.js"></script>
   <script src="/workbench/news.js"></script>
 </body>

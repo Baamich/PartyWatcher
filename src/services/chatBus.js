@@ -12,4 +12,15 @@ function emitMessage(streamerNameLower, payload) {
   return true;
 }
 
-module.exports = { init, emitMessage };
+// отправить событие только сокетам конкретного пользователя в чате канала
+function emitToUser(streamerNameLower, userId, event, payload) {
+  if (!nsp) return;
+  const sockets = nsp.adapter.rooms.get(`chat:${streamerNameLower}`);
+  if (!sockets) return;
+  sockets.forEach((sid) => {
+    const s = nsp.sockets.get(sid);
+    if (s && s.data && s.data.userId === String(userId)) s.emit(event, payload);
+  });
+}
+
+module.exports = { init, emitMessage, emitToUser };

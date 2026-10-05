@@ -21,6 +21,14 @@ const DOCS_CHAPTERS = [
       { id: 'chat-security', title: 'Безопасность и лимиты', desc: 'Как защищён ключ и что нельзя' },
     ],
   },
+  {
+    id: 'constructor',
+    title: 'Конструктор',
+    pages: [
+      { id: 'constructor-chat', title: 'Конструктор чата', desc: 'Вид чата без кода и ссылка для OBS' },
+      { id: 'constructor-commands', title: 'Команды чата', desc: 'Свои команды !команда и переменные' },
+    ],
+  },
 ];
 
 let myStreamerNameLower = null;

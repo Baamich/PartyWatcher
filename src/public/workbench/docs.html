@@ -26,8 +26,8 @@
     </a>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" onclick="goToMyStreamerProfile()">← Профиль</button>
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+        <button class="icon-btn" data-click="goToMyStreamerProfile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
       </div>
     </div>
   </div>
@@ -36,11 +36,12 @@
     <div class="wb-subpage docs-layout">
 
       <nav class="wb-nav wb-nav-static">
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/news.html'">📰 Новости</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench.html'">📡 Управление трансляцией</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/videos.html'">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
-        <button type="button" class="wb-nav-btn active">📚 Документация</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
       </nav>
 
       <main class="wb-subpage-main docs-main">
@@ -54,6 +55,7 @@
   </div>
 
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/js/minipip.js"></script>
   <script src="/workbench/docs.js"></script>
 </body>

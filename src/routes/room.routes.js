@@ -23,11 +23,20 @@ function withLiveStatus(room, io) {
   return { ...room.toObject(), viewerCount };
 }
 
+const VIDEO_TYPES = ['youtube', 'twitch', 'drive', 'player_capture', 'direct'];
+
 function validateVideo(video) {
   const t = video?.type;
   const u = String(video?.url || '').trim();
+  if (!VIDEO_TYPES.includes(t)) return 'Неизвестный тип видео';
   if ((t === 'direct' || t === 'player_capture') && !/^https?:\/\//i.test(u)) {
     return 'Нужна полная ссылка (http/https)';
+  }
+  if (t === 'twitch' && !/twitch\.tv\/videos\/\d+/.test(u)) {
+    return 'Нужна ссылка на запись Twitch (twitch.tv/videos/...)';
+  }
+  if (t === 'drive' && !/^[A-Za-z0-9_-]{10,100}$/.test(u)) {
+    return 'Не удалось распознать файл Google Диска';
   }
   // ссылка на YouTube должна содержать настоящий id видео (потом её обрабатывает yt-dlp на сервере)
   if (t === 'youtube' && !extractYoutubeId(u)) {
@@ -44,6 +53,10 @@ router.post('/', auth, async (req, res) => {
     }
     const videoError = validateVideo(video);
     if (videoError) return res.status(400).json({ error: videoError });
+
+    if ((await Room.countDocuments({ owner: req.user.id })) >= 30) {
+      return res.status(400).json({ error: 'Слишком много комнат: удали ненужные' });
+    }
 
     let code;
     do {
@@ -78,9 +91,9 @@ router.get('/public', auth, async (req, res) => {
   const io = req.app.get('io');
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = 52;
-  const sort = req.query.sort || 'newest';
+  const sort = String(req.query.sort || 'newest');
   const onlyWithPeople = req.query.onlyWithPeople === '1';
-  const q = (req.query.q || '').trim();
+  const q = String(req.query.q || '').trim();
 
   const filter = {
     isPublic: true,
@@ -106,6 +119,7 @@ router.get('/public', auth, async (req, res) => {
 
   const total = await Room.countDocuments(filter);
   const rooms = await Room.find(filter)
+    .select('-bannedUsers')
     .sort(sortOption)
     .skip((page - 1) * limit)
     .limit(limit);
@@ -169,7 +183,7 @@ router.delete('/:code', auth, async (req, res) => {
 router.get('/:code', auth, async (req, res) => {
   const room = await Room.findOne({ code: req.params.code });
   if (!room) return res.status(404).json({ error: 'Комната не найдена' });
-  res.json(room);
+  res.json({ code: room.code, name: room.name });
 });
 
 router.post('/:code/change-video', auth, async (req, res) => {

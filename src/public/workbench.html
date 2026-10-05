@@ -25,9 +25,9 @@
     </a>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" onclick="goToMyStreamerProfile()">← Профиль</button>
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-        <button class="icon-btn" onclick="onResetLayoutClick()">↺ По умолчанию</button>
+        <button class="icon-btn" data-click="goToMyStreamerProfile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+        <button class="icon-btn" data-click="onResetLayoutClick">↺ По умолчанию</button>
       </div>
     </div>
   </div>
@@ -38,11 +38,12 @@
     <div id="wbCanvas" class="wb-canvas">
 
       <nav id="wbNavFixed" class="wb-nav">
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/news.html'">📰 Новости</button>
-        <button type="button" class="wb-nav-btn active">📡 Управление трансляцией</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/videos.html'">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/channel-activity.html'">🛡️ Актив канала</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/docs.html'">📚 Документация</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
       </nav>
 
       <div id="keyPanel" class="wb-window">
@@ -50,12 +51,12 @@
         <div class="wb-window-content">
           <div class="wb-key-row">
             <input id="streamKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
-            <button type="button" class="icon-btn" onclick="copyStreamKey()">📋</button>
-            <button type="button" id="generateKeyBtn" class="icon-btn" onclick="onGenerateKeyClick()">🔄 Сгенерировать</button>
+            <button type="button" class="icon-btn" data-click="copyStreamKey">📋</button>
+            <button type="button" id="generateKeyBtn" class="icon-btn" data-click="onGenerateKeyClick">🔄 Сгенерировать</button>
           </div>
           <p class="wb-hint">
             Сервер:
-            <button type="button" class="wb-rtmp-copy-btn" onclick="copyRtmpUrl()">rtmp://live.partywatcher.de/live 📋</button>
+            <button type="button" class="wb-rtmp-copy-btn" data-click="copyRtmpUrl">rtmp://live.partywatcher.de/live 📋</button>
           </p>
         </div>
         <div class="wb-resize-handle"></div>
@@ -71,7 +72,7 @@
           </div>
         </div>
         <div class="wb-window-content wb-player-content">
-          <button type="button" id="pipBtn" class="wb-mini-btn" title="Мини-окно поверх всех окон" onclick="togglePip()">⧉ Мини-окно</button>
+          <button type="button" id="pipBtn" class="wb-mini-btn" title="Мини-окно поверх всех окон" data-click="togglePip">⧉ Мини-окно</button>
           <div id="playerOffline" class="wb-player-offline">Стрим сейчас офлайн</div>
           <video id="playerVideo" class="wb-player hidden" controls muted playsinline></video>
           <div id="playerReconnecting" class="wb-player-reconnecting hidden">Переподключение…</div>
@@ -88,7 +89,7 @@
           <label class="auth-label" for="streamDescInput">Описание</label>
           <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее"></textarea>
 
-          <button type="button" class="auth-submit" onclick="saveSettings()">Сохранить</button>
+          <button type="button" class="auth-submit" data-click="saveSettings">Сохранить</button>
         </div>
         <div class="wb-resize-handle"></div>
       </div>
@@ -105,18 +106,18 @@
         <div class="wb-window-titlebar wb-chat-titlebar">
           <span>Чат</span>
           <div class="wb-chat-head-right">
-            <button type="button" id="wbViewersBtn" class="wb-viewers-btn" title="Зрители" onclick="toggleViewersPanel(event)">
+            <button type="button" id="wbViewersBtn" class="wb-viewers-btn" title="Зрители" data-click="toggleViewersPanel" data-event>
               👁 <span id="viewersCount">0</span>
             </button>
             <div class="wb-tooltip-wrap">
-              <button type="button" class="wb-clear-chat-btn" onclick="onClearChatClick()">🧹</button>
+              <button type="button" class="wb-clear-chat-btn" data-click="onClearChatClick">🧹</button>
               <span class="wb-tooltip">Очистить чат</span>
             </div>
           </div>
         </div>
         <div class="wb-window-content wb-chat-content">
           <div class="wb-chatapi-bar">
-            <button type="button" id="chatApiToggle" class="wb-chatapi-toggle" title="API чата" aria-expanded="false" onclick="toggleChatApi()">
+            <button type="button" id="chatApiToggle" class="wb-chatapi-toggle" title="API чата" aria-expanded="false" data-click="toggleChatApi">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
@@ -128,23 +129,23 @@
           <div id="chatApiBlock" class="wb-chatapi-block hidden">
             <div class="wb-key-row">
               <input id="chatApiKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
-              <button type="button" class="icon-btn" title="Скопировать ключ" onclick="copyChatApiKey()">📋</button>
-              <button type="button" id="chatApiGenerateBtn" class="icon-btn" onclick="onChatApiGenerateClick()">🔄 Сгенерировать</button>
+              <button type="button" class="icon-btn" title="Скопировать ключ" data-click="copyChatApiKey">📋</button>
+              <button type="button" id="chatApiGenerateBtn" class="icon-btn" data-click="onChatApiGenerateClick">🔄 Сгенерировать</button>
             </div>
-            <button type="button" class="wb-rtmp-copy-btn wb-chatapi-obs-btn" onclick="copyChatOverlayUrl()">Ссылка для OBS (Browser Source) 📋</button>
+            <button type="button" class="wb-rtmp-copy-btn wb-chatapi-obs-btn" data-click="copyChatOverlayUrl">Ссылка для OBS (Browser Source) 📋</button>
             <p class="wb-hint">Отправка в чат: <code>POST /api/chat/send</code> с заголовком <code>Authorization: Bearer ключ</code></p>
           </div>
 
           <div id="chatMessages" class="wb-chat-messages no-scrollbar"></div>
           <div class="wb-chat-input-row">
-            <input id="chatInput" placeholder="Написать в чат…" onkeydown="handleChatKey(event)" />
-            <button type="button" onclick="sendChatMessage()">➤</button>
+            <input id="chatInput" placeholder="Написать в чат…" data-keydown="handleChatKey" data-event />
+            <button type="button" data-click="sendChatMessage">➤</button>
           </div>
 
           <div id="wbViewersPanel" class="wb-viewers-panel">
             <div class="wb-viewers-panel-header">
               <span>Зрители</span>
-              <button type="button" class="wb-viewers-close" aria-label="Закрыть" onclick="toggleViewersPanel(event)">×</button>
+              <button type="button" class="wb-viewers-close" aria-label="Закрыть" data-click="toggleViewersPanel">×</button>
             </div>
             <div id="wbViewersList" class="wb-viewers-list no-scrollbar"></div>
           </div>
@@ -157,49 +158,50 @@
 
   <div id="timeoutModal" class="modal hidden">
     <div class="modal-content">
-      <button type="button" class="modal-close" onclick="closeTimeoutModal()">×</button>
+      <button type="button" class="modal-close" data-click="closeTimeoutModal">×</button>
       <h3 id="timeoutModalName"></h3>
       <div class="wb-timeout-inputs">
         <input id="timeoutHours" type="number" min="0" max="99" value="0" /> ч
         <input id="timeoutMinutes" type="number" min="0" max="59" value="5" /> м
         <input id="timeoutSeconds" type="number" min="0" max="59" value="0" /> с
       </div>
-      <button type="button" class="auth-submit" onclick="confirmTimeout()">Ограничить</button>
+      <button type="button" class="auth-submit" data-click="confirmTimeout">Ограничить</button>
     </div>
   </div>
 
   <div id="regenConfirmModal" class="modal hidden">
     <div class="modal-content">
-      <button type="button" class="modal-close" onclick="closeRegenConfirm()">×</button>
+      <button type="button" class="modal-close" data-click="closeRegenConfirm">×</button>
       <h3>Сгенерировать новый ключ?</h3>
       <p class="wb-hint">Старый ключ сразу перестанет работать — если сейчас идёт трансляция через него, она оборвётся.</p>
-      <button type="button" class="auth-submit" onclick="confirmRegenerateKey()">Да, сгенерировать</button>
-      <button type="button" class="icon-btn" onclick="closeRegenConfirm()">Отмена</button>
+      <button type="button" class="auth-submit" data-click="confirmRegenerateKey">Да, сгенерировать</button>
+      <button type="button" class="icon-btn" data-click="closeRegenConfirm">Отмена</button>
     </div>
   </div>
 
   <div id="resetLayoutModal" class="modal hidden">
     <div class="modal-content">
-      <button type="button" class="modal-close" onclick="closeResetLayoutModal()">×</button>
+      <button type="button" class="modal-close" data-click="closeResetLayoutModal">×</button>
       <h3>Вернуть расположение окон по умолчанию?</h3>
       <p class="wb-hint">Все передвинутые и растянутые окна вернутся на исходные места.</p>
-      <button type="button" class="auth-submit" onclick="confirmResetLayout()">Да, вернуть</button>
-      <button type="button" class="icon-btn" onclick="closeResetLayoutModal()">Отмена</button>
+      <button type="button" class="auth-submit" data-click="confirmResetLayout">Да, вернуть</button>
+      <button type="button" class="icon-btn" data-click="closeResetLayoutModal">Отмена</button>
     </div>
   </div>
 
   <div id="chatKeyRegenModal" class="modal hidden">
     <div class="modal-content">
-      <button type="button" class="modal-close" onclick="closeChatKeyRegen()">×</button>
+      <button type="button" class="modal-close" data-click="closeChatKeyRegen">×</button>
       <h3>Сгенерировать новый ключ чата?</h3>
       <p class="wb-hint">Старый ключ перестанет работать: оверлей в OBS, боты и мосты придётся перенастроить на новый.</p>
-      <button type="button" class="auth-submit" onclick="confirmChatKeyRegen()">Да, сгенерировать</button>
-      <button type="button" class="icon-btn" onclick="closeChatKeyRegen()">Отмена</button>
+      <button type="button" class="auth-submit" data-click="confirmChatKeyRegen">Да, сгенерировать</button>
+      <button type="button" class="icon-btn" data-click="closeChatKeyRegen">Отмена</button>
     </div>
   </div>
 
   <script src="/vendor/hls.min.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/minipip.js"></script>

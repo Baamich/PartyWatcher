@@ -7,7 +7,7 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css" />
-  <link rel="stylesheet" href="/css/index.css?v=2" />
+  <link rel="stylesheet" href="/css/index.css?v=3" />
   <title>PartyWatcher — смотреть фильмы и видео вместе онлайн</title>
   <meta name="description" content="PartyWatcher — бесплатный сервис для совместного просмотра. Создай комнату, отправь ссылку друзьям и смотри YouTube, Twitch и другие видео синхронно, с чатом и голосом.">
   <link rel="canonical" href="https://partywatcher.de/" />
@@ -43,14 +43,14 @@
         <label class="auth-label" for="passwordInput">Пароль</label>
         <div class="password-wrap">
           <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Пароль" />
-          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('passwordInput', this)" aria-label="Показать пароль">👁</button>
+          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="passwordInput" aria-label="Показать пароль">👁</button>
         </div>
 
-        <button class="auth-submit" onclick="login()">Войти</button>
+        <button class="auth-submit" data-click="login">Войти</button>
 
         <p class="auth-switch">
           Нет аккаунта?
-          <button type="button" class="auth-link" onclick="showRegisterPanel()">Зарегистрироваться</button>
+          <button type="button" class="auth-link" data-click="showRegisterPanel">Зарегистрироваться</button>
         </p>
       </div>
 
@@ -72,7 +72,7 @@
         <label class="auth-label" for="regPassword">Пароль</label>
         <div class="password-wrap">
           <input id="regPassword" type="password" autocomplete="new-password" placeholder="Пароль" />
-          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPassword', this)" aria-label="Показать пароль">👁</button>
+          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPassword" aria-label="Показать пароль">👁</button>
         </div>
 
         <ul id="passwordRules" class="password-rules">
@@ -86,14 +86,14 @@
         <label class="auth-label" for="regPasswordConfirm">Повторите пароль</label>
         <div class="password-wrap">
           <input id="regPasswordConfirm" type="password" autocomplete="new-password" placeholder="Повторите пароль" />
-          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPasswordConfirm', this)" aria-label="Показать пароль">👁</button>
+          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPasswordConfirm" aria-label="Показать пароль">👁</button>
         </div>
 
-        <button id="registerBtn" class="auth-submit" onclick="register()" disabled>Зарегистрироваться</button>
+        <button id="registerBtn" class="auth-submit" data-click="register" disabled>Зарегистрироваться</button>
 
         <p class="auth-switch">
           Уже есть аккаунт?
-          <button type="button" class="auth-link" onclick="showLoginPanel()">Войти</button>
+          <button type="button" class="auth-link" data-click="showLoginPanel">Войти</button>
         </p>
       </div>
     </div><!-- /auth-card -->
@@ -117,8 +117,8 @@
       <div class="header-right">
         <div class="corner-menu">
           <span class="corner-name" id="meName"></span>
-          <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-          <button class="icon-btn" onclick="logout()">Выйти</button>
+          <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+          <button class="icon-btn" data-click="logout">Выйти</button>
         </div>
         <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn">Админ</button></a>
       </div>
@@ -126,30 +126,30 @@
 
     <div class="layout">
       <nav class="nav-sidebar">
-        <button type="button" class="page-nav-btn active" onclick="navigateWithFade('/')">🏠 Комнаты</button>
-        <button type="button" class="page-nav-btn" onclick="navigateWithFade('/streams.html')">📡 Прямые трансляции</button>
+        <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/">🏠 Комнаты</button>
+        <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/streams.html">📡 Прямые трансляции</button>
       </nav>
 
       <div class="col-left">
         <h2>Создать комнату</h2>
         <input id="roomName" placeholder="Название комнаты" />
         <div class="type-row">
-          <select id="videoType" onchange="onVideoTypeChange()">
+          <select id="videoType" data-change="onVideoTypeChange">
             <option value="youtube_twitch">YouTube / Twitch (запись)</option>
             <option value="drive">Google Диск</option>
             <option value="player_capture">Захват плеера (фильм / сериал)</option>
             <option value="direct">Прямая ссылка на видео</option>
           </select>
-          <button type="button" class="info-btn" onclick="toggleInfoPopup()">i</button>
-          <button type="button" class="lock-btn lock-private" id="privacyToggle" onclick="togglePrivacy()">🔒</button>
+          <button type="button" class="info-btn" data-click="toggleInfoPopup">i</button>
+          <button type="button" class="lock-btn lock-private" id="privacyToggle" data-click="togglePrivacy">🔒</button>
         </div>
         <div id="infoPopup" class="info-popup hidden"></div>
         <input id="videoUrl" placeholder="Ссылка на видео" />
-        <button onclick="createRoom()">Создать</button>
+        <button data-click="createRoom">Создать</button>
 
         <h2>Войти по ключу</h2>
         <input id="joinCodeInput" placeholder="Ключ комнаты" />
-        <button class="btn-mono" onclick="joinByCode()">Войти</button>
+        <button class="btn-mono" data-click="joinByCode">Войти</button>
         </div>
 
         <div class="col-right">
@@ -163,13 +163,13 @@
         <h2>Публичные комнаты</h2>
 
         <div class="public-search-wrap">
-          <input id="publicSearchInput" type="text" placeholder="Поиск по названию" onkeydown="handlePublicSearchKey(event)" />
-          <button type="button" class="search-icon-btn" onclick="onPublicFilterChange()" aria-label="Искать">🔍</button>
+          <input id="publicSearchInput" type="text" placeholder="Поиск по названию" data-keydown="handlePublicSearchKey" data-event />
+          <button type="button" class="search-icon-btn" data-click="onPublicFilterChange" aria-label="Искать">🔍</button>
         </div>
 
         <div class="public-controls">
           <div class="public-filters">
-            <select id="publicSort" onchange="onPublicFilterChange()">
+            <select id="publicSort" data-change="onPublicFilterChange">
               <option value="newest">Новые</option>
               <option value="oldest">Старые</option>
               <option value="most">Больше людей</option>
@@ -177,7 +177,7 @@
             </select>
 
             <label class="filter-check">
-              <input type="checkbox" id="onlyWithPeople" onchange="onPublicFilterChange()" />
+              <input type="checkbox" id="onlyWithPeople" data-change="onPublicFilterChange" />
               С людьми
             </label>
           </div>
@@ -217,7 +217,8 @@
   
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/js/page-transition.js"></script>
-  <script src="/js/index.js?v=2"></script>
+  <script src="/js/index.js?v=3"></script>
 </body>
 </html>

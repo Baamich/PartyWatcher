@@ -547,7 +547,7 @@ body {
   color: var(--text);
 }
 
-#chat > button[onclick="resync()"] {
+#chat > #resyncBtn {
   display: block;
   margin: 12px 10px 10px 10px !important;
   width: calc(100% - 20px);
@@ -579,7 +579,7 @@ body.view-video-only #chat {
 
   body.view-video-only #chat #messages,
   body.view-video-only #chat #chatForm,
-  body.view-video-only #chat button[onclick="resync()"] {
+  body.view-video-only #chat #resyncBtn {
     display: none !important;
   }
 

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="/js/theme.js"></script>
+  <script src="/js/favicon.js"></script>
+  <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/workbench/workbench.css" />
+  <link rel="stylesheet" href="/workbench/constructor.css" />
+  <title>PartyWatcher — Конструктор</title>
+</head>
+<body>
+  <div class="page-header">
+    <a href="/streams.html" class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span class="brand-stack">
+        <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+        <span class="brand-live-tag">LIVE</span>
+      </span>
+    </a>
+    <div class="header-right">
+      <div class="corner-menu">
+        <button class="icon-btn" data-click="goProfile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wb-outer">
+    <div class="wb-subpage ctor-layout">
+
+      <nav class="wb-nav wb-nav-static">
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn active">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
+      </nav>
+
+      <main class="wb-subpage-main ctor-main">
+        <section id="ctorChat" class="ctor-panel">
+          <h1 class="wb-subpage-title">🧩 Конструктор чата</h1>
+          <p class="wb-subpage-hint">Настрой вид чата и скопируй готовую ссылку для OBS. Ключ чата подставится сам.</p>
+          <h3 class="ctor-group">Готовые стили</h3>
+          <div id="ctorPresets" class="ctor-presets"></div>
+          <div id="ctorFields"></div>
+          <button type="button" class="icon-btn ctor-reset" data-click="resetChat">↺ Сбросить настройки</button>
+        </section>
+
+        <section id="ctorCmds" class="ctor-panel hidden">
+          <div class="ctor-cmds-head">
+            <div>
+              <h1 class="wb-subpage-title">🤖 Команды чата</h1>
+              <p class="wb-subpage-hint">Зритель пишет <code>!команда</code>, бот отвечает в чат.</p>
+            </div>
+            <button type="button" data-click="openCmdModal">＋ Создать</button>
+          </div>
+          <div id="cmdTable" class="cmd-table-wrap hidden">
+            <table class="cmd-table">
+              <thead>
+                <tr><th></th><th>Команда</th><th>Ответ</th><th>Вкл.</th><th></th></tr>
+              </thead>
+              <tbody id="cmdList"></tbody>
+            </table>
+          </div>
+          <p id="cmdEmpty" class="wb-subpage-hint">Команд пока нет. Нажми «＋ Создать».</p>
+        </section>
+      </main>
+
+      <aside class="ctor-side">
+        <h2>Предпросмотр</h2>
+        <div id="pvStage" class="ctor-stage"></div>
+        <button type="button" class="icon-btn ctor-replay" data-click="replayAnim">▶ Показать анимацию</button>
+        <p class="wb-hint">В предпросмотре сообщения не исчезают, в OBS они пропадут через выбранное время.</p>
+        <button type="button" id="ctorCopyBtn" class="auth-submit" data-click="copyObsLink">Скопировать ссылку для OBS 📋</button>
+        <p class="wb-hint">В ссылке лежит ключ чата. Не показывай её на стриме.</p>
+      </aside>
+
+      <aside class="ctor-picker">
+        <h2>Конструктор</h2>
+        <button type="button" class="ctor-pick active" data-mode="chat" data-click="pickCtor" data-arg="chat">💬 Чат</button>
+        <button type="button" class="ctor-pick" data-mode="cmds" data-click="pickCtor" data-arg="cmds">🤖 Команды</button>
+      </aside>
+
+    </div>
+  </div>
+
+  <div id="cmdModal" class="modal hidden">
+    <div class="modal-content cmd-modal">
+      <button type="button" class="modal-close" data-click="closeCmdModal">×</button>
+      <h3 id="cmdModalTitle" style="margin:0 0 10px">Новая команда</h3>
+
+      <label class="auth-label" for="cmdName">Команда</label>
+      <div class="cmd-name-row"><span>!</span><input id="cmdName" maxlength="20" placeholder="правила" autocomplete="off" /></div>
+
+      <label class="auth-label" for="cmdResp">Что ответит бот</label>
+      <textarea id="cmdResp" rows="4" maxlength="400" placeholder="Привет, {user}! Сейчас идёт: {title}"></textarea>
+
+      <div class="auth-label">Переменные (нажми, чтобы вставить)</div>
+      <div id="cmdVars" class="cmd-vars"></div>
+
+      <div class="auth-label">Как будет выглядеть</div>
+      <div id="cmdPreview" class="ctor-stage ctor-stage--small"></div>
+
+      <p id="cmdError" class="ctor-error hidden"></p>
+      <button type="button" id="cmdSubmitBtn" class="auth-submit" data-click="saveCommand">Создать</button>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
+  <script src="/js/minipip.js"></script>
+  <script src="/workbench/constructor.js"></script>
+</body>
+</html>

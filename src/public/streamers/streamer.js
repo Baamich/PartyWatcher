@@ -243,6 +243,7 @@ function stopLiveSession() {
   document.getElementById('liveViewersBtn')?.classList.remove('active');
   setViewersCount(0);
   renderViewersList([]);
+  applyLiveRestriction(null);
 }
 
 document.getElementById('profileAvatarBtn')?.addEventListener('click', toggleLiveStrip);
@@ -768,6 +769,41 @@ function setViewersCount(count) {
   if (el) el.textContent = String(count ?? 0);
 }
 
+let liveRestrictTimer = null;
+
+function fmtHMS(ms) {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  return [Math.floor(t / 3600), Math.floor((t % 3600) / 60), t % 60].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+// r: { type: 'none' | 'ban' | 'timeout', until } или null
+function applyLiveRestriction(r) {
+  clearInterval(liveRestrictTimer);
+  const form = document.getElementById('liveChatForm');
+  const box = document.getElementById('liveChatBlocked');
+  if (!form || !box) return;
+
+  const free = () => { box.classList.add('hidden'); form.classList.remove('hidden'); };
+  if (!r || r.type === 'none') return free();
+
+  form.classList.add('hidden');
+  box.classList.remove('hidden');
+
+  if (r.type === 'ban') {
+    box.textContent = 'Вам закрыт доступ в чат этого канала';
+    return;
+  }
+
+  const until = new Date(r.until).getTime();
+  const tick = () => {
+    const left = until - Date.now();
+    if (left <= 0) { clearInterval(liveRestrictTimer); free(); return; }
+    box.textContent = 'Вам ограничили доступ в чат на: ' + fmtHMS(left);
+  };
+  tick();
+  liveRestrictTimer = setInterval(tick, 1000);
+}
+
 function connectLiveChat(nameLower) {
   liveSocket = io('/chat', { reconnection: false });
 
@@ -782,6 +818,7 @@ function connectLiveChat(nameLower) {
     });
   });
   liveSocket.on('chat:cleared', () => { document.getElementById('liveMessages').innerHTML = ''; });
+  liveSocket.on('chat:restriction', applyLiveRestriction);
 
   liveSocket.on('chat:viewers', (payload) => {
     if (typeof payload === 'number') {
