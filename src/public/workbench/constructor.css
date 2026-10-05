@@ -122,8 +122,13 @@
 .cmd-ico svg { width: 17px; height: 17px; display: block; }
 .cmd-ico:hover { background: var(--border); box-shadow: none; }
 .cmd-ico--del:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
-.sw input:checked + .sw-slider { background: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.65); }
-.sw input:checked + .sw-slider::before { transform: translateX(20px); }
+.sw input:checked + .sw-slider {
+  background: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.65);
+}
+.sw input:checked + .sw-slider::before {
+  transform: translate(22px, -50%);
+}
 
 /* ---- выбор конструктора ---- */
 .ctor-pick {
