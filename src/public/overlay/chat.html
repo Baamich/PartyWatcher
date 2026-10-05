@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PartyWatcher — Чат для OBS</title>
-  <style>
-    /* Все настройки вида собраны в переменные: их можно менять параметрами в ссылке или своим CSS в OBS */
+      /* Все настройки вида собраны в переменные: их можно менять параметрами в ссылке или своим CSS в OBS */
     :root {
       --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
       --fs: 22px;
@@ -25,6 +24,13 @@
       --align: flex-start;
       --talign: left;
       --anim: msg-in;
+      --maxw: 100%;
+      --op: 1;
+      --italic: normal;
+      --ls: 0px;
+      --lh: 1.3;
+      --ncaps: none;
+      --glow: none;
     }
     html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
 
@@ -42,11 +48,16 @@
       gap: var(--gap);
       overflow: hidden;
       font-family: var(--font);
+      opacity: var(--op);
     }
+    #chat.top { top: 0; bottom: auto; justify-content: flex-start; }
+    #chat.layout-bar { padding: 0; gap: 0; }
+    #chat.layout-row { flex-direction: row; align-items: flex-end; justify-content: flex-end; flex-wrap: nowrap; }
+
     .msg {
       align-self: var(--align);
       text-align: var(--talign);
-      max-width: 100%;
+      max-width: var(--maxw);
       box-sizing: border-box;
       padding: var(--pad);
       border-radius: var(--radius);
@@ -54,24 +65,45 @@
       background: var(--msg-bg);
       font-size: var(--fs);
       font-weight: var(--weight);
-      line-height: 1.3;
+      font-style: var(--italic);
+      letter-spacing: var(--ls);
+      line-height: var(--lh);
       word-break: break-word;
       text-shadow: var(--text-shadow);
       -webkit-text-stroke: var(--stroke-w) var(--stroke-c);
       paint-order: stroke fill;
       border: var(--bw) solid var(--bc);
+      border-left: var(--stripe-w, var(--bw)) solid var(--stripe-c, var(--bc));
+      box-shadow: var(--glow);
       backdrop-filter: blur(var(--blur));
       animation: var(--anim) 0.2s ease-out;
     }
+    #chat.layout-bar .msg {
+      align-self: stretch;
+      width: 100%;
+      max-width: 100%;
+      border-radius: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #chat.layout-row .msg { align-self: auto; flex-shrink: 0; white-space: nowrap; }
     .msg.out { opacity: 0; transition: opacity 0.6s ease; }
-    .nick { font-weight: 700; }
+
+    .nick { font-weight: 700; text-transform: var(--ncaps); }
     .nick--owner {
       background: var(--owner-bg);
       color: #fff;
       padding: 1px 8px;
       border-radius: 6px;
-      -webkit-text-stroke: 0;
       text-shadow: none;
+      -webkit-text-stroke: 0;
+    }
+    .nick.plate {
+      padding: 1px 8px;
+      border-radius: 6px;
+      text-shadow: none;
+      -webkit-text-stroke: 0;
     }
     .src {
       font-size: 0.6em;
@@ -80,11 +112,13 @@
       margin-right: 6px;
       padding: 1px 6px;
       border-radius: 4px;
-      -webkit-text-stroke: 0;
       background: rgba(255, 255, 255, 0.22);
       text-shadow: none;
+      -webkit-text-stroke: 0;
       vertical-align: middle;
     }
+    #chat.nosrc .src { display: none; }
+
     @keyframes msg-in {
       from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 1; transform: none; }
@@ -97,7 +131,6 @@
       from { opacity: 0; }
       to   { opacity: 1; }
     }
-  </style>
 </head>
 <body>
   <div id="chat"></div>

@@ -215,8 +215,10 @@ router.post('/chat-key/reveal', auth, requireStreamer, async (req, res) => {
 });
 
 const ChatCommand = require('../../models/ChatCommand');
+const { parseArgsInput, parseCommandLine, buildReply } = require('../../services/chatCommands');
 const COMMAND_NAME_RE = /^[a-zA-Z0-9_а-яА-ЯёЁ]{1,20}$/;
 const MAX_COMMANDS = 50;
+const cleanCommandName = (v) => String(v ?? '').trim().replace(/^!+/, '').toLowerCase();
 
 // GET /workbench/commands
 router.get('/commands', auth, requireStreamer, async (req, res) => {
@@ -226,13 +228,33 @@ router.get('/commands', auth, requireStreamer, async (req, res) => {
   res.json(list);
 });
 
-// POST /workbench/commands { name, response }
+// POST /workbench/commands/preview — как ответил бы на такое сообщение (для конструктора)
+router.post('/commands/preview', auth, requireStreamer, (req, res) => {
+  const name = cleanCommandName(req.body?.name) || 'команда';
+  const argsRes = parseArgsInput(req.body?.args);
+  if (argsRes.error) return res.json({ text: '⚠ ' + argsRes.error, usage: false });
+  const response = String(req.body?.response ?? '').slice(0, 400);
+  const parsed = parseCommandLine(req.body?.line) || { name, argv: [] };
+  const out = buildReply({ name, args: argsRes.args, response }, parsed.argv, {
+    user: 'Viewer1',
+    streamer: req.streamerUser.streamerName,
+    title: req.streamerUser.streamTitle || 'Играем с друзьями',
+    viewers: 12,
+    uptime: '1ч 05м',
+    count: 7,
+  });
+  res.json(out);
+});
+
+// POST /workbench/commands { name, response, args }
 router.post('/commands', auth, requireStreamer, async (req, res) => {
   const nameLower = req.streamerUser.streamerNameLower;
-  const name = String(req.body?.name ?? '').trim().replace(/^!+/, '').toLowerCase();
+  const name = cleanCommandName(req.body?.name);
   const response = String(req.body?.response ?? '').trim();
+  const argsRes = parseArgsInput(req.body?.args);
 
   if (!COMMAND_NAME_RE.test(name)) return res.status(400).json({ error: 'Команда: 1–20 символов, буквы, цифры и _' });
+  if (argsRes.error) return res.status(400).json({ error: argsRes.error });
   if (!response) return res.status(400).json({ error: 'Напиши, что должен ответить бот' });
   if (response.length > 400) return res.status(400).json({ error: 'Ответ слишком длинный (максимум 400 символов)' });
   if ((await ChatCommand.countDocuments({ streamerNameLower: nameLower })) >= MAX_COMMANDS) {
@@ -240,8 +262,41 @@ router.post('/commands', auth, requireStreamer, async (req, res) => {
   }
 
   try {
-    const cmd = await ChatCommand.create({ streamerNameLower: nameLower, name, response });
+    const cmd = await ChatCommand.create({ streamerNameLower: nameLower, name, response, args: argsRes.args });
     res.status(201).json(cmd);
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: 'Такая команда уже есть' });
+    throw err;
+  }
+});
+
+// PATCH /workbench/commands/:id { name?, response?, args?, enabled? }
+router.patch('/commands/:id', auth, requireStreamer, async (req, res) => {
+  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Некорректный id' });
+  const cmd = await ChatCommand.findOne({ _id: req.params.id, streamerNameLower: req.streamerUser.streamerNameLower });
+  if (!cmd) return res.status(404).json({ error: 'Команда не найдена' });
+
+  if (req.body?.name !== undefined) {
+    const name = cleanCommandName(req.body.name);
+    if (!COMMAND_NAME_RE.test(name)) return res.status(400).json({ error: 'Команда: 1–20 символов, буквы, цифры и _' });
+    cmd.name = name;
+  }
+  if (req.body?.response !== undefined) {
+    const response = String(req.body.response).trim();
+    if (!response) return res.status(400).json({ error: 'Напиши, что должен ответить бот' });
+    if (response.length > 400) return res.status(400).json({ error: 'Ответ слишком длинный (максимум 400 символов)' });
+    cmd.response = response;
+  }
+  if (req.body?.args !== undefined) {
+    const argsRes = parseArgsInput(req.body.args);
+    if (argsRes.error) return res.status(400).json({ error: argsRes.error });
+    cmd.args = argsRes.args;
+  }
+  if (req.body?.enabled !== undefined) cmd.enabled = !!req.body.enabled;
+
+  try {
+    await cmd.save();
+    res.json(cmd);
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Такая команда уже есть' });
     throw err;

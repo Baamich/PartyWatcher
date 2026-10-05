@@ -65,7 +65,7 @@
           <div id="cmdTable" class="cmd-table-wrap hidden">
             <table class="cmd-table">
               <thead>
-                <tr><th></th><th>Команда</th><th>Ответ</th><th>Вкл.</th><th></th></tr>
+                <tr><th></th><th>Команда</th><th>Ответ</th><th>Исп.</th><th>Вкл.</th><th></th></tr>
               </thead>
               <tbody id="cmdList"></tbody>
             </table>
@@ -97,16 +97,29 @@
       <button type="button" class="modal-close" data-click="closeCmdModal">×</button>
       <h3 id="cmdModalTitle" style="margin:0 0 10px">Новая команда</h3>
 
+      <div class="auth-label">Быстрые заготовки</div>
+      <div id="cmdExamples" class="cmd-vars"></div>
+
       <label class="auth-label" for="cmdName">Команда</label>
-      <div class="cmd-name-row"><span>!</span><input id="cmdName" maxlength="20" placeholder="правила" autocomplete="off" /></div>
+      <div class="cmd-name-row"><span>!</span><input id="cmdName" maxlength="20" placeholder="рандом" autocomplete="off" /></div>
+
+      <div class="auth-label">Аргументы: то, что зритель пишет после команды</div>
+      <div id="cmdArgs" class="cmd-vars"></div>
+      <div class="cmd-arg-add">
+        <input id="cmdArgName" maxlength="15" placeholder="название, например число" autocomplete="off" />
+        <label class="cmd-arg-opt"><input type="checkbox" id="cmdArgOpt" /> необязательный</label>
+        <button type="button" class="icon-btn" data-click="addCmdArg">＋ Добавить</button>
+      </div>
+      <p class="wb-hint" id="cmdUsage"></p>
 
       <label class="auth-label" for="cmdResp">Что ответит бот</label>
-      <textarea id="cmdResp" rows="4" maxlength="400" placeholder="Привет, {user}! Сейчас идёт: {title}"></textarea>
+      <textarea id="cmdResp" rows="4" maxlength="400" placeholder="Случайное число до {число}: {random:{число}}"></textarea>
 
       <div class="auth-label">Переменные (нажми, чтобы вставить)</div>
       <div id="cmdVars" class="cmd-vars"></div>
 
-      <div class="auth-label">Как будет выглядеть</div>
+      <label class="auth-label" for="cmdTry">Проверка: что напишет зритель</label>
+      <input id="cmdTry" class="cmd-try" maxlength="120" autocomplete="off" />
       <div id="cmdPreview" class="ctor-stage ctor-stage--small"></div>
 
       <p id="cmdError" class="ctor-error hidden"></p>

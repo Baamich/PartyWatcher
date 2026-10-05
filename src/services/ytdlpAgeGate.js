@@ -93,7 +93,7 @@ function friendlyError(raw) {
   if (/Requested format is not available|n challenge|nsig|JS runtime/i.test(s)) {
     return 'yt-dlp не смог расшифровать ссылки: обнови yt-dlp и проверь JS-runtime (deno)';
   }
-  if (/no such option/i.test(s)) return 'yt-dlp на сервере устарел: pip3 install -U yt-dlp --break-system-packages';
+  if (/no such option/i.test(s)) return 'yt-dlp на сервере устарел: поставь свежий бинарник и укажи YT_DLP_PATH в .env';
   if (/403/i.test(s)) return 'YouTube отклонил загрузку (403): обнови yt-dlp и cookies';
   if (/таймаут/i.test(s)) return 'Загрузка зависла и была остановлена';
   return 'Не удалось скачать видео (подробности в логах сервера)';
@@ -101,43 +101,45 @@ function friendlyError(raw) {
 
 // ---------- запуск yt-dlp ----------
 
-// старые yt-dlp не знают --remote-components и падают: проверяем один раз
-let remoteComponentsSupported = null;
-function detectRemoteComponents() {
-  if (remoteComponentsSupported !== null) return Promise.resolve(remoteComponentsSupported);
+// старые yt-dlp не знают --remote-components и --js-runtimes: проверяем один раз
+let ytSupport = null;
+function detectYtDlp() {
+  if (ytSupport) return Promise.resolve(ytSupport);
   return new Promise((resolve) => {
     let out = '';
     const child = spawn(YTDLP, ['--help'], { stdio: ['ignore', 'pipe', 'ignore'] });
     child.stdout.on('data', (b) => { out += b; });
-    child.on('error', () => { remoteComponentsSupported = false; resolve(false); });
+    child.on('error', () => { ytSupport = { remote: false, jsRuntimes: false }; resolve(ytSupport); });
     child.on('close', () => {
-      remoteComponentsSupported = out.includes('--remote-components');
-      if (!remoteComponentsSupported) console.warn('[ytdlpAgeGate] yt-dlp устарел (нет --remote-components): pip3 install -U yt-dlp --break-system-packages');
-      resolve(remoteComponentsSupported);
+      ytSupport = { remote: out.includes('--remote-components'), jsRuntimes: out.includes('--js-runtimes') };
+      if (!ytSupport.remote || !ytSupport.jsRuntimes) {
+        console.warn('[ytdlpAgeGate] yt-dlp устарел (' + YTDLP + '): поставь свежий и укажи YT_DLP_PATH в .env');
+      }
+      resolve(ytSupport);
     });
   });
 }
 
-function buildArgs(videoUrl, outFile, client, withRemote) {
+function buildArgs(videoUrl, outFile, client, support) {
   const args = [
     '-f', `bestvideo[height<=${MAX_HEIGHT}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${MAX_HEIGHT}][ext=mp4]/best[height<=${MAX_HEIGHT}]/best`,
     '--merge-output-format', 'mp4',
     '--no-playlist',
     '--newline', // прогресс построчно, чтобы его можно было читать
-    ...(withRemote ? ['--remote-components', 'ejs:github'] : []),
+    ...(support.remote ? ['--remote-components', 'ejs:github'] : []),
     '-o', outFile,
   ];
   if (client && client !== 'default') args.push('--extractor-args', `youtube:player_client=${client}`);
-  if (JS_RUNTIMES) args.push('--js-runtimes', JS_RUNTIMES);
+  if (JS_RUNTIMES && support.jsRuntimes) args.push('--js-runtimes', JS_RUNTIMES);
   if (PROXY) args.push('--proxy', PROXY);
   if (fs.existsSync(COOKIES_PATH)) args.push('--cookies', COOKIES_PATH);
   args.push('--', videoUrl); // всё после «--» yt-dlp считает адресом, а не опциями
   return args;
 }
 
-function runYtDlp(videoUrl, outFile, client, onProgress, withRemote) {
+function runYtDlp(videoUrl, outFile, client, onProgress, support) {
   return new Promise((resolve, reject) => {
-    const child = spawn(YTDLP, buildArgs(videoUrl, outFile, client, withRemote), { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(YTDLP, buildArgs(videoUrl, outFile, client, support), { stdio: ['ignore', 'pipe', 'pipe'] });
     let errText = '';
     let timedOut = false;
 
@@ -183,11 +185,11 @@ async function runJob(job, id) {
   job.status = 'running';
 
   let lastErr = null;
-  const withRemote = await detectRemoteComponents();
+  const support = await detectYtDlp();
   for (const client of CLIENTS) {
     try {
       job.progress = null;
-      await runYtDlp(videoUrl, outFile, client, (p) => { job.progress = p; }, withRemote);
+      await runYtDlp(videoUrl, outFile, client, (p) => { job.progress = p; }, support);
       if (fs.existsSync(outFile)) {
         console.log(`[ytdlpAgeGate] ${id}: успех через client=${client}`);
         cleanupPartials(id);

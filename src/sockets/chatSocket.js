@@ -7,6 +7,7 @@ const ChannelActionLog = require('../models/ChannelActionLog');
 const User = require('../models/User');
 const chatBus = require('../services/chatBus');
 const ChatCommand = require('../models/ChatCommand');
+const { parseCommandLine, buildReply } = require('../services/chatCommands');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
@@ -101,19 +102,21 @@ module.exports = function registerChatSocket(io) {
     nsp.to(roomName(nameLower)).emit('chat:viewers', payload);
   }
 
-    const COMMAND_COOLDOWN_MS = 3000;
+  const COMMAND_COOLDOWN_MS = 3000;
   const commandLastUsed = new Map(); // `${канал}:${команда}` → время последнего ответа
 
   async function runChatCommand(nameLower, text, username) {
-    if (text[0] !== '!') return;
-    const [head, ...rest] = text.slice(1).split(/\s+/);
-    const name = String(head || '').toLowerCase();
-    if (!name) return;
+    const parsed = parseCommandLine(text);
+    if (!parsed) return;
 
-    const key = `${nameLower}:${name}`;
+    const key = `${nameLower}:${parsed.name}`;
     const now = Date.now();
     if (now - (commandLastUsed.get(key) || 0) < COMMAND_COOLDOWN_MS) return; // защита от спама
-    const cmd = await ChatCommand.findOne({ streamerNameLower: nameLower, name, enabled: { $ne: false } }).lean();
+    const cmd = await ChatCommand.findOne({
+      streamerNameLower: nameLower,
+      name: parsed.name,
+      enabled: { $ne: false },
+    }).lean();
     if (!cmd) return;
     if (commandLastUsed.size > 500) commandLastUsed.clear();
     commandLastUsed.set(key, now);
@@ -121,18 +124,19 @@ module.exports = function registerChatSocket(io) {
     const streamer = await User.findOne({ streamerNameLower: nameLower })
       .select('streamerName streamTitle isLive liveStartedAt')
       .lean();
-    const vars = {
+
+    const reply = buildReply(cmd, parsed.argv, {
       user: username,
       streamer: streamer?.streamerName || nameLower,
       title: streamer?.streamTitle || '',
-      viewers: String(buildViewersPayload(nameLower).count),
+      viewers: buildViewersPayload(nameLower).count,
       uptime: formatUptime(streamer?.liveStartedAt, streamer?.isLive),
-      random: String(1 + Math.floor(Math.random() * 100)),
-      args: rest.join(' '),
-    };
-    const out = cmd.response
-      .replace(/\{(\w+)\}/g, (m, k) => (Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : m))
-      .slice(0, 500);
+      count: (cmd.uses || 0) + 1,
+    });
+    if (!reply.usage) {
+      ChatCommand.updateOne({ _id: cmd._id }, { $inc: { uses: 1 } }).catch(() => {});
+    }
+    const out = reply.text;
     if (!out.trim()) return;
 
     const msg = await StreamChatMessage.create({
