@@ -122,7 +122,7 @@ function detectYtDlp() {
 
 function buildArgs(videoUrl, outFile, client, support) {
   const args = [
-    '-f', `bestvideo[height<=${MAX_HEIGHT}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${MAX_HEIGHT}][ext=mp4]/best[height<=${MAX_HEIGHT}]/best`,
+    '-f', `18/bestvideo[height<=${MAX_HEIGHT}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${MAX_HEIGHT}][ext=mp4]/best[height<=${MAX_HEIGHT}]/best`,
     '--merge-output-format', 'mp4',
     '--no-playlist',
     '--newline', // прогресс построчно, чтобы его можно было читать
