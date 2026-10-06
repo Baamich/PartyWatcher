@@ -293,7 +293,7 @@ function loadHlsScript() {
 }
 
 function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStreams }) {
-  showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
+  container.innerHTML = ''; // убираем заглушку «Ищем видеопоток...»
   const videoEl = document.createElement('video');
   videoEl.id = 'captureVideo';
   videoEl.controls = isOwner;
@@ -633,8 +633,11 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     });
   };
 
-  const reloadWithEpisode = async (episode, playerLabel) => {
-    container.innerHTML = `
+    const reloadWithEpisode = async (episode, playerLabel) => {
+      try { clearTimeout(proactiveRefreshTimer); clearTimeout(stallTimer); } catch (_) {}
+      try { if (hlsInstance) hlsInstance.destroy(); } catch (_) {}
+      hlsInstance = null;
+      container.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
         <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
       </div>
