@@ -588,7 +588,7 @@ function isAgeConfirmedLocally() {
 
   if (video.type === 'player_capture') {
     window.__captureVideoUrl = video.url;
-    return import('/js/playerCapture/index.js').then(mod => {
+    return import('/js/playerCapture/index.js?v=3').then(mod => {
       return mod.renderPlayerCapture(video, {
         isOwner,
         container: document.getElementById('player'),
