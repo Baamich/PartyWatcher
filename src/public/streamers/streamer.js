@@ -21,17 +21,11 @@ let isOwnerFlag = false;
 
 function renderProfile(streamer) {
   const banner = document.getElementById('banner');
-  if (streamer.streamerBannerUrl) {
-    banner.style.backgroundImage = `url('${streamer.streamerBannerUrl}')`;
-  }
+  banner.style.backgroundImage = streamer.streamerBannerUrl ? `url('${streamer.streamerBannerUrl}')` : '';
 
   const avatar = document.getElementById('profileAvatar');
-  if (streamer.streamerAvatarUrl) {
-    avatar.style.backgroundImage = `url('${streamer.streamerAvatarUrl}')`;
-    avatar.textContent = '';
-  } else {
-    avatar.textContent = initialLetter(streamer.streamerName);
-  }
+  avatar.style.backgroundImage = streamer.streamerAvatarUrl ? `url('${streamer.streamerAvatarUrl}')` : '';
+  avatar.textContent = streamer.streamerAvatarUrl ? '' : initialLetter(streamer.streamerName);
 
   document.getElementById('liveBadge').classList.toggle('hidden', !streamer.isLive);
   document.getElementById('profileName').textContent = streamer.streamerName;
@@ -127,24 +121,29 @@ function switchToVodPlayback(v) {
   });
 }
 
-async function loadVods(nameLower) {
-  try {
-    cachedVods = await api('/streamers/' + encodeURIComponent(nameLower) + '/vods');
-  } catch (e) {
-    console.warn('[loadVods]', e.message);
-    cachedVods = [];
+let vodSig = null;
+
+// принимает уже загруженный список (из кэша или с сервера); если он не изменился, DOM не трогаем
+function applyVods(vods) {
+  const list = vods || [];
+  const sig = JSON.stringify(list);
+  cachedVods = list;
+  const hasVods = list.length > 0;
+  if (sig !== vodSig) {
+    vodSig = sig;
+    renderVodGrid(list);
+    renderVodColumn(list);
   }
-  const hasVods = cachedVods.length > 0;
-  renderVodGrid(cachedVods);
-  renderVodColumn(cachedVods);
-  document.getElementById('vodSection').classList.toggle('hidden', !hasVods || liveOpen);
-  document.getElementById('vodColumn').classList.toggle('hidden', !hasVods || !liveOpen);
+  const pro = !!window.PWProView?.active;
+  document.getElementById('vodSection').classList.toggle('hidden', !hasVods || (liveOpen && !pro));
+  document.getElementById('vodColumn').classList.toggle('hidden', pro || !hasVods || !liveOpen);
 }
 
 function switchVodLayout(open) {
   const hasVods = cachedVods.length > 0;
-  document.getElementById('vodSection').classList.toggle('hidden', open || !hasVods);
-  document.getElementById('vodColumn').classList.toggle('hidden', !open || !hasVods);
+  const pro = !!window.PWProView?.active;
+  document.getElementById('vodSection').classList.toggle('hidden', (open && !pro) || !hasVods);
+  document.getElementById('vodColumn').classList.toggle('hidden', pro || !open || !hasVods);
 }
 
 // ---------- аккордеон эфира ----------
@@ -252,10 +251,10 @@ document.getElementById('liveToggleChevronBtn')?.addEventListener('click', toggl
 
 // ---------- HLS-плеер + качество ----------
 
-function lockToLiveEdge(video) {
-  if (video.dataset.liveLockAttached) return;
-  video.dataset.liveLockAttached = '1';
-  video.addEventListener('seeking', () => {
+  function lockToLiveEdge(video) {
+    if (video.__liveLockBound) return; // слушатель вешаем один раз за жизнь страницы
+    video.__liveLockBound = true;
+    video.addEventListener('seeking', () => {
     if (!video.seekable.length) return;
     const liveEdge = video.seekable.end(video.seekable.length - 1);
     const minAllowed = Math.max(0, liveEdge - 3);
@@ -378,12 +377,13 @@ function attachLiveHls(playbackId) {
 const VOLUME_STORAGE_KEY = 'pw_volume';
 
 function getSavedVolume() {
-  const v = parseInt(localStorage.getItem(VOLUME_STORAGE_KEY), 10);
+  let v = NaN;
+  try { v = parseInt(localStorage.getItem(VOLUME_STORAGE_KEY), 10); } catch (_) {}
   return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 50;
 }
 
 function saveVolume(v) {
-  localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+  try { localStorage.setItem(VOLUME_STORAGE_KEY, String(v)); } catch (_) {}
 }
 
 function applyVolumeToLive(v) {
@@ -874,29 +874,91 @@ document.getElementById('liveChatForm')?.addEventListener('submit', (e) => {
 
 // ---------- инициализация страницы ----------
 
+function showPage() {
+  document.getElementById('notFound').classList.add('hidden');
+  document.getElementById('pageContent').classList.remove('hidden');
+}
+
+function showNotFound() {
+  document.getElementById('pageContent').classList.add('hidden');
+  document.getElementById('notFound').classList.remove('hidden');
+}
+
 async function loadProfile() {
   const nameLower = getNameFromUrl();
-  if (!nameLower) {
-    document.getElementById('notFound').classList.remove('hidden');
-    return;
+  if (!nameLower) return showNotFound();
+  const enc = encodeURIComponent(nameLower);
+
+  const ownerP = checkOwnership(nameLower);      // идёт параллельно со всем остальным
+  const cached = await PWCache.get(nameLower);
+
+  // 1) мгновенно рисуем из кэша (isLive там нет: он всегда свежий)
+  if (cached) {
+    currentStreamer = { ...cached.streamer };
+    renderProfile(currentStreamer);
+    applyVods(cached.vods);
+    if (cached.layout) window.PWProView?.apply(cached.layout, cachedVods.length > 0);
+    showPage();
   }
 
+  // 2) параллельно: сверка версии и записи
+  const vodsP = api('/streamers/' + enc + '/vods').catch((e) => {
+    console.warn('[vods]', e.message);
+    return null;
+  });
+
+  let b;
   try {
-    const streamer = await api('/streamers/' + encodeURIComponent(nameLower));
-    currentStreamer = streamer;
-    renderProfile(streamer);
-    await checkOwnership(nameLower);
-    await loadVods(nameLower);
-
-    document.getElementById('pageContent').classList.remove('hidden');
-
-    if (streamer.isLive && streamer.streamPlaybackId) {
-      setTimeout(openLiveStrip, 120);
-    }
+    const q = cached && Number.isFinite(cached.rev) ? '?rev=' + cached.rev : '';
+    b = await api('/streamers/' + enc + '/bundle' + q);
   } catch (err) {
     console.warn('[loadProfile]', err.message);
-    document.getElementById('notFound').classList.remove('hidden');
+    if (!cached || /не найден/i.test(err.message || '')) {
+      if (cached) PWCache.del(nameLower);
+      showNotFound();
+    }
+    return; // нет сети, но есть кэш: оставляем показанное
   }
+
+  const live = { isLive: !!b.isLive, streamPlaybackId: b.streamPlaybackId || null };
+  const same = !!(b.unchanged && cached);
+  const stat = same
+    ? { streamer: cached.streamer, layout: cached.layout }
+    : {
+        streamer: {
+          streamerName: b.streamerName,
+          streamerBio: b.streamerBio || '',
+          streamerAvatarUrl: b.streamerAvatarUrl || null,
+          streamerBannerUrl: b.streamerBannerUrl || null,
+        },
+        layout: b.layout || null,
+      };
+
+  currentStreamer = { ...stat.streamer, ...live };
+
+  if (same) {
+    // данные те же: перерисовывать нечего, обновляем только бейдж «В ЭФИРЕ»
+    document.getElementById('liveBadge')?.classList.toggle('hidden', !live.isLive);
+  } else {
+    if (window.PWProView?.active && !stat.layout) {
+      // макет сбросили: проще перезагрузить, кэш к этому моменту уже обновлён
+      await PWCache.set(nameLower, { rev: b.rev, ...stat, vods: cachedVods });
+      location.reload();
+      return;
+    }
+    renderProfile(currentStreamer);
+    if (stat.layout) window.PWProView?.apply(stat.layout, cachedVods.length > 0);
+    showPage();
+  }
+
+  // 3) эфир открываем, когда уже известен владелец (нужно для кнопок модерации)
+  await ownerP;
+  if (live.isLive && live.streamPlaybackId && !liveOpen) setTimeout(openLiveStrip, 120);
+
+  // 4) записи и обновление кэша
+  const vods = await vodsP;
+  if (vods) applyVods(vods);
+  PWCache.set(nameLower, { rev: b.rev, streamer: stat.streamer, layout: stat.layout, vods: cachedVods });
 }
 
 let liveStatusPollTimer = null;

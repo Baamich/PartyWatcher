@@ -36,6 +36,7 @@ async function showEditSection(streamerName) {
 
   try {
     const streamer = await api('/streamers/' + encodeURIComponent(streamerName.toLowerCase()));
+    window.__streamerData = streamer;
     document.getElementById('bioInput').value = streamer.streamerBio || '';
     if (streamer.streamerAvatarUrl) setPreview('avatar', streamer.streamerAvatarUrl);
     if (streamer.streamerBannerUrl) setPreview('banner', streamer.streamerBannerUrl);

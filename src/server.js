@@ -57,7 +57,8 @@ async function start() {
   
   app.use(securityHeaders()); // CSP и остальные заголовки безопасности (режим — CSP_MODE в .env)
   app.use(cors());
-  app.use(express.json({ limit: '15mb' }));
+  app.use('/api/streamers', express.json({ limit: '15mb' })); // аватар, баннер, макет
+  app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
 
   // API не должно кэшироваться ни браузером, ни Cloudflare — иначе статус isLive/чат зависают на старом значении

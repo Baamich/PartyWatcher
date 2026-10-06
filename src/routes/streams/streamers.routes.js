@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../../models/User');
 const auth = require('../../middleware/auth');
+const PWLayout = require('../../public/js/pwlayout.js');
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
 
@@ -110,6 +111,7 @@ router.patch('/me', auth, async (req, res) => {
       me.streamerBannerUrl = streamerBannerUrl || null;
     }
 
+    me.profileRev = Date.now();
     await me.save();
 
     res.json({
@@ -121,6 +123,86 @@ router.patch('/me', auth, async (req, res) => {
   } catch (err) {
     console.error('[PATCH /streamers/me]', err);
     res.status(500).json({ error: 'Не удалось сохранить изменения' });
+  }
+});
+
+// PUT /streamers/me/layout — сохранить PRO-макет (layout: null — сброс)
+router.put('/me/layout', auth, async (req, res) => {
+  try {
+    const me = await User.findById(req.user.id).select('streamerName');
+    if (!me) return res.status(401).json({ error: 'Юзер не найден' });
+    if (!me.streamerName) return res.status(409).json({ error: 'Сначала создай имя стримера' });
+    if (req.body.layout === undefined) return res.status(400).json({ error: 'Нет макета' });
+
+    let layout;
+    try {
+      layout = PWLayout.sanitize(req.body.layout);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    await User.updateOne({ _id: me._id }, { $set: { profileLayout: layout, profileRev: Date.now() } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[PUT /streamers/me/layout]', err);
+    res.status(500).json({ error: 'Не удалось сохранить макет' });
+  }
+});
+
+// GET /streamers/:name/layout — публичный макет (без +1 просмотра)
+router.get('/:name/layout', async (req, res) => {
+  try {
+    const nameLower = String(req.params.name || '').trim().toLowerCase();
+    if (!nameLower) return res.status(400).json({ error: 'Не указано имя стримера' });
+    const s = await User.findOne({ streamerNameLower: nameLower }).select('profileLayout -_id').lean();
+    if (!s) return res.status(404).json({ error: 'Стример не найден' });
+    res.json({ layout: s.profileLayout || null });
+  } catch (err) {
+    console.error('[GET /streamers/:name/layout]', err);
+    res.status(500).json({ error: 'Ошибка' });
+  }
+});
+
+// GET /streamers/:name/bundle?rev=N — профиль + макет одним запросом.
+// Если rev совпал с текущим, тяжёлое (аватар, баннер, макет) не отправляем.
+router.get('/:name/bundle', async (req, res) => {
+  try {
+    const nameLower = String(req.params.name || '').trim().toLowerCase();
+    if (!nameLower) return res.status(400).json({ error: 'Не указано имя стримера' });
+
+    const s = await User.findOneAndUpdate(
+      { streamerNameLower: nameLower },
+      { $inc: { profileViews: 1 } },
+      { new: true }
+    )
+      .select('streamerName isLive streamPlaybackId profileRev')
+      .lean();
+    if (!s) return res.status(404).json({ error: 'Стример не найден' });
+
+    const rev = s.profileRev || 0;
+    const light = {
+      rev,
+      streamerName: s.streamerName,
+      isLive: !!s.isLive,
+      streamPlaybackId: s.streamPlaybackId || null,
+    };
+
+    const clientRev = req.query.rev === undefined ? NaN : Number(req.query.rev);
+    if (clientRev === rev) return res.json({ ...light, unchanged: true });
+
+    const heavy = await User.findById(s._id)
+      .select('streamerBio streamerAvatarUrl streamerBannerUrl profileLayout -_id')
+      .lean();
+
+    res.json({
+      ...light,
+      streamerBio: heavy?.streamerBio || '',
+      streamerAvatarUrl: heavy?.streamerAvatarUrl || null,
+      streamerBannerUrl: heavy?.streamerBannerUrl || null,
+      layout: heavy?.profileLayout || null,
+    });
+  } catch (err) {
+    console.error('[GET /streamers/:name/bundle]', err);
+    res.status(500).json({ error: 'Не удалось загрузить профиль стримера' });
   }
 });
 

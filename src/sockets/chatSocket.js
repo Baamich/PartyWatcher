@@ -164,7 +164,8 @@ module.exports = function registerChatSocket(io) {
   nsp.on('connection', (socket) => {
     const authUser = getUserFromSocket(socket);
     socket.data.userId = authUser?.id ? String(authUser.id) : null;
-    let currentStreamerNameLower = null;
+      let currentStreamerNameLower = null;
+      let lastSendAt = 0;
 
     socket.on('chat:join', async ({ streamerName, chatKey } = {}) => {
       // если уже были в другой комнате — выходим
@@ -235,8 +236,11 @@ module.exports = function registerChatSocket(io) {
     });
 
     socket.on('chat:send', async ({ text }) => {
-      if (!authUser || !currentStreamerNameLower || socket.data.isOverlay) return;
-      const trimmed = String(text || '').trim().slice(0, 500);
+        if (!authUser || !currentStreamerNameLower || socket.data.isOverlay) return;
+        const nowTs = Date.now();
+        if (nowTs - lastSendAt < 700) return; // не чаще раза в 0,7 с
+        lastSendAt = nowTs;
+        const trimmed = String(text || '').trim().slice(0, 500);
       if (!trimmed) return;
 
       const restriction = await getRestriction(currentStreamerNameLower, authUser.id);
@@ -265,8 +269,9 @@ module.exports = function registerChatSocket(io) {
     });
 
     socket.on('chat:delete', async ({ messageId }) => {
-      if (!socket.data.isOwner || !currentStreamerNameLower) return;
-      const msg = await StreamChatMessage.findOneAndUpdate(
+        if (!socket.data.isOwner || !currentStreamerNameLower) return;
+        if (!/^[a-f0-9]{24}$/i.test(String(messageId))) return;
+        const msg = await StreamChatMessage.findOneAndUpdate(
         { _id: messageId, streamerNameLower: currentStreamerNameLower },
         { deleted: true },
         { new: true }

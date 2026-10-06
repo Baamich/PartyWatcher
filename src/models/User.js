@@ -18,6 +18,8 @@ const userSchema = new mongoose.Schema(
     streamerAvatarUrl: { type: String, default: null },
     streamerBannerUrl: { type: String, default: null },
     profileViews: { type: Number, default: 0 },
+    profileLayout: { type: mongoose.Schema.Types.Mixed, default: null },
+    profileRev: { type: Number, default: 0 },
 
     // ---- творческая студия ----
     streamTitle: { type: String, default: '' },

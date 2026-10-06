@@ -1,0 +1,73 @@
+.pw-fill { width: 100%; height: 100%; box-sizing: border-box; }
+
+.pw-text .pw-fill {
+  display: flex;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  font-size: calc(var(--fs, 16) * var(--s, 1) * 1px);
+  padding: calc(var(--pd, 0) * var(--s, 1) * 1px);
+  border: calc(var(--bw, 0) * var(--s, 1) * 1px) solid;
+  letter-spacing: calc(var(--ls, 0) * var(--s, 1) * 1px);
+}
+.pw-link .pw-fill {
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; text-align: center;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  font-size: calc(16 * var(--s, 1) * 1px);
+  transition: filter 0.15s;
+}
+a.pw-link { display: block; text-decoration: none; }
+a.pw-link:hover .pw-fill { filter: brightness(1.12); }
+
+/* холст (профиль на странице стримера и сцена редактора) */
+.pw-canvas, .pw-stage {
+  position: relative;
+  --s: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  height: calc(var(--ch, 600) * var(--s) * 1px);
+}
+
+.pw-canvas > .pw-block,
+.pw-stage > .pw-block,
+.live-strip-inner.pw-on:not(.fs-active) > .pw-block {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  left: calc(var(--x) * var(--s) * 1px);
+  top: calc(var(--y) * var(--s) * 1px);
+  width: calc(var(--w) * var(--s) * 1px);
+  height: calc(var(--h) * var(--s) * 1px);
+}
+
+/* ---- профиль: родные элементы страницы внутри холста ---- */
+.pw-canvas > .profile-banner { margin: 0; }
+.pw-canvas .profile-avatar { width: 100%; height: 100%; font-size: calc(var(--w) * var(--s) * 0.33px); }
+.pw-canvas > .profile-info { overflow: hidden; }
+.pw-canvas > .vod-section { max-width: none; padding: 0; overflow: auto; }
+
+/* ---- эфир: тот же .live-strip-inner, но с абсолютными блоками ---- */
+.live-strip-inner > .pw-custom { display: none; }
+
+.live-strip-inner.pw-on:not(.fs-active) {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+/* распорка задаёт высоту, поэтому аккордеон (0fr) схлопывается как раньше */
+.live-strip-inner.pw-on:not(.fs-active)::before {
+  content: '';
+  display: block;
+  height: calc(var(--ch, 500) * var(--s, 1) * 1px);
+}
+.live-strip-inner.pw-on:not(.fs-active) > .pw-custom { display: block; }
+.live-strip-inner.pw-on:not(.fs-active) > .pw-block { z-index: 1; }
+.live-strip-inner.pw-on:not(.fs-active) > .pw-back { z-index: 0; }
+.live-strip-inner.pw-on:not(.fs-active) > .live-player-wrap {
+  flex: none; aspect-ratio: auto; min-height: 0;
+}
+.live-strip-inner.pw-on:not(.fs-active) > .live-chat-side { align-self: auto; }
