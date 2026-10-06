@@ -32,11 +32,12 @@
       vods: document.getElementById('vodSection'),
     };
 
-    for (const b of blocks) {
+    blocks.forEach((b, i) => {
       let el = native[b.type];
       if (el) el.classList.add('pw-block');
       else el = P.buildEl(b, false);
       canvas.appendChild(el); // для родных блоков это перемещение, порядок = слои
+      el.style.zIndex = String(i + 1);
       P.applyVars(el, b);
       if (b.type === 'avatar') {
         const av = document.getElementById('profileAvatar');
@@ -45,7 +46,7 @@
       }
       if (b.type === 'banner') P.applyFit(native.banner, b);
       if (b.type === 'vods') native.vods.classList.toggle('vod-v', b.o === 'v');
-    }
+    });
     document.getElementById('vodSection').classList.toggle('hidden', !hasVods);
     canvas.style.setProperty('--ch', P.canvasHeight(blocks));
     watchScale(canvas, P.WM.profile);

@@ -73,3 +73,7 @@ a.pw-link:hover .pw-fill { filter: brightness(1.12); }
 .live-strip-inner.pw-on:not(.fs-active) > .live-chat-side { align-self: auto; }
 /* записи вертикальным списком */
 .pw-canvas > .vod-section.vod-v .vod-grid { grid-template-columns: 1fr; }
+/* панель зрителей прячем в границах чата: иначе в PRO-макете она торчит рядом с ним */
+.live-strip-inner.pw-on:not(.fs-active) > .live-chat-side {
+  overflow: hidden;
+}

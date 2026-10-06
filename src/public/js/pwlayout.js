@@ -65,6 +65,16 @@
     return b;
   }
 
+  // аватар всегда выше баннера: если он в списке раньше, ставим сразу за баннером
+  function fixOrder(blocks) {
+    const bi = blocks.findIndex((b) => b.type === 'banner');
+    const ai = blocks.findIndex((b) => b.type === 'avatar');
+    if (bi >= 0 && ai >= 0 && ai < bi) {
+      const [a] = blocks.splice(ai, 1);
+      blocks.splice(bi, 0, a);
+    }
+  }
+
   function syncChat(blocks) {
     const p = blocks.find((b) => b.type === 'player');
     const c = blocks.find((b) => b.type === 'chat');
@@ -88,6 +98,7 @@
       const blocks = clone(src);
       for (const d of DEFAULTS[mode]) if (!blocks.some((b) => b.id === d.id)) blocks.unshift(clone(d));
       blocks.forEach((b) => clampBlock(b, mode));
+      fixOrder(blocks);
       syncChat(blocks);
       out[mode] = { blocks };
     }
@@ -201,6 +212,7 @@
         blocks.push(nb);
       }
       for (const d of DEFAULTS[mode]) if (!seen.has(d.id)) blocks.unshift(clone(d));
+      fixOrder(blocks);
       syncChat(blocks);
       const c = counts(blocks), L = LIMITS[mode];
       if (c.custom > L.custom) throw new Error(`Слишком много блоков (максимум ${L.custom})`);
@@ -214,7 +226,7 @@
     return out;
   }
 
-  const api = { W, WM, MAX_H, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, defOf, minSize, clampBlock, syncChat, counts, withDefaults, sanitize, clone };
+  const api = { fixOrder, W, WM, MAX_H, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, defOf, minSize, clampBlock, syncChat, counts, withDefaults, sanitize, clone };
   if (typeof document === 'undefined') return api;
 
   // ---------- только браузер ----------

@@ -335,6 +335,8 @@
   function moveLayer(b, dir) {
     const rest = blocks().filter((x) => x !== b);
     layout[mode].blocks = dir > 0 ? rest.concat(b) : [b].concat(rest);
+    P.fixOrder(layout[mode].blocks);
+    if (b.type === 'avatar' && dir < 0) toast('Аватар всегда лежит выше баннера', 'info');
     touch();
     renderStage();
   }
@@ -576,7 +578,7 @@
     if (t === 'vods') add(button(b.o === 'v' ? '↔ Показать горизонтально' : '↕ Показать вертикально', () => { b.o = b.o === 'v' ? 'h' : 'v'; touch(); renderStage(); }, 'pm-flat'));
     if (t === 'shape' || t === 'image' || t === 'text') add(button('🔗 Сделать кнопкой', () => toLink(b), 'pm-flat'));
     if (t === 'link') add(button('▢ Сделать обычным блоком', () => fromLink(b), 'pm-flat'));
-    if (!(t === 'image' && mode === 'live')) {
+    if (t !== 'avatar' && t !== 'banner' && !(t === 'image' && mode === 'live')) {
       add(button('⬆ На передний план', () => moveLayer(b, 1), 'pm-flat'));
       add(button('⬇ На задний план', () => moveLayer(b, -1), 'pm-flat'));
     }
@@ -781,10 +783,9 @@
   }
 
   async function closeEditor() {
-    if (dirty && !(await PW.confirm('Несохранённые изменения пропадут.', { title: 'Закрыть редактор?', okText: 'Закрыть', danger: true }))) return;
+    if (dirty && !(await PW.confirm('Несохранённые изменения пропадут.', { title: 'Перейти в профиль?', okText: 'Перейти', danger: true }))) return;
     closeMenu();
-    root.classList.add('hidden');
-    document.body.style.overflow = '';
+    goToOwnProfile();
   }
 
   async function save() {
