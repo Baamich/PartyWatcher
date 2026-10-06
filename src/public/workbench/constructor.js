@@ -744,8 +744,46 @@ function pickCtor(m) {
   $('ctorChat').classList.toggle('hidden', mode !== 'chat');
   $('ctorCmds').classList.toggle('hidden', mode !== 'cmds');
   $('ctorCopyBtn').classList.toggle('hidden', mode !== 'chat');
+  $('ctorSaveBtn').classList.toggle('hidden', mode !== 'chat');
   document.querySelectorAll('.ctor-pick').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
   renderPreview();
+}
+
+// ---------- пре-сеты ----------
+
+function publishStylePreset() {
+  PWPresets.openPublish({ type: 'style', onDone: loadMyPresets });
+}
+function publishCmdPreset() {
+  PWPresets.openPublish({ type: 'command', onDone: loadMyPresets });
+}
+
+function renderMyPresets(boxId, items) {
+  const box = $(boxId);
+  box.replaceChildren();
+  if (!items.length) {
+    const p = el('p', 'wb-subpage-hint', 'Вы ещё не добавляли и не публиковали пре-сеты. Посмотрите готовые пре-сеты от других пользователей: ');
+    const a = el('a', null, 'открыть пре-сеты');
+    a.href = '/workbench/presets.html';
+    p.appendChild(a);
+    box.appendChild(p);
+    return;
+  }
+  items.forEach((it) => {
+    box.appendChild(PWPresets.buildCard(it, {
+      readonly: true,
+      onTrash: (x) => PWPresets.trash(x, async () => { await loadCommands(); loadMyPresets(); }),
+    }));
+  });
+}
+
+async function loadMyPresets() {
+  try {
+    const r = await api('/presets/mine');
+    const all = [...r.published, ...r.added];
+    renderMyPresets('ctorMyStyles', all.filter((p) => p.type === 'style'));
+    renderMyPresets('ctorMyCmds', all.filter((p) => p.type === 'command'));
+  } catch (_) {}
 }
 
 async function goProfile() {
@@ -781,6 +819,7 @@ async function init() {
 
   await loadCommands();
   pickCtor('chat');
+  loadMyPresets();
 }
 
 init();

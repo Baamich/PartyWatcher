@@ -27,6 +27,7 @@ const voiceRoutes = require('./routes/voice.routes');
 const supportRoutes = require('./routes/support.routes');
 const streamersRoutes = require('./routes/streams/streamers.routes');
 const workbenchRoutes = require('./routes/streams/workbench.routes');
+const presetsRoutes = require('./routes/streams/presets.routes');
 const registerChatSocket = require('./sockets/chatSocket');
 const rtmpServer = require('./services/rtmpServer');
 const streamKeyCache = require('./services/streamKeyCache');
@@ -53,7 +54,15 @@ async function start() {
   const app = express();
   app.set('trust proxy', 1);
   const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: '*' } });
+  const siteOrigin = (() => { try { return new URL(config.publicUrl).origin; } catch { return null; } })();
+  const io = new Server(server, {
+    cors: { origin: siteOrigin ? [siteOrigin] : false },
+    allowRequest: (req, cb) => {
+      const origin = req.headers.origin;
+      if (!origin) return cb(null, true);            // не браузер: бот на C#
+      cb(null, !siteOrigin || origin === siteOrigin); // браузер: только наш сайт
+    },
+  });
   
   app.use(securityHeaders()); // CSP и остальные заголовки безопасности (режим — CSP_MODE в .env)
   app.use(cors());
@@ -135,6 +144,7 @@ async function start() {
   app.use('/api/support', supportRoutes);
   app.use('/api/streamers', streamersRoutes);
   app.use('/api/workbench', workbenchRoutes);
+  app.use('/api/presets', presetsRoutes);
 
   app.use('/api/chat', CHAT_ROUTES);
   app.use('/api/news', NEWS_ROUTES);

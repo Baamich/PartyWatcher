@@ -1,0 +1,99 @@
+.pst-layout { align-items: flex-start; }
+
+.pst-head {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.pst-head-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.pst-head-top > button { width: auto; white-space: nowrap; }
+.pst-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.pst-filters select { width: auto; margin: 0; }
+.pst-filters input { flex: 1; min-width: 180px; margin: 0; }
+
+.pst-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.pst-seg button {
+  width: auto; margin: 0; padding: 7px 14px; font-size: 13px; font-weight: 600;
+  background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); box-shadow: none;
+}
+.pst-seg button:hover { background: var(--surface-alt); box-shadow: none; border-color: var(--accent); }
+.pst-seg button.active { color: var(--text); border-color: var(--accent); }
+
+.pst-h2, #pstMineWrap h2 { margin-top: 30px; }
+.pst-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.pst-more { display: block; margin: 16px auto 0; width: auto; }
+
+/* ---- карточка ---- */
+.pst-card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.pst-main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.pst-card .ctor-stage--small { margin: 0; height: 160px; }
+.pst-name { font-size: 16px; font-weight: 800; margin: 0; word-break: break-word; }
+.pst-desc { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.45; word-break: break-word; }
+.pst-meta { font-size: 11px; color: var(--text-muted); }
+
+.pst-del {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  width: 30px; height: 30px; margin: 0; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.65); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: var(--radius-sm); box-shadow: none; cursor: pointer;
+}
+.pst-del svg { width: 16px; height: 16px; display: block; }
+.pst-del:hover { background: var(--danger); border-color: var(--danger); box-shadow: none; }
+
+.pst-foot {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  background: var(--surface-alt); border-top: 1px solid var(--border);
+}
+.pst-add { flex: 1; width: auto; margin: 0; padding: 8px 10px; font-size: 13px; }
+.pst-add.on {
+  background: var(--surface); color: #22c55e; border: 1px solid #22c55e; box-shadow: none;
+}
+.pst-add:disabled, .pst-like:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.pst-count { font-size: 13px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pst-like {
+  width: auto; margin: 0; padding: 6px 12px; font-size: 13px; font-weight: 700;
+  background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); box-shadow: none;
+}
+.pst-like:hover { color: var(--text); background: var(--surface); box-shadow: none; }
+.pst-like.on { color: #ef4444; border-color: #ef4444; }
+
+/* ---- превью команды ---- */
+.pst-cmd {
+  min-height: 160px; display: flex; flex-direction: column; justify-content: center; gap: 10px;
+  padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: #0d1117; color: #e6e6e6; font-size: 14px;
+}
+.pst-cmd-lbl { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8b949e; margin-right: 8px; }
+.pst-cmd code { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 5px; padding: 1px 6px; }
+.pst-cmd-out { word-break: break-word; }
+.pst-cmd-usage { font-size: 12px; color: #8b949e; }
+
+/* ---- окно публикации ---- */
+.pst-modal { width: min(520px, 94vw); }
+.pst-modal textarea {
+  width: 100%; font-family: inherit; font-size: 14px; resize: vertical;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.pst-modal input, .pst-modal select { width: 100%; margin: 0; }
+.pst-modal .pst-seg { margin: 8px 0; }
+.pst-pub-body { margin: 6px 0; }
+.pst-modal .ctor-stage--small { margin-top: 8px; }
+
+/* ---- Конструктор ---- */
+.pst-save { width: 100%; margin-top: 8px; }
+.ctor-cmds-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.ctor-cmds-btns button { width: auto; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .pst-layout { flex-direction: column; }
+  .pst-grid { grid-template-columns: 1fr; }
+}

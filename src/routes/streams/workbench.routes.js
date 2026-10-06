@@ -118,6 +118,7 @@ router.get('/bans', auth, requireStreamer, async (req, res) => {
 
 // DELETE /workbench/bans/:userId — разблокировать
 router.delete('/bans/:userId', auth, requireStreamer, async (req, res) => {
+  if (!/^[a-f0-9]{24}$/i.test(req.params.userId)) return res.status(400).json({ error: 'Некорректный id' });
   await ChannelBan.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
   chatBus.emitToUser(req.streamerUser.streamerNameLower, req.params.userId, 'chat:restriction', { type: 'none' });
   res.json({ status: 'ok' });

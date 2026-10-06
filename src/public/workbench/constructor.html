@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/common.css" />
   <link rel="stylesheet" href="/workbench/workbench.css" />
   <link rel="stylesheet" href="/workbench/constructor.css" />
+  <link rel="stylesheet" href="/workbench/presets.css" />
   <title>PartyWatcher — Конструктор</title>
 </head>
 <body>
@@ -34,15 +35,17 @@
 
   <div class="wb-outer">
     <div class="wb-subpage ctor-layout">
-
+      
       <nav class="wb-nav wb-nav-static">
         <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
         <button type="button" class="wb-nav-btn active">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html">🎨 Пре-сеты</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
       </nav>
+
 
       <main class="wb-subpage-main ctor-main">
         <section id="ctorChat" class="ctor-panel">
@@ -52,6 +55,8 @@
           <div id="ctorPresets" class="ctor-presets"></div>
           <div id="ctorFields"></div>
           <button type="button" class="icon-btn ctor-reset" data-click="resetChat">↺ Сбросить настройки</button>
+          <h3 class="ctor-group">Ваши пре-сеты</h3>
+          <div id="ctorMyStyles" class="pst-grid"></div>
         </section>
 
         <section id="ctorCmds" class="ctor-panel hidden">
@@ -60,7 +65,10 @@
               <h1 class="wb-subpage-title">🤖 Команды чата</h1>
               <p class="wb-subpage-hint">Зритель пишет <code>!команда</code>, бот отвечает в чат.</p>
             </div>
-            <button type="button" data-click="openCmdModal">＋ Создать</button>
+            <div class="ctor-cmds-btns">
+              <button type="button" class="icon-btn" data-click="publishCmdPreset">📤 Опубликовать пре-сет</button>
+              <button type="button" data-click="openCmdModal">＋ Создать</button>
+            </div>
           </div>
           <div id="cmdTable" class="cmd-table-wrap hidden">
             <table class="cmd-table">
@@ -71,6 +79,8 @@
             </table>
           </div>
           <p id="cmdEmpty" class="wb-subpage-hint">Команд пока нет. Нажми «＋ Создать».</p>
+          <h3 class="ctor-group">Ваши пре-сеты</h3>
+          <div id="ctorMyCmds" class="pst-grid"></div>
         </section>
       </main>
 
@@ -81,6 +91,7 @@
         <p class="wb-hint">В предпросмотре сообщения не исчезают, в OBS они пропадут через выбранное время.</p>
         <button type="button" id="ctorCopyBtn" class="auth-submit" data-click="copyObsLink">Скопировать ссылку для OBS 📋</button>
         <p class="wb-hint">В ссылке лежит ключ чата. Не показывай её на стриме.</p>
+        <button type="button" id="ctorSaveBtn" class="icon-btn pst-save" data-click="publishStylePreset">💾 Сохранить как пре-сет</button>
       </aside>
 
       <aside class="ctor-picker">
@@ -130,6 +141,8 @@
   <script src="/js/api.js"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/minipip.js"></script>
-  <script src="/workbench/constructor.js"></script>
+  <script src="/js/pwstyle.js"></script>
+  <script src="/workbench/presets-shared.js"></script>
+  <script src="/workbench/constructor.js?v=2"></script>
 </body>
 </html>

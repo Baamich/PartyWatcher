@@ -37,6 +37,14 @@ const DOCS_CHAPTERS = [
       { id: 'editor-pro', title: 'Профессиональный редактор', desc: 'Блоки, фигуры, текст, кнопки, эфир' },
     ],
   },
+  {
+    id: 'presets',
+    title: 'Пре-сеты',
+    pages: [
+      { id: 'presets-styles', title: 'Стили чата', desc: 'Добавить чужой стиль или опубликовать свой' },
+      { id: 'presets-commands', title: 'Команды', desc: 'Готовые команды от других стримеров' },
+    ],
+  },
 ];
 
 let myStreamerNameLower = null;
