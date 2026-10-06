@@ -6,10 +6,10 @@
   window.PWProView = view;
 
   const watched = new WeakSet();
-  function watchScale(el) {
+  function watchScale(el, w) {
     if (watched.has(el)) return; // повторный apply не плодит наблюдателей
     watched.add(el);
-    const set = () => el.style.setProperty('--s', Math.min(1, el.clientWidth / P.W) || 1);
+    const set = () => el.style.setProperty('--s', Math.min(1, el.clientWidth / w) || 1);
     set();
     new ResizeObserver(set).observe(el);
   }
@@ -44,10 +44,11 @@
         P.applyFit(av, b);
       }
       if (b.type === 'banner') P.applyFit(native.banner, b);
+      if (b.type === 'vods') native.vods.classList.toggle('vod-v', b.o === 'v');
     }
     document.getElementById('vodSection').classList.toggle('hidden', !hasVods);
     canvas.style.setProperty('--ch', P.canvasHeight(blocks));
-    watchScale(canvas);
+    watchScale(canvas, P.WM.profile);
   }
 
   let liveMq = null;
@@ -67,6 +68,8 @@
         inner.appendChild(el);
       }
       P.applyVars(el, b);
+      // порядок в списке = слои (фото-фон остаётся позади)
+      el.style.zIndex = el.classList.contains('pw-back') ? '' : String(blocks.indexOf(b) + 1);
     }
     inner.style.setProperty('--ch', P.canvasHeight(blocks));
 
@@ -76,7 +79,7 @@
       sync();
       liveMq.addEventListener('change', sync);
     }
-    watchScale(inner);
+    watchScale(inner, P.WM.live);
   }
 
   function apply(layout, hasVods) {

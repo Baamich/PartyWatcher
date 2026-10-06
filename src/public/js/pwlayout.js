@@ -17,9 +17,10 @@
       { id: 'chat', type: 'chat', x: 780, y: 0, w: 320, h: 430 },
     ],
   };
+  const WM = { profile: 1100, live: 1600 }; // ширина холста по режимам
   const LIMITS = {
-    profile: { custom: 5, photos: 2, links: 10 },
-    live: { custom: 5, photos: 2, links: 2 },
+    profile: { custom: 12, photos: 4, links: 12 },
+    live: { custom: 8, photos: 2, links: 6 },
   };
   const CUSTOM_TYPES = { profile: ['shape', 'text', 'image', 'link'], live: ['text', 'image', 'link'] };
   const FONTS = {
@@ -47,12 +48,13 @@
     if (d) {
       if (d.type === 'player') { const w = Math.ceil(d.w * 0.9); return { w, h: Math.ceil((w * 9) / 16) }; }
       if (d.type === 'chat') return { w: 320, h: 1 };
-      return { w: d.w, h: d.h };
+      return { w: Math.ceil(d.w * 0.6), h: Math.ceil(d.h * 0.6) }; // базовые блоки можно уменьшать до 60%
     }
     return { w: 40, h: 24 };
   }
 
   function clampBlock(b, mode) {
+    const W = WM[mode] || 1100;
     const min = minSize(b, mode);
     b.w = Math.round(num(b.w, min.w, W, min.w));
     b.h = Math.round(num(b.h, min.h, MAX_H, min.h));
@@ -136,6 +138,7 @@
     clampBlock(o, mode);
 
     if (type === 'avatar') o.shape = SIMPLE_SHAPES.includes(b.shape) ? b.shape : 'circle';
+    if (type === 'vods') o.o = b.o === 'v' ? 'v' : 'h'; // вертикальный или горизонтальный список записей
 
     if (type === 'shape') {
       if (b.shape === 'poly') {
@@ -163,6 +166,9 @@
     if (type === 'link') {
       o.fill = COLOR_RE.test(b.fill) ? b.fill : '#7c5cff';
       o.label = String(b.label || '').slice(0, 40);
+      o.lc = COLOR_RE.test(b.lc) ? b.lc : '#ffffff';
+      o.lf = Math.round(num(b.lf, 8, 80, 16));
+      o.rd = Math.round(num(b.rd, 0, 100, 0));
       const u = String(b.url || '').trim();
       o.url = /^https?:\/\/[^\s"'<>]{1,490}$/i.test(u) ? u : '';
     }
@@ -208,7 +214,7 @@
     return out;
   }
 
-  const api = { W, MAX_H, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, defOf, minSize, clampBlock, syncChat, counts, withDefaults, sanitize, clone };
+  const api = { W, WM, MAX_H, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, defOf, minSize, clampBlock, syncChat, counts, withDefaults, sanitize, clone };
   if (typeof document === 'undefined') return api;
 
   // ---------- только браузер ----------
@@ -300,7 +306,12 @@
         api.applyFit(f, b);
       }
       api.paintShape(f, b);
-      if (b.type === 'link') f.textContent = b.label || '';
+      if (b.type === 'link') {
+        f.textContent = b.label || '';
+        f.style.setProperty('--lf', b.lf || 16);
+        f.style.color = b.lc || '#ffffff';
+        if ((b.shape || 'rect') === 'rect' && b.rd) f.style.borderRadius = `calc(${b.rd} * var(--s, 1) * 1px)`;
+      }
     }
   };
 

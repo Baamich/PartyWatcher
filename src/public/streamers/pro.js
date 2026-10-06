@@ -24,7 +24,7 @@
   // ---------- история: Ctrl+Z / Ctrl+Y ----------
   const HIST_MAX = 60;
   let hist = [], hi = -1, savedHi = -1, lastT = 0, lastInputT = 0, lastSel = null;
-  let fitOpen = false;
+  let fitOpen = false, menuId = null, phone = false;
 
   // копия макета: строки с картинками остаются общими по ссылке, память не растёт
   const cloneLayout = (l) => {
@@ -153,7 +153,7 @@
     } else if (b.type === 'info') {
       f.append(E('b', { textContent: sd.streamerName || '' }), E('span', { textContent: ($('bioInput').value || 'Описание').slice(0, 120) }));
     } else if (b.type === 'vods') {
-      f.append(E('div', { textContent: 'Записи' }), E('div', { className: 'ph-grid' }, ...Array.from({ length: 6 }, () => E('i'))));
+      f.append(E('div', { textContent: 'Записи' }), E('div', { className: 'ph-grid' + (b.o === 'v' ? ' ph-grid-v' : '') }, ...Array.from({ length: b.o === 'v' ? 4 : 6 }, () => E('i'))));
     } else if (b.type === 'player') {
       f.append(E('span', { textContent: '▶ Плеер эфира' }));
     } else if (b.type === 'chat') {
@@ -186,18 +186,56 @@
   }
 
   function renderStage() {
+    applyStageSize();
+    if (phone && mode === 'live') {
+      stage.replaceChildren(mobileLiveMock());
+      updateInfo();
+      return;
+    }
     stage.style.setProperty('--ch', P.canvasHeight(blocks()));
     stage.replaceChildren(...blocks().map(makeEl));
+    fitScale();
     updateInfo();
+    refreshMenu(); // три точки всегда показывают актуальные пункты
+  }
+
+  function curW() { return P.WM[mode]; }
+  function fitScale() { stage.style.setProperty('--s', Math.min(1, stage.clientWidth / curW()) || 1); }
+  function applyStageSize() {
+    stage.classList.toggle('pw-phone', phone);
+    stage.style.maxWidth = (phone ? 390 : curW()) + 'px';
+    stage.style.height = phone && mode === 'live' ? 'auto' : '';
+  }
+  // на телефоне эфир показывается обычной вёрстке: плеер сверху, чат снизу
+  function mobileLiveMock() {
+    return E('div', { className: 'ph-m-live' },
+      E('div', { className: 'pw-fill ph-player' }, E('span', { textContent: '▶ Плеер эфира' })),
+      E('div', { className: 'pw-fill ph-chat' }, E('div', { className: 'ph-chat-h', textContent: '💬 Чат' }), ...[0, 1, 2, 3, 4].map(() => E('div', { className: 'ph-line' }))));
+  }
+  function refreshMenu() {
+    if (!menuId || menu.classList.contains('hidden')) return;
+    const b = find(menuId);
+    if (!b) return closeMenu();
+    const a = document.activeElement;
+    if (menu.contains(a) && /^(INPUT|TEXTAREA)$/.test(a.tagName)) return; // не сбиваем ввод
+    const top = menu.scrollTop;
+    buildMenu(b);
+    menu.scrollTop = top;
   }
 
   function updateInfo() {
+    if (phone) {
+      $('proInfo').textContent = mode === 'live'
+        ? 'Так эфир выглядит на телефоне: плеер сверху, чат снизу (свой макет работает от 900 px)'
+        : 'Так профиль выглядит на телефоне (только просмотр)';
+      return;
+    }
     const c = P.counts(blocks()), L = P.LIMITS[mode];
     $('proInfo').textContent = `Блоки ${c.custom}/${L.custom} · Фото ${c.photos}/${L.photos} · Кнопки ${c.links}/${L.links}` +
       (mode === 'live' ? ' · В эфире без ножниц, фото — только фон' : '');
   }
 
-  new ResizeObserver(() => stage.style.setProperty('--s', Math.min(1, stage.clientWidth / P.W) || 1)).observe(stage);
+  new ResizeObserver(() => fitScale()).observe(stage);
 
   // ---------- перемещение и ресайз ----------
   function startMove(e, b, el) {
@@ -232,7 +270,7 @@
     el.classList.add('resizing');
     lab.textContent = `${b.w}×${b.h}`;
     const mv = (ev) => {
-      b.w = Math.min(ow + (ev.clientX - sx) / s, P.W - b.x);
+      b.w = Math.min(ow + (ev.clientX - sx) / s, curW() - b.x);
       if (b.type !== 'chat') b.h = oh + (ev.clientY - sy) / s; // высота чата = высоте плеера
       P.clampBlock(b, mode);
       P.syncChat(blocks());
@@ -254,6 +292,51 @@
     };
     window.addEventListener('pointermove', mv);
     window.addEventListener('pointerup', up, { once: true });
+  }
+
+  // ---------- кнопки-ссылки и слои ----------
+  function addLink() {
+    if (!canAdd('link')) return;
+    addBlock({ id: uid(), type: 'link', x: (curW() - 220) / 2, y: 80, w: 220, h: 64, fill: '#7c5cff', label: 'Кнопка', url: '', shape: 'rect', lc: '#ffffff', lf: 18, rd: 12 });
+  }
+
+  function toLink(b) {
+    if (P.counts(blocks()).links >= P.LIMITS[mode].links) return toast(`Максимум кнопок: ${P.LIMITS[mode].links}`);
+    if (b.shape === 'poly') return toast('Фигуру из своей линии кнопкой не сделать');
+    if (b.type === 'text') {
+      const st = b.st;
+      Object.assign(b, { label: String(b.text || '').slice(0, 40), lc: st.color, lf: Math.min(80, st.fs), fill: st.bg, rd: Math.min(100, st.radius), shape: 'rect' });
+      delete b.text;
+      delete b.st;
+    }
+    b.type = 'link';
+    b.url = b.url || '';
+    b.label = b.label || '';
+    touch();
+    renderStage();
+  }
+
+  function fromLink(b) {
+    const L = P.LIMITS[mode], c = P.counts(blocks());
+    if (b.img) {
+      if (c.photos >= L.photos) return toast(`Максимум фото: ${L.photos}`);
+      b.type = 'image';
+    } else {
+      if (mode === 'live') return toast('В эфире без фото блок бывает только текстом или кнопкой');
+      if (c.custom >= L.custom) return toast(`Максимум своих блоков: ${L.custom}`);
+      b.type = 'shape';
+    }
+    for (const k of ['url', 'label', 'lc', 'lf', 'rd']) delete b[k];
+    touch();
+    renderStage();
+  }
+
+  // порядок в списке = слои: последний лежит сверху
+  function moveLayer(b, dir) {
+    const rest = blocks().filter((x) => x !== b);
+    layout[mode].blocks = dir > 0 ? rest.concat(b) : [b].concat(rest);
+    touch();
+    renderStage();
   }
 
   // ---------- инструменты ----------
@@ -294,7 +377,7 @@
       const { url, w, h } = await P.imageToDataUrl(f, kind === 'link' ? 600 : 900);
       const bw = kind === 'link' ? 200 : Math.min(320, w);
       const bh = kind === 'link' ? 80 : Math.round((bw * h) / w);
-      const b = { id: uid(), type: kind, x: (P.W - bw) / 2, y: 80, w: bw, h: bh, img: url, ia: +(w / h).toFixed(3), shape: 'rect' };
+      const b = { id: uid(), type: kind, x: (curW() - bw) / 2, y: 80, w: bw, h: bh, img: url, ia: +(w / h).toFixed(3), shape: 'rect' };
       if (kind === 'link') { b.url = ''; b.label = ''; }
       addBlock(b);
     } catch (err) { toast(err.message); }
@@ -376,7 +459,7 @@
   }
 
   // ---------- меню «три точки» ----------
-  function closeMenu() { menu.classList.add('hidden'); menu.replaceChildren(); }
+  function closeMenu() { menuId = null; menu.classList.add('hidden'); menu.replaceChildren(); }
 
   async function changeBuiltinPhoto(b) {
     const f = await pickFile();
@@ -418,6 +501,22 @@
   }
 
   function openMenu(b, anchor) {
+    menuId = b.id;
+    buildMenu(b);
+    place(anchor.closest('.pw-ed') || anchor);
+  }
+
+  // меню рядом с блоком: справа, а если не помещается, то слева
+  function place(el) {
+    const r = el.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+    let left = r.right + 12;
+    if (left + w > innerWidth - 8) left = r.left - w - 12;
+    if (left < 8) left = Math.max(8, innerWidth - w - 8);
+    menu.style.left = left + 'px';
+    menu.style.top = Math.max(8, Math.min(innerHeight - h - 8, r.top)) + 'px';
+  }
+
+  function buildMenu(b) {
     const body = E('div', { className: 'pm-body' });
     const add = (...n) => body.append(...n);
     const set = (fn) => (v) => { fn(v); touch(); renderStage(); };
@@ -444,6 +543,11 @@
       add(row('Ссылка', E('input', { type: 'text', value: b.url || '', placeholder: 'https://…', maxLength: 500, oninput: (e) => { b.url = e.target.value.trim(); touch(); } })));
       add(E('div', { className: 'pm-hint', textContent: 'Только http:// или https://' }));
       add(row('Форма', select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
+      add(row('Цвет кнопки', color(b.fill || '#7c5cff', set((v) => (b.fill = v)))));
+      if (b.img) add(button('Убрать фото', () => { delete b.img; delete b.fit; delete b.ia; touch(); renderStage(); }, 'pm-flat'));
+      add(row('Цвет текста', color(b.lc || '#ffffff', set((v) => (b.lc = v)))));
+      add(row('Размер текста', numInput(b.lf || 16, 8, 80, set((v) => (b.lf = v)))));
+      if ((b.shape || 'rect') === 'rect') add(row('Скругление', numInput(b.rd || 0, 0, 100, set((v) => (b.rd = v)))));
     }
 
     if (t === 'text') {
@@ -469,6 +573,13 @@
     }
 
     if (t === 'banner' || t === 'avatar' || b.img) add(button('🎯 Как показывать фото', () => openFit(b), 'pm-flat'));
+    if (t === 'vods') add(button(b.o === 'v' ? '↔ Показать горизонтально' : '↕ Показать вертикально', () => { b.o = b.o === 'v' ? 'h' : 'v'; touch(); renderStage(); }, 'pm-flat'));
+    if (t === 'shape' || t === 'image' || t === 'text') add(button('🔗 Сделать кнопкой', () => toLink(b), 'pm-flat'));
+    if (t === 'link') add(button('▢ Сделать обычным блоком', () => fromLink(b), 'pm-flat'));
+    if (!(t === 'image' && mode === 'live')) {
+      add(button('⬆ На передний план', () => moveLayer(b, 1), 'pm-flat'));
+      add(button('⬇ На задний план', () => moveLayer(b, -1), 'pm-flat'));
+    }
 
     if (P.defOf(mode, b.id)) {
       add(button('↺ Сбросить размер и место', () => {
@@ -478,18 +589,11 @@
       }, 'pm-flat'));
       if (t === 'player' || t === 'chat') add(E('div', { className: 'pm-hint', textContent: t === 'player' ? 'Плеер можно увеличить и уменьшить максимум на 10%. Высота чата подстроится.' : 'Чат можно расширить, высота равна высоте плеера.' }));
     } else {
-      add(button('⬆ На передний план', () => {
-        layout[mode].blocks = blocks().filter((x) => x !== b).concat(b);
-        touch(); renderStage();
-      }, 'pm-flat'));
       add(button('🗑 Удалить блок', () => removeBlock(b.id), 'pm-danger'));
     }
 
     menu.replaceChildren(E('div', { className: 'pm-title', textContent: TITLES[t] || 'Блок' }), body);
     menu.classList.remove('hidden');
-    const r = anchor.getBoundingClientRect();
-    menu.style.left = Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth)) + 'px';
-    menu.style.top = Math.max(8, Math.min(innerHeight - menu.offsetHeight - 8, r.bottom + 6)) + 'px';
   }
 
   // ---------- подгон фото ----------
@@ -607,6 +711,7 @@
   // ---------- верхняя панель ----------
   root.querySelectorAll('[data-tool]').forEach((btn) => btn.addEventListener('click', () => {
     const t = btn.dataset.tool;
+    if (phone) return toast('В режиме телефона можно только смотреть');
     shapeMenu.classList.add('hidden');
     closeMenu();
     if (t === 'scissors') {
@@ -617,7 +722,8 @@
       shapeMenu.classList.toggle('hidden');
       return;
     }
-    if (t === 'image' || t === 'link') return addImage(t);
+    if (t === 'image') return addImage('image');
+    if (t === 'link') return addLink();
     setTool(t);
   }));
 
@@ -627,11 +733,12 @@
   }));
 
   function syncModeButtons() {
-    root.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
-    $('proScissors').disabled = mode === 'live';
+    root.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode && (b.dataset.phone === '1') === phone));
+    $('proScissors').disabled = mode === 'live' || phone;
   }
   root.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
     mode = b.dataset.mode;
+    phone = b.dataset.phone === '1';
     selId = null;
     closeMenu();
     setTool('select');
@@ -662,6 +769,7 @@
       return toast(err.message || 'Не удалось загрузить макет');
     }
     mode = 'profile';
+    phone = false;
     hist = [snap()]; hi = 0; savedHi = 0; dirty = false; lastT = 0; lastInputT = 0;
     updateHistBtns();
     selId = null;
@@ -669,7 +777,6 @@
     setTool('select');
     root.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
-    stage.style.setProperty('--s', Math.min(1, stage.clientWidth / P.W) || 1);
     renderStage();
   }
 

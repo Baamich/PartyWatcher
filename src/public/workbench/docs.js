@@ -29,6 +29,14 @@ const DOCS_CHAPTERS = [
       { id: 'constructor-commands', title: 'Команды чата', desc: 'Свои команды !команда и переменные' },
     ],
   },
+  {
+    id: 'editor',
+    title: 'Редактор профиля',
+    pages: [
+      { id: 'editor-standard', title: 'Стандартный редактор', desc: 'Баннер, аватар и описание' },
+      { id: 'editor-pro', title: 'Профессиональный редактор', desc: 'Блоки, фигуры, текст, кнопки, эфир' },
+    ],
+  },
 ];
 
 let myStreamerNameLower = null;

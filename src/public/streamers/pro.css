@@ -124,3 +124,18 @@
 .fit-img { position: absolute; max-width: none; pointer-events: none; user-select: none; }
 .fit-ghost { opacity: 0.3; }
 .fit-win { position: absolute; overflow: hidden; outline: 2px solid var(--accent-text); }
+.pro-modes { overflow-y: auto; }
+.pro-mode span { text-align: center; line-height: 1.2; }
+
+/* режим «телефон» только для просмотра */
+.pw-stage.pw-phone {
+  max-width: 390px; overflow: hidden; border-radius: 22px; outline: 2px solid var(--border);
+}
+.pw-stage.pw-phone > .pw-block { pointer-events: none; }
+.pw-phone .pw-dots, .pw-phone .pw-rsz { display: none; }
+.ph-m-live { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.ph-m-live .pw-fill { height: auto; }
+.ph-m-live .ph-player { aspect-ratio: 16 / 9; }
+.ph-m-live .ph-chat { height: 320px; }
+
+.ph-grid.ph-grid-v { grid-template-columns: 1fr; }
