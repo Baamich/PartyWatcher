@@ -190,7 +190,7 @@ button {
 }
 .support-tab.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   border-color: var(--accent);
 }
 .support-tickets-list {

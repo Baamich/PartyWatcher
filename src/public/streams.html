@@ -27,25 +27,25 @@
       <div class="header-right">
         <div class="corner-menu">
           <span class="corner-name" id="meName"></span>
-          <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-          <button class="icon-btn my-profile-btn" onclick="goToMyProfile()">👤 Стрим-профиль</button>
+          <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+          <button class="icon-btn my-profile-btn" data-click="goToMyProfile">👤 Стрим-профиль</button>
         </div>
       </div>
     </div>
 
     <nav class="nav-sidebar">
-      <button type="button" class="page-nav-btn" onclick="navigateWithFade('/')">🏠 Комнаты</button>
-      <button type="button" class="page-nav-btn active" onclick="navigateWithFade('/streams.html')">📡 Прямые трансляции</button>
+      <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/">🏠 Комнаты</button>
+      <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/streams.html">📡 Прямые трансляции</button>
     </nav>
 
     <div class="streams-layout">
       <div class="streams-search-wrap">
         <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера"
               autocomplete="off"
-              onkeydown="handleStreamerSearchKey(event)"
-              oninput="handleStreamerSearchInput()"
-              onblur="hideSuggestionsSoon()" />
-        <button type="button" class="search-icon-btn" onclick="onStreamerSearch()" aria-label="Искать">🔍</button>
+              data-keydown="handleStreamerSearchKey" data-event
+              data-input="handleStreamerSearchInput"
+              data-blur="hideSuggestionsSoon" />
+        <button type="button" class="search-icon-btn" data-click="onStreamerSearch" aria-label="Искать">🔍</button>
         <div id="searchSuggestions" class="search-suggestions hidden"></div>
       </div>
 
@@ -65,6 +65,7 @@
     </div>
 
     <script src="/js/api.js"></script>
+    <script src="/js/actions.js?v=3"></script>
     <script src="/js/page-transition.js"></script>
     <script src="/streams/streams.js"></script>
   </body>

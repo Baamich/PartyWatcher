@@ -20,18 +20,27 @@ async function loadBans() {
       return;
     }
     box.innerHTML = '';
+    box.className = 'ban-list';
     bans.forEach((b) => {
       const row = document.createElement('div');
-      row.className = 'participant-row';
-      row.innerHTML = `<span>${escapeHtml(b.username)}</span>`;
+      row.className = 'ban-row';
+
+      const name = document.createElement('span');
+      name.className = 'ban-name';
+      name.textContent = b.username;
+      name.title = b.username;
+
       const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-btn';
       btn.textContent = 'Разблокировать';
       btn.onclick = () => unbanUser(b.userId, row);
-      row.appendChild(btn);
+
+      row.append(name, btn);
       box.appendChild(row);
     });
   } catch (err) {
-    box.innerHTML = `<p style="color:var(--danger); font-size:14px;">${err.message}</p>`;
+    box.innerHTML = `<p style="color:var(--danger); font-size:14px;">${escapeHtml(err.message)}</p>`;
   }
 }
 

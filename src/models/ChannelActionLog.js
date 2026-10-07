@@ -12,4 +12,7 @@ const channelActionLogSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
+// Mongo сам удаляет записи старше 7 дней (проверка раз в минуту)
+channelActionLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
+
 module.exports = mongoose.model('ChannelActionLog', channelActionLogSchema);

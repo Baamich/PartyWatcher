@@ -13,17 +13,23 @@ function streamerInitial(name) {
   return (name || '?').trim().charAt(0).toUpperCase();
 }
 
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function renderStreamerCard(streamer) {
   const card = document.createElement('div');
   card.className = 'streamer-card';
   card.innerHTML = `
     <div class="streamer-avatar-wrap">
       ${streamer.streamerAvatarUrl
-        ? `<img class="streamer-avatar" src="${streamer.streamerAvatarUrl}" loading="lazy" />`
-        : `<div class="streamer-avatar-fallback">${streamerInitial(streamer.streamerName)}</div>`}
+        ? `<img class="streamer-avatar" src="${esc(streamer.streamerAvatarUrl)}" loading="lazy" />`
+        : `<div class="streamer-avatar-fallback">${esc(streamerInitial(streamer.streamerName))}</div>`}
       ${streamer.isLive ? '<span class="live-badge">В ЭФИРЕ</span>' : ''}
     </div>
-    <div class="streamer-name" title="${streamer.streamerName}">${streamer.streamerName}</div>
+    <div class="streamer-name" title="${esc(streamer.streamerName)}">${esc(streamer.streamerName)}</div>
     <div class="streamer-meta">${streamer.isLive ? 'в эфире' : 'офлайн'}</div>
   `;
   card.onclick = () => (location.href = `/streamers/${encodeURIComponent(streamer.streamerName.toLowerCase())}`);
@@ -34,7 +40,11 @@ function renderStreamersList(container, streamers, emptyText) {
   if (!container) return;
   container.innerHTML = '';
   if (!streamers.length) {
-    container.innerHTML = `<p style="color:var(--text-muted); font-size:14px;">${emptyText}</p>`;
+    // emptyText может содержать поисковый запрос из адреса страницы — вставляем только как текст
+    const p = document.createElement('p');
+    p.style.cssText = 'color:var(--text-muted); font-size:14px;';
+    p.textContent = emptyText;
+    container.appendChild(p);
     return;
   }
   streamers.forEach((s) => container.appendChild(renderStreamerCard(s)));
@@ -114,9 +124,9 @@ function renderSuggestions(streamers, query) {
     row.className = 'suggestion-item';
     row.innerHTML = `
       ${s.streamerAvatarUrl
-        ? `<img class="suggestion-avatar" src="${s.streamerAvatarUrl}" />`
-        : `<div class="suggestion-avatar-fallback">${streamerInitial(s.streamerName)}</div>`}
-      <span class="suggestion-name">${s.streamerName}</span>
+        ? `<img class="suggestion-avatar" src="${esc(s.streamerAvatarUrl)}" />`
+        : `<div class="suggestion-avatar-fallback">${esc(streamerInitial(s.streamerName))}</div>`}
+      <span class="suggestion-name">${esc(s.streamerName)}</span>
       ${s.isLive ? '<span class="suggestion-badge">В ЭФИРЕ</span>' : ''}
     `;
     row.onclick = () => (location.href = `/streamers/${encodeURIComponent(s.streamerName.toLowerCase())}`);

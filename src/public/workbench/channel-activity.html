@@ -25,8 +25,8 @@
     </a>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" id="profileBtn" onclick="goProfile()">← Профиль</button>
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+        <button class="icon-btn" id="profileBtn" data-click="goProfile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
       </div>
     </div>
   </div>
@@ -34,11 +34,16 @@
   <div class="wb-outer">
     <div class="wb-subpage">
       <nav class="wb-nav wb-nav-static">
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench.html'">📡 Управление трансляцией</button>
-        <button type="button" class="wb-nav-btn" onclick="location.href='/workbench/videos.html'">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" onclick="alert('Скоро появится')">📰 Новости</button>
-        <button type="button" class="wb-nav-btn active">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html">🎨 Пре-сеты</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
       </nav>
+
+      
       <div class="wb-subpage-main">
         <section class="wb-panel">
           <h2>Заблокированные пользователи</h2>
@@ -53,6 +58,8 @@
   </div>
 
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/workbench/channel-activity.js"></script>
+  <script src="/js/minipip.js"></script>
 </body>
 </html>

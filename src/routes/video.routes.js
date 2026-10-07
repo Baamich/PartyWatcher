@@ -15,14 +15,31 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname).toLowerCase()}`;
     cb(null, unique);
   },
 });
 
-const upload = multer({ storage, limits: { fileSize: config.upload.maxSizeMb * 1024 * 1024 } });
+const ALLOWED_EXT = new Set(['.mp4', '.webm', '.mkv', '.mov', '.m4v']);
 
-router.post('/upload', auth, upload.single('video'), async (req, res) => {
+const upload = multer({
+  storage,
+  limits: { fileSize: config.upload.maxSizeMb * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXT.has(ext) || !String(file.mimetype).startsWith('video/')) {
+      return cb(new Error('Разрешены только видеофайлы (mp4, webm, mkv, mov)'));
+    }
+    cb(null, true);
+  },
+});
+
+router.post('/upload', auth, (req, res, next) => {
+  upload.single('video')(req, res, (err) => {
+    if (err) return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: err.message });
+    next();
+  });
+}, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Файл не получен' });
 
   const expiresAt = new Date(Date.now() + config.upload.ttlDays * 24 * 60 * 60 * 1000);

@@ -26,23 +26,23 @@
     </a>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
-        <button class="icon-btn" onclick="location.href='/streams.html'">К списку</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+        <button class="icon-btn" data-href="/streams.html">К списку</button>
       </div>
     </div>
   </div>
 
   <nav class="nav-sidebar">
-    <button type="button" class="page-nav-btn" onclick="navigateWithFade('/')">🏠 Комнаты</button>
-    <button type="button" class="page-nav-btn active" onclick="navigateWithFade('/streams.html')">📡 Прямые трансляции</button>
+    <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/">🏠 Комнаты</button>
+    <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/streams.html">📡 Прямые трансляции</button>
   </nav>
 
   <div class="search-results-layout">
     <div class="streams-search-wrap">
       <input id="searchQueryInput" type="text" autocomplete="off"
              placeholder="Поиск по имени стримера"
-             onkeydown="handleSearchKey(event)" />
-      <button type="button" class="search-icon-btn" onclick="runSearch()" aria-label="Искать">🔍</button>
+             data-keydown="handleSearchKey" data-event />
+      <button type="button" class="search-icon-btn" data-click="runSearch" aria-label="Искать">🔍</button>
     </div>
 
     <h2 id="resultsHeading" class="results-heading"></h2>
@@ -50,6 +50,7 @@
   </div>
 
   <script src="/js/api.js"></script>
+  <script src="/js/actions.js?v=3"></script>
   <script src="/js/page-transition.js"></script>
   <script src="/streams/streams.js"></script>
   <script src="/streams/search.js"></script>

@@ -5,6 +5,24 @@ const router = express.Router();
 const User = require('../models/User');
 const config = require('../config');
 const auth = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много попыток входа, попробуй через 15 минут' },
+});
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много регистраций с этого адреса, попробуй позже' },
+});
+// для логинов, которых нет в базе: сравниваем с «пустышкой», чтобы время ответа не выдавало, что такого логина нет
+const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', 12);
 
 function signToken(user) {
   return jwt.sign(
@@ -54,7 +72,7 @@ function validateEmail(email) {
   return null;
 }
 
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const username = String(req.body.username || '').trim();
     const email = String(req.body.email || '').trim().toLowerCase();
@@ -101,18 +119,25 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
-  const { login, password } = req.body; // логин = username или email
-  const loginLower = String(login || '').trim().toLowerCase();
-  const user = await User.findOne({ $or: [{ usernameLower: loginLower }, { email: loginLower }] });
-  if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
+router.post('/login', loginLimiter, async (req, res) => {
+  try {
+    const loginLower = String(req.body?.login ?? '').trim().toLowerCase(); // логин = username или email
+    const password = req.body?.password;
+    if (!loginLower || typeof password !== 'string' || !password) {
+      return res.status(400).json({ error: 'Введите логин и пароль' });
+    }
 
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ error: 'Неверный логин или пароль' });
+    const user = await User.findOne({ $or: [{ usernameLower: loginLower }, { email: loginLower }] });
+    const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
+    if (!user || !ok) return res.status(401).json({ error: 'Неверный логин или пароль' });
 
-  const token = signToken(user);
-  setTokenCookie(res, token);
-  res.json({ id: user._id, username: user.username, role: user.role });
+    const token = signToken(user);
+    setTokenCookie(res, token);
+    res.json({ id: user._id, username: user.username, role: user.role });
+  } catch (err) {
+    console.error('[auth/login]', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
 });
 
 router.post('/logout', (req, res) => {

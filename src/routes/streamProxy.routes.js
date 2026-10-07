@@ -6,6 +6,7 @@ const PROXY_SERVER = process.env.PROXY_SERVER;
 const PROXY_USER = process.env.PROXY_USER;
 const PROXY_PASS = process.env.PROXY_PASS;
 const { ProxyAgent } = require('undici');
+const { safeFetch, assertPublicHttpUrl } = require('../services/ssrfGuard');
 
 let cachedDispatcher = null;
 function buildDispatcher() {
@@ -46,12 +47,23 @@ function playlistCacheSet(key, text) {
 const segmentCache = new Map(); // key → { buf, contentType, expires }
 const SEGMENT_CACHE_TTL_MS = 5 * 60_000; // 5 минут
 const SEGMENT_CACHE_MAX = 200;
+// потолок по памяти: раньше 200 сегментов по 8 МБ могли занять 1,6 ГБ и убить процесс
+const SEGMENT_CACHE_MAX_BYTES = 150 * 1024 * 1024;
+let segmentCacheBytes = 0;
+
+function segmentCacheDelete(key) {
+  const hit = segmentCache.get(key);
+  if (hit) {
+    segmentCacheBytes -= hit.buf.length;
+    segmentCache.delete(key);
+  }
+}
 
 function segmentCacheGet(key) {
   const hit = segmentCache.get(key);
   if (!hit) return null;
   if (Date.now() > hit.expires) {
-    segmentCache.delete(key);
+    segmentCacheDelete(key);
     return null;
   }
   return hit;
@@ -118,15 +130,22 @@ setInterval(() => {
 }, 5 * 60_000).unref();
 
 function segmentCacheSet(key, buf, contentType) {
-  if (segmentCache.size >= SEGMENT_CACHE_MAX) {
+  segmentCacheDelete(key);
+  // вытесняем самые старые записи, пока не влезем и по количеству, и по памяти
+  while (
+    segmentCache.size >= SEGMENT_CACHE_MAX ||
+    (segmentCacheBytes + buf.length > SEGMENT_CACHE_MAX_BYTES && segmentCache.size > 0)
+  ) {
     const first = segmentCache.keys().next().value;
-    if (first) segmentCache.delete(first);
+    if (first === undefined) break;
+    segmentCacheDelete(first);
   }
   segmentCache.set(key, {
     buf,
     contentType,
     expires: Date.now() + SEGMENT_CACHE_TTL_MS,
   });
+  segmentCacheBytes += buf.length;
 }
 
 // если один URL запросили 10 раз одновременно — качаем один раз
@@ -278,7 +297,7 @@ async function tryCandidate(targetUrl, { referer, origin }, isLast, preferProxyF
     try {
       const fetchOpts = { headers };
       if (step.proxy) fetchOpts.dispatcher = dispatcher;
-      const res = await fetch(targetUrl, fetchOpts);
+      const res = await safeFetch(targetUrl, fetchOpts, { guarded: !step.proxy });
       if (res && res.ok) {
         return { response: res, usedProxy: step.proxy, referer, origin };
       }
@@ -437,8 +456,13 @@ async function warmStream(targetUrl) {
 
 router.get('/relay', auth, async (req, res) => {
   const targetUrl = req.query.url;
-  if (!targetUrl || !targetUrl.startsWith('http')) {
+  if (typeof targetUrl !== 'string' || targetUrl.length > 4000 || !targetUrl.startsWith('http')) {
     return res.status(400).json({ error: 'Нужен валидный url' });
+  }
+  try {
+    await assertPublicHttpUrl(targetUrl);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
   }
 
   try {

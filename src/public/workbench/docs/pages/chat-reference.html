@@ -1,0 +1,67 @@
+<h1>Справочник API</h1>
+<p class="docs-lead">Все запросы и события чата в одном месте. Эта страница нужна тем, кто пишет бота или мост сам. Если ты просто показываешь чат в OBS, она тебе не нужна.</p>
+
+<h2>Как отправить сообщение в чат</h2>
+<p>Отправь запрос <code>POST</code> на адрес:</p>
+<pre><code>https://partywatcher.de/api/chat/send</code></pre>
+<p>В заголовках укажи ключ чата: <code>Authorization: Bearer pwc_...</code> (или <code>X-Api-Key: pwc_...</code>). В адресную строку ключ не пиши: он попадёт в журналы.</p>
+
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Поле в теле (JSON)</th><th>Что это</th></tr>
+  <tr><td><code>text</code></td><td>Текст сообщения. Обязательно, до 500 символов.</td></tr>
+  <tr><td><code>username</code></td><td>Имя отправителя, до 32 символов. Если не указать, будет «Бот».</td></tr>
+  <tr><td><code>source</code></td><td>Метка, откуда сообщение: латинские буквы, цифры, <code>_</code> и <code>-</code>, до 16 символов. Например <code>twitch</code>, <code>vk</code>, <code>bot</code>. Если не указать, будет <code>api</code>.</td></tr>
+  <tr><td><code>color</code></td><td>Цвет ника в виде <code>#rrggbb</code>, например <code>#9146ff</code>. Необязательно.</td></tr>
+</table>
+</div>
+
+<p>Пример для терминала (ключ замени на свой):</p>
+<pre><code>curl -X POST https://partywatcher.de/api/chat/send \
+  -H "Authorization: Bearer pwc_ТВОЙ_КЛЮЧ" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"привет из твича","username":"viewer123","source":"twitch","color":"#9146ff"}'</code></pre>
+
+<h3>Что отвечает сайт</h3>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Код</th><th>Что значит</th></tr>
+  <tr><td><code>200</code></td><td>Всё хорошо, сообщение в чате.</td></tr>
+  <tr><td><code>400</code></td><td>Сообщение пустое.</td></tr>
+  <tr><td><code>401</code></td><td>Ключа нет или он неверный.</td></tr>
+  <tr><td><code>429</code></td><td>Слишком часто. В ответе есть <code>Retry-After</code>: через сколько секунд можно снова.</td></tr>
+  <tr><td><code>500</code></td><td>Ошибка на стороне сайта. Попробуй позже.</td></tr>
+</table>
+</div>
+
+<h2>Как читать чат</h2>
+<p>Подключись по Socket.IO к адресу <code>https://partywatcher.de/chat</code>. Сразу после подключения отправь событие <code>chat:join</code> с телом <code>{ "chatKey": "твой ключ" }</code>. Такое подключение только читает и не появляется в списке зрителей.</p>
+
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Событие</th><th>Когда приходит</th></tr>
+  <tr><td><code>chat:history</code></td><td>Сразу после входа: до 50 последних сообщений.</td></tr>
+  <tr><td><code>chat:message</code></td><td>Появилось новое сообщение (от зрителя или из API).</td></tr>
+  <tr><td><code>chat:message-deleted</code></td><td>Сообщение удалено. В событии есть <code>messageId</code>.</td></tr>
+  <tr><td><code>chat:cleared</code></td><td>Чат очищен.</td></tr>
+  <tr><td><code>chat:overlay-error</code></td><td>Ключ неверный. В событии есть <code>error</code>.</td></tr>
+</table>
+</div>
+
+<h3>Что внутри сообщения</h3>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Поле</th><th>Что это</th></tr>
+  <tr><td><code>_id</code></td><td>Номер сообщения.</td></tr>
+  <tr><td><code>senderUsername</code></td><td>Имя отправителя.</td></tr>
+  <tr><td><code>text</code></td><td>Текст.</td></tr>
+  <tr><td><code>isOwner</code></td><td><code>true</code>, если пишет владелец канала.</td></tr>
+  <tr><td><code>external</code></td><td><code>true</code>, если сообщение пришло через API (от бота или моста).</td></tr>
+  <tr><td><code>source</code></td><td>Метка источника (у сообщений через API).</td></tr>
+  <tr><td><code>nickColor</code></td><td>Цвет ника <code>#rrggbb</code> или <code>null</code>.</td></tr>
+  <tr><td><code>senderId</code></td><td>Номер пользователя сайта. У сообщений через API это <code>null</code>.</td></tr>
+  <tr><td><code>createdAt</code></td><td>Когда отправлено.</td></tr>
+</table>
+</div>
+
+<p>Дальше: <a href="#chat-security">Безопасность и лимиты</a>.</p>

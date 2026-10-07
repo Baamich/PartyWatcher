@@ -14,8 +14,11 @@
   --text: #f0ebe6;
   --text-muted: #a39e96;
   --border: #322f2c;
-  --accent: #b89bff;
-  --accent-hover: #a07df5;
+  /* акцент нейтральный (белый); фиолетовый остаётся только для текста: --accent-text */
+  --accent: #f0ebe6;
+  --accent-hover: #ffffff;
+  --accent-contrast: #121110; /* цвет текста на фоне акцента */
+  --accent-text: #b89bff;
   --danger: #f87171;
   --shadow: 0 4px 22px rgba(0, 0, 0, 0.55);
   --logo-alt: #f0ebe6;
@@ -40,8 +43,10 @@
   --text: #272c3a;
   --text-muted: #6a7183;
   --border: #ccd1de;
-  --accent: #6a5cd0;
-  --accent-hover: #5a4cbe;
+  --accent: #1c202b;
+  --accent-hover: #000000;
+  --accent-contrast: #ffffff;
+  --accent-text: #6a5cd0;
   --danger: #cf5559;
   --shadow: 0 2px 10px rgba(35, 40, 65, 0.10);
   --logo-alt: #272c3a;
@@ -247,7 +252,7 @@ button:active {
 [data-theme="dark"] select:focus {
   background: #242220;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(184, 155, 255, 0.22);
+  box-shadow: 0 0 0 3px rgba(240, 235, 230, 0.16);
 }
 
 [data-theme="dark"] button {
@@ -297,7 +302,7 @@ button:active {
 }
 
 [data-theme="dark"] .commit-item:hover {
-  background: rgba(184, 155, 255, 0.09);
+  background: rgba(240, 235, 230, 0.07);
 }
 
 /* =========================================
@@ -318,7 +323,7 @@ button:active {
 [data-theme="light"] input:focus,
 [data-theme="light"] select:focus {
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(106, 92, 208, 0.16);
+  box-shadow: 0 0 0 3px rgba(28, 32, 43, 0.14);
 }
 
 [data-theme="light"] button {
@@ -385,7 +390,21 @@ button:active {
 }
 
 .brand-party {
-  color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* буква «P» в значке логотипа остаётся фиолетовой (в SVG на всех страницах она красится через --accent) */
+.brand-mark path:first-of-type { stroke: var(--accent-text); }
+
+/* второстепенная кнопка: чёрная на светлой теме, белая на тёмной */
+[data-theme] button.btn-mono {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: none;
+}
+[data-theme] button.btn-mono:hover {
+  background: var(--accent-hover);
+  box-shadow: none;
 }
 
 .brand-watcher {
@@ -585,3 +604,57 @@ body.page-fade-out {
   70%  { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
+
+/* ===== окна сайта (alert / confirm / prompt) и всплывашки ===== */
+.pw-dialog-overlay { z-index: 100000; }
+.pw-dialog { width: min(420px, 92vw); padding: 22px 22px 18px; }
+.pw-dialog-title { margin: 0 0 8px; padding-right: 20px; font-size: 18px; font-weight: 800; }
+.pw-dialog-text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pw-dialog-input { display: block; width: 100%; margin: 0 0 16px; }
+.pw-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.pw-dialog-actions button { width: auto; margin: 0; padding: 9px 18px; }
+[data-theme] .pw-dialog-actions button.pw-danger { background: var(--danger); color: #fff; box-shadow: none; }
+[data-theme] .pw-dialog-actions button.pw-danger:hover { background: var(--danger); filter: brightness(1.1); }
+
+.pw-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 100001;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(92vw, 460px);
+  pointer-events: none;
+}
+.pw-toast {
+  pointer-events: auto;
+  cursor: pointer;
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  box-shadow: var(--shadow);
+  animation: pw-toast-in 0.2s ease;
+}
+.pw-toast--success { border-left-color: #22c55e; }
+.pw-toast--error { border-left-color: var(--danger); }
+.pw-toast--info { border-left-color: var(--text-muted); }
+.pw-toast--out { opacity: 0; transform: translateY(6px); transition: opacity 0.25s ease, transform 0.25s ease; }
+@keyframes pw-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

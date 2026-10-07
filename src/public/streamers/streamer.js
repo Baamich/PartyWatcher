@@ -21,17 +21,11 @@ let isOwnerFlag = false;
 
 function renderProfile(streamer) {
   const banner = document.getElementById('banner');
-  if (streamer.streamerBannerUrl) {
-    banner.style.backgroundImage = `url('${streamer.streamerBannerUrl}')`;
-  }
+  banner.style.backgroundImage = streamer.streamerBannerUrl ? `url('${streamer.streamerBannerUrl}')` : '';
 
   const avatar = document.getElementById('profileAvatar');
-  if (streamer.streamerAvatarUrl) {
-    avatar.style.backgroundImage = `url('${streamer.streamerAvatarUrl}')`;
-    avatar.textContent = '';
-  } else {
-    avatar.textContent = initialLetter(streamer.streamerName);
-  }
+  avatar.style.backgroundImage = streamer.streamerAvatarUrl ? `url('${streamer.streamerAvatarUrl}')` : '';
+  avatar.textContent = streamer.streamerAvatarUrl ? '' : initialLetter(streamer.streamerName);
 
   document.getElementById('liveBadge').classList.toggle('hidden', !streamer.isLive);
   document.getElementById('profileName').textContent = streamer.streamerName;
@@ -127,24 +121,29 @@ function switchToVodPlayback(v) {
   });
 }
 
-async function loadVods(nameLower) {
-  try {
-    cachedVods = await api('/streamers/' + encodeURIComponent(nameLower) + '/vods');
-  } catch (e) {
-    console.warn('[loadVods]', e.message);
-    cachedVods = [];
+let vodSig = null;
+
+// принимает уже загруженный список (из кэша или с сервера); если он не изменился, DOM не трогаем
+function applyVods(vods) {
+  const list = vods || [];
+  const sig = JSON.stringify(list);
+  cachedVods = list;
+  const hasVods = list.length > 0;
+  if (sig !== vodSig) {
+    vodSig = sig;
+    renderVodGrid(list);
+    renderVodColumn(list);
   }
-  const hasVods = cachedVods.length > 0;
-  renderVodGrid(cachedVods);
-  renderVodColumn(cachedVods);
-  document.getElementById('vodSection').classList.toggle('hidden', !hasVods || liveOpen);
-  document.getElementById('vodColumn').classList.toggle('hidden', !hasVods || !liveOpen);
+  const pro = !!window.PWProView?.active;
+  document.getElementById('vodSection').classList.toggle('hidden', !hasVods || (liveOpen && !pro));
+  document.getElementById('vodColumn').classList.toggle('hidden', pro || !hasVods || !liveOpen);
 }
 
 function switchVodLayout(open) {
   const hasVods = cachedVods.length > 0;
-  document.getElementById('vodSection').classList.toggle('hidden', open || !hasVods);
-  document.getElementById('vodColumn').classList.toggle('hidden', !open || !hasVods);
+  const pro = !!window.PWProView?.active;
+  document.getElementById('vodSection').classList.toggle('hidden', (open && !pro) || !hasVods);
+  document.getElementById('vodColumn').classList.toggle('hidden', pro || !open || !hasVods);
 }
 
 // ---------- аккордеон эфира ----------
@@ -243,6 +242,7 @@ function stopLiveSession() {
   document.getElementById('liveViewersBtn')?.classList.remove('active');
   setViewersCount(0);
   renderViewersList([]);
+  applyLiveRestriction(null);
 }
 
 document.getElementById('profileAvatarBtn')?.addEventListener('click', toggleLiveStrip);
@@ -251,10 +251,10 @@ document.getElementById('liveToggleChevronBtn')?.addEventListener('click', toggl
 
 // ---------- HLS-плеер + качество ----------
 
-function lockToLiveEdge(video) {
-  if (video.dataset.liveLockAttached) return;
-  video.dataset.liveLockAttached = '1';
-  video.addEventListener('seeking', () => {
+  function lockToLiveEdge(video) {
+    if (video.__liveLockBound) return; // слушатель вешаем один раз за жизнь страницы
+    video.__liveLockBound = true;
+    video.addEventListener('seeking', () => {
     if (!video.seekable.length) return;
     const liveEdge = video.seekable.end(video.seekable.length - 1);
     const minAllowed = Math.max(0, liveEdge - 3);
@@ -377,12 +377,13 @@ function attachLiveHls(playbackId) {
 const VOLUME_STORAGE_KEY = 'pw_volume';
 
 function getSavedVolume() {
-  const v = parseInt(localStorage.getItem(VOLUME_STORAGE_KEY), 10);
+  let v = NaN;
+  try { v = parseInt(localStorage.getItem(VOLUME_STORAGE_KEY), 10); } catch (_) {}
   return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 50;
 }
 
 function saveVolume(v) {
-  localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+  try { localStorage.setItem(VOLUME_STORAGE_KEY, String(v)); } catch (_) {}
 }
 
 function applyVolumeToLive(v) {
@@ -657,13 +658,27 @@ function liveEscapeHtml(s) {
 function buildLiveMessageHtml(msg) {
   if (msg.deleted) return `<span style="color:var(--text-muted);font-style:italic;">Сообщение удалено</span>`;
 
-  const modBtns = isOwnerFlag ? `
-    <button type="button" class="live-mod-btn" title="Удалить" onclick="liveDeleteMessage('${msg._id}')">🗑️</button>
-    <button type="button" class="live-mod-btn" title="Заблокировать" onclick="liveBanUser('${msg.senderId}', '${liveEscapeHtml(msg.senderUsername)}')">🚫</button>
-    <button type="button" class="live-mod-btn" title="Ограничить чат" onclick="liveTimeoutUser('${msg.senderId}', '${liveEscapeHtml(msg.senderUsername)}')">⏱️</button>
+  // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick
+  const delBtn = isOwnerFlag
+    ? `<button type="button" class="live-mod-btn" title="Удалить" data-act="del" data-id="${liveEscapeHtml(msg._id)}">🗑️</button>`
+    : '';
+
+  // бан и таймаут — только для сообщений реальных юзеров
+  const userBtns = isOwnerFlag && !msg.external && msg.senderId ? `
+    <button type="button" class="live-mod-btn" title="Заблокировать" data-act="ban" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">🚫</button>
+    <button type="button" class="live-mod-btn" title="Ограничить чат" data-act="timeout" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">⏱️</button>
   ` : '';
 
-  return `${modBtns}<b>${liveEscapeHtml(msg.senderUsername)}:</b> ${liveEscapeHtml(msg.text)}`;
+  const src = msg.external
+    ? `<span class="live-src">${liveEscapeHtml(msg.source || 'api')}</span>`
+    : '';
+
+  const nickCls = 'live-nick' + (msg.isOwner ? ' live-nick--owner' : '');
+  const nickStyle = !msg.isOwner && /^#[0-9a-f]{6}$/i.test(msg.nickColor || '')
+    ? ` style="color:${msg.nickColor}"`
+    : '';
+
+  return `${delBtn}${userBtns}${src}<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(msg.senderUsername)}</b>: ${liveEscapeHtml(msg.text)}`;
 }
 
 function renderLiveMessage(msg) {
@@ -679,12 +694,22 @@ function renderLiveMessage(msg) {
 function liveDeleteMessage(messageId) {
   liveSocket?.emit('chat:delete', { messageId });
 }
-function liveBanUser(userId, username) {
-  if (!confirm(`Заблокировать ${username} в этом канале навсегда?`)) return;
+async function liveBanUser(userId, username) {
+  const ok = await PW.confirm(`${username} не сможет писать в чат канала.`, {
+    title: 'Заблокировать пользователя?',
+    okText: 'Заблокировать',
+    danger: true,
+  });
+  if (!ok) return;
   liveSocket?.emit('chat:ban', { userId, username });
 }
-function liveTimeoutUser(userId, username) {
-  const secStr = prompt(`На сколько секунд ограничить чат для ${username}?`, '300');
+async function liveTimeoutUser(userId, username) {
+  const secStr = await PW.prompt(`На сколько секунд ограничить чат для ${username}?`, {
+    title: 'Ограничить чат',
+    defaultValue: '300',
+    inputType: 'number',
+    okText: 'Ограничить',
+  });
   const seconds = parseInt(secStr, 10);
   if (!seconds || seconds <= 0) return;
   liveSocket?.emit('chat:timeout', { userId, username, seconds });
@@ -693,8 +718,13 @@ window.liveDeleteMessage = liveDeleteMessage;
 window.liveBanUser = liveBanUser;
 window.liveTimeoutUser = liveTimeoutUser;
 
-document.getElementById('liveClearChatBtn')?.addEventListener('click', () => {
-  if (confirm('Очистить весь чат для всех зрителей?')) liveSocket?.emit('chat:clear');
+document.getElementById('liveClearChatBtn')?.addEventListener('click', async () => {
+  const ok = await PW.confirm('Все сообщения исчезнут у всех зрителей.', {
+    title: 'Очистить чат?',
+    okText: 'Очистить',
+    danger: true,
+  });
+  if (ok) liveSocket?.emit('chat:clear');
 });
 
 function toggleViewersPanel() {
@@ -739,6 +769,41 @@ function setViewersCount(count) {
   if (el) el.textContent = String(count ?? 0);
 }
 
+let liveRestrictTimer = null;
+
+function fmtHMS(ms) {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  return [Math.floor(t / 3600), Math.floor((t % 3600) / 60), t % 60].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+// r: { type: 'none' | 'ban' | 'timeout', until } или null
+function applyLiveRestriction(r) {
+  clearInterval(liveRestrictTimer);
+  const form = document.getElementById('liveChatForm');
+  const box = document.getElementById('liveChatBlocked');
+  if (!form || !box) return;
+
+  const free = () => { box.classList.add('hidden'); form.classList.remove('hidden'); };
+  if (!r || r.type === 'none') return free();
+
+  form.classList.add('hidden');
+  box.classList.remove('hidden');
+
+  if (r.type === 'ban') {
+    box.textContent = 'Вам закрыт доступ в чат этого канала';
+    return;
+  }
+
+  const until = new Date(r.until).getTime();
+  const tick = () => {
+    const left = until - Date.now();
+    if (left <= 0) { clearInterval(liveRestrictTimer); free(); return; }
+    box.textContent = 'Вам ограничили доступ в чат на: ' + fmtHMS(left);
+  };
+  tick();
+  liveRestrictTimer = setInterval(tick, 1000);
+}
+
 function connectLiveChat(nameLower) {
   liveSocket = io('/chat', { reconnection: false });
 
@@ -753,6 +818,7 @@ function connectLiveChat(nameLower) {
     });
   });
   liveSocket.on('chat:cleared', () => { document.getElementById('liveMessages').innerHTML = ''; });
+  liveSocket.on('chat:restriction', applyLiveRestriction);
 
   liveSocket.on('chat:viewers', (payload) => {
     if (typeof payload === 'number') {
@@ -808,29 +874,91 @@ document.getElementById('liveChatForm')?.addEventListener('submit', (e) => {
 
 // ---------- инициализация страницы ----------
 
+function showPage() {
+  document.getElementById('notFound').classList.add('hidden');
+  document.getElementById('pageContent').classList.remove('hidden');
+}
+
+function showNotFound() {
+  document.getElementById('pageContent').classList.add('hidden');
+  document.getElementById('notFound').classList.remove('hidden');
+}
+
 async function loadProfile() {
   const nameLower = getNameFromUrl();
-  if (!nameLower) {
-    document.getElementById('notFound').classList.remove('hidden');
-    return;
+  if (!nameLower) return showNotFound();
+  const enc = encodeURIComponent(nameLower);
+
+  const ownerP = checkOwnership(nameLower);      // идёт параллельно со всем остальным
+  const cached = await PWCache.get(nameLower);
+
+  // 1) мгновенно рисуем из кэша (isLive там нет: он всегда свежий)
+  if (cached) {
+    currentStreamer = { ...cached.streamer };
+    renderProfile(currentStreamer);
+    applyVods(cached.vods);
+    if (cached.layout) window.PWProView?.apply(cached.layout, cachedVods.length > 0);
+    showPage();
   }
 
+  // 2) параллельно: сверка версии и записи
+  const vodsP = api('/streamers/' + enc + '/vods').catch((e) => {
+    console.warn('[vods]', e.message);
+    return null;
+  });
+
+  let b;
   try {
-    const streamer = await api('/streamers/' + encodeURIComponent(nameLower));
-    currentStreamer = streamer;
-    renderProfile(streamer);
-    await checkOwnership(nameLower);
-    await loadVods(nameLower);
-
-    document.getElementById('pageContent').classList.remove('hidden');
-
-    if (streamer.isLive && streamer.streamPlaybackId) {
-      setTimeout(openLiveStrip, 120);
-    }
+    const q = cached && Number.isFinite(cached.rev) ? '?rev=' + cached.rev : '';
+    b = await api('/streamers/' + enc + '/bundle' + q);
   } catch (err) {
     console.warn('[loadProfile]', err.message);
-    document.getElementById('notFound').classList.remove('hidden');
+    if (!cached || /не найден/i.test(err.message || '')) {
+      if (cached) PWCache.del(nameLower);
+      showNotFound();
+    }
+    return; // нет сети, но есть кэш: оставляем показанное
   }
+
+  const live = { isLive: !!b.isLive, streamPlaybackId: b.streamPlaybackId || null };
+  const same = !!(b.unchanged && cached);
+  const stat = same
+    ? { streamer: cached.streamer, layout: cached.layout }
+    : {
+        streamer: {
+          streamerName: b.streamerName,
+          streamerBio: b.streamerBio || '',
+          streamerAvatarUrl: b.streamerAvatarUrl || null,
+          streamerBannerUrl: b.streamerBannerUrl || null,
+        },
+        layout: b.layout || null,
+      };
+
+  currentStreamer = { ...stat.streamer, ...live };
+
+  if (same) {
+    // данные те же: перерисовывать нечего, обновляем только бейдж «В ЭФИРЕ»
+    document.getElementById('liveBadge')?.classList.toggle('hidden', !live.isLive);
+  } else {
+    if (window.PWProView?.active && !stat.layout) {
+      // макет сбросили: проще перезагрузить, кэш к этому моменту уже обновлён
+      await PWCache.set(nameLower, { rev: b.rev, ...stat, vods: cachedVods });
+      location.reload();
+      return;
+    }
+    renderProfile(currentStreamer);
+    if (stat.layout) window.PWProView?.apply(stat.layout, cachedVods.length > 0);
+    showPage();
+  }
+
+  // 3) эфир открываем, когда уже известен владелец (нужно для кнопок модерации)
+  await ownerP;
+  if (live.isLive && live.streamPlaybackId && !liveOpen) setTimeout(openLiveStrip, 120);
+
+  // 4) записи и обновление кэша
+  const vods = await vodsP;
+  if (vods) applyVods(vods);
+  PWCache.set(nameLower, { rev: b.rev, streamer: stat.streamer, layout: stat.layout, vods: cachedVods });
 }
 
 let liveStatusPollTimer = null;
@@ -1045,6 +1173,56 @@ try {
 }
 
 applyVolumeToLive(getSavedVolume());
+
+// ---- мини-окно (Picture-in-Picture): тот же <video>, без второго потока ----
+(function initLiveMini() {
+  const video = document.getElementById('liveVideo');
+  const btn = document.getElementById('liveMiniBtn');
+  if (!video || !btn || !window.PWMini || !PWMini.pipSupported()) return;
+
+  const sync = () => {
+    const on = document.pictureInPictureElement === video;
+    btn.classList.toggle('active', on);
+    btn.textContent = on ? '↩' : '⧉';
+    btn.title = on ? 'Вернуть в плеер' : 'Мини-окно поверх всех окон';
+  };
+
+  // кнопка видна, только пока в плеере реально есть эфир
+  video.addEventListener('loadedmetadata', () => btn.classList.remove('hidden'));
+  video.addEventListener('emptied', () => btn.classList.add('hidden'));
+  video.addEventListener('enterpictureinpicture', sync);
+  video.addEventListener('leavepictureinpicture', sync);
+
+  btn.addEventListener('click', async () => {
+    if (document.pictureInPictureElement === video) {
+      await document.exitPictureInPicture().catch(() => {});
+      return;
+    }
+    const err = await PWMini.enterPip({
+      video,
+      streamer: getNameFromUrl(),
+      returnPath: location.pathname,
+    });
+    if (err) console.warn('[mini]', err);
+  });
+})();
+
+// ---- кнопки модерации в чате: данные в data-атрибутах, а не в onclick ----
+document.getElementById('liveMessages')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.live-mod-btn');
+  if (!btn) return;
+  const { act, id, uid, name } = btn.dataset;
+  if (act === 'del') liveDeleteMessage(id);
+  else if (act === 'ban') liveBanUser(uid, name);
+  else if (act === 'timeout') liveTimeoutUser(uid, name);
+});
+
+// ---- не даём экрану и компьютеру уснуть, пока идёт эфир ----
+setInterval(() => {
+  const v = document.getElementById('liveVideo');
+  const playing = !!v && liveOpen && !v.classList.contains('hidden') && !v.paused && !v.ended && v.readyState > 2;
+  window.PWWake?.set('live', playing);
+}, 4000);
 
 loadProfile();
 startStreamerLivePolling();

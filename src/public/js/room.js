@@ -40,6 +40,54 @@ const MIC_DEVICE_KEY = 'pw_mic_device';
 const DUCK_ON_KEY = 'pw_duck_on';
 const DUCK_AMOUNT_KEY = 'pw_duck_amount';
 
+const MIC_PROC_KEY = 'pw_mic_proc';
+
+function micProcessingEnabled() {
+  return localStorage.getItem(MIC_PROC_KEY) !== '0';
+}
+
+// Bluetooth-гарнитура при включённом микрофоне переключается в «режим звонка» (профиль Hands-Free):
+// звук фильма в наушниках становится узким и глухим, «как в банке», музыки почти не слышно
+const BT_MIC_RE = /hands-?free|bluetooth|airpods|buds|\bbt\b/i;
+
+function micLabelLooksBluetooth(label) {
+  return BT_MIC_RE.test(String(label || ''));
+}
+
+let micDevicesCache = [];
+
+function updateMicHint() {
+  const hint = document.getElementById('micBtHint');
+  const sel = document.getElementById('micSelect');
+  if (!hint || !sel) return;
+
+  let label = sel.selectedOptions[0]?.textContent || '';
+  if (!sel.value) {
+    // «По умолчанию»: настоящее имя устройства лежит в записи с id 'default'
+    label = micDevicesCache.find((d) => d.deviceId === 'default')?.label || label;
+  }
+
+  const bt = micLabelLooksBluetooth(label);
+  hint.classList.toggle('hidden', !bt);
+  if (bt) {
+    hint.textContent =
+      'Выбран Bluetooth-микрофон. Пока он включён, наушники переключаются в режим звонка, ' +
+      'и звук фильма становится «как в банке». Выбери микрофон ноутбука или проводной, ' +
+      'а наушники останутся в обычном режиме.';
+  }
+}
+
+function warnIfBluetoothMic() {
+  const label = rawLocalStream?.getAudioTracks?.()[0]?.label || '';
+  if (!micLabelLooksBluetooth(label)) return;
+  PW.toast(
+    `Микрофон «${label}» — Bluetooth-гарнитура: из-за него звук фильма может стать «как в банке». ` +
+      'Выбери другой микрофон в 🎚️ Настройках звука.',
+    'info',
+    10000
+  );
+}
+
 function getMicGainPct() {
   const v = parseInt(localStorage.getItem(MIC_GAIN_KEY), 10);
   return Number.isFinite(v) && v >= 50 && v <= 400 ? v : 100;
@@ -114,22 +162,21 @@ function resumePlaybackCtx() {
 document.addEventListener('pointerdown', resumePlaybackCtx);
 document.addEventListener('visibilitychange', resumePlaybackCtx);
 
-// во время звонка экран телефона не гаснет (иначе звонок обрывается)
-let wakeLock = null;
-async function acquireWakeLock() {
+// Не даём экрану и компьютеру уснуть: пока идёт просмотр и пока человек в голосовом звонке.
+// Сама логика лежит в /js/wakelock.js, тут две «причины»: voice и video.
+// Выход из звонка больше не снимает блокировку, пока видео ещё играет.
+function acquireWakeLock() { PWWake.set('voice', true); }
+function releaseWakeLock() { PWWake.set('voice', false); }
+
+function updateVideoWakeLock() {
+  let watching = false;
   try {
-    if (!('wakeLock' in navigator) || wakeLock) return;
-    wakeLock = await navigator.wakeLock.request('screen');
-    wakeLock.addEventListener('release', () => { wakeLock = null; });
+    // started: человек нажал «Начать просмотр»; lastState.isPlaying: хост запустил (нужно для iframe-плееров)
+    watching = started && playerReady && (getIsPlayingNow() || !!lastState.isPlaying);
   } catch (_) {}
+  PWWake.set('video', watching);
 }
-function releaseWakeLock() {
-  try { wakeLock?.release(); } catch (_) {}
-  wakeLock = null;
-}
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && inVoiceCall) acquireWakeLock();
-});
+setInterval(updateVideoWakeLock, 4000);
 
 function applyRemoteGain(socketId, factor) {
   const r = remoteAudio[socketId];
@@ -213,10 +260,11 @@ function detachRemoteAudio(socketId) {
 }
 
 async function getMicStream(deviceId) {
+  const proc = micProcessingEnabled();
   const audio = {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
+    echoCancellation: proc,
+    noiseSuppression: proc,
+    autoGainControl: proc,
     channelCount: 1,
     sampleRate: 48000,
   };
@@ -491,20 +539,46 @@ function isAgeConfirmedLocally() {
       return;
     }
 
-    setOverlay('Получаю поток через yt-dlp...', false);
+    const keyAtStart = roomStateKey; // чтобы понять, что хост не сменил видео, пока мы ждём
+    setOverlay('Скачиваю видео для просмотра…', false);
     try {
-      const data = await api('/youtube-capture/age-restricted-extract', {
+      let data = await api('/youtube-capture/age-restricted-extract', {
         method: 'POST',
         body: { code },
       });
+
+      // сервер качает видео в фоне (это может занять минуты): спрашиваем, как дела
+      const startedAt = Date.now();
+      while (data.status !== 'done') {
+        if (roomStateKey !== keyAtStart) return; // видео уже другое
+        if (data.status === 'error') throw new Error(data.error || 'Не удалось скачать видео');
+        if (data.status === 'idle') throw new Error('Задача потерялась, попробуй ещё раз');
+        if (Date.now() - startedAt > 15 * 60 * 1000) throw new Error('Слишком долго, попробуй позже');
+
+        const sec = Math.round((Date.now() - startedAt) / 1000);
+        const pct = Number.isFinite(data.progress) ? ` ${Math.round(data.progress)}%` : '';
+        setOverlay(
+          data.status === 'queued'
+            ? `Ждём очереди на сервере… ${sec} с`
+            : `Скачиваю видео…${pct} (${sec} с)`,
+          false
+        );
+
+        await new Promise((r) => setTimeout(r, 2500));
+        data = await api('/youtube-capture/age-restricted-status?code=' + encodeURIComponent(code));
+      }
+
+      if (roomStateKey !== keyAtStart) return;
       ageGateResolvedForVideo = true; // видео решено — дальнейшие onError по этому видео игнорим
       renderDirectVideoUrl(data.url);
-      socket.emit('youtube:age-restricted-stream', { code, url: data.url });
+      // зрителям ссылку рассылает сервер сам, когда скачивание закончилось
       setOverlay('Готово к просмотру', true);
     } catch (err) {
-      setOverlay('Не удалось получить видео: ' + (err.message || ''), false);
+      if (roomStateKey === keyAtStart) {
+        setOverlay('Не удалось получить видео: ' + (err.message || ''), false);
+      }
     } finally {
-      ageGateHandling = false;
+      if (roomStateKey === keyAtStart) ageGateHandling = false;
     }
   }
 
@@ -514,7 +588,7 @@ function isAgeConfirmedLocally() {
 
   if (video.type === 'player_capture') {
     window.__captureVideoUrl = video.url;
-    return import('/js/playerCapture/index.js').then(mod => {
+    return import('/js/playerCapture/index.js?v=3').then(mod => {
       return mod.renderPlayerCapture(video, {
         isOwner,
         container: document.getElementById('player'),
@@ -560,6 +634,19 @@ function isAgeConfirmedLocally() {
     container.appendChild(iframe);
     playerReady = true;
     return Promise.resolve();
+  }
+
+  if (video.type === 'youtube' && video.ageRestricted && video.directUrl) {
+    // видео 18+ уже скачано на сервер: играем копию сразу, без попытки встроить YouTube
+    return (async () => {
+      const confirmed = await askAgeGate();
+      if (!confirmed) {
+        setOverlay('Без подтверждения возраста это видео недоступно', false);
+        return;
+      }
+      ageGateResolvedForVideo = true;
+      renderDirectVideoUrl(video.directUrl);
+    })();
   }
 
   if (video.type === 'youtube') {
@@ -729,7 +816,7 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
       }
 
       if (isPlaying) {
-        v.play().catch((e) => console.warn('[capture] play failed', e));
+        v.play().catch((e) => { if (e?.name !== 'AbortError') console.warn('[capture] play failed', e); });
         if (positionSeconds > 2) {
           const doSeek = () => {
             try { v.currentTime = positionSeconds; } catch (_) {}
@@ -888,8 +975,9 @@ function resync() {
 }
 
 function copyRoomLink() {
-  navigator.clipboard.writeText(location.href);
-  alert('Ссылка на комнату скопирована');
+  navigator.clipboard.writeText(location.href)
+    .then(() => PW.toast('Ссылка на комнату скопирована', 'success'))
+    .catch(() => PW.toast('Не удалось скопировать ссылку', 'error'));
 }
 
 let copyToastTimer = null;
@@ -1130,8 +1218,13 @@ function renderParticipantRowsInto(container, list) {
       ` : ''}`;
 
     if (isOwner && !p.isOwner) {
-      row.querySelector('.kick-btn').onclick = () => {
-        if (confirm(`Кикнуть и заблокировать ${p.username} в этой комнате?`)) {
+      row.querySelector('.kick-btn').onclick = async () => {
+        const ok = await PW.confirm(`${p.username} будет выгнан из комнаты и заблокирован в ней.`, {
+          title: 'Кикнуть участника?',
+          okText: 'Кикнуть',
+          danger: true,
+        });
+        if (ok) {
           socket.emit('room:kick', { code, targetUsername: p.username });
 
           const normalBannedOpen = !document.getElementById('bannedModal')?.classList.contains('hidden');
@@ -1363,12 +1456,16 @@ async function init() {
 
   socket.on('youtube:age-restricted-stream', async ({ url }) => {
     if (isOwner) return;
+    if (videoEl && videoEl.getAttribute('src') === url) return; // эта копия уже играет
     const confirmed = await askAgeGate();
     if (!confirmed) {
       setOverlay('Хост включил контент 18+. Обнови страницу, если готов подтвердить возраст.', false);
       return;
     }
+    ageGateResolvedForVideo = true;
     renderDirectVideoUrl(url);
+    started = false;
+    updateWaitingOverlayText(); // убираем «жду хоста» и показываем кнопку «Начать просмотр»
   });
 
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name, username }) => {
@@ -1462,7 +1559,7 @@ window.__onCapturePlayerReload = (player) => {
 
       if (state.isPlaying) {
         if (v.paused) {
-          v.play().catch((e) => console.warn('[viewer] sync play failed', e));
+          v.play().catch((e) => { if (e?.name !== 'AbortError') console.warn('[viewer] sync play failed', e); });
         }
       } else {
         if (!v.paused) v.pause();
@@ -1494,18 +1591,18 @@ window.__onCapturePlayerReload = (player) => {
   socket.on('room:banned-list', renderBannedList);
 
   socket.on('room:kicked', () => {
-    alert('Вас кикнули из этой комнаты — доступ заблокирован');
-    location.href = '/';
+    PW.alert('Доступ в неё заблокирован.', { title: 'Вас кикнули из комнаты' })
+      .then(() => { location.href = '/'; });
   });
 
   socket.on('room:banned', () => {
-    alert('Вы заблокированы в этой комнате');
-    location.href = '/';
+    PW.alert('Вход в эту комнату вам закрыт.', { title: 'Вы заблокированы' })
+      .then(() => { location.href = '/'; });
   });
 
   socket.on('room:deleted', () => {
-    alert('Комната удалена владельцем');
-    location.href = '/';
+    PW.alert('Владелец удалил эту комнату.', { title: 'Комнаты больше нет' })
+      .then(() => { location.href = '/'; });
   });
 
   socket.on('room:video-changed', async ({ video, playback, by }) => {
@@ -1568,7 +1665,7 @@ window.__onCapturePlayerReload = (player) => {
   });
 
   socket.on('chat:message', addMessage);
-  socket.on('room:error', (err) => alert(err.error));
+  socket.on('room:error', (err) => PW.toast(err?.error || 'Ошибка комнаты', 'error'));
 
   socket.on('voice:participants', (list) => {
     const prevIds = new Set(voiceParticipants.map((p) => p.socketId));
@@ -2275,6 +2372,7 @@ async function startVoiceCall() {
       alert('Не удалось получить доступ к микрофону: ' + (e.message || e));
       return;
     }
+    warnIfBluetoothMic();
 
     localMeter = makeMeter(micLimiterNode); // уровень того, что реально уходит собеседникам
 
@@ -3231,6 +3329,7 @@ async function fillMicList() {
   try {
     devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
   } catch (_) {}
+  micDevicesCache = devices;
 
   const saved = localStorage.getItem(MIC_DEVICE_KEY) || '';
   sel.innerHTML = '';
@@ -3249,10 +3348,12 @@ async function fillMicList() {
   });
 
   sel.value = [...sel.options].some((o) => o.value === saved) ? saved : '';
+  updateMicHint();
 }
 
 function openVoiceSettings() {
   const gain = getMicGainPct();
+  document.getElementById('micProcToggle').checked = micProcessingEnabled();
   document.getElementById('micGainSlider').value = gain;
   document.getElementById('micGainValue').textContent = gain + '%';
   document.getElementById('duckToggle').checked = duckEnabled;
@@ -3284,11 +3385,22 @@ document.getElementById('micSelect')?.addEventListener('change', async (e) => {
   const id = e.target.value;
   if (id) localStorage.setItem(MIC_DEVICE_KEY, id);
   else localStorage.removeItem(MIC_DEVICE_KEY);
+  updateMicHint();
   if (!inVoiceCall) return;
   try {
     await switchMic(id || null);
   } catch (err) {
     alert('Не удалось переключить микрофон: ' + (err.message || err));
+  }
+});
+
+document.getElementById('micProcToggle')?.addEventListener('change', async (e) => {
+  localStorage.setItem(MIC_PROC_KEY, e.target.checked ? '1' : '0');
+  if (!inVoiceCall) return;
+  try {
+    await switchMic(localStorage.getItem(MIC_DEVICE_KEY) || null); // перезахват микрофона с новыми настройками
+  } catch (err) {
+    PW.toast('Не удалось применить настройку: ' + (err.message || err), 'error');
   }
 });
 

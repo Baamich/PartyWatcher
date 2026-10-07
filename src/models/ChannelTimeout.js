@@ -11,5 +11,6 @@ const channelTimeoutSchema = new mongoose.Schema(
 );
 
 channelTimeoutSchema.index({ streamerNameLower: 1, userId: 1 }, { unique: true });
+channelTimeoutSchema.index({ until: 1 }, { expireAfterSeconds: 0 }); // Mongo удалит запись, когда время вышло
 
 module.exports = mongoose.model('ChannelTimeout', channelTimeoutSchema);

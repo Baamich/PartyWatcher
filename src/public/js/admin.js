@@ -23,12 +23,11 @@ function renderCommits(commits) {
     .map(
       (c) => `
       <label class="commit-item">
-        <input type="radio" name="commit" value="${c.hash}"
-          onchange="selectCommit('${c.hash}')"
+        <input type="radio" name="commit" value="${escapeHtml(c.hash)}"
           ${selectedHash === c.hash ? 'checked' : ''} />
-        <span class="commit-hash">${c.short}</span>
+        <span class="commit-hash">${escapeHtml(c.short)}</span>
         <span class="commit-msg">${escapeHtml(c.message)}</span>
-        <span class="commit-meta">${c.author} · ${c.date}</span>
+        <span class="commit-meta">${escapeHtml(c.author)} · ${escapeHtml(c.date)}</span>
       </label>
     `
     )
@@ -70,9 +69,14 @@ async function runUpdate(hash) {
   pollStatus(log);
 }
 
-function revertToCommit() {
+async function revertToCommit() {
   if (!selectedHash) return;
-  if (!confirm('Откатить проект на выбранный коммит?')) return;
+  const ok = await PW.confirm('Проект вернётся на выбранный коммит, сервер перезапустится.', {
+    title: 'Откатить проект?',
+    okText: 'Откатить',
+    danger: true,
+  });
+  if (!ok) return;
   runUpdate(selectedHash);
 }
 
@@ -218,5 +222,9 @@ function pollStatus(log) {
     }
   } catch (_) {}
 })();
+
+document.getElementById('commitList').addEventListener('change', (e) => {
+  if (e.target.name === 'commit') selectCommit(e.target.value);
+});
 
 loadCommits();

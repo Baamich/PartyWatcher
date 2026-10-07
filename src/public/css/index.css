@@ -132,16 +132,31 @@ button {
   background: #eceff6;
 }
 
-.room-card .delete-btn {
+/* круглая кнопка в углу картинки: тёмный фон + белая иконка видны на любой теме и любом кадре */
+.room-card button.delete-btn {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: auto;
-  padding: 4px 8px;
-  background: none;
-  border: none;
-  font-size: 16px;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  box-shadow: none;
   cursor: pointer;
+}
+.room-card button.delete-btn svg { width: 18px; height: 18px; display: block; }
+.room-card button.delete-btn:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: none;
 }
 
 .room-thumb {
@@ -251,7 +266,7 @@ button {
   padding: 0;
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -261,7 +276,7 @@ button {
 .auth-link:hover {
   background: none;
   text-decoration: underline;
-  color: var(--accent-hover);
+  color: var(--accent-text);
 }
 
 
@@ -500,7 +515,7 @@ button {
 
 .pagination button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   border-color: var(--accent);
 }
 

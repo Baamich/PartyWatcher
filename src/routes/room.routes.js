@@ -5,11 +5,14 @@ const router = express.Router();
 const Room = require('../models/Room');
 const auth = require('../middleware/auth');
 const ChatMessage = require('../models/ChatMessage');
+const { extractYoutubeId } = require('../services/ytdlpAgeGate');
 
 const fs = require('fs');
 const path = require('path');
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
 
+
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
 
 function generateCode() {
   return crypto.randomBytes(3).toString('hex');
@@ -20,11 +23,24 @@ function withLiveStatus(room, io) {
   return { ...room.toObject(), viewerCount };
 }
 
+const VIDEO_TYPES = ['youtube', 'twitch', 'drive', 'player_capture', 'direct'];
+
 function validateVideo(video) {
   const t = video?.type;
   const u = String(video?.url || '').trim();
+  if (!VIDEO_TYPES.includes(t)) return 'Неизвестный тип видео';
   if ((t === 'direct' || t === 'player_capture') && !/^https?:\/\//i.test(u)) {
     return 'Нужна полная ссылка (http/https)';
+  }
+  if (t === 'twitch' && !/twitch\.tv\/videos\/\d+/.test(u)) {
+    return 'Нужна ссылка на запись Twitch (twitch.tv/videos/...)';
+  }
+  if (t === 'drive' && !/^[A-Za-z0-9_-]{10,100}$/.test(u)) {
+    return 'Не удалось распознать файл Google Диска';
+  }
+  // ссылка на YouTube должна содержать настоящий id видео (потом её обрабатывает yt-dlp на сервере)
+  if (t === 'youtube' && !extractYoutubeId(u)) {
+    return 'Не удалось распознать ссылку YouTube';
   }
   return null;
 }
@@ -38,12 +54,23 @@ router.post('/', auth, async (req, res) => {
     const videoError = validateVideo(video);
     if (videoError) return res.status(400).json({ error: videoError });
 
+    if ((await Room.countDocuments({ owner: req.user.id })) >= 30) {
+      return res.status(400).json({ error: 'Слишком много комнат: удали ненужные' });
+    }
+
     let code;
     do {
       code = generateCode();
     } while (await Room.findOne({ code }));
 
-    const room = await Room.create({ name, code, owner: req.user.id, video, isPublic: !!isPublic });
+    // из запроса берём только тип и ссылку: остальное (ageRestricted, directUrl, meta) выставляет сервер
+    const room = await Room.create({
+      name: String(name).trim().slice(0, 100),
+      code,
+      owner: req.user.id,
+      video: { type: video.type, url: String(video.url).trim() },
+      isPublic: !!isPublic,
+    });
 
     // мгновенно обновляем списки у всех, кто на главной
     const io = req.app.get('io');
@@ -64,9 +91,9 @@ router.get('/public', auth, async (req, res) => {
   const io = req.app.get('io');
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = 52;
-  const sort = req.query.sort || 'newest';
+  const sort = String(req.query.sort || 'newest');
   const onlyWithPeople = req.query.onlyWithPeople === '1';
-  const q = (req.query.q || '').trim();
+  const q = String(req.query.q || '').trim();
 
   const filter = {
     isPublic: true,
@@ -82,7 +109,7 @@ router.get('/public', auth, async (req, res) => {
   }
 
   if (q) {
-    filter.name = { $regex: q, $options: 'i' };
+    filter.name = { $regex: escapeRegex(q), $options: 'i' };
   }
 
   let sortOption = { createdAt: -1 };
@@ -92,6 +119,7 @@ router.get('/public', auth, async (req, res) => {
 
   const total = await Room.countDocuments(filter);
   const rooms = await Room.find(filter)
+    .select('-bannedUsers')
     .sort(sortOption)
     .skip((page - 1) * limit)
     .limit(limit);
@@ -122,7 +150,7 @@ router.get('/mine', auth, async (req, res) => {
 
 router.get('/search', auth, async (req, res) => {
   const io = req.app.get('io');
-  const q = req.query.q || '';
+  const q = escapeRegex(req.query.q || '');
   const rooms = await Room.find({ owner: req.user.id, name: { $regex: q, $options: 'i' } }).sort({ createdAt: -1 });
   res.json(rooms.map((r) => withLiveStatus(r, io)));
 });
@@ -155,7 +183,7 @@ router.delete('/:code', auth, async (req, res) => {
 router.get('/:code', auth, async (req, res) => {
   const room = await Room.findOne({ code: req.params.code });
   if (!room) return res.status(404).json({ error: 'Комната не найдена' });
-  res.json(room);
+  res.json({ code: room.code, name: room.name });
 });
 
 router.post('/:code/change-video', auth, async (req, res) => {
@@ -173,7 +201,7 @@ router.post('/:code/change-video', auth, async (req, res) => {
     let url = rawUrl;
 
     if (type === 'youtube') {
-      if (!/youtube\.com|youtu\.be/.test(rawUrl)) {
+      if (!extractYoutubeId(rawUrl)) {
         return res.status(400).json({ error: 'Нужна ссылка YouTube (режим комнаты — youtube)' });
       }
     } else if (type === 'twitch') {
@@ -197,6 +225,7 @@ router.post('/:code/change-video', auth, async (req, res) => {
     room.video.url = url;
     room.video.title = undefined;
     room.video.ageRestricted = false;
+    room.video.directUrl = null;
     room.ageConfirmed = false;
     if (room.video.meta) {
       room.video.meta.currentSeason = null;

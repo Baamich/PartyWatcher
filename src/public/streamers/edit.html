@@ -8,6 +8,8 @@
     <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
     <link rel="stylesheet" href="/css/common.css" />
     <link rel="stylesheet" href="/streamers/edit.css" />
+    <link rel="stylesheet" href="/streamers/blocks.css" />
+    <link rel="stylesheet" href="/streamers/pro.css" />
     <title>PartyWatcher — Редактирование профиля</title>
   </head>
   <body>
@@ -24,7 +26,7 @@
         </span>
       </a>
       <div class="header-right">
-        <button class="icon-btn theme-toggle" onclick="toggleTheme()">🌙</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
       </div>
     </div>
 
@@ -39,38 +41,82 @@
         <div id="createNameError" class="auth-error hidden"></div>
         <label class="auth-label" for="newStreamerName">Имя стримера</label>
         <input id="newStreamerName" placeholder="Например, Baamich" maxlength="32" />
-        <button type="button" class="auth-submit" onclick="submitStreamerName()">Создать</button>
+        <button type="button" class="auth-submit" data-click="submitStreamerName">Создать</button>
       </section>
 
       <!-- Шаг 2: редактирование профиля (показывается, если имя уже есть) -->
       <section id="editProfileSection" class="edit-card hidden">
+        <!-- переключатель справа от карточки (розовая зона) -->
+        <div class="mode-switch">
+          <button type="button" class="mode-btn active">Стандарт</button>
+          <button type="button" class="mode-btn mode-pro" id="openProBtn">⚡ PRO</button>
+        </div>
         <h1 class="edit-title">Редактирование профиля</h1>
         <p class="edit-hint">Профиль: <span id="currentStreamerName" class="current-name"></span></p>
         <div id="editError" class="auth-error hidden"></div>
         <div id="editOk" class="support-ok hidden">Сохранено ✓</div>
 
-        <label class="auth-label" for="bannerFileInput">Баннер</label>
+        <label class="auth-label" for="bannerFileInput">Баннер (1200х480) макс: 4 МБ</label>
         <div id="bannerPreviewWrap" class="image-preview-wrap">
           <div id="bannerPreview" class="image-preview banner-preview"></div>
         </div>
-        <input id="bannerFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'banner')" />
+        <input id="bannerFileInput" type="file" accept="image/*" data-change="onImageSelected" data-event data-arg="banner" />
 
         <label class="auth-label" for="avatarFileInput">Аватар</label>
         <div id="avatarPreviewWrap" class="image-preview-wrap">
           <div id="avatarPreview" class="image-preview avatar-preview"></div>
         </div>
-        <input id="avatarFileInput" type="file" accept="image/*" onchange="onImageSelected(event, 'avatar')" />
+        <input id="avatarFileInput" type="file" accept="image/*" data-change="onImageSelected" data-event data-arg="avatar" />
 
         <label class="auth-label" for="bioInput">Описание</label>
         <textarea id="bioInput" rows="6" maxlength="2000" placeholder="Расскажи о себе (до 2000 символов)"></textarea>
 
-        <button type="button" class="auth-submit" onclick="submitProfile()">Сохранить</button>
-        <button type="button" class="icon-btn" id="backToProfileBtn" onclick="goToOwnProfile()">Открыть профиль</button>
+        <button type="button" class="auth-submit" data-click="submitProfile">Сохранить</button>
+        <button type="button" class="icon-btn" id="backToProfileBtn" data-click="goToOwnProfile">Открыть профиль</button>
       </section>
 
     </div>
 
+    <div id="proEditor" class="pro-editor hidden">
+      <div class="pro-topbar">
+        <div class="pro-tools">
+          <button type="button" class="pro-tool active" data-tool="select" title="Выбор и перемещение">🖱️</button>
+          <button type="button" class="pro-tool" id="proScissors" data-tool="scissors" title="Ножницы: вырезать свою фигуру">✂️</button>
+          <button type="button" class="pro-tool" data-tool="text" title="Текст (зажми и вытяни область)"><b>T</b></button>
+          <button type="button" class="pro-tool" data-tool="image" title="Вставить фото">📎</button>
+          <button type="button" class="pro-tool" data-tool="link" title="Кнопка-ссылка (фото можно добавить потом)">🔗</button>
+        </div>
+        <div id="proInfo" class="pro-info"></div>
+        <div class="pro-actions">
+          <button type="button" id="proUndoBtn" class="icon-btn pro-hist" title="Отменить (Ctrl+Z)" disabled>↶</button>
+          <button type="button" id="proRedoBtn" class="icon-btn pro-hist" title="Повторить (Ctrl+Y)" disabled>↷</button>
+          <button type="button" id="proResetBtn" class="icon-btn">↺ Сбросить макет</button>
+          <button type="button" id="proSaveBtn">💾 Сохранить</button>
+          <button type="button" id="proCloseBtn" class="icon-btn">👤 В профиль</button>
+        </div>
+      </div>
+      <div class="pro-body">
+        <aside class="pro-modes">
+          <button type="button" class="pro-mode active" data-mode="profile">👤<span>Профиль</span></button>
+          <button type="button" class="pro-mode" data-mode="live">📡<span>Эфир</span></button>
+          <button type="button" class="pro-mode" data-mode="profile" data-phone="1">📱<span>Профиль<br>телефон</span></button>
+          <button type="button" class="pro-mode" data-mode="live" data-phone="1">📱<span>Эфир<br>телефон</span></button>
+        </aside>
+        <div class="pro-stage-wrap"><div id="proStage" class="pw-stage"></div></div>
+      </div>
+      <div id="proShapeMenu" class="pro-shapes hidden">
+        <button type="button" data-cut="circle">⚪ Круг</button>
+        <button type="button" data-cut="rect">⬜ Квадрат</button>
+        <button type="button" data-cut="triangle">🔺 Треугольник</button>
+        <button type="button" data-cut="free">✏️ Своя линия</button>
+      </div>
+      <div id="proMenu" class="pro-menu hidden"></div>
+    </div>
+
     <script src="/js/api.js"></script>
+    <script src="/js/actions.js?v=3"></script>
+    <script src="/js/pwlayout.js"></script>
     <script src="/streamers/edit.js"></script>
+    <script src="/streamers/pro.js"></script>
   </body>
   </html>

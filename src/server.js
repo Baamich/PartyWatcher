@@ -12,6 +12,7 @@ const User = require('./models/User');
 const registerRoomSocket = require('./sockets/roomSocket');
 require('./services/roomCleanup');
 require('./services/vodCleanup');
+require('express-async-errors');
 
 const authRoutes = require('./routes/auth.routes');
 const roomRoutes = require('./routes/room.routes');
@@ -26,12 +27,18 @@ const voiceRoutes = require('./routes/voice.routes');
 const supportRoutes = require('./routes/support.routes');
 const streamersRoutes = require('./routes/streams/streamers.routes');
 const workbenchRoutes = require('./routes/streams/workbench.routes');
+const presetsRoutes = require('./routes/streams/presets.routes');
 const registerChatSocket = require('./sockets/chatSocket');
 const rtmpServer = require('./services/rtmpServer');
 const streamKeyCache = require('./services/streamKeyCache');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
 const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
+
+const CHAT_ROUTES =  require('./routes/chat');
+const NEWS_ROUTES = require('./routes/news');
+const securityHeaders = require('./middleware/securityHeaders');
+const cspRoutes = require('./routes/csp.routes');
 
 async function start() {
   await connectDB();
@@ -45,11 +52,22 @@ async function start() {
   }
 
   const app = express();
+  app.set('trust proxy', 1);
   const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: '*' } });
+  const siteOrigin = (() => { try { return new URL(config.publicUrl).origin; } catch { return null; } })();
+  const io = new Server(server, {
+    cors: { origin: siteOrigin ? [siteOrigin] : false },
+    allowRequest: (req, cb) => {
+      const origin = req.headers.origin;
+      if (!origin) return cb(null, true);            // не браузер: бот на C#
+      cb(null, !siteOrigin || origin === siteOrigin); // браузер: только наш сайт
+    },
+  });
   
+  app.use(securityHeaders()); // CSP и остальные заголовки безопасности (режим — CSP_MODE в .env)
   app.use(cors());
-  app.use(express.json({ limit: '15mb' }));
+  app.use('/api/streamers', express.json({ limit: '15mb' })); // аватар, баннер, макет
+  app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
 
   // API не должно кэшироваться ни браузером, ни Cloudflare — иначе статус isLive/чат зависают на старом значении
@@ -83,7 +101,13 @@ async function start() {
   });
 
   app.use(express.static(path.join(__dirname, 'public')));
-  app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir)));
+  app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir), {
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      // даже если туда попадёт HTML, он откроется «в песочнице» без скриптов и доступа к сайту
+      res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; media-src 'self'");
+    },
+  }));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
@@ -114,10 +138,19 @@ async function start() {
   app.use('/api/youtube-capture', youtubeCaptureRoutes);
   app.use('/api/voice',  voiceRoutes);
 
-  app.use('/debug-screenshots', express.static(debugScreenshotsDir));
+  if (process.env.PLAYER_CAPTURE_DEBUG === '1') {
+    app.use('/debug-screenshots', express.static(debugScreenshotsDir));
+  }
   app.use('/api/support', supportRoutes);
   app.use('/api/streamers', streamersRoutes);
   app.use('/api/workbench', workbenchRoutes);
+  app.use('/api/presets', presetsRoutes);
+
+  app.use('/api/chat', CHAT_ROUTES);
+  app.use('/api/news', NEWS_ROUTES);
+  app.use('/api/csp-report', cspRoutes);
+
+process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
 
   // страница профиля стримера — единый шаблон на любое имя
   app.get('/streamers/:name', (req, res) => {
@@ -132,12 +165,16 @@ async function start() {
   await streamKeyCache.loadAll(); // заполняем кэш ключей ДО старта RTMP-сервера
   rtmpServer.run();
 
+  // единый обработчик ошибок — ПОСЛЕДНИМ в цепочке
   app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: `Файл слишком большой (лимит: ${config.upload.maxSizeMb} MB)` });
     }
-    console.error(err);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Слишком большой запрос' });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Некорректный JSON' });
+    console.error('[error]', req.method, req.originalUrl, err);
+    res.status(500).json({ error: 'Ошибка сервера' });
   });
 
   server.listen(config.port, () => {

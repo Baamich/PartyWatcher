@@ -18,12 +18,17 @@ const userSchema = new mongoose.Schema(
     streamerAvatarUrl: { type: String, default: null },
     streamerBannerUrl: { type: String, default: null },
     profileViews: { type: Number, default: 0 },
+    profileLayout: { type: mongoose.Schema.Types.Mixed, default: null },
+    profileRev: { type: Number, default: 0 },
 
     // ---- творческая студия ----
     streamTitle: { type: String, default: '' },
     streamDescription: { type: String, default: '' },
     streamKey: { type: String, default: undefined, unique: true, sparse: true },
     streamPlaybackId: { type: String, default: undefined, unique: true, sparse: true },
+
+    // ---- API чата (OBS-оверлей, боты, мосты) ----
+    chatApiKey: { type: String, default: undefined, unique: true, sparse: true },
   },
   { versionKey: false }
 );

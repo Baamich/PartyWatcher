@@ -1,8 +1,27 @@
 // index.js (playerCapture)
 
-import { createIframePlayer } from './iframeManager.js';
 import { detectMeta } from './detector.js';
 import { showEpisodeControls, hideEpisodeControls } from './controls.js';
+
+const HLS_CONFIG = {
+  enableWorker: true,
+  maxBufferLength: 30,
+  maxMaxBufferLength: 60,
+  maxBufferHole: 0.5, // небольшие «дырки» в буфере (разрывы таймкодов у CDN) перепрыгиваем, а не зависаем
+  nudgeMaxRetry: 6,   // сколько раз подтолкнуть воспроизведение, прежде чем считать это ошибкой
+  nudgeOffset: 0.1,
+};
+
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function showLoading(container, text) {
+  container.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;flex-direction:column;gap:12px;">' +
+    '<div style="font-size:32px;">⏳</div><div class="pc-loading-text"></div></div>';
+  container.querySelector('.pc-loading-text').textContent = text; // только как текст
+}
 
 function parseStreamExpiry(url) {
   const m = url.match(/:(\d{10}):/);
@@ -77,15 +96,7 @@ try {
         tried.add(label);
 
         console.log('[playerCapture] нет streams, пробую плеер:', label);
-        container.innerHTML = `
-          <div style="
-            display:flex;align-items:center;justify-content:center;
-            height:100%;color:#fff;background:#111;flex-direction:column;gap:12px;
-          ">
-            <div style="font-size:32px;">⏳</div>
-            <div>Пробуем плеер «${label}»...</div>
-          </div>
-        `;
+        showLoading(container, `Пробуем плеер «${label}»...`);
 
         const resNext = await fetch('/api/player-capture/extract', {
           method: 'POST',
@@ -165,7 +176,7 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
   container.innerHTML = '';
   
   const iframe = document.createElement('iframe');
-  iframe.src = playerUrl;
+  iframe.src = /^https?:\/\//i.test(playerUrl) ? playerUrl : 'about:blank'; // javascript: в iframe запрещаем
   iframe.allow = 'autoplay; fullscreen; picture-in-picture';
   iframe.style.width = '100%';
   iframe.style.height = '100%';
@@ -178,11 +189,7 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
 
   if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
     const reloadWithEpisode = async (episode, playerLabel) => {
-      container.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
-          <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
-        </div>
-      `;
+      showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
 
       const res = await fetch('/api/player-capture/extract', {
         method: 'POST',
@@ -254,19 +261,39 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
   };
 }
 
-function loadHlsScript() {
+// hls.js грузим с нашего же сервера (/vendor/hls.min.js): быстрее, не зависит от CDN
+// и не вызывает «Tracking Prevention blocked access to storage» в Edge и Safari.
+// Если локального файла вдруг нет — запасной вариант с CDN.
+let hlsLoadPromise = null;
+
+function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
-    if (window.Hls) return resolve(window.Hls);
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
-    s.onload = () => resolve(window.Hls);
-    s.onerror = () => reject(new Error('Не удалось загрузить hls.js'));
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => {
+      s.remove();
+      reject(new Error('Не удалось загрузить ' + src));
+    };
     document.head.appendChild(s);
   });
 }
 
+function loadHlsScript() {
+  if (window.Hls) return Promise.resolve(window.Hls);
+  if (!hlsLoadPromise) {
+    hlsLoadPromise = loadScriptOnce('/vendor/hls.min.js')
+      .then(() => window.Hls)
+      .catch((e) => {
+        hlsLoadPromise = null;
+        throw e;
+      });
+  }
+  return hlsLoadPromise;
+}
+
 function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStreams }) {
-  container.innerHTML = '';
+  container.innerHTML = ''; // убираем заглушку «Ищем видеопоток...»
   const videoEl = document.createElement('video');
   videoEl.id = 'captureVideo';
   videoEl.controls = isOwner;
@@ -333,11 +360,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
       if (isHls) {
         const Hls = await loadHlsScript();
         if (Hls.isSupported()) {
-          hlsInstance = new Hls({
-            enableWorker: true,
-            maxBufferLength: 30,
-            maxMaxBufferLength: 60,
-          });
+          hlsInstance = new Hls(HLS_CONFIG);
 
           if (streamToPlay.playlist) {
             const blob = new Blob([toAbsolutePlaylist(streamToPlay.playlist)], {
@@ -350,8 +373,12 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
 
           hlsInstance.attachMedia(videoEl);
           hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-            console.error('[capture] hls error', data);
-            if (!data.fatal) return;
+            if (!data.fatal) {
+              // bufferStalledError и подобное hls.js лечит сам, в консоль не шумим
+              console.debug('[capture] hls (не фатально):', data.details);
+              return;
+            }
+            console.error('[capture] hls fatal:', data.type, data.details, data.response?.code || '');
 
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
               consecutiveNetworkErrors++;
@@ -606,8 +633,11 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     });
   };
 
-  const reloadWithEpisode = async (episode, playerLabel) => {
-    container.innerHTML = `
+    const reloadWithEpisode = async (episode, playerLabel) => {
+      try { clearTimeout(proactiveRefreshTimer); clearTimeout(stallTimer); } catch (_) {}
+      try { if (hlsInstance) hlsInstance.destroy(); } catch (_) {}
+      hlsInstance = null;
+      container.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
         <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
       </div>
@@ -735,7 +765,7 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
       <div style="font-size:48px; margin-bottom:16px;">🎬</div>
       <h3 style="margin:0 0 8px;">Не удалось встроить плеер</h3>
       <p style="opacity:0.7; margin:0 0 12px; max-width:420px; line-height:1.5;">
-        ${errorMessage || 'Сайт использует сильную защиту'}
+        ${escHtml(errorMessage || 'Сайт использует сильную защиту')}
       </p>
       <p style="opacity:0.5; font-size:13px; max-width:420px;">
         Если есть выбор плеера (например «4К Качество») — переключи его справа<br>
@@ -749,11 +779,7 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
 
   if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
     const reloadWithEpisode = async (episode, playerLabel) => {
-      container.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
-          <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
-        </div>
-      `;
+      showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
 
       const res = await fetch('/api/player-capture/extract', {
         method: 'POST',
