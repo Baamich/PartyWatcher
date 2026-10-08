@@ -118,7 +118,8 @@ async function enableLightMode(page) {
 // Настоящий клик мышью по центру самого большого iframe на странице — как сделал бы человек.
 // Плееры kinogo (cinemar и др.) не запрашивают плейлист, пока по ним не кликнули;
 // клик по ".play" на самой странице часто попадает в рекламу, а клик в iframe — в плеер.
-async function clickMainIframe(page, logLabel) {
+async function clickMainIframe(page, logLabel, attempt = 1) {
+  const startUrl = page.url();
   const box = await page
     .evaluate(() => {
       const frames = Array.from(document.querySelectorAll('iframe')).filter((f) => {
@@ -128,12 +129,30 @@ async function clickMainIframe(page, logLabel) {
       });
       if (!frames.length) return null;
       frames.sort((a, b) => b.offsetWidth * b.offsetHeight - a.offsetWidth * a.offsetHeight);
-      frames[0].scrollIntoView({ block: 'center' });
-      const r = frames[0].getBoundingClientRect();
-      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      const iframe = frames[0];
+      iframe.scrollIntoView({ block: 'center' });
+      const r = iframe.getBoundingClientRect();
+      const x = r.x + r.width / 2;
+      const y = r.y + r.height / 2;
+
+      // Поверх плеера часто лежат ссылки/рекламные слои: клик по ним уводит страницу на другой фильм.
+      // Всё, что перекрывает центр iframe, делаем «прозрачным» для мыши.
+      const removed = [];
+      for (let i = 0; i < 8; i++) {
+        const top = document.elementFromPoint(x, y);
+        if (!top || top === iframe) break;
+        removed.push((top.tagName + '.' + String(top.className || '')).slice(0, 60));
+        top.style.setProperty('pointer-events', 'none', 'important');
+      }
+      return { x, y, removed, ok: document.elementFromPoint(x, y) === iframe };
     })
     .catch(() => null);
   if (!box) return false;
+  if (box.removed.length) console.log(`[player-capture] (${logLabel}) убрал перекрытия плеера:`, box.removed);
+  if (!box.ok) {
+    console.warn(`[player-capture] (${logLabel}) центр iframe перекрыт — клик не делаю`);
+    return false;
+  }
 
   // реклама открывается новыми вкладками — закрываем, чтобы не мешала
   const closePopup = (popup) => popup.close().catch(() => {});
@@ -142,13 +161,27 @@ async function clickMainIframe(page, logLabel) {
     await page.mouse.move(box.x, box.y, { steps: 5 });
     await page.mouse.click(box.x, box.y, { delay: 80 });
     console.log(`[player-capture] (${logLabel}) клик по центру iframe плеера`);
-    return true;
   } catch (e) {
     console.warn(`[player-capture] (${logLabel}) клик по iframe не удался:`, e.message);
     return false;
   } finally {
     setTimeout(() => page.off('popup', closePopup), 3000);
   }
+
+  // клик всё-таки увёл страницу (реклама внутри плеера сменила адрес вкладки) — возвращаемся и пробуем ещё раз
+  await new Promise((r) => setTimeout(r, 700));
+  if (page.url() !== startUrl) {
+    console.warn(`[player-capture] (${logLabel}) клик увёл страницу на`, page.url(), '— возвращаюсь');
+    await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+    if (attempt >= 2) return false;
+    await waitUntil(
+      () => page.evaluate(() => !!document.querySelector('iframe[src^="http"]')).catch(() => false),
+      6000,
+      250
+    );
+    return clickMainIframe(page, logLabel, attempt + 1);
+  }
+  return true;
 }
 
 // ждать условие с ранним выходом вместо фиксированной паузы
