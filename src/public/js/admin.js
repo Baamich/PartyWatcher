@@ -143,8 +143,9 @@ function pollStatus(log) {
           const showActions = currentStatus === 'unread';
           return `
           <div class="support-card" data-id="${t._id}">
-            <div class="support-card-meta">${formatDate(t.createdAt)} · @${escapeHtml(t.username || '—')}</div>
+            <div class="support-card-meta">${t.source === 'email' ? '✉️ почта · ' : '🌐 сайт · '}${formatDate(t.createdAt)} · @${escapeHtml(t.username || '—')}</div>
             <div class="support-card-name">${escapeHtml(t.name || 'Без имени')}${t.email ? ' · ' + escapeHtml(t.email) : ''}</div>
+            ${t.subject ? `<div class="support-card-subject">${escapeHtml(t.subject)}</div>` : ''}
             <div class="support-card-desc">${escapeHtml(t.description)}</div>
             ${
               showActions

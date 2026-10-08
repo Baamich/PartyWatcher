@@ -228,6 +228,12 @@ button {
   font-weight: 600;
   font-size: 14px;
 }
+.support-card-subject {
+  margin-top: 4px;
+  font-size: 14px;
+  font-style: italic;
+  word-break: break-word;
+}
 .support-card-desc {
   max-height: 120px;
   overflow-y: auto;

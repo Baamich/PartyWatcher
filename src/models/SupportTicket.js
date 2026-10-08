@@ -4,7 +4,10 @@ const supportTicketSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true, maxlength: 12, default: '' },
     email: { type: String, trim: true, maxlength: 100, default: '' },
-    description: { type: String, required: true, trim: true, maxlength: 1000 },
+    // письма бывают длиннее формы на сайте (форма сама режет до 1000)
+    description: { type: String, required: true, trim: true, maxlength: 5000 },
+    source: { type: String, enum: ['site', 'email'], default: 'site' },
+    subject: { type: String, trim: true, maxlength: 200, default: '' }, // тема письма (только для source=email)
     status: {
       type: String,
       enum: ['unread', 'accepted', 'trivial'],
