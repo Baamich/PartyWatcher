@@ -122,37 +122,58 @@ async function clickMainIframe(page, logLabel, attempt = 1) {
   const startUrl = page.url();
   const box = await page
     .evaluate(() => {
+      const desc = (el) =>
+        el ? (el.tagName + (el.id ? '#' + el.id : '') + '.' + String(el.className || '').trim().replace(/\s+/g, '.')).slice(0, 70) : null;
       const frames = Array.from(document.querySelectorAll('iframe')).filter((f) => {
         const src = f.getAttribute('src') || f.src || '';
         const r = f.getBoundingClientRect();
         return /^https?:/.test(src) && r.width >= 200 && r.height >= 120;
       });
-      if (!frames.length) return null;
       frames.sort((a, b) => b.offsetWidth * b.offsetHeight - a.offsetWidth * a.offsetHeight);
-      const iframe = frames[0];
-      iframe.scrollIntoView({ block: 'center' });
-      const r = iframe.getBoundingClientRect();
-      const x = r.x + r.width / 2;
-      const y = r.y + r.height / 2;
 
-      // Поверх плеера часто лежат ссылки/рекламные слои: клик по ним уводит страницу на другой фильм.
-      // Всё, что перекрывает центр iframe, делаем «прозрачным» для мыши.
-      const removed = [];
-      for (let i = 0; i < 8; i++) {
-        const top = document.elementFromPoint(x, y);
-        if (!top || top === iframe) break;
-        removed.push((top.tagName + '.' + String(top.className || '')).slice(0, 60));
-        top.style.setProperty('pointer-events', 'none', 'important');
+      const info = [];
+      for (const iframe of frames) {
+        iframe.scrollIntoView({ block: 'center' });
+        const r = iframe.getBoundingClientRect();
+        const x = r.x + r.width / 2;
+        const y = r.y + r.height / 2;
+
+        // Убираем только мелкие слои, целиком лежащие ВНУТРИ плеера (прозрачная реклама поверх видео).
+        // Если iframe закрыт контейнером страницы (шапка, обёртка контента) — он скрыт под сайтом
+        // (обычно это рекламный слот), кликать в него нельзя.
+        const removed = [];
+        let top = document.elementFromPoint(x, y);
+        for (let i = 0; i < 6 && top && top !== iframe; i++) {
+          const t = top.getBoundingClientRect();
+          const inside = t.left >= r.left - 2 && t.top >= r.top - 2 && t.right <= r.right + 2 && t.bottom <= r.bottom + 2;
+          if (!inside) break;
+          removed.push(desc(top));
+          top.style.setProperty('pointer-events', 'none', 'important');
+          top = document.elementFromPoint(x, y);
+        }
+        const src = (iframe.getAttribute('src') || iframe.src || '').slice(0, 70);
+        info.push({ src, w: Math.round(r.width), h: Math.round(r.height), onTop: top === iframe, coveredBy: top === iframe ? null : desc(top) });
+        if (top === iframe) return { x, y, removed, info };
       }
-      return { x, y, removed, ok: document.elementFromPoint(x, y) === iframe };
+
+      // видимого iframe нет — для диагностики покажем, где на странице контейнеры плеера
+      const players = Array.from(document.querySelectorAll('[id*="player" i], [class*="player" i], [class*="allplay" i]'))
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          return { el: desc(el), w: Math.round(r.width), h: Math.round(r.height), y: Math.round(r.y + window.scrollY) };
+        })
+        .filter((p) => p.w >= 100 && p.h >= 60)
+        .slice(0, 10);
+      return { info, players };
     })
-    .catch(() => null);
-  if (!box) return false;
-  if (box.removed.length) console.log(`[player-capture] (${logLabel}) убрал перекрытия плеера:`, box.removed);
-  if (!box.ok) {
-    console.warn(`[player-capture] (${logLabel}) центр iframe перекрыт — клик не делаю`);
+    .catch((e) => ({ info: [], error: e.message }));
+  if (!box?.x) {
+    console.warn(`[player-capture] (${logLabel}) видимого iframe плеера нет. iframe:`, JSON.stringify(box?.info || []),
+      '| контейнеры плеера:', JSON.stringify(box?.players || []), box?.error || '');
     return false;
   }
+  if (box.removed.length) console.log(`[player-capture] (${logLabel}) убрал перекрытия внутри плеера:`, box.removed);
+  if (box.info.length > 1) console.log(`[player-capture] (${logLabel}) пропущены скрытые iframe:`, JSON.stringify(box.info.slice(0, -1)));
 
   // реклама открывается новыми вкладками — закрываем, чтобы не мешала
   const closePopup = (popup) => popup.close().catch(() => {});
@@ -438,7 +459,10 @@ router.post('/extract', auth, async (req, res) => {
   // (кроме forceRefresh — старая ссылка протухла, кэш нужно обойти)
   if (roomCode && !forceRefresh) {
     const cached = playerCaptureCache.get(roomCode, requestedEpisodeForCache, requestedSeason);
-    if (cached) {
+    // в кэше только запасной iframe без потока — хосту даём попробовать заново,
+    // иначе неудачный захват «залипал» в комнате на час
+    const cachedIframeOnly = cached && !(cached.streams?.length);
+    if (cached && !(cachedIframeOnly && mayExtract)) {
       console.log('[player-capture] отдаю из кэша для комнаты', roomCode, 'серия', requestedEpisodeForCache || 1);
       return res.json(cached);
     }
@@ -1682,6 +1706,31 @@ router.post('/extract', auth, async (req, res) => {
         console.log('[player-capture] (kinogo2026) ожидание playlist/load:', waited, 'мс, потоков:', cdnSeriesStreams.length);
       } else if (!controlFrame) {
         console.warn('[player-capture] (kinogo2026) control-фрейм не найден — переключение серии невозможно');
+        // диагностика: что реально внутри каждого фрейма (пусто / заглушка / плеер без плейлиста)
+        for (const f of page.frames().slice(1)) {
+          const inside = await f
+            .evaluate(() => ({
+              len: document.body?.innerHTML?.length || 0,
+              playlist: !!document.querySelector('.playlist, .playlist-dropdown'),
+              video: !!document.querySelector('video'),
+              text: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+            }))
+            .catch((e) => ({ error: e.message.slice(0, 80) }));
+          console.log('[player-capture] (kinogo2026) фрейм', f.url().slice(0, 70), JSON.stringify(inside));
+        }
+        // диагностика: что реально загрузилось в каждом фрейме (заголовок, размер, начало текста)
+        for (const f of page.frames()) {
+          const info = await f
+            .evaluate(() => ({
+              title: document.title,
+              len: document.documentElement?.innerHTML.length || 0,
+              video: !!document.querySelector('video'),
+              iframes: document.querySelectorAll('iframe').length,
+              text: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200),
+            }))
+            .catch((e) => ({ error: e.message }));
+          console.log('[player-capture] (kinogo2026) фрейм', (f.url() || '').slice(0, 90), JSON.stringify(info));
+        }
       } else {
         // серия 1 / фильм: поток придёт сам после клика по плееру — ждём его с ранним выходом
         const waited = await waitUntil(
