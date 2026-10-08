@@ -311,32 +311,4 @@ router.delete('/commands/:id', auth, requireStreamer, async (req, res) => {
   res.json({ ok: true });
 });
 
-// PATCH /workbench/commands/:id  { name?, response?, enabled? }
-router.patch('/commands/:id', auth, requireStreamer, async (req, res) => {
-  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Некорректный id' });
-  const cmd = await ChatCommand.findOne({ _id: req.params.id, streamerNameLower: req.streamerUser.streamerNameLower });
-  if (!cmd) return res.status(404).json({ error: 'Команда не найдена' });
-
-  if (req.body?.name !== undefined) {
-    const name = String(req.body.name).trim().replace(/^!+/, '').toLowerCase();
-    if (!COMMAND_NAME_RE.test(name)) return res.status(400).json({ error: 'Команда: 1–20 символов, буквы, цифры и _' });
-    cmd.name = name;
-  }
-  if (req.body?.response !== undefined) {
-    const response = String(req.body.response).trim();
-    if (!response) return res.status(400).json({ error: 'Напиши, что должен ответить бот' });
-    if (response.length > 400) return res.status(400).json({ error: 'Ответ слишком длинный (максимум 400 символов)' });
-    cmd.response = response;
-  }
-  if (req.body?.enabled !== undefined) cmd.enabled = !!req.body.enabled;
-
-  try {
-    await cmd.save();
-    res.json(cmd);
-  } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ error: 'Такая команда уже есть' });
-    throw err;
-  }
-});
-
 module.exports = router;

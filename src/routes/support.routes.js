@@ -4,14 +4,32 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/adminOnly');
 const SupportTicket = require('../models/SupportTicket');
+const rateLimit = require('express-rate-limit');
 
-// пользователь создаёт обращение
-router.post('/', auth, async (req, res) => {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// гостей ограничиваем жёстче: обращение без входа — самый простой путь для спама
+const guestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: (req) => (req.user ? 20 : 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много обращений, попробуйте позже' },
+});
+
+// обращение может создать любой: вошедшему почта не нужна (ответим в аккаунте), гостю — обязательна
+router.post('/', auth.optional, guestLimiter, async (req, res) => {
   try {
-    let name = String(req.body.name || '').trim().slice(0, 12);
-    let email = String(req.body.email || '').trim().slice(0, 26);
+    const name = String(req.body.name || '').trim().slice(0, 12);
+    const email = String(req.body.email || '').trim().toLowerCase().slice(0, 100);
     const description = String(req.body.description || '').trim().slice(0, 1000);
 
+    if (!req.user && !email) {
+      return res.status(400).json({ error: 'Укажите почту — без входа в аккаунт ответить можно только на неё' });
+    }
+    if (email && !EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: 'Некорректная почта' });
+    }
     if (!description) {
       return res.status(400).json({ error: 'Опишите проблему' });
     }
@@ -23,8 +41,8 @@ router.post('/', auth, async (req, res) => {
       name,
       email,
       description,
-      userId: req.user.id,
-      username: req.user.username || '',
+      userId: req.user ? req.user.id : null,
+      username: req.user ? req.user.username || '' : '',
     });
 
     const io = req.app.get('io');
@@ -71,6 +89,7 @@ router.get('/count', auth, adminOnly, async (req, res) => {
 // админ: смена статуса
 router.patch('/:id/status', auth, adminOnly, async (req, res) => {
   try {
+    if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Некорректный id' });
     const status = req.body.status;
     if (!['accepted', 'trivial', 'unread'].includes(status)) {
       return res.status(400).json({ error: 'Неверный статус' });

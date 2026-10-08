@@ -16,7 +16,6 @@ require('express-async-errors');
 
 const authRoutes = require('./routes/auth.routes');
 const roomRoutes = require('./routes/room.routes');
-const videoRoutes = require('./routes/video.routes');
 const adminRoutes = require('./routes/admin.routes');
 const driveRoutes = require('./routes/drive.routes');
 const playerCaptureRoutes = require('./routes/playerCapture.routes');
@@ -65,7 +64,8 @@ async function start() {
   });
   
   app.use(securityHeaders()); // CSP и остальные заголовки безопасности (режим — CSP_MODE в .env)
-  app.use(cors());
+  // браузеры с чужих сайтов к API не пускаем; запросы без Origin (бот, curl) CORS не касается
+  app.use(cors({ origin: siteOrigin ? [siteOrigin] : false, credentials: true }));
   app.use('/api/streamers', express.json({ limit: '15mb' })); // аватар, баннер, макет
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
@@ -100,14 +100,15 @@ async function start() {
     next();
   });
 
+  // hls.js берём из npm: файла в репозитории нет, а так он есть после любого npm install, версия — в package-lock
+  try {
+    const hlsFile = require.resolve('hls.js/dist/hls.min.js');
+    app.get('/vendor/hls.min.js', (req, res) => res.sendFile(hlsFile, { maxAge: '7d' }));
+  } catch (_) {
+    console.warn('[server] hls.js не установлен — /vendor/hls.min.js будет только из public/vendor');
+  }
+
   app.use(express.static(path.join(__dirname, 'public')));
-  app.use('/uploads', express.static(path.join(process.cwd(), config.upload.dir), {
-    setHeaders: (res) => {
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      // даже если туда попадёт HTML, он откроется «в песочнице» без скриптов и доступа к сайту
-      res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; media-src 'self'");
-    },
-  }));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
@@ -130,7 +131,6 @@ async function start() {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/rooms', roomRoutes);
-  app.use('/api/videos', videoRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/drive', driveRoutes);
   app.use('/api/player-capture', playerCaptureRoutes);
@@ -168,9 +168,6 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
   // единый обработчик ошибок — ПОСЛЕДНИМ в цепочке
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: `Файл слишком большой (лимит: ${config.upload.maxSizeMb} MB)` });
-    }
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Слишком большой запрос' });
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Некорректный JSON' });
     console.error('[error]', req.method, req.originalUrl, err);

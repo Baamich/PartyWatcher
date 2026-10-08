@@ -146,7 +146,7 @@ export async function onEpisodeChange() {
 
   if (onEpisodeChangeCallback) {
     try {
-      await onEpisodeChangeCallback(episode, player);
+      await onEpisodeChangeCallback(episode, player, season);
     } catch (e) {
       console.error('[playerCapture] ошибка при смене серии/плеера:', e.message);
       return;

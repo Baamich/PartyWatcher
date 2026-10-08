@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 
@@ -15,9 +14,10 @@ async function start() {
   await connectDB();
 
   const app = express();
+  app.set('trust proxy', 1); // за cloudflared: иначе rate limit видит у всех один IP 127.0.0.1
 
+  // cors() не нужен: админка ходит в API только со своего же домена
   app.use(securityHeaders());
-  app.use(cors());
   app.use((req, res, next) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     next();

@@ -57,20 +57,101 @@ function getAdblocker() {
 }
 
 function detectSite(url) {
+  let host = '';
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch (_) {}
   const lower = url.toLowerCase();
-  if (lower.includes('rezka') || lower.includes('hdrezka')) return 'rezka';
+  if (/h?d?rezka/.test(host)) return 'rezka';
   // kinogo2026.com — отдельное зеркало, проверяем ДО общего kinogo,
   // чтобы у него была своя логика (proxy/antibot) и не смешивалась
   // с остальными доменами kinogo
-  if (lower.includes('kinogo2026')) return 'kinogo2026';
-  if (lower.includes('kinogo')) return 'kinogo';
+  if (host.includes('kinogo2026')) return 'kinogo2026';
+  if (/kinogo/.test(host)) return 'kinogo';
   // lordfilm.fi / top.lordfilm.fi — отдельный движок (balancerplayer + gate)
-  if (lower.includes('lordfilm.fi') || lower.includes('top.lordfilm')) return 'lordfilm_fi';
-  // mg.lordfilm.md и прочие зеркала со старой вёрсткой tabs-sel
-  if (lower.includes('lordfilm') || lower.includes('lordserial')) return 'lordfilm';
+  if (/lord-?film[^.]*\.fi$/.test(host) || host.includes('top.lordfilm')) return 'lordfilm_fi';
+  // mg.lordfilm.md, lordfilm5.pro, lord-film.*, lordserial и прочие зеркала со старой вёрсткой tabs-sel
+  if (/lord-?film|lordserial|lord-?serial/.test(host)) return 'lordfilm';
   if (lower.includes('yandex.ru/video')) return 'yandex';
-  if (lower.includes('my.mail.ru')) return 'mailru';
+  if (host.endsWith('my.mail.ru')) return 'mailru';
   return 'unknown';
+}
+
+// Зеркала часто живут на доменах без «kinogo»/«lordfilm» в имени.
+// Тогда узнаём движок по вёрстке уже открытой страницы. null — не узнали.
+async function detectSiteByDom(page) {
+  return page
+    .evaluate(() => {
+      const has = (sel) => !!document.querySelector(sel);
+      const frameSrcs = Array.from(document.querySelectorAll('iframe'))
+        .map((f) => f.getAttribute('src') || f.getAttribute('data-src') || '')
+        .join(' ');
+      if (has('.lf-player-gate') || has('.lf-player-picker__option')) return 'lordfilm_fi';
+      if (has('#cdnplayer-container, .b-translator__item') || /sof\.tv\.init/.test(document.documentElement.innerHTML.slice(0, 400000))) return 'rezka';
+      if (has('.tabs-sel span[onclick*="src"]') || /ortified\.ws|cdn\.lordfilm/i.test(frameSrcs)) return 'lordfilm';
+      if (has('ul.tabs li[data-src]') || has('.allplay') || /stravers\.live|stloadi\.live|cinemar\.cc/i.test(frameSrcs)) return 'kinogo';
+      return null;
+    })
+    .catch(() => null);
+}
+
+// Картинки, шрифты и счётчики плееру не нужны, а грузятся дольше всего (особенно через прокси).
+// Режем их на уровне сети через CDP — это не конфликтует с перехватом запросов у adblocker'а.
+const LIGHT_BLOCKED_URLS = [
+  '*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.avif', '*.ico',
+  '*.woff', '*.woff2', '*.ttf', '*.otf', '*.eot',
+  '*mc.yandex.ru*', '*google-analytics.com*', '*googletagmanager.com*', '*doubleclick.net*',
+  '*top-fwz1.mail.ru*', '*counter.yadro.ru*', '*liveinternet.ru*',
+];
+
+async function enableLightMode(page) {
+  if (process.env.PLAYER_CAPTURE_LIGHT === '0') return;
+  try {
+    const cdp = await page.target().createCDPSession();
+    await cdp.send('Network.enable');
+    await cdp.send('Network.setBlockedURLs', { urls: LIGHT_BLOCKED_URLS });
+  } catch (e) {
+    console.warn('[player-capture] light mode не включился:', e.message);
+  }
+}
+
+// ждать условие с ранним выходом вместо фиксированной паузы
+async function waitUntil(check, maxMs, stepMs = 300) {
+  let waited = 0;
+  while (waited < maxMs) {
+    if (await check()) return waited;
+    await new Promise((r) => setTimeout(r, stepMs));
+    waited += stepMs;
+  }
+  return waited;
+}
+
+// скачать ресурс браузером через CDP (без CORS, с куками страницы); null — не получилось
+async function loadViaCdp(page, frame, url) {
+  if (!frame?._id) return null;
+  let cdp = null;
+  try {
+    cdp = await page.target().createCDPSession();
+    await cdp.send('Network.enable').catch(() => {});
+    const { resource } = await cdp.send('Network.loadNetworkResource', {
+      frameId: frame._id,
+      url,
+      options: { disableCache: false, includeCredentials: true },
+    });
+    if (!resource?.success || !resource.stream) return null;
+    let text = '';
+    for (;;) {
+      const chunk = await cdp.send('IO.read', { handle: resource.stream });
+      text += chunk.base64Encoded ? Buffer.from(chunk.data, 'base64').toString('utf8') : chunk.data;
+      if (chunk.eof || text.length > 5_000_000) break;
+    }
+    await cdp.send('IO.close', { handle: resource.stream }).catch(() => {});
+    return text;
+  } catch (_) {
+    return null;
+  } finally {
+    if (cdp) cdp.detach().catch(() => {});
+  }
 }
 
 function pickPlayerOrigin(page) {
@@ -242,6 +323,7 @@ router.post('/extract', auth, async (req, res) => {
   }
   const { url, roomCode } = req.body;
   let requestedEpisodeForCache = req.body.episode ? Number(req.body.episode) : null;
+  const requestedSeason = Number(req.body.season) || 1;
 
   if (typeof url !== 'string' || url.length > 2000 || !url.startsWith('http')) {
     return res.status(400).json({ error: 'Нужна валидная ссылка' });
@@ -275,16 +357,18 @@ router.post('/extract', auth, async (req, res) => {
     }
   }
 
-  const siteName = detectSite(url);
-  const adapter = siteAdapters[siteName] || null;
+  // let: для незнакомого домена движок уточняется по вёрстке страницы (detectSiteByDom)
+  let siteName = detectSite(url);
+  let adapter = siteAdapters[siteName] || null;
   console.log('[player-capture] сайт определён как:', siteName, '| адаптер найден:', !!adapter);
 
-  const forceRefresh = !!req.body.forceRefresh;
+  // явная смена плеера хостом — тоже повод не отдавать кэш (в кэше поток другого плеера)
+  const forceRefresh = !!req.body.forceRefresh || (!!req.body.player && !req.body.onlyCache);
 
   // если для этой комнаты+серии уже есть свежий кэш — не гоняем puppeteer заново
   // (кроме forceRefresh — старая ссылка протухла, кэш нужно обойти)
   if (roomCode && !forceRefresh) {
-    const cached = playerCaptureCache.get(roomCode, requestedEpisodeForCache);
+    const cached = playerCaptureCache.get(roomCode, requestedEpisodeForCache, requestedSeason);
     if (cached) {
       console.log('[player-capture] отдаю из кэша для комнаты', roomCode, 'серия', requestedEpisodeForCache || 1);
       return res.json(cached);
@@ -315,7 +399,9 @@ router.post('/extract', auth, async (req, res) => {
 
   // если для этой же комнаты+серии уже выполняется extract прямо сейчас —
   // не запускаем второй Puppeteer параллельно, а просто ждём результат первого
-  const inFlightKey = roomCode ? `${roomCode}:${requestedEpisodeForCache || 1}` : null;
+  const inFlightKey = roomCode
+    ? `${roomCode}:${requestedSeason}:${requestedEpisodeForCache || 1}:${req.body.player || ''}`
+    : null;
   if (inFlightKey && inFlightExtracts.has(inFlightKey)) {
     console.log('[player-capture] extract уже выполняется для', inFlightKey, '— жду результат вместо повторного запуска');
     try {
@@ -370,6 +456,7 @@ router.post('/extract', auth, async (req, res) => {
       });
 
       const page = await browser.newPage();
+      await enableLightMode(page);
 
       if (useProxy && PROXY_USER && PROXY_PASS) {
         await page.authenticate({ username: PROXY_USER, password: PROXY_PASS });
@@ -384,16 +471,18 @@ router.post('/extract', auth, async (req, res) => {
     const isLordfilmFamily = siteName === 'lordfilm' || siteName === 'lordfilm_fi';
     const disableAdblock = isKinogoFamily || isLordfilmFamily;
 
-    if (blocker && !disableAdblock) {
+    const blockerOn = !!(blocker && !disableAdblock);
+    if (blockerOn) {
       await blocker.enableBlockingInPage(page);
       console.log('[player-capture] adblocker подключен к странице');
 
-      blocker.on('request-blocked', (request) => {
-        console.log('[adblock] заблокирован запрос:', request.url);
-      });
-      blocker.on('request-redirected', (request) => {
-        console.log('[adblock] редирект запроса (например анти-трекинг):', request.url);
-      });
+      // blocker общий на все запросы: подписываемся один раз и только в отладке, иначе слушатели копятся
+      if (process.env.PLAYER_CAPTURE_DEBUG === '1' && !blocker.__pwLogging) {
+        blocker.__pwLogging = true;
+        blocker.on('request-blocked', (request) => {
+          console.log('[adblock] заблокирован запрос:', request.url);
+        });
+      }
     } else if (disableAdblock) {
       console.log(
         `[player-capture] ${siteName} — adblocker выключен (иначе режет s.myangular.life / player CDN)`
@@ -682,6 +771,22 @@ router.post('/extract', auth, async (req, res) => {
       };
     }
 
+    // незнакомый домен: узнаём kinogo/lordfilm/rezka-движок по вёрстке
+    if (siteName === 'unknown') {
+      const domSite = await detectSiteByDom(page);
+      if (domSite) {
+        siteName = domSite;
+        adapter = siteAdapters[siteName] || null;
+        console.log('[player-capture] движок определён по вёрстке:', siteName);
+        // kinogo/lordfilm ломаются под adblocker'ом (режет скрипты плеера) — выключаем и перегружаем
+        if (blockerOn && /^(kinogo|lordfilm)/.test(siteName)) {
+          await blocker.disableBlockingInPage(page).catch(() => {});
+          response = (await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => null)) || response;
+          console.log('[player-capture] adblocker выключен, страница перезагружена');
+        }
+      }
+    }
+
     let pageTitle = '(не удалось получить)';
     let bodyLength = 0;
     try {
@@ -703,17 +808,20 @@ router.post('/extract', auth, async (req, res) => {
       } catch (e) {}
     }
 
-        try {
-      await page.waitForSelector('#cdnplayer-container, #cdnplayer, .b-player', { timeout: 2500 });
-    } catch (_) {}
-    await new Promise(r => setTimeout(r, 800));
-    // даём странице дописать cookie favs
-    await new Promise(r => setTimeout(r, 1500));
-
-    const dbgCookies = await page.evaluate(() => document.cookie);
-    console.log('[player-capture] cookies:', dbgCookies.slice(0, 300));
-    const hasSof = await page.evaluate(() => typeof sof !== 'undefined' && typeof sof.ajax === 'function');
-    console.log('[player-capture] sof.ajax:', hasSof);
+    // ожидание контейнера и cookie favs нужно только rezka; остальным сайтам это были лишние ~2.3 с
+    if (siteName === 'rezka') {
+      try {
+        await page.waitForSelector('#cdnplayer-container, #cdnplayer, .b-player', { timeout: 2500 });
+      } catch (_) {}
+      // ждём, пока страница допишет cookie favs (выходим сразу, как появилась)
+      await waitUntil(
+        () => page.evaluate(() => /(?:^|;\s*)favs=/.test(document.cookie) || !!document.querySelector('#ctrl_favs')).catch(() => false),
+        2300,
+        250
+      );
+      const hasSof = await page.evaluate(() => typeof sof !== 'undefined' && typeof sof.ajax === 'function').catch(() => false);
+      console.log('[player-capture] sof.ajax:', hasSof);
+    }
     // ============================================================
     // REZKA: прямой AJAX get_cdn_series (фильм + сериал)
     // translator_id=59 + favs UUID — как в реальном браузере
@@ -815,7 +923,7 @@ router.post('/extract', auth, async (req, res) => {
             console.warn('[player-capture] favs пустой — AJAX почти наверняка даст "сессия истекла"');
           }
           const isSeries = pageMeta.isSeries;
-          const season = pageMeta.activeSeason || 1;
+          const season = Number(req.body.season) || pageMeta.activeSeason || 1;
           const episode = requestedEpisodeForCache || pageMeta.activeEpisode || 1;
 
           console.log('[player-capture] translators to try:', idsToTry, 'favs:', favs);
@@ -2031,16 +2139,10 @@ router.post('/extract', auth, async (req, res) => {
     }
     // если JSON так и не пришёл, но есть iframe плеера — ещё раз подождём сеть
     if (!playerApiData && foundIframes.some((u) => u.includes('stravers.live') || u.includes('ortified'))) {
-      console.log('[player-capture] iframe есть, JSON нет — доп. ожидание 5с');
-      await new Promise((r) => setTimeout(r, 5000));
+      const waited = await waitUntil(() => !!playerApiData, 5000, 250);
+      console.log('[player-capture] iframe есть, JSON ждали', waited, 'мс, получен:', !!playerApiData);
     }
 
-    if (playerApiData) {
-      console.log('[player-capture] playerApiData keys:', Object.keys(playerApiData));
-      try {
-        console.log('[player-capture] hlsSource sample:', JSON.stringify(playerApiData.hlsSource || null).slice(0, 600));
-      } catch (_) {}
-    }
     let uniqueStreams = [...new Map(foundStreams.map((s) => [s.url, s])).values()];
     if (playerApiData) {
       console.log('[player-capture] playerApiData keys:', Object.keys(playerApiData));
@@ -2079,11 +2181,18 @@ router.post('/extract', auth, async (req, res) => {
             null;
           const ctx = playerFrame || page;
 
-          // дать плееру самому сходить за m3u8 (перехват в handleResponse → playlistRaw)
-          await new Promise((r) => setTimeout(r, 3000));
+          // дать плееру самому сходить за m3u8 (перехват в handleResponse → playlistRaw); если уже перехвачен — не ждём
+          await waitUntil(() => foundStreams.some((s) => s.playlistRaw), 3000, 250);
+
+          // 0) плеер уже сам скачал именно этот master — берём из перехвата, без лишних запросов
+          const exactRaw = foundStreams.find((s) => s.playlistRaw && s.url === masterUrl);
+          if (exactRaw) {
+            downloadedPlaylist = exactRaw.playlistRaw;
+            console.log('[player-capture] master уже перехвачен из сети плеера, длина:', downloadedPlaylist.length);
+          }
 
           // A) fetch из фрейма (часто CORS Failed to fetch)
-          const playlistText = await ctx.evaluate(async (u) => {
+          const playlistText = downloadedPlaylist ? null : await ctx.evaluate(async (u) => {
             try {
               const r = await fetch(u, {
                 credentials: 'include',
@@ -2108,7 +2217,7 @@ router.post('/extract', auth, async (req, res) => {
               '[player-capture] master скачан из фрейма плеера, длина:',
               downloadedPlaylist.length
             );
-          } else {
+          } else if (playlistText) {
             console.warn(
               '[player-capture] фрейм не отдал m3u8 для',
               masterUrl.slice(0, 80),
@@ -2122,8 +2231,6 @@ router.post('/extract', auth, async (req, res) => {
           // B) CDP: скачать URL тем же браузером без CORS (как навигация)
           if (!downloadedPlaylist) {
             try {
-              const cdp = await page.target().createCDPSession();
-              await cdp.send('Network.enable').catch(() => {});
               const ref =
                 playerApiOrigin ||
                 (playerFrame ? playerFrame.url() : '') ||
@@ -2133,18 +2240,15 @@ router.post('/extract', auth, async (req, res) => {
                 refOrigin = ref ? new URL(ref).origin + '/' : '';
               } catch (_) {}
 
-              const result = await cdp.send('Network.loadNetworkResource', {
-                frameId: playerFrame._id || undefined,
-                url: masterUrl,
-                options: {
-                  disableCache: false,
-                  includeCredentials: true,
-                },
-              }).catch(() => null);
+              const cdpText = await loadViaCdp(page, playerFrame, masterUrl);
+              if (cdpText && cdpText.includes('#EXTM3U')) {
+                downloadedPlaylist = cdpText;
+                console.log('[player-capture] master скачан через CDP, длина:', cdpText.length);
+              }
 
               // fallback: через page.evaluate XHR не сработает из‑за CORS —
-              // пробуем Buffer из уже перехваченных + cookie-aware node fetch ниже
-              if (!result) {
+              // пробуем cookie-aware node fetch
+              if (!downloadedPlaylist) {
                 const cookies = await page.cookies();
                 const cookieStr = cookies
                   .map((c) => `${c.name}=${c.value}`)
@@ -2160,6 +2264,7 @@ router.post('/extract', auth, async (req, res) => {
                 };
                 if (cookieStr) headers['Cookie'] = cookieStr;
 
+                await assertPublicHttpUrl(masterUrl); // адрес пришёл от чужого плеера — во внутреннюю сеть не ходим
                 const r = await fetch(masterUrl, { headers });
                 if (r.ok) {
                   const t = await r.text();
@@ -2211,6 +2316,7 @@ router.post('/extract', auth, async (req, res) => {
         if (!downloadedPlaylist && !isVk) {
           let checkPage = null;
           try {
+            await assertPublicHttpUrl(masterUrl);
             checkPage = await browser.newPage();
             if (useProxy && PROXY_USER && PROXY_PASS) {
               await checkPage.authenticate({ username: PROXY_USER, password: PROXY_PASS });
@@ -2427,9 +2533,9 @@ router.post('/extract', auth, async (req, res) => {
     }
 
     const meta = {
-      site: detectSite(url),
+      site: siteName,
       seasons: seasonsFound.length ? seasonsFound : [1],
-      currentSeason: 1,
+      currentSeason: requestedSeason,
       currentEpisode: requestedEpisode || 1,
       totalEpisodes,
       voices: [],
@@ -2502,14 +2608,14 @@ router.post('/extract', auth, async (req, res) => {
       (responseData.playerIframes?.length || 0) > 0;
 
     if (roomCode && (responseData.streams?.length || 0) > 0 && hasPlayable) {
-      playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
+      playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData, requestedSeason);
     } else if (
       roomCode &&
       (responseData.playerIframes?.length || 0) > 0 &&
       (responseData.streams?.length || 0) === 0
     ) {
       // iframe-only тоже кэшируем — чтобы зрители не гоняли puppeteer
-      playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData);
+      playerCaptureCache.set(roomCode, requestedEpisodeForCache, responseData, requestedSeason);
     }
 
     res.json(responseData);

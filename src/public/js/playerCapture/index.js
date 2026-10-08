@@ -1,6 +1,5 @@
 // index.js (playerCapture)
 
-import { detectMeta } from './detector.js';
 import { showEpisodeControls, hideEpisodeControls } from './controls.js';
 
 const HLS_CONFIG = {
@@ -10,6 +9,8 @@ const HLS_CONFIG = {
   maxBufferHole: 0.5, // небольшие «дырки» в буфере (разрывы таймкодов у CDN) перепрыгиваем, а не зависаем
   nudgeMaxRetry: 6,   // сколько раз подтолкнуть воспроизведение, прежде чем считать это ошибкой
   nudgeOffset: 0.1,
+  fragLoadingMaxRetry: 6,      // relay иногда медленно перебирает referer — даём сегменту больше попыток
+  manifestLoadingMaxRetry: 3,
 };
 
 function escHtml(s) {
@@ -48,40 +49,91 @@ function pickBestStream(streams) {
   return byQ(720) || byQ(1080) || byQ(480) || byQ(360) || clean[0];
 }
 
+async function requestExtract(body) {
+  const res = await fetch('/api/player-capture/extract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ roomCode: window.code, ...body }),
+  });
+  return res.json();
+}
+
+// хост раздаёт найденные потоки зрителям (сервер сам решает, сбрасывать ли позицию)
+function emitStreams(data, season, episode) {
+  if (!window.socket || !window.code || !data?.streams?.length) return;
+  window.socket.emit('player_capture:streams', {
+    code: window.code,
+    season: season || data.meta?.currentSeason || 1,
+    episode: episode || data.meta?.currentEpisode || 1,
+    voice: data.meta?.currentVoice || null,
+    streams: data.streams,
+    playerIframes: data.playerIframes || [],
+    meta: data.meta,
+  });
+}
+
+// Один общий обработчик «сменить серию / плеер» для всех видов плеера (раньше было три копии)
+function makeReloader(ctx) {
+  const { container, videoUrl, isOwner } = ctx;
+  return async (episode, playerLabel, season) => {
+    try { ctx.current?.destroy?.(); } catch (_) {}
+    showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
+
+    let data;
+    try {
+      data = await requestExtract({ url: videoUrl, episode, season: season || null, player: playerLabel || null });
+    } catch (e) {
+      data = { success: false, error: e.message };
+    }
+    const meta = { ...(ctx.meta || {}), ...(data.meta || {}) };
+
+    let player;
+    if (data.success && data.streams?.length) {
+      if (isOwner) emitStreams(data, season, episode);
+      const best = pickBestStream(data.streams);
+      player = renderNativePlayer(best, { ...meta, currentQuality: best?.quality || null }, {
+        isOwner, container, videoUrl, allStreams: data.streams,
+      });
+    } else if (data.success && data.playerIframes?.length) {
+      player = renderPlayerIframe(data.playerIframes[0], meta, { isOwner, container, videoUrl });
+    } else {
+      player = renderFallback(videoUrl, meta, {
+        isOwner, container, videoUrl, errorMessage: data.error || data.message || 'Не удалось загрузить',
+      });
+    }
+    if (typeof window.__onCapturePlayerReload === 'function') window.__onCapturePlayerReload(player);
+    return player;
+  };
+}
+
+function setupControls(meta, ctx, streamsList, switchQuality) {
+  const hasControls =
+    ctx.isOwner &&
+    (meta.seasons?.length > 1 ||
+      meta.totalEpisodes > 1 ||
+      meta.voices?.length ||
+      (meta.players && meta.players.length > 1) ||
+      (streamsList || []).filter((s) => s.quality).length > 1);
+
+  if (hasControls) showEpisodeControls(meta, makeReloader(ctx), streamsList, switchQuality);
+  else hideEpisodeControls();
+}
+
 export async function renderPlayerCapture(video, { isOwner, container }) {
-  container.innerHTML = `
-    <div style="
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      height:100%;
-      color:#fff;
-      background:#111;
-      flex-direction:column;
-      gap:12px;
-    ">
-      <div style="font-size:32px;">⏳</div>
-      <div>Ищем видеопоток...</div>
-    </div>
-  `;
+  showLoading(container, 'Ищем видеопоток...');
 
-  let meta = video.meta || {};
-  let streams = [];
+  const meta = video.meta || {};
+  const season = meta.currentSeason || null;
+  const episode = meta.currentEpisode || null;
 
-try {
-    const res = await fetch('/api/player-capture/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
+  try {
+    let data = await requestExtract({
       url: video.url,
-      episode: video.meta?.currentEpisode || null,
-      roomCode: window.code,
+      season,
+      episode,
       onlyCache: !isOwner, // зритель — только кэш
-    }),
     });
-
-        let data = await res.json();
     console.log('[playerCapture] extract result:', data);
 
     // Универсальный перебор плееров: если у текущего нет streams —
@@ -98,18 +150,7 @@ try {
         console.log('[playerCapture] нет streams, пробую плеер:', label);
         showLoading(container, `Пробуем плеер «${label}»...`);
 
-        const resNext = await fetch('/api/player-capture/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            url: video.url,
-            episode: video.meta?.currentEpisode || null,
-            player: label,
-            roomCode: window.code,
-          }),
-        });
-        const next = await resNext.json();
+        const next = await requestExtract({ url: video.url, season, episode, player: label });
         console.log('[playerCapture] extract result (player:', label, '):', next);
 
         if (next.success && next.streams?.length) {
@@ -117,64 +158,39 @@ try {
           break;
         }
         // сохраняем последний ответ с players, даже если streams пусто
-        if (next.meta?.players?.length) {
-          data = next;
-        }
+        if (next.meta?.players?.length) data = next;
       }
     }
 
-    if (data.success) {
-      if (isOwner && window.socket && window.code && data.streams?.length) {
-        window.socket.emit('player_capture:streams', {
-          code: window.code,
-          season: data.meta?.currentSeason || 1,
-          episode: data.meta?.currentEpisode || 1,
-          voice: data.meta?.currentVoice || null,
-          streams: data.streams,
-          playerIframes: data.playerIframes || [],
-          meta: data.meta,
-        });
-      }
-      if (data.streams?.length) {
-        const best = pickBestStream(data.streams);
-        const m = { ...(data.meta || meta), currentQuality: best?.quality || null };
-        return renderNativePlayer(best, m, {
-          isOwner,
-          container,
-          videoUrl: video.url,
-          allStreams: data.streams,
-        });
-      }
-      if (data.playerIframes?.length) {
-        return renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
-          isOwner,
-          container,
-          videoUrl: video.url,
-        });
-      }
+    const m = { ...meta, ...(data.meta || {}) };
+    if (data.success && data.streams?.length) {
+      if (isOwner) emitStreams(data, season, episode);
+      const best = pickBestStream(data.streams);
+      return renderNativePlayer(best, { ...m, currentQuality: best?.quality || null }, {
+        isOwner,
+        container,
+        videoUrl: video.url,
+        allStreams: data.streams,
+      });
     }
-
-    return renderFallback(video.url, data.meta || meta, {
+    if (data.success && data.playerIframes?.length) {
+      return renderPlayerIframe(data.playerIframes[0], m, { isOwner, container, videoUrl: video.url });
+    }
+    return renderFallback(video.url, m, {
       isOwner,
       container,
       errorMessage: data.error || data.message || 'Не удалось найти плеер',
       videoUrl: video.url,
     });
-
-    } catch (e) {
+  } catch (e) {
     console.error('[playerCapture] fetch error', e);
-      return renderFallback(video.url, meta, { 
-        isOwner, 
-        container,
-        errorMessage: e.message,
-        videoUrl: video.url,
-    });
+    return renderFallback(video.url, meta, { isOwner, container, errorMessage: e.message, videoUrl: video.url });
   }
 }
 
 function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
   container.innerHTML = '';
-  
+
   const iframe = document.createElement('iframe');
   iframe.src = /^https?:\/\//i.test(playerUrl) ? playerUrl : 'about:blank'; // javascript: в iframe запрещаем
   iframe.allow = 'autoplay; fullscreen; picture-in-picture';
@@ -184,73 +200,7 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
   iframe.referrerPolicy = 'no-referrer';
   container.appendChild(iframe);
 
-  const hasPlayers = meta.players && meta.players.length > 1;
-  const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
-
-  if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
-    const reloadWithEpisode = async (episode, playerLabel) => {
-      showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
-
-      const res = await fetch('/api/player-capture/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          url: videoUrl,
-          episode,
-          player: playerLabel || null,
-          roomCode: window.code,
-        }),
-      });
-      const data = await res.json();
-
-      if (data.success && data.streams?.length) {
-        if (isOwner && window.socket && window.code) {
-          window.socket.emit('player_capture:streams', {
-            code: window.code,
-            season: data.meta?.currentSeason || 1,
-            episode,
-            voice: data.meta?.currentVoice || null,
-            streams: data.streams,
-            playerIframes: data.playerIframes || [],
-            meta: data.meta,
-          });
-        }
-        const player = renderNativePlayer(data.streams[0], data.meta || meta, {
-          isOwner,
-          container,
-          videoUrl,
-        });
-        if (typeof window.__onCapturePlayerReload === 'function') {
-          window.__onCapturePlayerReload(player);
-        }
-        return player;
-      } else if (data.success && data.playerIframes?.length) {
-        const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
-          isOwner,
-          container,
-          videoUrl,
-        });
-        if (typeof window.__onCapturePlayerReload === 'function') {
-          window.__onCapturePlayerReload(player);
-        }
-        return player;
-      } else {
-        renderFallback(videoUrl, data.meta || meta, {
-          isOwner,
-          container,
-          errorMessage: data.error || data.message || 'Не удалось загрузить',
-          videoUrl,
-        });
-      }
-    };
-
-    showEpisodeControls(meta, reloadWithEpisode);
-  } else {
-    hideEpisodeControls();
-  }
-
-  return {
+  const player = {
     type: 'player_capture',
     iframe,
     meta,
@@ -258,12 +208,14 @@ function renderPlayerIframe(playerUrl, meta, { isOwner, container, videoUrl }) {
     getIsPlayingNow: () => false,
     doPlayPause: () => {},
     seekTo: () => {},
+    destroy: () => {},
   };
+  setupControls(meta, { isOwner, container, videoUrl, meta, current: player });
+  return player;
 }
 
-// hls.js грузим с нашего же сервера (/vendor/hls.min.js): быстрее, не зависит от CDN
-// и не вызывает «Tracking Prevention blocked access to storage» в Edge и Safari.
-// Если локального файла вдруг нет — запасной вариант с CDN.
+// hls.js грузим с нашего же сервера (/vendor/hls.min.js — отдаётся из npm-пакета hls.js):
+// быстрее, не зависит от CDN и проходит строгую CSP.
 let hlsLoadPromise = null;
 
 function loadScriptOnce(src) {
@@ -309,138 +261,158 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     console.error('[capture] video error', videoEl.error);
   });
 
+  let destroyed = false;
   let currentStream = stream;
   const streamsList = allStreams || [stream];
+  // по этому списку зритель понимает, что хост прислал тот же самый поток и пересобирать плеер не нужно
+  if (meta) meta.__streamUrls = streamsList.map((s) => s.url);
   let hlsInstance = null;
-  let isRefreshingStream = false; // общий флаг вместо hlsInstance.__refreshing — переживает пересоздание hlsInstance
-  let mediaRecoverTried = false;
-  let consecutiveNetworkErrors = 0; // если CDN рвётся без чёткого 404/410 (CORS/timeout) несколько раз подряд — тоже повод обновить поток
+  let blobUrl = null;
+  let isRefreshingStream = false; // общий флаг — переживает пересоздание hlsInstance
+  let mediaRecoverStep = 0;       // 0 — ещё не лечили, 1 — recoverMediaError, 2 — + swapAudioCodec
+  let consecutiveNetworkErrors = 0; // CDN рвётся без чёткого 404/410 (CORS/timeout) несколько раз подряд — повод обновить поток
 
-    const setupSource = async (streamToPlay) => {
-    mediaRecoverTried = false;      // новый источник — можно снова попробовать recoverMediaError при следующей ошибке
-    consecutiveNetworkErrors = 0;   // и снова с нуля считать подряд идущие сетевые ошибки
-    const streamUrl = streamToPlay.url;
-    const isHls = streamToPlay.type === 'hls' || /\.m3u8(\?|$)/i.test(streamUrl) || /cinemap\.cc|cinemar\.cc|cfnd\./i.test(streamUrl);
-    const refQ = streamToPlay.referer
-      ? `&referer=${encodeURIComponent(streamToPlay.referer)}`
-      : '';
-    const playUrl = `/api/stream/relay?url=${encodeURIComponent(streamUrl)}${refQ}`;
-
-    const toAbsolutePlaylist = (text) => {
-      const origin = window.location.origin;
-      const refSuffix = streamToPlay.referer
-        ? `&referer=${encodeURIComponent(streamToPlay.referer)}`
-        : '';
-      const addRef = (path) => {
-        if (!refSuffix || path.includes('referer=')) return path;
-        return path + refSuffix;
-      };
-      return text
-        .split('\n')
-        .map((line) => {
-          if (line.startsWith('#EXT-X-MAP') || line.startsWith('#EXT-X-KEY')) {
-            return line.replace(
-              /URI="(\/api\/stream\/relay\?url=[^"]+)"/,
-              (_, path) => `URI="${origin}${addRef(path)}"`
-            );
-          }
-          if (line.startsWith('/api/stream/relay?url=')) {
-            return origin + addRef(line);
-          }
-          return line;
-        })
-        .join('\n');
+  // восстановить позицию и play после пересборки источника
+  function resumeAt(pos, wasPlaying) {
+    const go = () => {
+      if (destroyed) return;
+      if (pos > 0.5) {
+        try { videoEl.currentTime = pos; } catch (_) {}
+      }
+      if (wasPlaying) videoEl.play().catch(() => {});
     };
+    if (videoEl.readyState >= 1) go();
+    else videoEl.addEventListener('loadedmetadata', go, { once: true });
+  }
+
+  function destroyHls() {
+    if (hlsInstance) {
+      try { hlsInstance.destroy(); } catch (_) {}
+      hlsInstance = null;
+    }
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      blobUrl = null;
+    }
+  }
+
+  function relayUrl(streamToPlay) {
+    const refQ = streamToPlay.referer ? `&referer=${encodeURIComponent(streamToPlay.referer)}` : '';
+    return `/api/stream/relay?url=${encodeURIComponent(streamToPlay.url)}${refQ}`;
+  }
+
+  function toAbsolutePlaylist(streamToPlay) {
+    const origin = window.location.origin;
+    const refSuffix = streamToPlay.referer ? `&referer=${encodeURIComponent(streamToPlay.referer)}` : '';
+    const addRef = (p) => (!refSuffix || p.includes('referer=') ? p : p + refSuffix);
+    return streamToPlay.playlist
+      .split('\n')
+      .map((line) => {
+        if (line.startsWith('#EXT-X-MAP') || line.startsWith('#EXT-X-KEY')) {
+          return line.replace(/URI="(\/api\/stream\/relay\?url=[^"]+)"/, (_, p) => `URI="${origin}${addRef(p)}"`);
+        }
+        if (line.startsWith('/api/stream/relay?url=')) return origin + addRef(line);
+        return line;
+      })
+      .join('\n');
+  }
+
+  // Новый экземпляр hls.js ВСЕГДА с обработчиком ошибок.
+  // Раньше после первой фатальной ошибки создавался голый Hls без обработчика —
+  // следующая ошибка уже ничем не лечилась, и у зрителя «замерзал» кадр.
+  function createHls(Hls, streamToPlay) {
+    destroyHls();
+    const hls = new Hls(HLS_CONFIG);
+    hlsInstance = hls;
+
+    if (streamToPlay.playlist) {
+      blobUrl = URL.createObjectURL(new Blob([toAbsolutePlaylist(streamToPlay)], { type: 'application/vnd.apple.mpegurl' }));
+      hls.loadSource(blobUrl);
+    } else {
+      hls.loadSource(relayUrl(streamToPlay));
+    }
+    hls.attachMedia(videoEl);
+
+    hls.on(Hls.Events.FRAG_LOADED, () => { consecutiveNetworkErrors = 0; });
+    hls.on(Hls.Events.ERROR, (event, data) => {
+      if (hls !== hlsInstance) return; // ошибка от уже заменённого экземпляра
+      if (!data.fatal) {
+        console.debug('[capture] hls (не фатально):', data.details);
+        return;
+      }
+      console.error('[capture] hls fatal:', data.type, data.details, data.response?.code || '');
+
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        consecutiveNetworkErrors++;
+        // протухшая подписанная ссылка (410/404) или CDN стабильно рвётся — нужен свежий extract
+        const isDeadLink =
+          data.response?.code === 410 || data.response?.code === 404 || consecutiveNetworkErrors >= 3;
+        if (isDeadLink && isOwner && !isRefreshingStream) {
+          console.warn('[capture] ссылка протухла (или CDN стабильно рвётся), запрашиваю свежий поток...');
+          refreshExpiredStream();
+          return;
+        }
+        // зритель свежую ссылку сам не добудет — пересобираем (не чаще раза в 5 с), пока хост не пришлёт новую
+        if (consecutiveNetworkErrors >= 3 && !isOwner) {
+          rebuildSource('сеть рвётся ' + consecutiveNetworkErrors + ' раза подряд');
+          return;
+        }
+        // штатный способ hls.js: перезапустить загрузку, позиция и буфер сохраняются
+        try { hls.startLoad(); return; } catch (_) {}
+      }
+
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoverStep < 2) {
+        mediaRecoverStep++;
+        console.warn('[capture] ошибка декодера, восстанавливаю (шаг', mediaRecoverStep, ')');
+        try {
+          if (mediaRecoverStep === 2) hls.swapAudioCodec();
+          hls.recoverMediaError();
+          return;
+        } catch (_) {}
+      }
+
+      rebuildSource('fatal ' + data.details);
+    });
+    return hls;
+  }
+
+  async function setupSource(streamToPlay) {
+    mediaRecoverStep = 0;
+    consecutiveNetworkErrors = 0;
+    const isHls =
+      streamToPlay.type === 'hls' ||
+      /\.m3u8(\?|$)/i.test(streamToPlay.url) ||
+      /cinemap\.cc|cinemar\.cc|cfnd\./i.test(streamToPlay.url);
 
     try {
-      if (hlsInstance) {
-        try { hlsInstance.destroy(); } catch (_) {}
-        hlsInstance = null;
-      }
       if (isHls) {
         const Hls = await loadHlsScript();
+        if (destroyed) return;
         if (Hls.isSupported()) {
-          hlsInstance = new Hls(HLS_CONFIG);
-
-          if (streamToPlay.playlist) {
-            const blob = new Blob([toAbsolutePlaylist(streamToPlay.playlist)], {
-              type: 'application/vnd.apple.mpegurl',
-            });
-            hlsInstance.loadSource(URL.createObjectURL(blob));
-          } else {
-            hlsInstance.loadSource(playUrl);
-          }
-
-          hlsInstance.attachMedia(videoEl);
-          hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-            if (!data.fatal) {
-              // bufferStalledError и подобное hls.js лечит сам, в консоль не шумим
-              console.debug('[capture] hls (не фатально):', data.details);
-              return;
-            }
-            console.error('[capture] hls fatal:', data.type, data.details, data.response?.code || '');
-
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              consecutiveNetworkErrors++;
-            }
-
-            // сетевые фатальные ошибки на уже "протухшей" подписанной ссылке
-            // (410/404 от relay) не лечатся пересозданием Hls с тем же URL —
-            // нужен свежий extract. То же самое, если CDN несколько раз подряд
-            // обрывается без внятного кода (CORS/timeout) — тоже сигнал,
-            // что со старой ссылкой что-то не так
-            const isDeadLink =
-              data.type === Hls.ErrorTypes.NETWORK_ERROR &&
-              (data.response?.code === 410 || data.response?.code === 404 || consecutiveNetworkErrors >= 3);
-
-            if (isDeadLink && !isRefreshingStream) {
-              console.warn('[capture] ссылка протухла (или CDN стабильно рвётся), запрашиваю свежий поток...');
-              refreshExpiredStream();
-              return;
-            }
-
-            // фатальную ошибку декодера часто можно вылечить без полной пересборки —
-            // recoverMediaError() дешевле и не сбивает позицию воспроизведения
-            if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !mediaRecoverTried) {
-              mediaRecoverTried = true;
-              console.warn('[capture] пробую recoverMediaError() перед пересборкой плеера');
-              try {
-                hlsInstance.recoverMediaError();
-                return;
-              } catch (_) {
-                // не получилось — падаем в обычную пересборку ниже
-              }
-            }
-
-            try { hlsInstance.destroy(); } catch (_) {}
-            hlsInstance = new Hls({
-              enableWorker: true,
-              maxBufferLength: 30,
-              maxMaxBufferLength: 60,
-            });
-            if (streamToPlay.playlist) {
-              const blob = new Blob([toAbsolutePlaylist(streamToPlay.playlist)], {
-                type: 'application/vnd.apple.mpegurl',
-              });
-              hlsInstance.loadSource(URL.createObjectURL(blob));
-            } else {
-              hlsInstance.loadSource(playUrl);
-            }
-            hlsInstance.attachMedia(videoEl);
-          });
-        } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-          videoEl.src = playUrl;
-        } else {
-          videoEl.src = playUrl;
+          createHls(Hls, streamToPlay);
+          return;
         }
-      } else {
-        videoEl.src = playUrl;
       }
+      destroyHls();
+      videoEl.src = relayUrl(streamToPlay); // mp4 или Safari с нативным HLS
     } catch (e) {
       console.error('[capture] setupSource failed', e);
-      videoEl.src = playUrl;
+      destroyHls();
+      videoEl.src = relayUrl(streamToPlay);
     }
-  };
+  }
+
+  // полная пересборка плеера на том же потоке с сохранением позиции (дешевле, чем Puppeteer)
+  let lastRebuildAt = 0;
+  async function rebuildSource(reason) {
+    if (destroyed || Date.now() - lastRebuildAt < 5000) return;
+    lastRebuildAt = Date.now();
+    const pos = videoEl.currentTime || 0;
+    const wasPlaying = !videoEl.paused;
+    console.warn('[capture] пересобираю плеер:', reason, '— позиция', Math.round(pos), 'с');
+    await setupSource(currentStream);
+    resumeAt(pos, wasPlaying);
+  }
 
   setupSource(currentStream);
 
@@ -457,159 +429,141 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     if (!expiry) return;
 
     // обновляем за 2 минуты до истечения — с запасом на сетевые задержки
-    const refreshAt = expiry.getTime() - 2 * 60 * 1000;
-    const delay = refreshAt - Date.now();
-
+    const delay = expiry.getTime() - 2 * 60 * 1000 - Date.now();
     if (delay <= 0) {
-      // ссылка уже истекла или истечёт вот-вот — обновляем сразу
       refreshExpiredStream();
       return;
     }
-
     console.log('[capture] запланировано проактивное обновление потока через', Math.round(delay / 1000), 'сек');
     proactiveRefreshTimer = setTimeout(() => refreshExpiredStream(), delay);
   }
 
   scheduleProactiveRefresh(currentStream.url);
 
-    // независимый сторож: если видео "виснет" на буферизации дольше 12 сек —
-  // считаем поток подвисшим, даже если hls.js не кинул fatal-ошибку явно
+  // ---- сторож буферизации: видео «ждёт» дольше 15 с ----
+  // Лечим по нарастающей: startLoad → перепрыгнуть дырку → пересборка → (хост) свежая ссылка.
+  // Раньше у зрителя после первой попытки сторож просто выключался — и кадр висел навсегда.
   let stallTimer = null;
-  const STALL_TIMEOUT_MS = 20000; // было 12с — мало: сам relay (перебор referer+proxy) иногда тормозит дольше
+  let stallStep = 0;
+  const STALL_TIMEOUT_MS = 15000;
   const MIN_REFRESH_INTERVAL_MS = 90 * 1000; // не поднимать Puppeteer заново чаще, чем раз в 90 сек
   let lastRefreshAt = 0;
-  let softRetryTried = false; // перед тяжёлым re-extract сначала пробуем дёшево пнуть hls.js
+
+  function onStall() {
+    if (destroyed || videoEl.paused || videoEl.ended || isRefreshingStream) return;
+    stallStep++;
+    if (stallStep === 1 && hlsInstance) {
+      console.warn('[capture] буферизация зависла — startLoad()');
+      try { hlsInstance.startLoad(); } catch (_) {}
+    } else if (stallStep <= 2) {
+      console.warn('[capture] буферизация зависла — перепрыгиваю на 1 с вперёд');
+      try { videoEl.currentTime = (videoEl.currentTime || 0) + 1; } catch (_) {}
+    } else if (stallStep === 3 || !isOwner || Date.now() - lastRefreshAt < MIN_REFRESH_INTERVAL_MS) {
+      rebuildSource('буферизация > ' + STALL_TIMEOUT_MS / 1000 + ' с');
+    } else {
+      console.warn('[capture] видео всё ещё виснет — запрашиваю свежий поток');
+      refreshExpiredStream();
+      return;
+    }
+    armStallWatchdog();
+  }
 
   function armStallWatchdog() {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => {
-      if (videoEl.paused || videoEl.ended) return; // пауза/конец — это не зависание
-      if (isRefreshingStream) return; // обновление уже идёт — не запускаем второе поверх
-
-      // 1) дешёвая попытка: просто заставить hls.js перечитать манифест/сегмент
-      // через уже открытый relay. Часто "зависание" — это just медленный перебор
-      // referer-кандидатов в streamProxy.routes.js, а не протухшая ссылка.
-      if (!softRetryTried && hlsInstance) {
-        softRetryTried = true;
-        console.warn('[capture] буферизация зависла — пробую startLoad() вместо полного re-extract');
-        try { hlsInstance.startLoad(); } catch (_) {}
-        armStallWatchdog(); // даём ещё один цикл на дешёвую попытку, прежде чем эскалировать
-        return;
-      }
-
-      // 2) дешёвая попытка не помогла — только тогда тяжёлый путь (Puppeteer),
-      // и не чаще MIN_REFRESH_INTERVAL_MS, чтобы не улетать в цикл "перезапуск каждые 30-40с"
-      const sinceLastRefresh = Date.now() - lastRefreshAt;
-      if (sinceLastRefresh < MIN_REFRESH_INTERVAL_MS) {
-        console.warn('[capture] всё ещё виснет, но re-extract был', Math.round(sinceLastRefresh / 1000), 'сек назад — жду кулдаун');
-        armStallWatchdog();
-        return;
-      }
-
-      console.warn('[capture] видео виснет на буферизации дольше', STALL_TIMEOUT_MS / 1000, 'сек — пробую обновить поток');
-      refreshExpiredStream();
-    }, STALL_TIMEOUT_MS);
+    stallTimer = setTimeout(onStall, STALL_TIMEOUT_MS);
   }
 
   function disarmStallWatchdog() {
     clearTimeout(stallTimer);
-    softRetryTried = false; // playback пошло — сбрасываем, чтобы при следующем стопоре снова сначала пробовали дешёвый путь
+    stallStep = 0; // playback пошло — при следующем стопоре снова начинаем с дешёвых шагов
   }
 
   videoEl.addEventListener('waiting', armStallWatchdog);
   videoEl.addEventListener('playing', disarmStallWatchdog);
   videoEl.addEventListener('pause', disarmStallWatchdog);
 
+  // ---- сторож «замёрзшего кадра»: время идёт (звук играет), а новых кадров нет ----
+  // Бывает при сбое декодера после склейки сегментов; событий waiting/error при этом нет.
+  let lastFrames = -1;
+  let lastTime = 0;
+  let frozenHits = 0;
+  const frozenTimer = setInterval(() => {
+    if (destroyed || videoEl.paused || videoEl.seeking || videoEl.readyState < 3) {
+      lastFrames = -1;
+      return;
+    }
+    // в фоновой вкладке браузер сам перестаёт декодировать видео — это не зависание
+    // (и сбрасываем замер, иначе при возврате на вкладку сработали бы ложно)
+    if (document.visibilityState !== 'visible' || !videoEl.getVideoPlaybackQuality || !videoEl.videoWidth) {
+      lastFrames = -1;
+      return;
+    }
+    const frames = videoEl.getVideoPlaybackQuality().totalVideoFrames;
+    const t = videoEl.currentTime;
+    if (lastFrames >= 0 && frames === lastFrames && t - lastTime > 1.5) {
+      frozenHits++;
+      console.warn('[capture] кадр замёрз (время идёт, кадров нет), попытка', frozenHits);
+      if (frozenHits === 1 && hlsInstance) {
+        try { hlsInstance.recoverMediaError(); } catch (_) {}
+        resumeAt(t, true);
+      } else {
+        frozenHits = 0;
+        rebuildSource('замёрзший кадр');
+      }
+    } else if (frames !== lastFrames) {
+      frozenHits = 0;
+    }
+    lastFrames = frames;
+    lastTime = t;
+  }, 3000);
+
   async function refreshExpiredStream() {
-    if (!isOwner) return; // только хост инициирует переизвлечение, зритель получит обновление через socket
-    if (isRefreshingStream) return; // уже обновляем — не запускаем параллельно
+    if (!isOwner || destroyed) return; // только хост ходит в extract, зритель получит обновление через socket
+    if (isRefreshingStream) return;
     isRefreshingStream = true;
-    lastRefreshAt = Date.now(); // ← новое: без этого кулдаун выше не работает
-    disarmStallWatchdog();
+    lastRefreshAt = Date.now();
+    clearTimeout(stallTimer);
 
     const wasPlaying = !videoEl.paused;
     const pos = videoEl.currentTime || 0;
 
     try {
-      const res = await fetch('/api/player-capture/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          url: videoUrl,
-          episode: meta?.currentEpisode || null,
-          roomCode: window.code,
-          forceRefresh: true, // игнорируем кэш на бэкенде — старая ссылка мертва
-        }),
+      const data = await requestExtract({
+        url: videoUrl,
+        season: meta?.currentSeason || null,
+        episode: meta?.currentEpisode || null,
+        forceRefresh: true, // игнорируем кэш на бэкенде — старая ссылка мертва
       });
-      const data = await res.json();
+      if (destroyed) return;
 
       if (data.success && data.streams?.length) {
-        refreshAttempts = 0; // успех — сбрасываем счётчик неудачных попыток
-
-        if (window.socket && window.code) {
-          window.socket.emit('player_capture:streams', {
-            code: window.code,
-            season: data.meta?.currentSeason || 1,
-            episode: data.meta?.currentEpisode || 1,
-            voice: data.meta?.currentVoice || null,
-            streams: data.streams,
-            playerIframes: data.playerIframes || [],
-            meta: data.meta,
-          });
-        }
+        refreshAttempts = 0;
+        emitStreams(data, meta?.currentSeason, meta?.currentEpisode); // та же серия — сервер позицию не сбросит
         const best = pickBestStream(data.streams);
         currentStream = best;
         if (meta) meta.currentQuality = best?.quality || null;
 
         await setupSource(best);
-        scheduleProactiveRefresh(best.url); // сразу планируем следующее обновление для НОВОЙ ссылки
-
-        const resume = () => {
-          try { videoEl.currentTime = pos; } catch (_) {}
-          if (wasPlaying) videoEl.play().catch(() => {});
-        };
-        if (videoEl.readyState >= 2) resume();
-        else videoEl.addEventListener('loadeddata', resume, { once: true });
+        scheduleProactiveRefresh(best.url);
+        resumeAt(pos, wasPlaying);
       } else {
         refreshAttempts++;
         console.error('[capture] не удалось получить свежий поток (попытка', refreshAttempts, '):', data.error || data.message);
         if (refreshAttempts < MAX_REFRESH_ATTEMPTS) {
-          setTimeout(() => refreshExpiredStream(), RETRY_BASE_DELAY_MS * refreshAttempts); // растущая пауза: 4с, 8с, 12с
+          setTimeout(() => refreshExpiredStream(), RETRY_BASE_DELAY_MS * refreshAttempts); // 4с, 8с
         } else {
           console.error('[capture] превышен лимит попыток обновления потока — сдаюсь');
         }
       }
     } catch (e) {
       refreshAttempts++;
-      console.error('[capture] ошибка обновления протухшего потока (попытка', refreshAttempts, '):', e.message);
+      console.error('[capture] ошибка обновления потока (попытка', refreshAttempts, '):', e.message);
       if (refreshAttempts < MAX_REFRESH_ATTEMPTS) {
         setTimeout(() => refreshExpiredStream(), RETRY_BASE_DELAY_MS * refreshAttempts);
       }
     } finally {
       isRefreshingStream = false;
     }
-  }
-
-  if (isOwner) {
-    videoEl.addEventListener('play', () => {
-      if (window.socket && window.code) {
-        window.socket.emit('playback:update', {
-          code: window.code,
-          isPlaying: true,
-          positionSeconds: videoEl.currentTime || 0,
-        });
-      }
-    });
-    videoEl.addEventListener('pause', () => {
-      if (window.socket && window.code) {
-        window.socket.emit('playback:update', {
-          code: window.code,
-          isPlaying: false,
-          positionSeconds: videoEl.currentTime || 0,
-        });
-      }
-    });
   }
 
   const switchQuality = (quality) => {
@@ -623,98 +577,11 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
 
     setupSource(next).then(() => {
       scheduleProactiveRefresh(next.url); // у другого качества обычно свой токен/срок жизни ссылки
-
-      const resume = () => {
-        try { videoEl.currentTime = pos; } catch (_) {}
-        if (wasPlaying) videoEl.play().catch(() => {});
-      };
-      if (videoEl.readyState >= 2) resume();
-      else videoEl.addEventListener('loadeddata', resume, { once: true });
+      resumeAt(pos, wasPlaying);
     });
   };
 
-    const reloadWithEpisode = async (episode, playerLabel) => {
-      try { clearTimeout(proactiveRefreshTimer); clearTimeout(stallTimer); } catch (_) {}
-      try { if (hlsInstance) hlsInstance.destroy(); } catch (_) {}
-      hlsInstance = null;
-      container.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;background:#111;">
-        <div>⏳ Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...</div>
-      </div>
-    `;
-
-    const res = await fetch('/api/player-capture/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        url: videoUrl,
-        episode,
-        player: playerLabel || null,
-        roomCode: window.code,
-      }),
-    });
-    const data = await res.json();
-
-    if (data.success && data.streams?.length) {
-      if (isOwner && window.socket && window.code) {
-        window.socket.emit('player_capture:streams', {
-          code: window.code,
-          season: data.meta?.currentSeason || 1,
-          episode,
-          voice: data.meta?.currentVoice || null,
-          streams: data.streams,
-          playerIframes: data.playerIframes || [],
-          meta: data.meta,
-        });
-      }
-      const best = pickBestStream(data.streams);
-      const m = { ...(data.meta || meta), currentQuality: best?.quality || null };
-      const player = renderNativePlayer(best, m, {
-        isOwner,
-        container,
-        videoUrl,
-        allStreams: data.streams,
-      });
-      if (typeof window.__onCapturePlayerReload === 'function') {
-        window.__onCapturePlayerReload(player);
-      }
-      return player;
-    } else if (data.success && data.playerIframes?.length) {
-      const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
-        isOwner,
-        container,
-        videoUrl,
-      });
-      if (typeof window.__onCapturePlayerReload === 'function') {
-        window.__onCapturePlayerReload(player);
-      }
-      return player;
-    } else {
-      renderFallback(videoUrl, data.meta || meta, {
-        isOwner,
-        container,
-        errorMessage: data.error || 'Не удалось загрузить серию',
-        videoUrl,
-      });
-    }
-  };
-
-  const hasControls =
-    isOwner &&
-    (meta.seasons?.length > 1 ||
-      meta.totalEpisodes > 1 ||
-      meta.voices?.length ||
-      (meta.players && meta.players.length > 1) ||
-      streamsList.filter((s) => s.quality).length > 1);
-
-  if (hasControls) {
-    showEpisodeControls(meta, reloadWithEpisode, streamsList, switchQuality);
-  } else {
-    hideEpisodeControls();
-  }
-
-  return {
+  const player = {
     type: 'player_capture',
     videoEl,
     meta,
@@ -724,25 +591,26 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     doPlayPause: (play) => (play ? videoEl.play().catch(() => {}) : videoEl.pause()),
     seekTo: (sec) => { videoEl.currentTime = sec; },
     destroy: () => {
+      destroyed = true;
       clearTimeout(proactiveRefreshTimer);
       clearTimeout(stallTimer);
+      clearInterval(frozenTimer);
       videoEl.removeEventListener('waiting', armStallWatchdog);
       videoEl.removeEventListener('playing', disarmStallWatchdog);
       videoEl.removeEventListener('pause', disarmStallWatchdog);
-      try { if (hlsInstance) hlsInstance.destroy(); } catch (_) {}
-      hlsInstance = null;
+      destroyHls();
+      // без этого старый <video> продолжает качать поток и отнимает канал у нового
+      try { videoEl.removeAttribute('src'); videoEl.load(); } catch (_) {}
     },
   };
+
+  setupControls(meta, { isOwner, container, videoUrl, meta, current: player }, streamsList, switchQuality);
+  return player;
 }
 
 export function renderFromStreams(streams, meta, { isOwner, container, videoUrl }) {
   if (!streams?.length) {
-    return renderFallback(videoUrl || '', meta || {}, {
-      isOwner,
-      container,
-      errorMessage: 'Нет потоков',
-      videoUrl,
-    });
+    return renderFallback(videoUrl || '', meta || {}, { isOwner, container, errorMessage: 'Нет потоков', videoUrl });
   }
   const best = pickBestStream(streams);
   const m = { ...(meta || {}), currentQuality: best?.quality || null };
@@ -774,78 +642,15 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
     </div>
   `;
 
-  const hasPlayers = meta.players && meta.players.length > 1;
-  const hasMultipleEpisodes = (meta.seasons?.length > 1) || (meta.totalEpisodes > 1);
-
-  if (isOwner && (hasMultipleEpisodes || meta.voices?.length || hasPlayers)) {
-    const reloadWithEpisode = async (episode, playerLabel) => {
-      showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
-
-      const res = await fetch('/api/player-capture/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          url: videoUrl || url,
-          episode,
-          player: playerLabel || null,
-          roomCode: window.code,
-        }),
-      });
-      const data = await res.json();
-
-      if (data.success && data.streams?.length) {
-        if (isOwner && window.socket && window.code) {
-          window.socket.emit('player_capture:streams', {
-            code: window.code,
-            season: data.meta?.currentSeason || 1,
-            episode,
-            voice: data.meta?.currentVoice || null,
-            streams: data.streams,
-            playerIframes: data.playerIframes || [],
-            meta: data.meta,
-          });
-        }
-        const player = renderNativePlayer(data.streams[0], data.meta || meta, {
-          isOwner,
-          container,
-          videoUrl: videoUrl || url,
-        });
-        if (typeof window.__onCapturePlayerReload === 'function') {
-          window.__onCapturePlayerReload(player);
-        }
-        return player;
-      } else if (data.success && data.playerIframes?.length) {
-        const player = renderPlayerIframe(data.playerIframes[0], data.meta || meta, {
-          isOwner,
-          container,
-          videoUrl: videoUrl || url,
-        });
-        if (typeof window.__onCapturePlayerReload === 'function') {
-          window.__onCapturePlayerReload(player);
-        }
-        return player;
-      } else {
-        renderFallback(videoUrl || url, data.meta || meta, {
-          isOwner,
-          container,
-          errorMessage: data.error || data.message || 'Не удалось загрузить',
-          videoUrl: videoUrl || url,
-        });
-      }
-    };
-
-    showEpisodeControls(meta, reloadWithEpisode);
-  } else {
-    hideEpisodeControls();
-  }
-
-  return {
+  const player = {
     type: 'player_capture',
     meta,
     getCurrentPosition: () => 0,
     getIsPlayingNow: () => false,
     doPlayPause: () => {},
     seekTo: () => {},
+    destroy: () => {},
   };
+  setupControls(meta || {}, { isOwner, container, videoUrl: videoUrl || url, meta, current: player });
+  return player;
 }

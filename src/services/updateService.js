@@ -1,8 +1,16 @@
 const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const config = require('../config');
 
 const status = { state: 'idle', log: [], updatedAt: null };
 const HASH_RE = /^[0-9a-f]{7,40}$/i;
+// имя и версия пакета идут в командную строку — пропускаем только безопасные символы
+const PKG_NAME_RE = /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i;
+const PKG_RANGE_RE = /^[0-9a-z.^~<>=| *+-]+$/i;
+
+// pm2-процессы проекта; тот, что выполняет обновление, перезапускаем последним
+const PM2_APPS = ['partywatcher', 'partywatcher-admin'];
 
 function run(cmd) {
   return new Promise((resolve, reject) => {
@@ -28,6 +36,43 @@ async function getCommits(limit = 100) {
     });
 }
 
+// Проверяет, что каждая зависимость из package.json реально установлена, и доустанавливает недостающие.
+// Страховка на случай, если npm install упал на середине или node_modules собран со старого package.json.
+async function ensureDependencies() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')); // не require: он кэширует старую версию
+  const missing = [];
+  for (const [name, range] of Object.entries(pkg.dependencies || {})) {
+    if (!PKG_NAME_RE.test(name) || !PKG_RANGE_RE.test(String(range))) {
+      status.log.push(`пропускаю зависимость с подозрительным именем/версией: ${name}`);
+      continue;
+    }
+    if (!fs.existsSync(path.join(process.cwd(), 'node_modules', name, 'package.json'))) {
+      missing.push(`"${name}@${range}"`);
+    }
+  }
+  if (!missing.length) {
+    status.log.push('все зависимости на месте');
+    return;
+  }
+  status.log.push('не хватает пакетов: ' + missing.join(' ') + ' — доустанавливаю...');
+  status.log.push(await run(`npm install --omit=dev --no-save ${missing.join(' ')}`));
+}
+
+async function restartApps() {
+  const self = process.env.name; // pm2 кладёт имя приложения в env.name
+  const order = [...PM2_APPS.filter((a) => a !== self), ...PM2_APPS.filter((a) => a === self)];
+  for (const app of order) {
+    status.log.push(`pm2 restart ${app}...`);
+    if (app === self) status.state = 'done'; // после рестарта себя записать статус уже не успеем
+    try {
+      status.log.push(await run(`pm2 restart ${app}`));
+    } catch (e) {
+      // процесса может не быть (например, админка не запущена) — не повод считать обновление проваленным
+      status.log.push(`pm2 restart ${app} не удался: ${e.message.slice(0, 200)}`);
+    }
+  }
+}
+
 async function performUpdate(targetHash) {
   if (targetHash && !HASH_RE.test(targetHash)) {
     throw new Error('Некорректный хэш коммита');
@@ -48,6 +93,9 @@ async function performUpdate(targetHash) {
     status.log.push('npm install...');
     status.log.push(await run('npm install --omit=dev'));
 
+    status.log.push('проверка зависимостей...');
+    await ensureDependencies();
+
     status.log.push('pip install/upgrade yt-dlp...');
     try {
       status.log.push(await run('pip3 install --upgrade "yt-dlp[default]"'));
@@ -56,8 +104,7 @@ async function performUpdate(targetHash) {
       status.log.push(await run('pip3 install --upgrade "yt-dlp[default]" --break-system-packages'));
     }
 
-    status.log.push('pm2 restart partywatcher...');
-    status.log.push(await run('pm2 restart partywatcher'));
+    await restartApps();
 
     status.state = 'done';
   } catch (err) {

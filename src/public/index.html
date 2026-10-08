@@ -49,8 +49,27 @@
         <button class="auth-submit" data-click="login">Войти</button>
 
         <p class="auth-switch">
+          <button type="button" class="auth-link" data-click="showForgotPanel">Забыли пароль?</button>
+        </p>
+        <p class="auth-switch">
           Нет аккаунта?
           <button type="button" class="auth-link" data-click="showRegisterPanel">Зарегистрироваться</button>
+        </p>
+      </div>
+
+      <!-- СБРОС ПАРОЛЯ -->
+      <div id="forgotPanel" class="hidden">
+        <h2 class="auth-title">Сброс пароля</h2>
+        <div id="forgotError" class="auth-error hidden"></div>
+        <div id="forgotOk" class="support-ok hidden"></div>
+
+        <label class="auth-label" for="forgotEmail">Почта аккаунта</label>
+        <input id="forgotEmail" type="email" autocomplete="email" placeholder="email@example.com" />
+
+        <button id="forgotBtn" class="auth-submit" data-click="sendForgot">Прислать ссылку</button>
+
+        <p class="auth-switch">
+          <button type="button" class="auth-link" data-click="showLoginPanel">Вернуться ко входу</button>
         </p>
       </div>
 
@@ -205,8 +224,8 @@
       <p class="support-modal-hint">Опишите проблему — мы постараемся помочь</p>
       <label class="auth-label" for="supportName">Имя (необязательно)</label>
       <input id="supportName" maxlength="12" placeholder="До 12 символов" />
-      <label class="auth-label" for="supportEmail">Почта (необязательно)</label>
-      <input id="supportEmail" type="email" maxlength="26" placeholder="До 26 символов" />
+      <label class="auth-label" for="supportEmail" id="supportEmailLabel">Почта</label>
+      <input id="supportEmail" type="email" maxlength="100" autocomplete="email" placeholder="email@example.com" />
       <label class="auth-label" for="supportDesc">Описание проблемы</label>
       <textarea id="supportDesc" maxlength="1000" rows="5" placeholder="Что случилось? (до 1000 символов)"></textarea>
       <div id="supportError" class="auth-error hidden"></div>
@@ -219,6 +238,6 @@
   <script src="/js/api.js"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/page-transition.js"></script>
-  <script src="/js/index.js?v=3"></script>
+  <script src="/js/index.js?v=4"></script>
 </body>
 </html>

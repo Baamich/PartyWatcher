@@ -1,8 +1,7 @@
 // roomSocket.js 
 const fs = require('fs');
 const path = require('path');
-const jwt = require('jsonwebtoken');
-const config = require('../config');
+const { verifyToken } = require('../middleware/auth');
 const Room = require('../models/Room');
 const ChatMessage = require('../models/ChatMessage');
 const SupportTicket = require('../models/SupportTicket');
@@ -73,13 +72,13 @@ function broadcastParticipants(io, code) {
 }
 
 function registerRoomSocket(io) {
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token =
       socket.handshake.auth?.token ||
-      socket.handshake.headers?.cookie?.match(/token=([^;]+)/)?.[1];
+      socket.handshake.headers?.cookie?.match(/(?:^|;\s*)token=([^;]+)/)?.[1];
     if (!token) return next(new Error('Не авторизован'));
     try {
-      socket.user = jwt.verify(token, config.jwt.secret);
+      socket.user = await verifyToken(token); // заодно отсекает токены, отозванные сменой пароля
       next();
     } catch {
       next(new Error('Невалидный токен'));
@@ -259,33 +258,50 @@ function registerRoomSocket(io) {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
       if (!streams?.length) return;
 
+      const seasonNum = Number(season) || 1;
+      const episodeNum = Number(episode) || 1;
+
       const playerCaptureCache = require('../services/playerCaptureCache');
-      playerCaptureCache.set(code, episode, {
+      playerCaptureCache.set(code, episodeNum, {
         success: true,
         streams,
         playerIframes: playerIframes || [],
         meta: meta || {},
         message: `Найдено потоков: ${streams.length}`,
-      });
+      }, seasonNum);
 
-      await Room.findOneAndUpdate(
+      const room = await Room.findOne({ code }).select('video.meta playback').lean();
+      if (!room) return;
+
+      // Та же серия (хост обновил протухшую ссылку или перезагрузил страницу) — позицию сохраняем.
+      // Раньше любой новый поток сбрасывал всех на 0:00.
+      const sameEpisode =
+        (Number(room.video?.meta?.currentSeason) || 1) === seasonNum &&
+        (Number(room.video?.meta?.currentEpisode) || 1) === episodeNum;
+      const playback = sameEpisode && room.playback
+        ? { isPlaying: !!room.playback.isPlaying, positionSeconds: Number(room.playback.positionSeconds) || 0 }
+        : { isPlaying: false, positionSeconds: 0 };
+
+      await Room.updateOne(
         { code },
         {
-          'video.meta.currentSeason': season || 1,
-          'video.meta.currentEpisode': episode || 1,
+          'video.meta.currentSeason': seasonNum,
+          'video.meta.currentEpisode': episodeNum,
           'video.meta.currentVoice': voice || null,
-          playback: { isPlaying: false, positionSeconds: 0, updatedAt: new Date() },
+          playback: { ...playback, updatedAt: new Date() },
         }
       );
 
-      socket.to(code).emit('playback:update', { isPlaying: false, positionSeconds: 0 });
+      if (!sameEpisode) socket.to(code).emit('playback:update', playback);
       socket.to(code).emit('player_capture:streams', {
-        season,
-        episode,
+        season: seasonNum,
+        episode: episodeNum,
         voice,
         streams,
         playerIframes: playerIframes || [],
         meta: meta || {},
+        sameEpisode,
+        playback,
         by: socket.user.username,
       });
     });

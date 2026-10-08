@@ -9,6 +9,13 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     createdAt: { type: Date, default: Date.now },
 
+    // ---- сброс пароля ----
+    // храним только sha256 от токена: утечка базы не даёт готовых ссылок сброса
+    resetTokenHash: { type: String, default: undefined, index: { sparse: true } },
+    resetTokenExpires: { type: Date, default: undefined },
+    // растёт при смене пароля — все старые JWT с меньшей версией перестают действовать
+    tokenVersion: { type: Number, default: 0 },
+
     // ---- стример ----
     streamerName: { type: String, default: undefined, trim: true },
     streamerNameLower: { type: String, default: undefined, unique: true, sparse: true },

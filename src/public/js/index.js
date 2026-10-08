@@ -18,6 +18,7 @@ async function checkAuth() {
       return;
     }
 
+    window.__pwAuthed = true;
     if (authBox) authBox.classList.add('hidden');
     if (appBox) appBox.classList.remove('hidden');
 
@@ -35,6 +36,7 @@ async function checkAuth() {
     startAutoRefresh();
   } catch (err) {
     console.warn('[checkAuth] не авторизован:', err?.message || err);
+    window.__pwAuthed = false;
     if (authBox) authBox.classList.remove('hidden');
     if (appBox) appBox.classList.add('hidden');
     stopAutoRefresh();
@@ -46,17 +48,54 @@ async function checkAuth() {
   }
 }
 
+function showAuthPanel(id) {
+  ['loginPanel', 'registerPanel', 'forgotPanel'].forEach((p) => {
+    document.getElementById(p)?.classList.toggle('hidden', p !== id);
+  });
+}
+
 function showLoginPanel() {
-  document.getElementById('loginPanel').classList.remove('hidden');
-  document.getElementById('registerPanel').classList.add('hidden');
+  showAuthPanel('loginPanel');
   hideAuthError('loginError');
 }
 
 function showRegisterPanel() {
-  document.getElementById('registerPanel').classList.remove('hidden');
-  document.getElementById('loginPanel').classList.add('hidden');
+  showAuthPanel('registerPanel');
   hideAuthError('registerError');
   validateRegisterForm();
+}
+
+function showForgotPanel() {
+  showAuthPanel('forgotPanel');
+  hideAuthError('forgotError');
+  document.getElementById('forgotOk')?.classList.add('hidden');
+  const loginVal = document.getElementById('loginInput')?.value.trim() || '';
+  const emailInput = document.getElementById('forgotEmail');
+  if (emailInput && !emailInput.value && loginVal.includes('@')) emailInput.value = loginVal;
+}
+
+async function sendForgot() {
+  hideAuthError('forgotError');
+  const okEl = document.getElementById('forgotOk');
+  okEl?.classList.add('hidden');
+  const email = (document.getElementById('forgotEmail')?.value || '').trim();
+  const err = getEmailError(email);
+  if (err) return showAuthError('forgotError', err);
+
+  const btn = document.getElementById('forgotBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api('/auth/forgot', { method: 'POST', body: { email } });
+    if (okEl) {
+      okEl.textContent = data.message || 'Проверьте почту';
+      okEl.classList.remove('hidden');
+    }
+    // после успеха не даём жать сразу снова: сервер всё равно примет одно письмо раз в 2 минуты
+    setTimeout(() => { if (btn) btn.disabled = false; }, 30000);
+  } catch (e) {
+    showAuthError('forgotError', e.message || 'Не удалось отправить');
+    if (btn) btn.disabled = false;
+  }
 }
 
 function showAuthError(id, message) {
@@ -696,6 +735,9 @@ function stopAutoRefresh() {
   if (!fab || !modal) return;
 
   function openSupport() {
+    // без входа отвечаем только на почту, поэтому она обязательна
+    const label = document.getElementById('supportEmailLabel');
+    if (label) label.textContent = window.__pwAuthed ? 'Почта (необязательно)' : 'Почта (обязательно — ответим на неё)';
     modal.classList.remove('hidden');
     document.getElementById('supportError')?.classList.add('hidden');
     document.getElementById('supportOk')?.classList.add('hidden');
@@ -712,20 +754,22 @@ function stopAutoRefresh() {
 
   sendBtn?.addEventListener('click', async () => {
     const name = (document.getElementById('supportName')?.value || '').trim().slice(0, 12);
-    const email = (document.getElementById('supportEmail')?.value || '').trim().slice(0, 26);
+    const email = (document.getElementById('supportEmail')?.value || '').trim().slice(0, 100);
     const description = (document.getElementById('supportDesc')?.value || '').trim().slice(0, 1000);
     const errEl = document.getElementById('supportError');
     const okEl = document.getElementById('supportOk');
     errEl?.classList.add('hidden');
     okEl?.classList.add('hidden');
 
-    if (!description || description.length < 5) {
+    const fail = (text) => {
       if (errEl) {
-        errEl.textContent = 'Опишите проблему (минимум 5 символов)';
+        errEl.textContent = text;
         errEl.classList.remove('hidden');
       }
-      return;
-    }
+    };
+    if (!window.__pwAuthed && !email) return fail('Укажите почту — без входа ответить можно только на неё');
+    if (email && getEmailError(email)) return fail('Некорректная почта');
+    if (!description || description.length < 5) return fail('Опишите проблему (минимум 5 символов)');
 
     sendBtn.disabled = true;
     try {

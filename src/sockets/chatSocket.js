@@ -1,5 +1,4 @@
-const jwt = require('jsonwebtoken');
-const config = require('../config');
+const { verifyToken } = require('../middleware/auth');
 const StreamChatMessage = require('../models/StreamChatMessage');
 const ChannelBan = require('../models/ChannelBan');
 const ChannelTimeout = require('../models/ChannelTimeout');
@@ -31,11 +30,11 @@ function parseCookieToken(cookieHeader) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-function getUserFromSocket(socket) {
+async function getUserFromSocket(socket) {
   try {
     const token = parseCookieToken(socket.handshake.headers.cookie);
     if (!token) return null;
-    return jwt.verify(token, config.jwt.secret);
+    return await verifyToken(token); // токен, отозванный сменой пароля, = гость
   } catch {
     return null;
   }
@@ -61,6 +60,13 @@ function formatUptime(startedAt, isLive) {
 module.exports = function registerChatSocket(io) {
   const nsp = io.of('/chat');
   chatBus.init(nsp);
+
+  // проверка токена асинхронная (версия в базе) — делаем её до connection,
+  // чтобы обработчики навешивались сразу и первый chat:join не потерялся
+  nsp.use(async (socket, next) => {
+    socket.data.authUser = await getUserFromSocket(socket);
+    next();
+  });
 
   // streamerNameLower → Map<socketId, { username, userId }>
   const presence = new Map();
@@ -162,7 +168,7 @@ module.exports = function registerChatSocket(io) {
   }
 
   nsp.on('connection', (socket) => {
-    const authUser = getUserFromSocket(socket);
+    const authUser = socket.data.authUser;
     socket.data.userId = authUser?.id ? String(authUser.id) : null;
       let currentStreamerNameLower = null;
       let lastSendAt = 0;

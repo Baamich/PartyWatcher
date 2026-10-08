@@ -214,10 +214,42 @@ function meterLevel(m) {
 
 // «говорит» = заметно громче собственного фонового шума источника
 // (у друга шумный фон или колонки: фильтр сам подстроится, а не будет глушить видео постоянно)
-function meterSpeaking(m) {
+// Речь идёт фразами с паузами. Звук без пауз дольше SUSTAINED_MS — это не голос, а фон:
+// чаще всего фильм, который микрофон собеседника ловит из его же наушников/колонок.
+// Раньше такой фон считался «говорит», и в громких сценах (музыка) фильм приглушался на 65%.
+const SUSTAINED_MS = 4000;
+const SPEECH_GAP_MS = 250; // пауза между словами/фразами
+
+function meterSpeaking(m, now = Date.now()) {
   const level = meterLevel(m);
   m.floor = Math.min(level, m.floor * 1.005 + 0.00001);
-  return { level, speaking: level > Math.max(SPEAK_THRESHOLD * 0.75, m.floor * 3) };
+  const loud = level > Math.max(SPEAK_THRESHOLD * 0.75, m.floor * 3);
+
+  if (loud) {
+    if (!m.loudSince) m.loudSince = now;
+    m.quietSince = 0;
+  } else {
+    if (!m.quietSince) m.quietSince = now;
+    if (now - m.quietSince >= SPEECH_GAP_MS) m.loudSince = 0; // была пауза — это похоже на речь
+  }
+
+  const sustained = !!m.loudSince && now - m.loudSince > SUSTAINED_MS;
+  if (sustained) {
+    // запоминаем громкость фона на 15 с: короткие паузы в музыке не должны снова включать приглушение.
+    // Голос поверх фона в уровень фона не записываем, иначе он сам себя «заглушит»
+    const bgActive = m.bgUntil > now;
+    if (!bgActive || level < m.bgLevel * 1.8) m.bgLevel = Math.max(bgActive ? m.bgLevel : 0, level);
+    m.bgUntil = now + 15000;
+  }
+  let louderThanBg = true;
+  if (m.bgUntil > now) {
+    m.bgLevel *= 0.998; // фон плавно «забывается»
+    louderThanBg = level > m.bgLevel * 1.8; // голос поверх фильма у микрофона заметно громче утечки
+  } else {
+    m.bgLevel = 0;
+  }
+  // в режиме фона «говорит» только тот, кто заметно громче фона (сам фон под это не попадает: bgLevel ≥ его уровня)
+  return { level, speaking: loud && louderThanBg };
 }
 
 function attachRemoteStream(socketId, stream) {
@@ -265,6 +297,8 @@ async function getMicStream(deviceId) {
     echoCancellation: proc,
     noiseSuppression: proc,
     autoGainControl: proc,
+    // «изоляция голоса» там, где браузер её умеет: режет фон (в т.ч. фильм из наушников), остальные браузеры игнорируют
+    voiceIsolation: proc,
     channelCount: 1,
     sampleRate: 48000,
   };
@@ -339,6 +373,21 @@ function teardownMicGraph() {
 }
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
+// один и тот же URL везде: разные ?t=... создавали бы новый экземпляр модуля при каждой смене серии
+const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=4';
+// после перемотки зрителя даём буферу догнать, прежде чем снова мерить отставание —
+// иначе на медленном потоке получается петля «перемотал → буферизуется → снова отстал → перемотал», кадр стоит
+const CAPTURE_SEEK_COOLDOWN_MS = 8000;
+let lastCaptureSeekAt = 0;
+
+// зритель «захвата плеера»: подтянуть позицию к хосту, но только когда это безопасно
+function syncCapturePosition(v, positionSeconds) {
+  if (!v || v.seeking || v.readyState < 3) return;            // ещё грузится — не трогаем
+  if (Date.now() - lastCaptureSeekAt < CAPTURE_SEEK_COOLDOWN_MS) return;
+  if (Math.abs((v.currentTime || 0) - positionSeconds) <= DRIFT_THRESHOLD_SECONDS) return;
+  lastCaptureSeekAt = Date.now();
+  try { v.currentTime = positionSeconds; } catch (_) {}
+}
 
 const PLAYBACK_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -588,7 +637,7 @@ function isAgeConfirmedLocally() {
 
   if (video.type === 'player_capture') {
     window.__captureVideoUrl = video.url;
-    return import('/js/playerCapture/index.js?v=3').then(mod => {
+    return import(CAPTURE_MODULE_URL).then(mod => {
       return mod.renderPlayerCapture(video, {
         isOwner,
         container: document.getElementById('player'),
@@ -1007,6 +1056,19 @@ function copyText(text, label) {
   });
 }
 
+// перемотать <video> на позицию, как только у него появятся метаданные
+function resumeVideoAt(v, positionSeconds) {
+  const pos = Number(positionSeconds) || 0;
+  if (!v || pos < 2) return;
+  const go = () => {
+    if (Math.abs((v.currentTime || 0) - pos) > 1) {
+      try { v.currentTime = pos; } catch (_) {}
+    }
+  };
+  if (v.readyState >= 1) go();
+  else v.addEventListener('loadedmetadata', go, { once: true });
+}
+
 function startWatching() {
   started = true;
   hideOverlay();
@@ -1015,8 +1077,10 @@ function startWatching() {
     if (currentVideoType === 'youtube') ytPlayer.playVideo();
     else if (currentVideoType === 'twitch') twitchPlayer.play();
     else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
-      capturePlayer.doPlayPause(true);
       const v = capturePlayer.videoEl;
+      // хост перезагрузил страницу — продолжаем с сохранённого места, а не с начала
+      resumeVideoAt(v, lastState.positionSeconds);
+      capturePlayer.doPlayPause(true);
       if (v && !v.dataset.captureBound) {
         v.dataset.captureBound = '1';
         v.addEventListener('play', () => emitPlayback(true));
@@ -1024,6 +1088,7 @@ function startWatching() {
         v.addEventListener('seeked', () => emitPlayback(!v.paused));
       }
     } else if (videoEl) {
+      resumeVideoAt(videoEl, lastState.positionSeconds);
       videoEl.play().catch(() => {});
     }
     startHeartbeat();
@@ -1031,9 +1096,10 @@ function startWatching() {
   } else {
     if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) {
       const v = capturePlayer.videoEl;
-      try { v.currentTime = 0; } catch (_) {}
-      v.play().catch((e) => console.warn('[viewer] start play failed', e));
-      setTimeout(() => softSync(lastState), 2000);
+      // сразу на позицию хоста (раньше с 0 и перемотка через 2 с — лишняя загрузка сегментов с начала)
+      resumeVideoAt(v, lastState.positionSeconds);
+      lastCaptureSeekAt = Date.now();
+      if (lastState.isPlaying) v.play().catch((e) => console.warn('[viewer] start play failed', e));
     } else {
       applyPlaybackState(lastState);
     }
@@ -1564,6 +1630,8 @@ window.__onCapturePlayerReload = (player) => {
       } else {
         if (!v.paused) v.pause();
       }
+      // раньше позиция у зрителя «захвата» не подтягивалась вовсе — отставание копилось без предела
+      syncCapturePosition(v, Number(state.positionSeconds) || 0);
       return;
     }
 
@@ -1609,24 +1677,42 @@ window.__onCapturePlayerReload = (player) => {
     await applyNewVideo(video, playback);
   });
 
-  socket.on('player_capture:streams', async ({ season, episode, voice, streams, meta, by }) => {
+  socket.on('player_capture:streams', async ({ season, episode, voice, streams, meta, by, sameEpisode, playback }) => {
     if (isOwner) return;
-
-    addMessage({
-      username: 'Система',
-      text: `Хост сменил на Сезон ${season}, Серия ${episode}`,
-    });
-
-    lastState = { isPlaying: false, positionSeconds: 0 };
-    started = false;
-    playerReady = false;
 
     const container = document.getElementById('player');
     const url = window.__captureVideoUrl;
     if (!container || !streams?.length) return;
 
+    // Та же серия: хост обновил ссылку или перезагрузил страницу.
+    // Если поток тот же, что уже играет, — ничего не трогаем; иначе тихо меняем источник с сохранением позиции.
+    const keepWatching = !!sameEpisode && started && capturePlayer?.videoEl;
+    if (keepWatching) {
+      const playingUrls = (capturePlayer.meta?.__streamUrls || []).join('|');
+      const newUrls = streams.map((s) => s.url).join('|');
+      if (playingUrls && playingUrls === newUrls) return;
+      lastState = {
+        isPlaying: playback ? !!playback.isPlaying : lastState.isPlaying,
+        positionSeconds: Math.max(capturePlayer.videoEl.currentTime || 0, Number(playback?.positionSeconds) || 0),
+      };
+    } else {
+      if (!sameEpisode) {
+        addMessage({
+          username: 'Система',
+          text: `Хост сменил на Сезон ${season}, Серия ${episode}`,
+        });
+      }
+      lastState = sameEpisode && playback
+        ? { isPlaying: !!playback.isPlaying, positionSeconds: Number(playback.positionSeconds) || 0 }
+        : { isPlaying: false, positionSeconds: 0 };
+      started = false;
+    }
+    playerReady = false;
+
     try {
-      const mod = await import('/js/playerCapture/index.js?t=' + Date.now());
+      // старый плеер обязательно гасим: иначе его hls.js продолжает качать поток и отнимает канал у нового
+      try { capturePlayer?.destroy?.(); } catch (_) {}
+      const mod = await import(CAPTURE_MODULE_URL);
       capturePlayer = mod.renderFromStreams(streams, meta || {
         currentSeason: season,
         currentEpisode: episode,
@@ -1657,7 +1743,14 @@ window.__onCapturePlayerReload = (player) => {
         });
       }
       setTimeout(refreshCcButton, 500);
-      setOverlay('Хост сменил серию — нажми, чтобы продолжить', true);
+      if (keepWatching && v) {
+        // смотрим дальше без кнопки: страница уже получила клик пользователя, автозапуск разрешён
+        resumeVideoAt(v, lastState.positionSeconds);
+        lastCaptureSeekAt = Date.now();
+        if (lastState.isPlaying) v.play().catch(() => setOverlay('Поток обновлён — нажми, чтобы продолжить', true));
+      } else {
+        setOverlay(sameEpisode ? 'Поток обновлён — нажми, чтобы продолжить' : 'Хост сменил серию — нажми, чтобы продолжить', true);
+      }
     } catch (e) {
       console.error('[viewer] streams error', e);
       setOverlay('Ошибка загрузки серии', false);
