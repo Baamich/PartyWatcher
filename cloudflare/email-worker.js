@@ -15,7 +15,11 @@ export default {
   async email(message, env) {
     let delivered = false;
 
-    if (message.rawSize <= 2 * 1024 * 1024) {
+    if (!env.INBOUND_URL || !env.INBOUND_SECRET) {
+      console.log('support-mail: не заданы переменные INBOUND_URL / INBOUND_SECRET');
+    } else if (message.rawSize > 2 * 1024 * 1024) {
+      console.log('support-mail: письмо больше 2 МБ, на сайт не отправляю', message.rawSize);
+    } else {
       try {
         const raw = await new Response(message.raw).arrayBuffer();
         const res = await fetch(env.INBOUND_URL, {
@@ -28,8 +32,10 @@ export default {
           body: raw,
         });
         delivered = res.ok;
-      } catch (_) {
-        delivered = false;
+        // ответ сайта видно в Workers → support-mail → Observability → Logs
+        console.log('support-mail: ответ сайта', res.status, (await res.text()).slice(0, 200));
+      } catch (e) {
+        console.log('support-mail: сайт недоступен', String(e && e.message));
       }
     }
 

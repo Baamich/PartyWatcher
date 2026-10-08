@@ -113,8 +113,14 @@ function inboundLimited(email) {
 
 router.post('/inbound', express.text({ type: '*/*', limit: '2mb' }), async (req, res) => {
   const secret = process.env.INBOUND_EMAIL_SECRET;
-  if (!secret || !safeEqual(req.get('x-inbound-secret') || '', secret)) {
-    return res.status(403).json({ error: 'forbidden' });
+  if (!secret) {
+    console.warn('[support/inbound] отклонено: INBOUND_EMAIL_SECRET не задан в .env');
+    return res.status(403).json({ error: 'forbidden', reason: 'no-secret-configured' });
+  }
+  if (!safeEqual(req.get('x-inbound-secret') || '', secret)) {
+    // сам секрет в лог не пишем — только факт
+    console.warn('[support/inbound] отклонено: секрет от Worker не совпадает с INBOUND_EMAIL_SECRET');
+    return res.status(403).json({ error: 'forbidden', reason: 'bad-secret' });
   }
   if (typeof req.body !== 'string' || !req.body) return res.status(400).json({ error: 'empty' });
 
