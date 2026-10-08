@@ -205,6 +205,29 @@ async function clickMainIframe(page, logLabel, attempt = 1) {
   return true;
 }
 
+// Запасной способ разбудить плеер: клик по типичной play-кнопке/контейнеру на самой странице.
+// На kinogo2026 именно это запускает cinemar (iframe плеера появляется только после клика).
+const PAGE_PLAY_SELECTORS = [
+  '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
+  '[class*="play"]', '.video-play-button',
+  '#cdnplayer-container', '.b-post__player', '#player',
+];
+
+async function clickPlaySelectors(page, logLabel) {
+  for (const sel of PAGE_PLAY_SELECTORS) {
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        await el.click({ delay: 100 }).catch(() => {});
+        console.log(`[player-capture] (${logLabel}) клик по селектору плеера:`, sel);
+        return true;
+      }
+    } catch (_) {}
+  }
+  console.warn(`[player-capture] (${logLabel}) не нашёл ни одного play-селектора для клика`);
+  return false;
+}
+
 // ждать условие с ранним выходом вместо фиксированной паузы
 async function waitUntil(check, maxMs, stepMs = 300) {
   let waited = 0;
@@ -653,8 +676,14 @@ router.post('/extract', auth, async (req, res) => {
       reqUrl.includes('cfnd.') ||
       isVkHost;
 
+    // скрипты/стили/картинки плеера плейлистом не бывают (в коде cinemar встречается строка "#EXTM3U",
+    // и его .js раньше ошибочно попадал в потоки); заодно не читаем их тела зря
+    const isAsset = /\.(js|css|png|jpe?g|gif|webp|svg|woff2?|ttf|ico)(\?|$)/i.test(reqUrl) ||
+      /javascript|text\/css|image\/|font\//i.test(contentType);
+
     if (
       looksPlaylist &&
+      !isAsset &&
       (isVkHost ||
         reqUrl.includes('.m3u8') ||
         reqUrl.includes('cinemap.cc') ||
@@ -667,7 +696,7 @@ router.post('/extract', auth, async (req, res) => {
         const status = response.status();
         if (status >= 200 && status < 400) {
           const text = await response.text();
-          if (text && text.includes('#EXTM3U')) {
+          if (text && text.trimStart().startsWith('#EXTM3U')) { // настоящий плейлист начинается с #EXTM3U
             console.log(
               '[player-capture] перехвачен m3u8 из сети плеера:',
               status,
@@ -1630,6 +1659,25 @@ router.post('/extract', auth, async (req, res) => {
     }
 
     
+    // поток уже есть: из AJAX/playlist/load, JSON hlsSource, перехваченный плейлист или mp4
+    const hasStream = () =>
+      cdnSeriesStreams.length > 0 ||
+      !!playerApiData?.hlsSource ||
+      foundStreams.some((s) => s.playlistRaw || s.type === 'mp4' || /\.m3u8(\?|$)/i.test(s.url || ''));
+
+    // «Разбудить» плеер, если он сам не запросил поток: сначала клик по видимому iframe плеера,
+    // потом (если разрешено) по play-кнопкам на странице, затем ждём поток с ранним выходом.
+    // Общая логика для kinogo2026, kinogo-дропдаунов и универсального режима (незнакомые сайты).
+    async function wakePlayer(label, { pageSelectors = true, maxWaitMs = 8000 } = {}) {
+      if (hasStream()) return true;
+      let clicked = await clickMainIframe(page, label);
+      if (!clicked && pageSelectors) clicked = await clickPlaySelectors(page, label);
+      if (!clicked) return false;
+      const waited = await waitUntil(hasStream, maxWaitMs, 300);
+      console.log(`[player-capture] (${label}) после клика поток ждали`, waited, 'мс, найден:', hasStream());
+      return hasStream();
+    }
+
     // используем то же значение, что и для кэша (body или хеш)
     const requestedEpisode = requestedEpisodeForCache;
     const alreadyHaveCdn = cdnSeriesStreams.length > 0;
@@ -1645,32 +1693,10 @@ router.post('/extract', auth, async (req, res) => {
       // JSON от cinemar.cc/api/playlist/load (см. handleResponse выше).
       const isLikelyMovie = !requestedEpisode || Number(requestedEpisode) === 1;
 
-      // без клика по плееру он не запускается, а значит не создаётся ни его
-      // iframe, ни вложенный ad-wrapper iframe (cvt-s1.agl010.pro и т.п.), где
-      // реально лежит .playlist-dropdown — поэтому сначала будим плеер кликом:
-      // в первую очередь по самому iframe плеера, селекторы на странице — запасной вариант
-      const playSelectors = [
-        '.play-btn', '.player-play', '.play', '#play',
-        '[class*="play"]', '.video-play-button',
-        '#cdnplayer-container', '.b-post__player', '#player',
-      ];
-      let kinogoPlayClicked = await clickMainIframe(page, 'kinogo2026');
-      for (const sel of kinogoPlayClicked ? [] : playSelectors) {
-        try {
-          const el = await page.$(sel);
-          if (el) {
-            await el.click({ delay: 100 }).catch(() => {});
-            console.log('[player-capture] (kinogo2026) клик по селектору плеера:', sel);
-            kinogoPlayClicked = true;
-            break;
-          }
-        } catch (e) {}
-      }
-      if (!kinogoPlayClicked) {
-        console.warn('[player-capture] (kinogo2026) не нашёл ни одного play-селектора для клика');
-      }
-      // даём время плееру и его вложенным iframe'ам (в т.ч. ad-wrapper) прогрузиться
-      await new Promise((r) => setTimeout(r, 2000));
+      // без клика плеер cinemar не запускается: нет ни его iframe, ни панели серий, ни плейлиста.
+      // Видимого iframe на kinogo2026 до клика нет (там только скрытый рекламный слот),
+      // поэтому срабатывает клик по play-кнопке на странице — он и создаёт cinemar.
+      await wakePlayer('kinogo2026');
 
       // фрейм с дропдауном может быть вложен в ad-wrapper iframe и грузиться
       // не сразу — даём больше попыток/времени, чем стандартные 8×400мс
@@ -1744,6 +1770,10 @@ router.post('/extract', auth, async (req, res) => {
       const dropdownTimeout = adapter.dropdownTimeoutMs || 4000;
       const isLikelyMovie = !requestedEpisode || Number(requestedEpisode) === 1;
 
+      // как на kinogo2026: без клика плеер может не создать ни дропдаун, ни поток.
+      // Клики по кнопкам на странице здесь запрещены — на kinogo они часто попадают в рекламу
+      await wakePlayer('dropdown', { pageSelectors: false });
+
       const playerContext = await findPlayerContext(page, adapter.markerSelector);
       console.log('[player-capture] контекст плеера (dropdown) найден:', !!playerContext);
 
@@ -1768,7 +1798,7 @@ router.post('/extract', auth, async (req, res) => {
         await new Promise(r => setTimeout(r, 3000));
       } else if (playerContext && isLikelyMovie) {
         console.log('[player-capture] фильм / 1 серия — dropdown пропускаем, ждём потоки от плеера');
-        await new Promise(r => setTimeout(r, 2500));
+        await waitUntil(hasStream, 2500, 300);
       } else {
         console.warn('[player-capture] не найден контекст плеера (markerSelector не сработал)');
       }
@@ -2040,42 +2070,16 @@ router.post('/extract', auth, async (req, res) => {
       } else if (skipGenericClick) {
         await clickPlayerAndWaitFrame(page, adapter, 'фильм');
       } else if (siteName === 'kinogo' || siteName === 'kinogo2026') {
-        // play внутри iframe уже сделан блоком (kinogo/vk) выше —
-        // generic page.$ по ".play" часто бьёт по рекламе и убивает плеер
-        // generic клик по ".play" на странице часто бьёт по рекламе — кликаем только по iframe плеера,
+        // клик по ".play" на странице у kinogo часто бьёт по рекламе — только по видимому iframe плеера,
         // и только если поток ещё не найден (плееры без JSON hlsSource сами плейлист не запрашивают)
-        const noStreamYet = !playerApiData && cdnSeriesStreams.length === 0 && !foundStreams.some((s) => s.playlistRaw);
-        if (noStreamYet && (await clickMainIframe(page, 'kinogo'))) {
-          const waited = await waitUntil(
-            () => cdnSeriesStreams.length > 0 || foundStreams.some((s) => s.playlistRaw) || !!playerApiData,
-            8000,
-            300
-          );
-          console.log('[player-capture] (kinogo) после клика по плееру поток ждали', waited, 'мс');
-        } else {
+        if (!(await wakePlayer('kinogo', { pageSelectors: false }))) {
           await new Promise((r) => setTimeout(r, 1500));
         }
       } else {
-        // пробуем кликнуть по типичным play-кнопкам/превьюшкам, если плеер лениво грузится
-        const playSelectors = [
-          '.play-btn', '.player-play', '.b-player__control', '.play', '#play',
-          '[class*="play"]', '.video-play-button',
-          '#cdnplayer-container', '.b-post__player', '#player',
-        ];
-        let clickedPlaySelector = false;
-        for (const sel of playSelectors) {
-          try {
-            const el = await page.$(sel);
-            if (el) {
-              await el.click({ delay: 100 }).catch(() => {});
-              console.log('[player-capture] клик по селектору плеера:', sel);
-              clickedPlaySelector = true;
-              break;
-            }
-          } catch (e) {}
-        }
-
-        if (!clickedPlaySelector && adapter?.playerFrameMatch) {
+        // универсальный режим (незнакомый сайт): та же логика, что сработала на kinogo2026 —
+        // видимый iframe плеера → play-кнопки на странице → ждём поток с ранним выходом
+        const woke = await wakePlayer('универсальный');
+        if (!woke && adapter?.playerFrameMatch) {
           await clickPlayerAndWaitFrame(page, adapter, 'фильм-fallback');
         }
       }
@@ -2110,8 +2114,10 @@ router.post('/extract', auth, async (req, res) => {
         await new Promise(r => setTimeout(r, 1500));
       }
 
-      // rezka/кастомным CDN-плеерам без явного episode-режима нужно больше времени на разворачивание
-      await new Promise(r => setTimeout(r, 2500));
+      // rezka/кастомным CDN-плеерам без явного episode-режима нужно больше времени на разворачивание;
+      // если поток уже пойман — не ждём
+      if (siteName === 'rezka') await new Promise((r) => setTimeout(r, 2500));
+      else await waitUntil(hasStream, 2500, 300);
 
       // фильмы (без requestedEpisode) тоже используют balabolka — на случай, если
       // clickPlayerAndWaitFrame выше не успел поймать фрейм с первого раза, даём
