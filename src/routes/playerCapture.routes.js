@@ -808,14 +808,28 @@ router.post('/extract', auth, async (req, res) => {
       } catch (e) {}
     }
 
-    // ожидание контейнера и cookie favs нужно только rezka; остальным сайтам это были лишние ~2.3 с
+    // kinogo/lordfilm: плеер вставляется скриптом уже после DOMContentLoaded — ждём его iframe
+    // (раньше это покрывала общая пауза ~2.3 с; без неё поиск плеера начинался слишком рано)
+    if (/^(kinogo|lordfilm)/.test(siteName)) {
+      const waited = await waitUntil(
+        () => page.evaluate(() =>
+          Array.from(document.querySelectorAll('iframe')).some((f) => /^https?:/.test(f.getAttribute('src') || f.src || ''))
+        ).catch(() => false),
+        6000,
+        250
+      );
+      console.log('[player-capture] iframe плеера на странице через', waited, 'мс');
+      await new Promise((r) => setTimeout(r, 800)); // даём iframe начать загрузку своих скриптов
+    }
+
+    // ожидание контейнера и cookie favs нужно только rezka
     if (siteName === 'rezka') {
       try {
         await page.waitForSelector('#cdnplayer-container, #cdnplayer, .b-player', { timeout: 2500 });
       } catch (_) {}
       // ждём, пока страница допишет cookie favs (выходим сразу, как появилась)
       await waitUntil(
-        () => page.evaluate(() => /(?:^|;\s*)favs=/.test(document.cookie) || !!document.querySelector('#ctrl_favs')).catch(() => false),
+        () => page.evaluate(() => /(?:^|;\s*)favs=/.test(document.cookie) || !!document.querySelector('#ctrl_favs')?.value).catch(() => false),
         2300,
         250
       );
