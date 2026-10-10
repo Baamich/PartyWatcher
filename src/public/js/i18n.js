@@ -1,5 +1,5 @@
 // Локализация в браузере. Подключается ПЕРВЫМ скриптом в <head> (без defer/async):
-//   <script src="/js/i18n.js?v=1" data-ns="index"></script>
+//   <script src="/js/i18n.js?v=3" data-ns="index"></script>
 // data-ns — разделы словаря этой страницы (common грузится всегда), файлы — src/locales/<язык>/<раздел>.json.
 // В JS:     t('room.copied'), t('room.viewers', { n: 5 }) — значение-объект { one, few, many, other } = плюрал.
 // В HTML:   data-i18n="ключ" (текст), data-i18n-html (разметка), data-i18n-placeholder, data-i18n-title,
@@ -52,8 +52,9 @@
   const me = document.currentScript;
   const ns = (me && me.getAttribute('data-ns')) || '';
   const nsList = ['common'].concat(ns.split(',').map((s) => s.trim()).filter(Boolean));
+  // &r= — только чтобы сменить адрес: браузеры держали прежний ответ (и 404 во время деплоя) по 4 ч из-за Cloudflare
   if (!window.PW_I18N_DATA) {
-    document.write('<script src="/locales/' + lang + '.js?ns=' + encodeURIComponent(nsList.join(',')) + '"><\/script>');
+    document.write('<script src="/locales/' + lang + '.js?ns=' + encodeURIComponent(nsList.join(',')) + '&r=2"><\/script>');
   }
 
   const pluralRules = typeof Intl !== 'undefined' && Intl.PluralRules ? new Intl.PluralRules(lang) : null;

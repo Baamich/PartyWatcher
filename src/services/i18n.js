@@ -2,7 +2,6 @@
 // Сервер: req.t('server.roomNotFound', { n: 3 }); браузер получает словари через GET /locales/<язык>.js?ns=common,index
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
 const LOCALES_DIR = path.join(__dirname, '..', 'locales');
 const LANGS = ['ru', 'en'];
@@ -128,31 +127,29 @@ function middleware(req, res, next) {
 }
 
 // GET /locales/:lang.js?ns=common,index — словари для браузера одним скриптом.
-// no-cache + ETag: браузер каждый раз сверяется (обычно 304), поэтому ?v= после правки словаря не нужен.
-// в кэш попадают только существующие разделы (server браузеру не нужен), сочетаний — не больше 200
+// no-store: Cloudflare заменяет no-cache у .js на max-age=14400 (4 ч) — и словарь, и даже 404 застревали
+// в браузере на 4 часа (ключи вместо текста после деплоя). no-store он не трогает; словарь — несколько КБ.
+// В памяти держим только существующие разделы (server браузеру не нужен), сочетаний — не больше 200
 const bundleCache = new Map();
 function bundle(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   const lang = normLang(req.params.lang);
   if (!lang) return res.status(404).end();
   const asked = String(req.query.ns || '').split(',').map((s) => s.trim());
   const names = ['common', ...[...new Set(asked)].filter((s) => s !== 'common' && s !== 'server' && dicts[lang][s]).sort()];
 
   const cacheKey = lang + ':' + names.join(',');
-  let entry = bundleCache.get(cacheKey);
-  if (!entry) {
+  let body = bundleCache.get(cacheKey);
+  if (!body) {
     const data = {};
     for (const ns of names) Object.assign(data, dicts[lang][ns] || {});
-    const body = `window.PW_I18N_DATA=${JSON.stringify(data)};`;
-    entry = { body, etag: '"' + crypto.createHash('sha1').update(body).digest('base64url').slice(0, 20) + '"' };
+    body = `window.PW_I18N_DATA=${JSON.stringify(data)};`;
     if (bundleCache.size >= 200) bundleCache.clear();
-    bundleCache.set(cacheKey, entry);
+    bundleCache.set(cacheKey, body);
   }
 
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('ETag', entry.etag);
-  if (req.headers['if-none-match'] === entry.etag) return res.status(304).end();
-  res.send(entry.body);
+  res.send(body);
 }
 
 module.exports = { LANGS, DEFAULT_LANG, COOKIE, t, err, errText, langFromHeaders, langFromAccept, middleware, bundle, LOCALES_DIR };
