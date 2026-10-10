@@ -14,6 +14,10 @@ let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
 let heartbeatTimer = null;
 let capturePlayer = null;
+// номер последней отрисовки плеера: если, пока грузился плеер, началась новая (повторный room:state после
+// переподключения сокета), старый результат гасим — иначе он играл в фоне и звук шёл дважды со сдвигом
+let renderGen = 0;
+let renderingKey = null; // видео, плеер которого сейчас грузится
 let playerFocused = false;
 
 let voiceParticipants = [];
@@ -632,14 +636,25 @@ function isAgeConfirmedLocally() {
   function renderPlayer(video) {
   currentVideoType = video.type;
   const container = document.getElementById('player');
+  const gen = ++renderGen;
+  const stale = () => gen !== renderGen; // пока грузились, началась более новая отрисовка
 
   if (video.type === 'player_capture') {
     window.__captureVideoUrl = video.url;
+    // своя «ячейка» на каждую отрисовку: устаревшая загрузка пишет в отсоединённую ячейку и не затрёт новый плеер
+    // (display: contents — для вёрстки её как будто нет, стили #player video работают как раньше)
+    const slot = document.createElement('div');
+    slot.style.display = 'contents';
+    container.replaceChildren(slot);
     return import(CAPTURE_MODULE_URL).then(mod => {
       return mod.renderPlayerCapture(video, {
         isOwner,
-        container: document.getElementById('player'),
+        container: slot,
       }).then(player => {
+        if (stale()) {
+          try { player?.destroy?.(); } catch (_) {}
+          return null;
+        }
         capturePlayer = player;
         playerReady = true;
         return player;
@@ -702,6 +717,7 @@ function isAgeConfirmedLocally() {
     container.innerHTML = '<div id="ytPlayer"></div>';
 
     return loadYouTubeAPI().then(() => new Promise((resolve) => {
+      if (stale()) return resolve();
       ytPlayer = new YT.Player('ytPlayer', {
         videoId,
         playerVars: {
@@ -755,6 +771,7 @@ function isAgeConfirmedLocally() {
     container.innerHTML = '<div id="twitchPlayer"></div>';
 
     return loadTwitchAPI().then(() => new Promise((resolve) => {
+      if (stale()) return resolve();
       twitchPlayer = new Twitch.Player('twitchPlayer', {
         video: videoId,
         width: '100%',
@@ -1404,6 +1421,8 @@ function updateVideoChangeModeLabel(type) {
 }
 
 function destroyCurrentPlayer() {
+  renderGen++; // плеер, который ещё грузится, после загрузки сам погасится
+  renderingKey = null;
   try {
     if (ytPlayer && typeof ytPlayer.destroy === 'function') {
       ytPlayer.destroy();
@@ -1430,7 +1449,13 @@ function destroyCurrentPlayer() {
   ageGateHandling = false;
 
   const container = document.getElementById('player');
-  if (container) container.innerHTML = '';
+  if (container) {
+    // <video>, убранный со страницы, продолжает играть звук — сначала останавливаем и отпускаем поток
+    container.querySelectorAll('video, audio').forEach((m) => {
+      try { m.pause(); m.removeAttribute('src'); m.load(); } catch (_) {}
+    });
+    container.innerHTML = '';
+  }
 }
 
 async function applyNewVideo(video, playback) {
@@ -1528,8 +1553,8 @@ async function init() {
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name, username }) => {
     if (username) myUsername = username;
     const stateKey = makeRoomStateKey(video);
-    if (roomStateKey === stateKey && playerReady) {
-      // сокет переподключился, а видео то же самое — плеер не трогаем
+    if (roomStateKey === stateKey && (playerReady || renderingKey === stateKey)) {
+      // сокет переподключился, а видео то же самое (уже играет или ещё грузится) — плеер не трогаем
       isOwner = ownerFlag;
       if (playback) lastState = playback;
       if (!started && !isOwner) updateWaitingOverlayText();
@@ -1569,7 +1594,13 @@ async function init() {
     }
 
     setViewMode('chat');
-    await renderPlayer(video);
+    destroyCurrentPlayer(); // прежний плеер (другое видео или не догрузившийся) — гасим, а не бросаем играть в фоне
+    renderingKey = stateKey;
+    try {
+      await renderPlayer(video);
+    } finally {
+      if (renderingKey === stateKey) renderingKey = null;
+    }
     setTimeout(refreshCcButton, 800);
 
     if (isOwner) {
@@ -1782,6 +1813,13 @@ window.__onCapturePlayerReload = (player) => {
     signalQueues[id] = (signalQueues[id] || Promise.resolve())
       .then(() => handleVoiceSignal(payload))
       .catch((e) => console.warn('[voice] signal error', e));
+  });
+
+  // я зашёл в звонок из другой вкладки/после переподключения — эта копия выходит
+  socket.on('voice:replaced', () => {
+    if (!inVoiceCall) return;
+    leaveVoiceCall();
+    PW.toast(t('room.voice.replaced'), 'info');
   });
 
   // сервер отказал (звонок полный): раньше клиент навсегда «висел» в звонке

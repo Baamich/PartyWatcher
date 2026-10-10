@@ -184,13 +184,23 @@ function registerRoomSocket(io) {
       }
       if (map.has(socket.id)) return; // уже в звонке
 
+      // один человек — одна запись: после перезагрузки страницы или переподключения старый сокет
+      // ещё «жив» до таймаута (через туннель — десятки секунд), и человек висел в списке дважды
+      const userId = String(socket.user.id);
+      for (const [sid, info] of map) {
+        if (sid === socket.id || info.userId !== userId) continue;
+        map.delete(sid);
+        socket.to(code).emit('voice:user-left', { socketId: sid });
+        io.to(sid).emit('voice:replaced'); // если это живая вторая вкладка — она выйдет из звонка сама
+      }
+
       if (map.size >= MAX_VOICE_PARTICIPANTS) {
         socket.emit('voice:join-rejected', { reason: 'full', max: MAX_VOICE_PARTICIPANTS });
         return;
       }
 
       const existing = getVoiceParticipants(code); // список ДО добавления себя — кому звонить первым
-      map.set(socket.id, { username: socket.user.username, isOwner: !!socket.data.isOwner });
+      map.set(socket.id, { userId, username: socket.user.username, isOwner: !!socket.data.isOwner });
 
       socket.emit('voice:existing-participants', existing);
       broadcastVoiceParticipants(io, code);
