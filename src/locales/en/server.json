@@ -71,7 +71,7 @@
     "badDriveFile": "Could not recognize the Google Drive file",
     "badYoutube": "Could not recognize the YouTube link",
     "needNameAndVideo": "A room name and a video are required",
-    "tooMany": "Too many rooms: delete the ones you don't need",
+    "tooMany": "You can have at most {n} rooms — delete one you no longer need in “My rooms” and try again",
     "createFailed": "Could not create the room",
     "notYours": "Not your room",
     "notFound": "Room not found",

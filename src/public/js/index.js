@@ -343,7 +343,11 @@ function extractDriveFileId(url) {
   return match ? match[1] : null;
 }
 
+let creatingRoom = false; // двойной клик не должен создать две комнаты (и обойти лимит)
 async function createRoom() {
+  if (creatingRoom) return;
+  creatingRoom = true;
+  let leaving = false;
   try {
     const name = document.getElementById('roomName').value.trim();
     if (!name) return PW.toast(t('index.create.noName'), 'info');
@@ -397,6 +401,7 @@ async function createRoom() {
     if (!room?.code) {
       throw new Error(room?.error || t('index.create.noCode'));
     }
+    leaving = true; // уходим в комнату — повторный клик не нужен
     location.href = `/room.html?code=${room.code}`;
   } catch (err) {
     console.error('[createRoom]', err);
@@ -405,6 +410,8 @@ async function createRoom() {
     } else {
       PW.toast(err.message || t('index.create.failed'), 'error');
     }
+  } finally {
+    if (!leaving) creatingRoom = false;
   }
 }
 

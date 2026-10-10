@@ -25,6 +25,7 @@ function withLiveStatus(room, io) {
 }
 
 const VIDEO_TYPES = ['youtube', 'twitch', 'drive', 'player_capture', 'direct'];
+const MAX_ROOMS_PER_USER = 6; // больше — ошибка «удалите ненужную»
 
 function validateVideo(video) {
   const t = video?.type;
@@ -56,8 +57,8 @@ router.post('/', auth, async (req, res) => {
     const videoError = validateVideo(video);
     if (videoError) return res.status(400).json({ error: req.t(videoError) });
 
-    if ((await Room.countDocuments({ owner: req.user.id })) >= 30) {
-      return res.status(400).json({ error: req.t('server.room.tooMany') });
+    if ((await Room.countDocuments({ owner: req.user.id })) >= MAX_ROOMS_PER_USER) {
+      return res.status(400).json({ error: req.t('server.room.tooMany', { n: MAX_ROOMS_PER_USER }) });
     }
 
     let code;
