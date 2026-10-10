@@ -3,30 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="/js/theme.js"></script>
+    <script src="/js/i18n.js?v=2" data-ns="editor,layout"></script>
+    <script src="/js/theme.js?v=2"></script>
     <script src="/js/favicon.js"></script>
     <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-    <link rel="stylesheet" href="/css/common.css" />
+    <link rel="stylesheet" href="/css/common.css?v=2" />
     <link rel="stylesheet" href="/streamers/edit.css" />
     <link rel="stylesheet" href="/streamers/blocks.css" />
     <link rel="stylesheet" href="/streamers/pro.css" />
-    <title>PartyWatcher — Редактирование профиля</title>
+    <title data-i18n="editor.pageTitle">PartyWatcher — Редактирование профиля</title>
   </head>
   <body>
     <div class="page-header">
-      <a href="/streams.html" class="brand">
-        <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
-          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <span class="brand-stack">
-          <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
-          <span class="brand-live-tag">LIVE</span>
-        </span>
-      </a>
+      <div class="brand-row">
+        <a href="/streams.html" class="brand">
+          <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+            <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand-stack">
+            <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+            <span class="brand-live-tag">LIVE</span>
+          </span>
+        </a>
+        <div data-lang-switch></div>
+      </div>
       <div class="header-right">
-        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
       </div>
     </div>
 
@@ -36,43 +40,43 @@
 
       <!-- Шаг 1: создание имени стримера (показывается, если его ещё нет) -->
       <section id="createNameSection" class="edit-card hidden">
-        <h1 class="edit-title">Стать стримером</h1>
-        <p class="edit-hint">Придумай имя — по нему тебя будут искать (страница будет доступна по адресу /streamers/имя, в нижнем регистре).</p>
+        <h1 class="edit-title" data-i18n="editor.create.title">Стать стримером</h1>
+        <p class="edit-hint" data-i18n="editor.create.hint">Придумай имя — по нему тебя будут искать (страница будет доступна по адресу /streamers/имя, в нижнем регистре).</p>
         <div id="createNameError" class="auth-error hidden"></div>
-        <label class="auth-label" for="newStreamerName">Имя стримера</label>
-        <input id="newStreamerName" placeholder="Например, Baamich" maxlength="32" />
-        <button type="button" class="auth-submit" data-click="submitStreamerName">Создать</button>
+        <label class="auth-label" for="newStreamerName" data-i18n="editor.create.name">Имя стримера</label>
+        <input id="newStreamerName" placeholder="Например, Baamich" data-i18n-placeholder="editor.create.namePh" maxlength="32" />
+        <button type="button" class="auth-submit" data-click="submitStreamerName" data-i18n="editor.create.submit">Создать</button>
       </section>
 
       <!-- Шаг 2: редактирование профиля (показывается, если имя уже есть) -->
       <section id="editProfileSection" class="edit-card hidden">
         <!-- переключатель справа от карточки (розовая зона) -->
         <div class="mode-switch">
-          <button type="button" class="mode-btn active">Стандарт</button>
+          <button type="button" class="mode-btn active" data-i18n="editor.standard">Стандарт</button>
           <button type="button" class="mode-btn mode-pro" id="openProBtn">⚡ PRO</button>
         </div>
-        <h1 class="edit-title">Редактирование профиля</h1>
-        <p class="edit-hint">Профиль: <span id="currentStreamerName" class="current-name"></span></p>
+        <h1 class="edit-title" data-i18n="editor.title">Редактирование профиля</h1>
+        <p class="edit-hint"><span data-i18n="editor.profile">Профиль:</span> <span id="currentStreamerName" class="current-name"></span></p>
         <div id="editError" class="auth-error hidden"></div>
-        <div id="editOk" class="support-ok hidden">Сохранено ✓</div>
+        <div id="editOk" class="support-ok hidden" data-i18n="editor.saved">Сохранено ✓</div>
 
-        <label class="auth-label" for="bannerFileInput">Баннер (1200х480) макс: 4 МБ</label>
+        <label class="auth-label" for="bannerFileInput" data-i18n="editor.banner">Баннер (1200х480) макс: 4 МБ</label>
         <div id="bannerPreviewWrap" class="image-preview-wrap">
           <div id="bannerPreview" class="image-preview banner-preview"></div>
         </div>
         <input id="bannerFileInput" type="file" accept="image/*" data-change="onImageSelected" data-event data-arg="banner" />
 
-        <label class="auth-label" for="avatarFileInput">Аватар</label>
+        <label class="auth-label" for="avatarFileInput" data-i18n="editor.avatar">Аватар</label>
         <div id="avatarPreviewWrap" class="image-preview-wrap">
           <div id="avatarPreview" class="image-preview avatar-preview"></div>
         </div>
         <input id="avatarFileInput" type="file" accept="image/*" data-change="onImageSelected" data-event data-arg="avatar" />
 
-        <label class="auth-label" for="bioInput">Описание</label>
-        <textarea id="bioInput" rows="6" maxlength="2000" placeholder="Расскажи о себе (до 2000 символов)"></textarea>
+        <label class="auth-label" for="bioInput" data-i18n="editor.bio">Описание</label>
+        <textarea id="bioInput" rows="6" maxlength="2000" placeholder="Расскажи о себе (до 2000 символов)" data-i18n-placeholder="editor.bioPh"></textarea>
 
-        <button type="button" class="auth-submit" data-click="submitProfile">Сохранить</button>
-        <button type="button" class="icon-btn" id="backToProfileBtn" data-click="goToOwnProfile">Открыть профиль</button>
+        <button type="button" class="auth-submit" data-click="submitProfile" data-i18n="editor.save">Сохранить</button>
+        <button type="button" class="icon-btn" id="backToProfileBtn" data-click="goToOwnProfile" data-i18n="editor.openProfile">Открыть профиль</button>
       </section>
 
     </div>
@@ -80,43 +84,43 @@
     <div id="proEditor" class="pro-editor hidden">
       <div class="pro-topbar">
         <div class="pro-tools">
-          <button type="button" class="pro-tool active" data-tool="select" title="Выбор и перемещение">🖱️</button>
-          <button type="button" class="pro-tool" id="proScissors" data-tool="scissors" title="Ножницы: вырезать свою фигуру">✂️</button>
-          <button type="button" class="pro-tool" data-tool="text" title="Текст (зажми и вытяни область)"><b>T</b></button>
-          <button type="button" class="pro-tool" data-tool="image" title="Вставить фото">📎</button>
-          <button type="button" class="pro-tool" data-tool="link" title="Кнопка-ссылка (фото можно добавить потом)">🔗</button>
+          <button type="button" class="pro-tool active" data-tool="select" title="Выбор и перемещение" data-i18n-title="editor.tool.select">🖱️</button>
+          <button type="button" class="pro-tool" id="proScissors" data-tool="scissors" title="Ножницы: вырезать свою фигуру" data-i18n-title="editor.tool.scissors">✂️</button>
+          <button type="button" class="pro-tool" data-tool="text" title="Текст (зажми и вытяни область)" data-i18n-title="editor.tool.text"><b>T</b></button>
+          <button type="button" class="pro-tool" data-tool="image" title="Вставить фото" data-i18n-title="editor.tool.image">📎</button>
+          <button type="button" class="pro-tool" data-tool="link" title="Кнопка-ссылка (фото можно добавить потом)" data-i18n-title="editor.tool.link">🔗</button>
         </div>
         <div id="proInfo" class="pro-info"></div>
         <div class="pro-actions">
-          <button type="button" id="proUndoBtn" class="icon-btn pro-hist" title="Отменить (Ctrl+Z)" disabled>↶</button>
-          <button type="button" id="proRedoBtn" class="icon-btn pro-hist" title="Повторить (Ctrl+Y)" disabled>↷</button>
-          <button type="button" id="proResetBtn" class="icon-btn">↺ Сбросить макет</button>
-          <button type="button" id="proSaveBtn">💾 Сохранить</button>
-          <button type="button" id="proCloseBtn" class="icon-btn">👤 В профиль</button>
+          <button type="button" id="proUndoBtn" class="icon-btn pro-hist" title="Отменить (Ctrl+Z)" data-i18n-title="editor.undo" disabled>↶</button>
+          <button type="button" id="proRedoBtn" class="icon-btn pro-hist" title="Повторить (Ctrl+Y)" data-i18n-title="editor.redo" disabled>↷</button>
+          <button type="button" id="proResetBtn" class="icon-btn" data-i18n="editor.reset">↺ Сбросить макет</button>
+          <button type="button" id="proSaveBtn" data-i18n="editor.proSave">💾 Сохранить</button>
+          <button type="button" id="proCloseBtn" class="icon-btn" data-i18n="editor.toProfile">👤 В профиль</button>
         </div>
       </div>
       <div class="pro-body">
         <aside class="pro-modes">
-          <button type="button" class="pro-mode active" data-mode="profile">👤<span>Профиль</span></button>
-          <button type="button" class="pro-mode" data-mode="live">📡<span>Эфир</span></button>
-          <button type="button" class="pro-mode" data-mode="profile" data-phone="1">📱<span>Профиль<br>телефон</span></button>
-          <button type="button" class="pro-mode" data-mode="live" data-phone="1">📱<span>Эфир<br>телефон</span></button>
+          <button type="button" class="pro-mode active" data-mode="profile">👤<span data-i18n="editor.mode.profile">Профиль</span></button>
+          <button type="button" class="pro-mode" data-mode="live">📡<span data-i18n="editor.mode.live">Эфир</span></button>
+          <button type="button" class="pro-mode" data-mode="profile" data-phone="1">📱<span data-i18n-html="editor.mode.profilePhone">Профиль<br>телефон</span></button>
+          <button type="button" class="pro-mode" data-mode="live" data-phone="1">📱<span data-i18n-html="editor.mode.livePhone">Эфир<br>телефон</span></button>
         </aside>
         <div class="pro-stage-wrap"><div id="proStage" class="pw-stage"></div></div>
       </div>
       <div id="proShapeMenu" class="pro-shapes hidden">
-        <button type="button" data-cut="circle">⚪ Круг</button>
-        <button type="button" data-cut="rect">⬜ Квадрат</button>
-        <button type="button" data-cut="triangle">🔺 Треугольник</button>
-        <button type="button" data-cut="free">✏️ Своя линия</button>
+        <button type="button" data-cut="circle" data-i18n="editor.cut.circle">⚪ Круг</button>
+        <button type="button" data-cut="rect" data-i18n="editor.cut.rect">⬜ Квадрат</button>
+        <button type="button" data-cut="triangle" data-i18n="editor.cut.triangle">🔺 Треугольник</button>
+        <button type="button" data-cut="free" data-i18n="editor.cut.free">✏️ Своя линия</button>
       </div>
       <div id="proMenu" class="pro-menu hidden"></div>
     </div>
 
-    <script src="/js/api.js"></script>
+    <script src="/js/api.js?v=2"></script>
     <script src="/js/actions.js?v=3"></script>
-    <script src="/js/pwlayout.js"></script>
-    <script src="/streamers/edit.js"></script>
-    <script src="/streamers/pro.js"></script>
+    <script src="/js/pwlayout.js?v=2"></script>
+    <script src="/streamers/edit.js?v=2"></script>
+    <script src="/streamers/pro.js?v=2"></script>
   </body>
   </html>

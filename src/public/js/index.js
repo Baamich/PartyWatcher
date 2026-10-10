@@ -87,13 +87,13 @@ async function sendForgot() {
   try {
     const data = await api('/auth/forgot', { method: 'POST', body: { email } });
     if (okEl) {
-      okEl.textContent = data.message || 'Проверьте почту';
+      okEl.textContent = data.message || t('index.forgot.checkMail');
       okEl.classList.remove('hidden');
     }
     // после успеха не даём жать сразу снова: сервер всё равно примет одно письмо раз в 2 минуты
     setTimeout(() => { if (btn) btn.disabled = false; }, 30000);
   } catch (e) {
-    showAuthError('forgotError', e.message || 'Не удалось отправить');
+    showAuthError('forgotError', e.message || t('index.sendFailed'));
     if (btn) btn.disabled = false;
   }
 }
@@ -118,7 +118,7 @@ function togglePasswordVisibility(inputId, btn) {
   const show = input.type === 'password';
   input.type = show ? 'text' : 'password';
   btn.textContent = show ? '🙈' : '👁';
-  btn.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
+  btn.setAttribute('aria-label', show ? t('index.password.hide') : t('index.password.show'));
 }
 
 function isValidEmail(email) {
@@ -128,10 +128,10 @@ function isValidEmail(email) {
 
 function getEmailError(email) {
   const v = String(email).trim();
-  if (!v) return 'Введите почту';
-  if (v.includes(' ')) return 'Почта не должна содержать пробелы';
-  if (!v.includes('@')) return 'В почте должен быть символ @';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'Некорректный формат почты';
+  if (!v) return t('index.email.empty');
+  if (v.includes(' ')) return t('index.email.spaces');
+  if (!v.includes('@')) return t('index.email.noAt');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return t('index.email.format');
   return null;
 }
 
@@ -154,7 +154,7 @@ function updateEmailStatus() {
   if (err) {
     status.textContent = '!';
     status.className = 'field-status bad';
-    status.title = 'Нажми, чтобы увидеть ошибку';
+    status.title = t('index.email.showError');
     status.onclick = () => {
       hint.textContent = err;
       hint.classList.remove('hidden');
@@ -162,7 +162,7 @@ function updateEmailStatus() {
   } else {
     status.textContent = '✓';
     status.className = 'field-status ok';
-    status.title = 'Почта корректна';
+    status.title = t('index.email.ok');
     status.onclick = null;
     hint.classList.add('hidden');
     hint.textContent = '';
@@ -216,7 +216,7 @@ async function login() {
   const loginVal = document.getElementById('loginInput').value.trim();
   const password = document.getElementById('passwordInput').value;
   if (!loginVal || !password) {
-    showAuthError('loginError', 'Введите логин и пароль');
+    showAuthError('loginError', t('index.login.empty'));
     return;
   }
   try {
@@ -234,7 +234,7 @@ async function login() {
     }
     await checkAuth();
   } catch (err) {
-    showAuthError('loginError', err.message || 'Не удалось войти');
+    showAuthError('loginError', err.message || t('index.login.failed'));
   }
 }
 
@@ -246,7 +246,7 @@ async function register() {
   const confirm = document.getElementById('regPasswordConfirm').value;
 
   if (!username) {
-    showAuthError('registerError', 'Введите логин');
+    showAuthError('registerError', t('index.register.noUsername'));
     return;
   }
   const emailErr = getEmailError(email);
@@ -257,9 +257,9 @@ async function register() {
   }
   if (!updatePasswordRules()) {
     if (password !== confirm) {
-      showAuthError('registerError', 'Пароли не совпадают');
+      showAuthError('registerError', t('index.register.mismatch'));
     } else {
-      showAuthError('registerError', 'Пароль не соответствует требованиям');
+      showAuthError('registerError', t('index.register.weak'));
     }
     return;
   }
@@ -276,7 +276,7 @@ async function register() {
     }
     await checkAuth();
   } catch (err) {
-    showAuthError('registerError', err.message || 'Не удалось зарегистрироваться');
+    showAuthError('registerError', err.message || t('index.register.failed'));
   }
 }
 
@@ -297,25 +297,17 @@ async function logout() {
 
 // ---- тип видео + приватность — один общий инфо-попап на двоих ----
 
-const infoTexts = {
-  youtube_twitch: 'Вставь ссылку на видео с YouTube (youtube.com/watch?v=... или youtu.be/...) или на запись (VOD) с Twitch (twitch.tv/videos/1234567890 — именно запись, не текущий эфир). <br>Тип определится автоматически по ссылке.',
-  drive: '(не тестировалось)<br>На Google Диске: правой кнопкой по видео → "Открыть доступ" → "Все, у кого есть ссылка" → скопируй ссылку и вставь сюда. Без этого сервер не сможет прочитать файл.',
-  player_capture: 'Вставь ссылку на страницу с фильмом/сериалом. Оптимизировано для:<br>• Kinogo(<a href="https://kinogo2026.com" target="_blank" rel="noopener">https://kinogo2026.com</a>), (<a href="https://kinogomy.net" target="_blank" rel="noopener">https://kinogomy.net</a>),<br>• Rezka (<a href="https://rezka-ua.tv" target="_blank" rel="noopener">https://rezka-ua.tv</a>), () <a href="https://rezka.ag" target="_blank" rel="noopener">https://rezka.ag</a><br>• (<a href="https://ga.lordfilm5.pro" target="_blank" rel="noopener">https://ga.lordfilm5.pro</a>), (<a href="https://lordfilm.fi" target="_blank" rel="noopener">https://lordfilm.fi</a>) и их возможные другие домены (могут быть нюансы, но должно работать фильм/сериал). <br>Другие сайты тоже могут сработать, но не гарантировано. <br>⚠️ my.mail.ru не поддерживается (его нельзя перехватить). <br>Для некоторых сайтов будет доступен выбор сезона/серии/озвучки/плеер.',
-  direct: 'Вставь ГОТОВУЮ прямую ссылку на видео — сюда НЕ подходит адрес обычной страницы сайта (например, страницы просмотра на my.mail.ru), только:<br>• ссылка на сам видеофайл: .mp4, .m3u8<br>• ссылка на embed-плеер, который сайт САМ разрешает встраивать (не все сайты это позволяют по тиму my.mail.ru.<br>Такую ссылку обычно нужно искать в исходном коде страницы — сервер её не ищет сам, в отличие от "Захвата плеера".',
-
-};
+// тексты подсказок по типу видео — в словаре: index.info.<тип> (с HTML-ссылками)
 
 let privacyPublic = false; // по умолчанию приватная
 
 function lockStatusText() {
-  return privacyPublic
-    ? '🔓 Открытая — комната появится в разделе "Публичные комнаты" у всех пользователей.'
-    : '🔒 Закрытая — комнату никто не увидит в списках, войти можно только по ключу.';
+  return privacyPublic ? t('index.privacy.public') : t('index.privacy.private');
 }
 
 function renderInfoPopup() {
   const type = document.getElementById('videoType').value;
-  document.getElementById('infoPopup').innerHTML = `${infoTexts[type]}<hr>${lockStatusText()}`;
+  document.getElementById('infoPopup').innerHTML = `${t('index.info.' + type)}<hr>${escapeHtml(lockStatusText())}`;
 }
 
 function toggleInfoPopup() {
@@ -354,34 +346,34 @@ function extractDriveFileId(url) {
 async function createRoom() {
   try {
     const name = document.getElementById('roomName').value.trim();
-    if (!name) return alert('Введи название комнаты');
+    if (!name) return PW.toast(t('index.create.noName'), 'info');
 
     const selection = document.getElementById('videoType').value;
     const rawUrl = document.getElementById('videoUrl').value.trim();
-    if (!rawUrl) return alert('Вставь ссылку на видео');
+    if (!rawUrl) return PW.toast(t('index.create.noUrl'), 'info');
 
     let type, url;
 
     if (selection === 'youtube_twitch') {
       if (/youtube\.com|youtu\.be/.test(rawUrl)) type = 'youtube';
       else if (/twitch\.tv/.test(rawUrl)) type = 'twitch';
-      else return alert('Не могу определить YouTube это или Twitch — проверь ссылку');
+      else return PW.toast(t('index.create.unknownYtTwitch'), 'error');
       url = rawUrl;
     } else if (selection === 'drive') {
       const fileId = extractDriveFileId(rawUrl);
-      if (!fileId) return alert('Не удалось распознать ссылку на файл Google Диска');
+      if (!fileId) return PW.toast(t('index.create.badDrive'), 'error');
       type = 'drive';
       url = fileId;
     } else if (selection === 'player_capture') {
-      if (!rawUrl.startsWith('http')) return alert('Нужна полная ссылка (начинается с http)');
+      if (!rawUrl.startsWith('http')) return PW.toast(t('index.create.needHttp'), 'error');
       type = 'player_capture';
       url = rawUrl;
     } else if (selection === 'direct') {
-      if (!rawUrl.startsWith('http')) return alert('Нужна полная ссылка (начинается с http)');
+      if (!rawUrl.startsWith('http')) return PW.toast(t('index.create.needHttp'), 'error');
       type = 'direct';
       url = rawUrl;
     } else {
-      return alert('Выбери тип видео');
+      return PW.toast(t('index.create.chooseType'), 'info');
     }
 
     const controller = new AbortController();
@@ -403,15 +395,15 @@ async function createRoom() {
     }
 
     if (!room?.code) {
-      throw new Error(room?.error || 'Сервер не вернул код комнаты');
+      throw new Error(room?.error || t('index.create.noCode'));
     }
     location.href = `/room.html?code=${room.code}`;
   } catch (err) {
     console.error('[createRoom]', err);
     if (err.name === 'AbortError') {
-      PW.toast('Сервер не ответил за 15 секунд. Попробуй ещё раз.', 'error');
+      PW.toast(t('index.create.timeout'), 'error');
     } else {
-      PW.toast(err.message || 'Не удалось создать комнату', 'error');
+      PW.toast(err.message || t('index.create.failed'), 'error');
     }
   }
 }
@@ -423,7 +415,7 @@ async function joinByCode() {
     await api('/rooms/' + encodeURIComponent(code));
     location.href = `/room.html?code=${encodeURIComponent(code)}`;
   } catch {
-    PW.toast('Комната не найдена или уже удалена', 'error');
+    PW.toast(t('index.join.notFound'), 'error');
   }
 }
 
@@ -439,25 +431,25 @@ function roomThumbnail(room) {
 }
 
 function occupancyLabel(room) {
-  return room.viewerCount > 0 ? room.viewerCount : 'пусто';
+  return room.viewerCount > 0 ? room.viewerCount : t('index.card.empty');
 }
 
 function deletionLabel(room) {
-  if (room.viewerCount > 0) return 'не удалится, пока кто-то смотрит';
+  if (room.viewerCount > 0) return t('index.card.keptWhileWatching');
   if (!room.emptySince) return '';
   const deadline = new Date(room.emptySince).getTime() + 20 * 60 * 60 * 1000;
   const msLeft = deadline - Date.now();
-  if (msLeft <= 0) return 'удаляется...';
+  if (msLeft <= 0) return t('index.card.deleting');
   const h = Math.floor(msLeft / 3600000);
   const m = Math.floor((msLeft % 3600000) / 60000);
-  return `удалится через ${h}ч ${m}м`;
+  return t('index.card.deletesIn', { h, m });
 }
 
 async function deleteRoom(code, ev) {
   ev.stopPropagation();
-  const ok = await PW.confirm('Комната и её чат будут удалены. Это нельзя отменить.', {
-    title: 'Удалить комнату?',
-    okText: 'Удалить',
+  const ok = await PW.confirm(t('index.delete.text'), {
+    title: t('index.delete.title'),
+    okText: t('common.delete'),
     danger: true,
   });
   if (!ok) return;
@@ -465,7 +457,7 @@ async function deleteRoom(code, ev) {
     await api('/rooms/' + code, { method: 'DELETE' });
     loadMyRooms();
   } catch (err) {
-    PW.toast(err.message || 'Не удалось удалить комнату', 'error');
+    PW.toast(err.message || t('index.delete.failed'), 'error');
   }
 }
 
@@ -487,14 +479,14 @@ function renderRoomCard(room, { showDelete }) {
   const card = document.createElement('div');
   card.className = 'room-card';
   card.innerHTML = `
-    ${showDelete ? `<button type="button" class="delete-btn" title="Удалить комнату" aria-label="Удалить комнату">${TRASH_SVG}</button>` : ''}
+    ${showDelete ? `<button type="button" class="delete-btn" title="${t('index.delete.btn')}" aria-label="${t('index.delete.btn')}">${TRASH_SVG}</button>` : ''}
     ${thumb ? `<img class="room-thumb" src="${escapeHtml(thumb)}" loading="lazy" />` : `<div class="room-thumb-placeholder">🎬</div>`}
     <div class="room-info">
       <span class="room-name" title="${escapeHtml(room.name)}">${escapeHtml(room.name)}</span>
       <span class="room-occupancy">👤 ${occupancyLabel(room)}</span>
     </div>
     <div class="room-actions">
-      <button class="enter-btn">Войти</button>
+      <button class="enter-btn">${t('index.join.submit')}</button>
       <div class="countdown">${deletionLabel(room)}</div>
     </div>`;
 
@@ -532,7 +524,7 @@ async function loadMyRooms() {
 
     if (!rooms.length) {
       lastRender.mine = '';
-      list.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Комнат нет</p>';
+      list.innerHTML = `<p style="color:var(--text-muted); font-size:14px;">${t('index.mine.empty')}</p>`;
       return;
     }
 
@@ -585,7 +577,7 @@ async function loadPublicRooms() {
 
     if (!rooms.length) {
       lastRender.public = '';
-      list.innerHTML = `<p style="color:var(--text-muted); font-size:14px;">${publicState.query ? 'Ничего не найдено' : 'Публичных комнат пока нет'}</p>`;
+      list.innerHTML = `<p style="color:var(--text-muted); font-size:14px;">${publicState.query ? t('index.public.notFound') : t('index.public.empty')}</p>`;
       if (paginationEl) paginationEl.classList.add('hidden');
       return;
     }
@@ -737,7 +729,7 @@ function stopAutoRefresh() {
   function openSupport() {
     // без входа отвечаем только на почту, поэтому она обязательна
     const label = document.getElementById('supportEmailLabel');
-    if (label) label.textContent = window.__pwAuthed ? 'Почта (необязательно)' : 'Почта (обязательно — ответим на неё)';
+    if (label) label.textContent = window.__pwAuthed ? t('index.support.emailOptional') : t('index.support.emailRequired');
     modal.classList.remove('hidden');
     document.getElementById('supportError')?.classList.add('hidden');
     document.getElementById('supportOk')?.classList.add('hidden');
@@ -767,9 +759,9 @@ function stopAutoRefresh() {
         errEl.classList.remove('hidden');
       }
     };
-    if (!window.__pwAuthed && !email) return fail('Укажите почту — без входа ответить можно только на неё');
-    if (email && getEmailError(email)) return fail('Некорректная почта');
-    if (!description || description.length < 5) return fail('Опишите проблему (минимум 5 символов)');
+    if (!window.__pwAuthed && !email) return fail(t('index.support.needEmail'));
+    if (email && getEmailError(email)) return fail(t('index.support.badEmail'));
+    if (!description || description.length < 5) return fail(t('index.support.shortDesc'));
 
     sendBtn.disabled = true;
     try {
@@ -783,7 +775,7 @@ function stopAutoRefresh() {
       setTimeout(closeSupport, 1200);
     } catch (e) {
       if (errEl) {
-        errEl.textContent = e.message || 'Не удалось отправить';
+        errEl.textContent = e.message || t('index.sendFailed');
         errEl.classList.remove('hidden');
       }
     } finally {

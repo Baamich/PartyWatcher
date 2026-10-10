@@ -1,0 +1,18 @@
+{
+  "pageTitle": "PartyWatcher — Streams",
+  "searchTitle": "PartyWatcher — Streamer search",
+  "searchPh": "Search by streamer name",
+  "active": "Active streamers",
+  "activeHint": "streaming often lately",
+  "all": "All streamers",
+  "toList": "Back to list",
+  "liveBadge": "LIVE",
+  "live": "live",
+  "offline": "offline",
+  "noStreamers": "No streamers yet",
+  "nobodyLive": "Nobody is live right now",
+  "nothingFound": "Nothing found",
+  "signInFirst": "Sign in first",
+  "didYouMean": "Did you mean:",
+  "noResults": "No one found for “{q}”"
+}

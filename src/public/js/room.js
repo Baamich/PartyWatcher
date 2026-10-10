@@ -1,3 +1,6 @@
+// системные сообщения приходят с именем «Система» (у пользователей логины только латиницей — не спутать)
+const SYSTEM_NAME = 'Система';
+
 const code = new URLSearchParams(location.search).get('code');
 let socket;
 let isOwner = false;
@@ -70,10 +73,7 @@ function updateMicHint() {
   const bt = micLabelLooksBluetooth(label);
   hint.classList.toggle('hidden', !bt);
   if (bt) {
-    hint.textContent =
-      'Выбран Bluetooth-микрофон. Пока он включён, наушники переключаются в режим звонка, ' +
-      'и звук фильма становится «как в банке». Выбери микрофон ноутбука или проводной, ' +
-      'а наушники останутся в обычном режиме.';
+    hint.textContent = t('room.voiceSettings.btHint');
   }
 }
 
@@ -81,8 +81,7 @@ function warnIfBluetoothMic() {
   const label = rawLocalStream?.getAudioTracks?.()[0]?.label || '';
   if (!micLabelLooksBluetooth(label)) return;
   PW.toast(
-    `Микрофон «${label}» — Bluetooth-гарнитура: из-за него звук фильма может стать «как в банке». ` +
-      'Выбери другой микрофон в 🎚️ Настройках звука.',
+    t('room.voice.btWarn', { label }),
     'info',
     10000
   );
@@ -320,7 +319,7 @@ function watchMicTrack(raw) {
   if (!track) return;
   track.onended = () => {
     if (!inVoiceCall) return;
-    alert('Микрофон отключился — звонок завершён');
+    PW.toast(t('room.voice.micLost'), 'error');
     leaveVoiceCall();
   };
 }
@@ -374,7 +373,7 @@ function teardownMicGraph() {
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 // один и тот же URL везде: разные ?t=... создавали бы новый экземпляр модуля при каждой смене серии
-const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=4';
+const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=5';
 // после перемотки зрителя даём буферу догнать, прежде чем снова мерить отставание —
 // иначе на медленном потоке получается петля «перемотал → буферизуется → снова отстал → перемотал», кадр стоит
 const CAPTURE_SEEK_COOLDOWN_MS = 8000;
@@ -485,8 +484,7 @@ function hideOverlay() {
 
 function updateWaitingOverlayText() {
   if (started || isOwner) return;
-  const status = lastState.isPlaying ? 'смотрит' : 'на паузе';
-  setOverlay(`Хост сейчас ${status} — нажми, чтобы присоединиться`, true);
+  setOverlay(lastState.isPlaying ? t('room.overlay.hostWatching') : t('room.overlay.hostPaused'), true);
 }
 
 function loadYouTubeAPI() {
@@ -576,20 +574,20 @@ function isAgeConfirmedLocally() {
     ageGateHandling = true;
 
     if (!isOwner) {
-      setOverlay('Видео заблокировано YouTube — жду, пока хост подтвердит возраст 18+', false);
+      setOverlay(t('room.ageGate.waitHost'), false);
       ageGateHandling = false;
       return;
     }
 
     const confirmed = await askAgeGate();
     if (!confirmed) {
-      setOverlay('Без подтверждения возраста это видео недоступно', false);
+      setOverlay(t('room.ageGate.declined'), false);
       ageGateHandling = false;
       return;
     }
 
     const keyAtStart = roomStateKey; // чтобы понять, что хост не сменил видео, пока мы ждём
-    setOverlay('Скачиваю видео для просмотра…', false);
+    setOverlay(t('room.ageGate.downloading'), false);
     try {
       let data = await api('/youtube-capture/age-restricted-extract', {
         method: 'POST',
@@ -600,16 +598,16 @@ function isAgeConfirmedLocally() {
       const startedAt = Date.now();
       while (data.status !== 'done') {
         if (roomStateKey !== keyAtStart) return; // видео уже другое
-        if (data.status === 'error') throw new Error(data.error || 'Не удалось скачать видео');
-        if (data.status === 'idle') throw new Error('Задача потерялась, попробуй ещё раз');
-        if (Date.now() - startedAt > 15 * 60 * 1000) throw new Error('Слишком долго, попробуй позже');
+        if (data.status === 'error') throw new Error(data.error || t('room.ageGate.downloadFailed'));
+        if (data.status === 'idle') throw new Error(t('room.ageGate.jobLost'));
+        if (Date.now() - startedAt > 15 * 60 * 1000) throw new Error(t('room.ageGate.tooLong'));
 
         const sec = Math.round((Date.now() - startedAt) / 1000);
         const pct = Number.isFinite(data.progress) ? ` ${Math.round(data.progress)}%` : '';
         setOverlay(
           data.status === 'queued'
-            ? `Ждём очереди на сервере… ${sec} с`
-            : `Скачиваю видео…${pct} (${sec} с)`,
+            ? t('room.ageGate.queued', { sec })
+            : t('room.ageGate.progress', { pct, sec }),
           false
         );
 
@@ -621,10 +619,10 @@ function isAgeConfirmedLocally() {
       ageGateResolvedForVideo = true; // видео решено — дальнейшие onError по этому видео игнорим
       renderDirectVideoUrl(data.url);
       // зрителям ссылку рассылает сервер сам, когда скачивание закончилось
-      setOverlay('Готово к просмотру', true);
+      setOverlay(t('room.overlay.ready'), true);
     } catch (err) {
       if (roomStateKey === keyAtStart) {
-        setOverlay('Не удалось получить видео: ' + (err.message || ''), false);
+        setOverlay(t('room.ageGate.getFailed') + ' ' + (err.message || ''), false);
       }
     } finally {
       if (roomStateKey === keyAtStart) ageGateHandling = false;
@@ -690,7 +688,7 @@ function isAgeConfirmedLocally() {
     return (async () => {
       const confirmed = await askAgeGate();
       if (!confirmed) {
-        setOverlay('Без подтверждения возраста это видео недоступно', false);
+        setOverlay(t('room.ageGate.declined'), false);
         return;
       }
       ageGateResolvedForVideo = true;
@@ -1025,8 +1023,8 @@ function resync() {
 
 function copyRoomLink() {
   navigator.clipboard.writeText(location.href)
-    .then(() => PW.toast('Ссылка на комнату скопирована', 'success'))
-    .catch(() => PW.toast('Не удалось скопировать ссылку', 'error'));
+    .then(() => PW.toast(t('room.copy.linkOk'), 'success'))
+    .catch(() => PW.toast(t('room.copy.linkFailed'), 'error'));
 }
 
 let copyToastTimer = null;
@@ -1047,12 +1045,13 @@ function showCopyToast(message) {
   }, 1200);
 }
 
-function copyText(text, label) {
-  const okMsg = label === 'Название' ? 'Название скопировано' : `${label} скопирован`;
+// what: 'name' | 'code'
+function copyText(text, what) {
+  const okMsg = what === 'name' ? t('room.copy.nameOk') : t('room.copy.codeOk');
   navigator.clipboard.writeText(text).then(() => {
     showCopyToast(okMsg);
   }).catch(() => {
-    showCopyToast('Не удалось скопировать');
+    showCopyToast(t('room.copy.failed'));
   });
 }
 
@@ -1272,8 +1271,8 @@ function renderParticipantRowsInto(container, list) {
 
     row.innerHTML = `
       <div class="participant-row-main">
-        <span>${escapeHTML(p.username)}${p.isOwner ? ' (Хост)' : ''}${isMe ? ' (вы)' : ''}</span>
-        ${isOwner && !p.isOwner ? '<button type="button" class="kick-btn">Кикнуть</button>' : ''}
+        <span>${escapeHTML(p.username)}${p.isOwner ? ' ' + t('room.participants.host') : ''}${isMe ? ' ' + t('room.participants.you') : ''}</span>
+        ${isOwner && !p.isOwner ? `<button type="button" class="kick-btn">${t('room.kick.btn')}</button>` : ''}
       </div>
       ${!isMe ? `
         <div class="participant-vol">
@@ -1285,9 +1284,9 @@ function renderParticipantRowsInto(container, list) {
 
     if (isOwner && !p.isOwner) {
       row.querySelector('.kick-btn').onclick = async () => {
-        const ok = await PW.confirm(`${p.username} будет выгнан из комнаты и заблокирован в ней.`, {
-          title: 'Кикнуть участника?',
-          okText: 'Кикнуть',
+        const ok = await PW.confirm(t('room.kick.text', { name: p.username }), {
+          title: t('room.kick.title'),
+          okText: t('room.kick.btn'),
           danger: true,
         });
         if (ok) {
@@ -1340,14 +1339,14 @@ function renderBannedRowsInto(container, list) {
   container.innerHTML = '';
 
   if (!list.length) {
-    container.textContent = 'Список пуст';
+    container.textContent = t('room.banned.empty');
     return;
   }
 
   list.forEach((u) => {
     const row = document.createElement('div');
     row.className = 'participant-row';
-    row.innerHTML = `<span>${escapeHTML(u.username)}</span><button class="unban-btn">Разблокировать</button>`;
+    row.innerHTML = `<span>${escapeHTML(u.username)}</span><button class="unban-btn">${t('room.banned.unban')}</button>`;
     row.querySelector('.unban-btn').onclick = () => socket.emit('room:unban', { code, userId: u.id });
     container.appendChild(row);
   });
@@ -1397,19 +1396,11 @@ function initChatInputPlaceholder() {
   });
 }
 
-const VIDEO_TYPE_LABELS = {
-  youtube: 'YouTube',
-  twitch: 'Twitch',
-  drive: 'Google Диск',
-  player_capture: 'Захват плеера',
-  direct: 'Прямая ссылка',
-  vk: 'VK',
-};
-
 function updateVideoChangeModeLabel(type) {
   const el = document.getElementById('videoChangeModeLabel');
   if (!el) return;
-  el.textContent = VIDEO_TYPE_LABELS[type] || type || '—';
+  const key = 'room.videoType.' + type;
+  el.textContent = (type && I18N.has(key) ? t(key) : type) || '—';
 }
 
 function destroyCurrentPlayer() {
@@ -1457,9 +1448,9 @@ async function applyNewVideo(video, playback) {
   setTimeout(refreshCcButton, 800);
 
   if (isOwner) {
-    setOverlay('Готово к просмотру', true);
+    setOverlay(t('room.overlay.ready'), true);
   } else {
-    setOverlay('Хост сменил видео — нажми, чтобы продолжить', true);
+    setOverlay(t('room.overlay.videoChanged'), true);
   }
 }
 
@@ -1469,13 +1460,13 @@ async function changeVideoUrl() {
   const btn = document.getElementById('videoChangeBtn');
   const url = (input?.value || '').trim();
   if (!url) {
-    alert('Вставь новую ссылку');
+    PW.toast(t('room.change.noUrl'), 'info');
     return;
   }
 
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Меняем...';
+    btn.textContent = t('room.change.changing');
   }
 
   try {
@@ -1486,11 +1477,11 @@ async function changeVideoUrl() {
     if (input) input.value = '';
     await applyNewVideo(data.video, data.playback);
   } catch (err) {
-    alert(err.message || 'Не удалось сменить видео');
+    PW.toast(err.message || t('room.change.failed'), 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Сменить';
+      btn.textContent = t('room.change.submit');
     }
   }
 }
@@ -1502,8 +1493,8 @@ async function init() {
   myUsername = me.username || me.user?.username || null;
 
   document.getElementById('roomCodeValue').textContent = code;
-  document.getElementById('roomCodeValue').onclick = () => copyText(code, 'Код');
-  setOverlay('Загрузка комнаты...', false);
+  document.getElementById('roomCodeValue').onclick = () => copyText(code, 'code');
+  setOverlay(t('room.loading'), false);
 
   const volumeSliderEl = document.getElementById('volumeSlider');
   if (volumeSliderEl) volumeSliderEl.value = getSavedVolume();
@@ -1525,7 +1516,7 @@ async function init() {
     if (videoEl && videoEl.getAttribute('src') === url) return; // эта копия уже играет
     const confirmed = await askAgeGate();
     if (!confirmed) {
-      setOverlay('Хост включил контент 18+. Обнови страницу, если готов подтвердить возраст.', false);
+      setOverlay(t('room.ageGate.hostEnabled'), false);
       return;
     }
     ageGateResolvedForVideo = true;
@@ -1573,8 +1564,8 @@ async function init() {
 
     const nameEl = document.getElementById('roomNameValue');
     if (nameEl) {
-      nameEl.textContent = name || 'Без названия';
-      nameEl.onclick = () => copyText(name || '', 'Название');
+      nameEl.textContent = name || t('room.meta.untitled');
+      nameEl.onclick = () => copyText(name || '', 'name');
     }
 
     setViewMode('chat');
@@ -1582,12 +1573,10 @@ async function init() {
     setTimeout(refreshCcButton, 800);
 
     if (isOwner) {
-      setOverlay('Готово к просмотру', true);
+      setOverlay(t('room.overlay.ready'), true);
     } else {
       updateWaitingOverlayText();
-      showLocalSystemMessage(
-        `Когда хост запускает видео, тебе нужно запустить у себя вручную (кнопкой или пробелом). После этого можно нажать «Синхронизировать», а сайт сам подстроит тебя автоматически, если отставание больше ${DRIFT_THRESHOLD_SECONDS} секунд.`
-      );
+      showLocalSystemMessage(t('room.sys.viewerHelp', { n: DRIFT_THRESHOLD_SECONDS }));
     }
   });
 
@@ -1652,24 +1641,24 @@ window.__onCapturePlayerReload = (player) => {
   });
 
   socket.on('room:user-joined', ({ username }) => {
-    addMessage({ username: 'Система', text: `${username} присоединился к просмотру` });
+    addMessage({ username: SYSTEM_NAME, text: t('room.sys.joined', { name: username }) });
   });
 
   socket.on('room:participants', renderParticipants);
   socket.on('room:banned-list', renderBannedList);
 
   socket.on('room:kicked', () => {
-    PW.alert('Доступ в неё заблокирован.', { title: 'Вас кикнули из комнаты' })
+    PW.alert(t('room.kicked.text'), { title: t('room.kicked.title') })
       .then(() => { location.href = '/'; });
   });
 
   socket.on('room:banned', () => {
-    PW.alert('Вход в эту комнату вам закрыт.', { title: 'Вы заблокированы' })
+    PW.alert(t('room.bannedMe.text'), { title: t('room.bannedMe.title') })
       .then(() => { location.href = '/'; });
   });
 
   socket.on('room:deleted', () => {
-    PW.alert('Владелец удалил эту комнату.', { title: 'Комнаты больше нет' })
+    PW.alert(t('room.deleted.text'), { title: t('room.deleted.title') })
       .then(() => { location.href = '/'; });
   });
 
@@ -1698,8 +1687,8 @@ window.__onCapturePlayerReload = (player) => {
     } else {
       if (!sameEpisode) {
         addMessage({
-          username: 'Система',
-          text: `Хост сменил на Сезон ${season}, Серия ${episode}`,
+          username: SYSTEM_NAME,
+          text: t('room.sys.episodeChanged', { season, episode }),
         });
       }
       lastState = sameEpisode && playback
@@ -1747,18 +1736,18 @@ window.__onCapturePlayerReload = (player) => {
         // смотрим дальше без кнопки: страница уже получила клик пользователя, автозапуск разрешён
         resumeVideoAt(v, lastState.positionSeconds);
         lastCaptureSeekAt = Date.now();
-        if (lastState.isPlaying) v.play().catch(() => setOverlay('Поток обновлён — нажми, чтобы продолжить', true));
+        if (lastState.isPlaying) v.play().catch(() => setOverlay(t('room.overlay.streamUpdated'), true));
       } else {
-        setOverlay(sameEpisode ? 'Поток обновлён — нажми, чтобы продолжить' : 'Хост сменил серию — нажми, чтобы продолжить', true);
+        setOverlay(sameEpisode ? t('room.overlay.streamUpdated') : t('room.overlay.episodeChanged'), true);
       }
     } catch (e) {
       console.error('[viewer] streams error', e);
-      setOverlay('Ошибка загрузки серии', false);
+      setOverlay(t('room.overlay.episodeError'), false);
     }
   });
 
   socket.on('chat:message', addMessage);
-  socket.on('room:error', (err) => PW.toast(err?.error || 'Ошибка комнаты', 'error'));
+  socket.on('room:error', (err) => PW.toast(err?.error || t('room.error'), 'error'));
 
   socket.on('voice:participants', (list) => {
     const prevIds = new Set(voiceParticipants.map((p) => p.socketId));
@@ -1798,7 +1787,7 @@ window.__onCapturePlayerReload = (player) => {
   // сервер отказал (звонок полный): раньше клиент навсегда «висел» в звонке
   socket.on('voice:join-rejected', ({ max }) => {
     leaveVoiceCall();
-    alert(`Звонок заполнен (максимум ${max} человек)`);
+    PW.toast(t('room.voice.full', { n: max }), 'error');
   });
 
   // после переподключения сокета сервер уже выкинул нас из звонка — заходим заново
@@ -1862,10 +1851,14 @@ function usernameColor(username) {
   return `hsl(${hue}, 70%, 65%)`;
 }
 
+function displayName(username) {
+  return username === SYSTEM_NAME ? t('room.system') : username;
+}
+
 function formatMessageHTML(username, text) {
-  const isSystem = username === 'Система';
+  const isSystem = username === SYSTEM_NAME;
   const nameHTML = isSystem
-    ? `<span style="color:var(--danger); font-weight:600;">Система</span>`
+    ? `<span style="color:var(--danger); font-weight:600;">${escapeHTML(t('room.system'))}</span>`
     : `<b style="color:${usernameColor(username)}">${escapeHTML(username)}</b>`;
   return `${nameHTML}: ${escapeHTML(text)}`;
 }
@@ -1884,7 +1877,7 @@ let fsNoticeTimer = null;
 function showFsNotice(username, text) {
   if (!isDocFullscreen()) return;
   const notice = document.getElementById('fsNotice');
-  notice.textContent = `${username}: ${text}`;
+  notice.textContent = `${displayName(username)}: ${text}`;
   notice.classList.remove('hidden', 'fade-out');
 
   clearTimeout(fsNoticeTimer);
@@ -1894,7 +1887,9 @@ function showFsNotice(username, text) {
   }, 5000);
 }
 
-function addMessage({ username, text }) {
+// key — сообщение сервера с ключом словаря (переводим на языке этого зрителя)
+function addMessage({ username, text, key, vars }) {
+  if (key && I18N.has(key)) text = t(key, vars);
   appendMessageTo('messages', username, text);
   appendMessageTo('fsMessages', username, text);
   showFsNotice(username, text);
@@ -1908,8 +1903,8 @@ function addHistoryMessage({ username, text }) {
 
 function showLocalSystemMessage(text) {
   // видно только этому зрителю локально, не рассылается остальным по сокету
-  appendMessageTo('messages', 'Система', text);
-  appendMessageTo('fsMessages', 'Система', text);
+  appendMessageTo('messages', SYSTEM_NAME, text);
+  appendMessageTo('fsMessages', SYSTEM_NAME, text);
 }
 
 const BUTTONS_LOCK_KEY = 'pw_buttons_locked';
@@ -1944,7 +1939,7 @@ function initLockButtonsControl() {
     hideTooltip();
     tooltipEl = document.createElement('div');
     tooltipEl.className = 'lock-btn-tooltip';
-    tooltipEl.textContent = 'Заблокировать/разблокировать движение кнопок плеера';
+    tooltipEl.textContent = t('room.lock.tooltip');
     btn.appendChild(tooltipEl);
   }
 
@@ -2392,10 +2387,10 @@ function renderVoicePanel() {
 
   if (count === 0) return;
 
-  text.textContent = inVoiceCall ? 'Вы в звонке' : 'Присоединиться к звонку';
+  text.textContent = inVoiceCall ? t('room.voice.inCall') : t('room.voice.join');
   countEl.textContent = count >= VOICE_WARN_THRESHOLD
-    ? `В звонке: ${count} (может тормозить)`
-    : `В звонке: ${count}`;
+    ? t('room.voice.countLaggy', { n: count })
+    : t('room.voice.count', { n: count });
   hangupBtn.classList.toggle('hidden', !inVoiceCall);
   if (muteBtn) {
     muteBtn.classList.toggle('hidden', !inVoiceCall);
@@ -2455,14 +2450,14 @@ async function startVoiceCall() {
     getPlaybackCtx(); // сразу, пока жив «клик пользователя», иначе AudioContext останется suspended
 
     if (voiceParticipants.length >= MAX_VOICE_PARTICIPANTS) {
-      alert(`Звонок уже заполнен (максимум ${MAX_VOICE_PARTICIPANTS} человек) — попробуй позже.`);
+      PW.toast(t('room.voice.fullTryLater', { n: MAX_VOICE_PARTICIPANTS }), 'error');
       return;
     }
 
     try {
       localStream = await buildLocalStream();
     } catch (e) {
-      alert('Не удалось получить доступ к микрофону: ' + (e.message || e));
+      PW.toast(t('room.voice.micDenied') + ' ' + (e.message || e), 'error');
       return;
     }
     warnIfBluetoothMic();
@@ -2820,7 +2815,7 @@ async function collectVoiceStats() {
         if (typeof pair.currentRoundTripTime === 'number') row.rtt = Math.round(pair.currentRoundTripTime * 1000);
         const l = stats.get(pair.localCandidateId);
         const rm = stats.get(pair.remoteCandidateId);
-        row.route = (l && l.candidateType === 'relay') || (rm && rm.candidateType === 'relay') ? 'через TURN' : 'напрямую';
+        row.route = (l && l.candidateType === 'relay') || (rm && rm.candidateType === 'relay') ? t('room.stats.turn') : t('room.stats.direct');
       }
       stats.forEach((r) => {
         if (r.type !== 'inbound-rtp' || r.kind !== 'audio') return;
@@ -2859,12 +2854,12 @@ async function refreshVoiceStats() {
     return;
   }
   if (!inVoiceCall) {
-    box.textContent = 'Появится, когда зайдёшь в звонок.';
+    box.textContent = t('room.voiceSettings.statsEmpty');
     return;
   }
   const rows = await collectVoiceStats();
   if (!rows.length) {
-    box.textContent = 'Пока ни с кем не соединён.';
+    box.textContent = t('room.stats.noPeers');
     return;
   }
   box.innerHTML = '';
@@ -2872,8 +2867,8 @@ async function refreshVoiceStats() {
     const div = document.createElement('div');
     div.className = 'voice-stat-row ' + voiceQualityClass(r);
     div.textContent = r.state === 'connected'
-      ? `${r.name}: ${r.route}, пинг ${r.rtt ?? '?'} мс, потери ${r.loss == null ? '?' : r.loss.toFixed(1) + '%'}, джиттер ${r.jitter ?? '?'} мс`
-      : `${r.name}: соединяется…`;
+      ? t('room.stats.row', { name: r.name, route: r.route, rtt: r.rtt ?? '?', loss: r.loss == null ? '?' : r.loss.toFixed(1) + '%', jitter: r.jitter ?? '?' })
+      : t('room.stats.connecting', { name: r.name });
     box.appendChild(div);
   });
 }
@@ -3429,14 +3424,14 @@ async function fillMicList() {
 
   const def = document.createElement('option');
   def.value = '';
-  def.textContent = 'По умолчанию';
+  def.textContent = t('room.voiceSettings.micDefault');
   sel.appendChild(def);
 
   devices.forEach((d, i) => {
     if (!d.deviceId || d.deviceId === 'default' || d.deviceId === 'communications') return;
     const opt = document.createElement('option');
     opt.value = d.deviceId;
-    opt.textContent = d.label || `Микрофон ${i + 1}`;
+    opt.textContent = d.label || t('room.voiceSettings.micN', { n: i + 1 });
     sel.appendChild(opt);
   });
 
@@ -3483,7 +3478,7 @@ document.getElementById('micSelect')?.addEventListener('change', async (e) => {
   try {
     await switchMic(id || null);
   } catch (err) {
-    alert('Не удалось переключить микрофон: ' + (err.message || err));
+    PW.toast(t('room.voiceSettings.switchFailed') + ' ' + (err.message || err), 'error');
   }
 });
 
@@ -3493,7 +3488,7 @@ document.getElementById('micProcToggle')?.addEventListener('change', async (e) =
   try {
     await switchMic(localStorage.getItem(MIC_DEVICE_KEY) || null); // перезахват микрофона с новыми настройками
   } catch (err) {
-    PW.toast('Не удалось применить настройку: ' + (err.message || err), 'error');
+    PW.toast(t('room.voiceSettings.applyFailed') + ' ' + (err.message || err), 'error');
   }
 });
 

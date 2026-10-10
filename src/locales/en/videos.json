@@ -1,0 +1,26 @@
+{
+  "pageTitle": "PartyWatcher — Video studio",
+  "hint": "Recordings are kept for 3 days (published ones are removed from the profile too).",
+  "editTitle": "Edit recording",
+  "name": "Title",
+  "desc": "Description",
+  "edit": "Edit",
+  "publish": "Publish",
+  "unpublish": "Remove from profile",
+  "empty": "No recordings yet — they appear after a stream.",
+  "status": {
+    "recording": "recording",
+    "processing": "compressing…",
+    "published": "on profile"
+  },
+  "card": {
+    "title": "Stream recording {date}",
+    "expiryNote": "(will be deleted after this date, including from the profile)",
+    "pending": "The file is still being written…"
+  },
+  "del": {
+    "title": "Delete the recording?",
+    "text": "The file will be deleted forever. It will also disappear from the profile.",
+    "ok": "Yes, delete"
+  }
+}

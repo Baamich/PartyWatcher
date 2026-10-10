@@ -1,0 +1,9 @@
+{
+  "pageTitle": "PartyWatcher — Channel activity",
+  "bans": "Banned users",
+  "subs": "Subscribers",
+  "subsSoon": "Subscriptions are not implemented yet — coming as a separate step.",
+  "noBans": "No banned users",
+  "unban": "Unban",
+  "unbanFailed": "Could not unban"
+}

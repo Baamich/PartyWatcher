@@ -1,0 +1,37 @@
+<h1>Security and limits</h1>
+<p class="docs-lead">In short: the chat key is the password to your chat. Here is what protects you on the site and what you need to do yourself.</p>
+
+<h2>What the site does by itself</h2>
+<ul>
+  <li><b>The key works only for your channel.</b> Your key can't write to other chats, and other people's keys don't open yours.</li>
+  <li><b>The owner can't be faked.</b> The site adds the red plate on the nickname itself, and a bot can't “draw” it for itself.</li>
+  <li><b>Bot messages are always labeled</b> (for example, <code>BOT</code> or <code>TWITCH</code>). Viewers can tell them from real people.</li>
+  <li><b>Limits.</b> No more than 20 messages in 10 seconds and 100 per minute. Beyond that the site replies “429” and tells how long to wait.</li>
+  <li><b>Sizes.</b> Text up to 500 characters, name up to 32. Everything that comes into the chat is shown as plain text, no “harmful” markup will run.</li>
+</ul>
+
+<h2>What you need to do</h2>
+<ol>
+  <li><b>Never show or send anyone the key or the OBS link.</b> The link contains the key too.</li>
+  <li><b>Don't publish bot code with the key</b> (for example, on GitHub). Publish the code without the key.</li>
+  <li><b>Don't open the OBS source properties on stream.</b> The key is visible in the URL field.</li>
+  <li><b>Add pauses between commands in the bot</b> (like in the roulette from the bot chapter) so viewers don't flood the chat.</li>
+</ol>
+
+<h2>If the key leaked</h2>
+<ol>
+  <li>Open the studio, click <b>▲ Chat API</b>, then <b>“🔄”</b> and confirm.</li>
+  <li>The old key immediately stops accepting messages.</li>
+  <li>Copy the new OBS link (<b>“OBS link”</b>) and replace it in the source.</li>
+  <li>Put the new key into the bot and restart the bot.</li>
+</ol>
+<div class="docs-note">
+  <p>Connections already opened with the old key keep showing the chat until they are restarted (they can no longer write). To cut them off right away, in OBS open the source Properties → “Refresh cache of current page”, and stop and start the bot again.</p>
+</div>
+
+<h2>What the key can't do</h2>
+<ul>
+  <li>Ban viewers, clear the chat or view the action log. That is done only in the studio under your account.</li>
+  <li>Read other people's data. Messages contain only the public name and text.</li>
+</ul>
+<p>Anyone can read the chat on the streamer page, so the key is needed for sending messages and for the OBS link, not for reading.</p>

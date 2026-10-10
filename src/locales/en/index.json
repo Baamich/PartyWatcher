@@ -1,0 +1,144 @@
+{
+  "meta": {
+    "title": "PartyWatcher — watch movies and videos together online",
+    "description": "PartyWatcher is a free watch-party service. Create a room, send the link to your friends and watch YouTube, Twitch and other videos in sync, with chat and voice.",
+    "ogDescription": "Create a room, send the link to your friends and watch videos in sync with chat and voice."
+  },
+  "intro": {
+    "title": "Watch movies and videos together with friends",
+    "text": "PartyWatcher is an online watch-party service. Create a room, share the link, and everyone watches the same video in sync: YouTube, Twitch, Google Drive and other sources. Rooms have text chat and voice."
+  },
+  "login": {
+    "title": "Sign in",
+    "login": "Username or email",
+    "password": "Password",
+    "submit": "Sign in",
+    "forgot": "Forgot password?",
+    "noAccount": "No account?",
+    "toRegister": "Sign up",
+    "empty": "Enter your username and password",
+    "failed": "Could not sign in"
+  },
+  "password": {
+    "show": "Show password",
+    "hide": "Hide password"
+  },
+  "forgot": {
+    "title": "Reset password",
+    "email": "Account email",
+    "submit": "Send link",
+    "back": "Back to sign in",
+    "checkMail": "Check your inbox"
+  },
+  "register": {
+    "title": "Sign up",
+    "username": "Username",
+    "email": "Email",
+    "confirm": "Repeat password",
+    "submit": "Sign up",
+    "haveAccount": "Already have an account?",
+    "noUsername": "Enter a username",
+    "mismatch": "Passwords do not match",
+    "weak": "Password does not meet the requirements",
+    "failed": "Could not sign up"
+  },
+  "rules": {
+    "length": "At least 8 characters",
+    "upper": "Starts with a capital Latin letter (A–Z)",
+    "letter": "Contains letters",
+    "digit": "Contains digits",
+    "match": "Passwords match"
+  },
+  "email": {
+    "empty": "Enter your email",
+    "spaces": "Email must not contain spaces",
+    "noAt": "Email must contain @",
+    "format": "Invalid email format",
+    "showError": "Click to see the error",
+    "ok": "Email looks good"
+  },
+  "sendFailed": "Could not send",
+  "create": {
+    "title": "Create a room",
+    "name": "Room name",
+    "url": "Video link",
+    "submit": "Create",
+    "info": "Help",
+    "privacy": "Public or private room",
+    "noName": "Enter a room name",
+    "noUrl": "Paste a video link",
+    "unknownYtTwitch": "Can't tell whether this is YouTube or Twitch — check the link",
+    "badDrive": "Could not recognize the Google Drive file link",
+    "needHttp": "A full link is required (starting with http)",
+    "chooseType": "Choose a video type",
+    "noCode": "The server did not return a room code",
+    "timeout": "The server did not respond within 15 seconds. Try again.",
+    "failed": "Could not create the room"
+  },
+  "type": {
+    "youtube_twitch": "YouTube / Twitch (recording)",
+    "drive": "Google Drive",
+    "player_capture": "Player capture (movie / series)",
+    "direct": "Direct video link"
+  },
+  "info": {
+    "youtube_twitch": "Paste a YouTube video link (youtube.com/watch?v=... or youtu.be/...) or a Twitch recording (VOD) link (twitch.tv/videos/1234567890 — a recording, not a live stream). <br>The type is detected automatically from the link.",
+    "drive": "(not tested)<br>In Google Drive: right-click the video → \"Share\" → \"Anyone with the link\" → copy the link and paste it here. Otherwise the server cannot read the file.",
+    "player_capture": "Paste a link to a movie/series page. Optimized for:<br>• Kinogo(<a href=\"https://kinogo2026.com\" target=\"_blank\" rel=\"noopener\">https://kinogo2026.com</a>), (<a href=\"https://kinogomy.net\" target=\"_blank\" rel=\"noopener\">https://kinogomy.net</a>),<br>• Rezka (<a href=\"https://rezka-ua.tv\" target=\"_blank\" rel=\"noopener\">https://rezka-ua.tv</a>), () <a href=\"https://rezka.ag\" target=\"_blank\" rel=\"noopener\">https://rezka.ag</a><br>• (<a href=\"https://ga.lordfilm5.pro\" target=\"_blank\" rel=\"noopener\">https://ga.lordfilm5.pro</a>), (<a href=\"https://lordfilm.fi\" target=\"_blank\" rel=\"noopener\">https://lordfilm.fi</a>) and their possible mirror domains (there may be quirks, but movies/series should work). <br>Other sites may work too, but this is not guaranteed. <br>⚠️ my.mail.ru is not supported (it cannot be captured). <br>Some sites let you choose the season/episode/voice-over/player.",
+    "direct": "Paste a READY direct video link — a regular site page address will NOT work here (e.g. a my.mail.ru watch page), only:<br>• a link to the video file itself: .mp4, .m3u8<br>• a link to an embed player that the site ITSELF allows to embed (not all sites allow it, e.g. my.mail.ru).<br>Such a link usually has to be found in the page source — the server does not look for it, unlike \"Player capture\"."
+  },
+  "privacy": {
+    "public": "🔓 Public — the room will appear in \"Public rooms\" for all users.",
+    "private": "🔒 Private — the room is not listed anywhere, it can only be joined with its key."
+  },
+  "join": {
+    "title": "Join with a key",
+    "code": "Room key",
+    "submit": "Join",
+    "notFound": "Room not found or already deleted"
+  },
+  "mine": {
+    "title": "My rooms",
+    "empty": "No rooms"
+  },
+  "public": {
+    "title": "Public rooms",
+    "search": "Search by name",
+    "sort": {
+      "newest": "Newest",
+      "oldest": "Oldest",
+      "most": "Most people",
+      "least": "Fewest people"
+    },
+    "withPeople": "With people",
+    "notFound": "Nothing found",
+    "empty": "No public rooms yet"
+  },
+  "card": {
+    "empty": "empty",
+    "keptWhileWatching": "won't be deleted while someone is watching",
+    "deleting": "deleting...",
+    "deletesIn": "deleted in {h}h {m}m"
+  },
+  "delete": {
+    "btn": "Delete room",
+    "title": "Delete the room?",
+    "text": "The room and its chat will be deleted. This cannot be undone.",
+    "failed": "Could not delete the room"
+  },
+  "support": {
+    "title": "Support",
+    "hint": "Describe the problem — we'll try to help",
+    "name": "Name (optional)",
+    "namePh": "Up to 12 characters",
+    "desc": "Problem description",
+    "descPh": "What happened? (up to 1000 characters)",
+    "sent": "Sent ✓",
+    "send": "Send",
+    "emailOptional": "Email (optional)",
+    "emailRequired": "Email (required — we'll reply to it)",
+    "needEmail": "Enter your email — without signing in we can only reply by email",
+    "badEmail": "Invalid email",
+    "shortDesc": "Describe the problem (at least 5 characters)"
+  }
+}

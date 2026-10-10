@@ -396,7 +396,7 @@ async function createVodDoc(key) {
     _id: vodId,
     userId: entry.userId,
     streamerNameLower: user.streamerNameLower,
-    title: user.streamTitle || 'Запись эфира',
+    title: user.streamTitle || '', // без названия сайт сам покажет «Запись» на языке зрителя
     description: user.streamDescription || '',
     fileRel,
     published: false,

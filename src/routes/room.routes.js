@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const Room = require('../models/Room');
 const auth = require('../middleware/auth');
+const i18n = require('../services/i18n');
 const ChatMessage = require('../models/ChatMessage');
 const { extractYoutubeId } = require('../services/ytdlpAgeGate');
 
@@ -28,19 +29,20 @@ const VIDEO_TYPES = ['youtube', 'twitch', 'drive', 'player_capture', 'direct'];
 function validateVideo(video) {
   const t = video?.type;
   const u = String(video?.url || '').trim();
-  if (!VIDEO_TYPES.includes(t)) return 'Неизвестный тип видео';
+  // возвращает ключ словаря ошибки (перевод — req.t) или null
+  if (!VIDEO_TYPES.includes(t)) return 'server.room.unknownType';
   if ((t === 'direct' || t === 'player_capture') && !/^https?:\/\//i.test(u)) {
-    return 'Нужна полная ссылка (http/https)';
+    return 'server.room.needFullUrl';
   }
   if (t === 'twitch' && !/twitch\.tv\/videos\/\d+/.test(u)) {
-    return 'Нужна ссылка на запись Twitch (twitch.tv/videos/...)';
+    return 'server.room.needTwitchVod';
   }
   if (t === 'drive' && !/^[A-Za-z0-9_-]{10,100}$/.test(u)) {
-    return 'Не удалось распознать файл Google Диска';
+    return 'server.room.badDriveFile';
   }
   // ссылка на YouTube должна содержать настоящий id видео (потом её обрабатывает yt-dlp на сервере)
   if (t === 'youtube' && !extractYoutubeId(u)) {
-    return 'Не удалось распознать ссылку YouTube';
+    return 'server.room.badYoutube';
   }
   return null;
 }
@@ -49,13 +51,13 @@ router.post('/', auth, async (req, res) => {
   try {
     const { name, video, isPublic } = req.body;
     if (!name || !video?.type || !video?.url) {
-      return res.status(400).json({ error: 'Нужно имя комнаты и видео' });
+      return res.status(400).json({ error: req.t('server.room.needNameAndVideo') });
     }
     const videoError = validateVideo(video);
-    if (videoError) return res.status(400).json({ error: videoError });
+    if (videoError) return res.status(400).json({ error: req.t(videoError) });
 
     if ((await Room.countDocuments({ owner: req.user.id })) >= 30) {
-      return res.status(400).json({ error: 'Слишком много комнат: удали ненужные' });
+      return res.status(400).json({ error: req.t('server.room.tooMany') });
     }
 
     let code;
@@ -83,7 +85,7 @@ router.post('/', auth, async (req, res) => {
     res.status(201).json(room);
   } catch (err) {
     console.error('[rooms/create]', err);
-    res.status(500).json({ error: err.message || 'Не удалось создать комнату' });
+    res.status(500).json({ error: req.t('server.room.createFailed') });
   }
 });
 
@@ -157,9 +159,9 @@ router.get('/search', auth, async (req, res) => {
 
 router.delete('/:code', auth, async (req, res) => {
   const room = await Room.findOne({ code: req.params.code });
-  if (!room) return res.status(404).json({ error: 'Не найдено' });
+  if (!room) return res.status(404).json({ error: req.t('server.notFound') });
   if (String(room.owner) !== String(req.user.id)) {
-    return res.status(403).json({ error: 'Не твоя комната' });
+    return res.status(403).json({ error: req.t('server.room.notYours') });
   }
 
   const io = req.app.get('io');
@@ -182,44 +184,44 @@ router.delete('/:code', auth, async (req, res) => {
 
 router.get('/:code', auth, async (req, res) => {
   const room = await Room.findOne({ code: req.params.code });
-  if (!room) return res.status(404).json({ error: 'Комната не найдена' });
+  if (!room) return res.status(404).json({ error: req.t('server.room.notFound') });
   res.json({ code: room.code, name: room.name });
 });
 
 router.post('/:code/change-video', auth, async (req, res) => {
   try {
     const room = await Room.findOne({ code: req.params.code });
-    if (!room) return res.status(404).json({ error: 'Комната не найдена' });
+    if (!room) return res.status(404).json({ error: req.t('server.room.notFound') });
     if (String(room.owner) !== String(req.user.id)) {
-      return res.status(403).json({ error: 'Только хост может сменить видео' });
+      return res.status(403).json({ error: req.t('server.room.hostOnlyChange') });
     }
 
     let rawUrl = String(req.body?.url || '').trim();
-    if (!rawUrl) return res.status(400).json({ error: 'Нужна ссылка' });
+    if (!rawUrl) return res.status(400).json({ error: req.t('server.room.needUrl') });
 
     const type = room.video.type;
     let url = rawUrl;
 
     if (type === 'youtube') {
       if (!extractYoutubeId(rawUrl)) {
-        return res.status(400).json({ error: 'Нужна ссылка YouTube (режим комнаты — youtube)' });
+        return res.status(400).json({ error: req.t('server.room.needYoutube') });
       }
     } else if (type === 'twitch') {
       if (!/twitch\.tv\/videos\//.test(rawUrl)) {
-        return res.status(400).json({ error: 'Нужна ссылка на VOD Twitch (twitch.tv/videos/...)' });
+        return res.status(400).json({ error: req.t('server.room.needTwitchVod2') });
       }
     } else if (type === 'drive') {
       const match = rawUrl.match(/\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
       if (!match && !/^[a-zA-Z0-9_-]+$/.test(rawUrl)) {
-        return res.status(400).json({ error: 'Не удалось распознать ссылку Google Диска' });
+        return res.status(400).json({ error: req.t('server.room.badDrive') });
       }
       url = match ? match[1] : rawUrl;
     } else if (type === 'player_capture' || type === 'direct') {
       if (!rawUrl.startsWith('http')) {
-        return res.status(400).json({ error: 'Нужна полная ссылка (http/https)' });
+        return res.status(400).json({ error: req.t('server.room.needFullUrl') });
       }
     } else {
-      return res.status(400).json({ error: 'Смена ссылки для этого режима не поддерживается' });
+      return res.status(400).json({ error: req.t('server.room.changeUnsupported') });
     }
 
     room.video.url = url;
@@ -258,8 +260,9 @@ router.post('/:code/change-video', auth, async (req, res) => {
       by: req.user.username,
     });
     io.to(room.code).emit('chat:message', {
-      username: 'Система',
-      text: `Хост сменил видео`,
+      username: 'Система', // служебное имя: клиент показывает его на языке зрителя
+      key: 'room.sys.videoChanged', // клиент переводит по ключу, text — запасной вариант
+      text: i18n.t(i18n.DEFAULT_LANG, 'server.sys.videoChanged'),
       at: Date.now(),
     });
 
@@ -270,7 +273,7 @@ router.post('/:code/change-video', auth, async (req, res) => {
     res.json({ status: 'ok', video: room.video, playback: room.playback });
   } catch (err) {
     console.error('[rooms/change-video]', err);
-    res.status(500).json({ error: err.message || 'Не удалось сменить видео' });
+    res.status(500).json({ error: req.t('server.room.changeFailed') });
   }
 });
 

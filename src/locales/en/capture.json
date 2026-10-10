@@ -1,0 +1,15 @@
+{
+  "loadingPlayer": "Loading “{name}”...",
+  "loadingEpisode": "Loading episode {n}...",
+  "loadFailed": "Could not load",
+  "searching": "Looking for the video stream...",
+  "tryingPlayer": "Trying player “{name}”...",
+  "playerNotFound": "Could not find a player",
+  "scriptFailed": "Could not load {src}",
+  "noStreams": "No streams",
+  "embedFailed": "Could not embed the player",
+  "strongProtection": "The site uses strong protection",
+  "switchPlayerHint": "If there is a player choice (e.g. “4K Quality”), switch it on the right<br>and wait for it to reload.",
+  "season": "Season {n}",
+  "episode": "Episode {n}"
+}

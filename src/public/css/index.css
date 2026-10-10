@@ -690,3 +690,23 @@ button {
     font-size: 13px;
   }
 }
+/* логотип + переключатель языка на экране входа */
+.intro-brand-row {
+  margin: 0 0 20px;
+}
+.intro-brand-row .intro-brand {
+  margin: 0;
+}
+@media (max-width: 1300px) {
+  .intro-brand-row {
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+}
+.reset-title-row {
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.reset-title-row .auth-title {
+  margin: 0;
+}

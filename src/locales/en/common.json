@@ -1,0 +1,70 @@
+{
+  "lang": {
+    "choose": "Language"
+  },
+  "header": {
+    "theme": "Switch theme",
+    "logout": "Sign out",
+    "admin": "Admin",
+    "streamProfile": "👤 Stream profile",
+    "studio": "🛠️ Creator studio"
+  },
+  "nav": {
+    "rooms": "🏠 Rooms",
+    "streams": "📡 Live streams"
+  },
+  "search": "Search",
+  "close": "Close",
+  "delete": "Delete",
+  "save": "Save",
+  "saved": "Saved",
+  "saveFailed": "Could not save",
+  "loading": "Loading…",
+  "resize": "Drag to resize",
+  "requestFailed": "Request failed",
+  "liveBadge": "LIVE",
+  "streamer": "Streamer",
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Cancel"
+  },
+  "sys": {
+    "bot": "Bot",
+    "system": "System",
+    "guest": "Guest"
+  },
+  "mini": {
+    "unsupported": "The browser does not support the mini window",
+    "onlyLive": "The mini window is available while the stream is live",
+    "openFailed": "Could not open the mini window:",
+    "volume": "Volume",
+    "sound": "Sound",
+    "pip": "Mini window on top of all windows",
+    "back": "Back to the player",
+    "close": "Close and mute",
+    "offline": "The stream is offline",
+    "noHls": "The browser does not support HLS",
+    "notFound": "Streamer not found"
+  },
+  "mod": {
+    "ban": "Ban",
+    "banTitle": "Ban the user?",
+    "banText": "{name} won't be able to write in the channel chat.",
+    "timeout": "Timeout",
+    "timeoutText": "For how many seconds should {name} be timed out?",
+    "timeoutOk": "Timeout"
+  },
+  "viewers": {
+    "none": "Nobody here",
+    "guests": {
+      "one": "Guest",
+      "other": "Guests ({n})"
+    }
+  },
+  "chat": {
+    "clearTitle": "Clear the chat?",
+    "clearText": "All messages will disappear for all viewers.",
+    "clearOk": "Clear",
+    "deleted": "Message deleted"
+  }
+}

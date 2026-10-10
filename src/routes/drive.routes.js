@@ -8,7 +8,7 @@ router.get('/stream/:fileId', auth, async (req, res) => {
   const { fileId } = req.params;
   // id файла: только буквы, цифры, _ и -. Иначе в адрес запроса (с твоим API-ключом) можно подмешать чужой путь
   if (!/^[A-Za-z0-9_-]{10,100}$/.test(fileId)) {
-    return res.status(400).json({ error: 'Некорректный id файла' });
+    return res.status(400).json({ error: req.t('server.drive.badId') });
   }
   const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${config.drive.apiKey}`;
 
@@ -20,7 +20,7 @@ router.get('/stream/:fileId', auth, async (req, res) => {
 
     if (!driveRes.ok) {
       return res.status(driveRes.status).json({
-        error: 'Не удалось получить файл с Google Диска — проверь, что доступ открыт "всем, у кого есть ссылка"',
+        error: req.t('server.drive.fetchFailed'),
       });
     }
 
@@ -33,7 +33,7 @@ router.get('/stream/:fileId', auth, async (req, res) => {
     Readable.fromWeb(driveRes.body).pipe(res);
   } catch (err) {
     console.error('[drive] stream error:', err);
-    res.status(500).json({ error: 'Ошибка стриминга с Google Диска' });
+    res.status(500).json({ error: req.t('server.drive.streamError') });
   }
 });
 

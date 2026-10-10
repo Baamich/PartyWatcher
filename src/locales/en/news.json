@@ -1,0 +1,43 @@
+{
+  "pageTitle": "PartyWatcher — News",
+  "from": "From",
+  "to": "To",
+  "reset": "Reset",
+  "create": "＋ Create news",
+  "newTitle": "New post",
+  "editTitle": "Edit post",
+  "titleLabel": "Title",
+  "titlePh": "What's new?",
+  "image": "Preview image (optional)",
+  "imageRemove": "Remove",
+  "body": "Description",
+  "bodyPh": "What changed",
+  "publish": "Publish",
+  "edited": "edited {date}",
+  "editBtn": "✏️ Edit",
+  "delBtn": "🗑 Delete",
+  "empty": "No news yet.",
+  "emptyPeriod": "No news for the selected period.",
+  "loadFailed": "Could not load news",
+  "publishedAt": "Published: {date} (the date does not change)",
+  "dateAuto": "Date: {date} (set automatically)",
+  "titleShort": "The title is too short (at least 3 characters)",
+  "delFailed": "Could not delete",
+  "imageTooBig": "The image is larger than 15 MB, choose a smaller one",
+  "imageReadFailed": "Could not read the image",
+  "spell": {
+    "ok": "✓ No mistakes found",
+    "found": "Issues found: {n}",
+    "unavailable": "Spell check is unavailable right now"
+  },
+  "del": {
+    "title": "Delete the post?",
+    "text": "It will disappear for everyone.",
+    "ok": "Yes, delete"
+  },
+  "tr": {
+    "auto": "Machine translation",
+    "showOriginal": "Show original",
+    "showTranslation": "Show translation"
+  }
+}

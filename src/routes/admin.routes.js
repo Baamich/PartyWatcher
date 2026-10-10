@@ -17,12 +17,12 @@ router.get('/commits', auth, adminOnly, async (req, res) => {
 
 router.post('/update', auth, adminOnly, (req, res) => {
   if (updateService.getStatus().state === 'running') {
-    return res.status(409).json({ error: 'Обновление уже идёт' });
+    return res.status(409).json({ error: req.t('server.admin.updateRunning') });
   }
 
   const hash = req.body && req.body.hash;
   if (hash && !HASH_RE.test(hash)) {
-    return res.status(400).json({ error: 'Некорректный хэш коммита' });
+    return res.status(400).json({ error: req.t('server.admin.badHash') });
   }
 
   updateService.performUpdate(hash || undefined);
@@ -30,7 +30,9 @@ router.post('/update', auth, adminOnly, (req, res) => {
 });
 
 router.get('/update/status', auth, adminOnly, (req, res) => {
-  res.json(updateService.getStatus());
+  const s = updateService.getStatus();
+  // служебные строки журнала хранятся ключами — переводим на язык админа
+  res.json({ ...s, log: s.log.map((x) => (typeof x === 'string' ? x : req.t(x.k, x.v))) });
 });
 
 module.exports = router;

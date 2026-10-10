@@ -6,10 +6,19 @@ const adminOnly = require('../middleware/adminOnly');
 const crypto = require('crypto');
 const { simpleParser } = require('mailparser');
 const SupportTicket = require('../models/SupportTicket');
+const Counter = require('../models/Counter');
 const User = require('../models/User');
 const rateLimit = require('express-rate-limit');
+const i18n = require('../services/i18n');
+const { sendSupportEmail, footer, subjectOf, ticketIdFromRefs } = require('../services/supportMail');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const STATUSES = ['unread', 'accepted', 'trivial', 'answered'];
+const MAX_MESSAGES = 100; // переписка по одному обращению
+
+const nextNumber = () => Counter.next('supportTicket');
+// язык писем для обращения с почты: есть кириллица — русский, иначе английский
+const guessLang = (...texts) => (/[А-Яа-яЁё]/.test(texts.join(' ')) ? 'ru' : 'en');
 
 // гостей ограничиваем жёстче: обращение без входа — самый простой путь для спама
 const guestLimiter = rateLimit({
@@ -17,7 +26,7 @@ const guestLimiter = rateLimit({
   limit: (req) => (req.user ? 20 : 5),
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Слишком много обращений, попробуйте позже' },
+  message: (req) => ({ error: req.t('server.support.tooMany') }),
 });
 
 // обращение может создать любой: вошедшему почта не нужна (ответим в аккаунте), гостю — обязательна
@@ -28,31 +37,33 @@ router.post('/', auth.optional, guestLimiter, async (req, res) => {
     const description = String(req.body.description || '').trim().slice(0, 1000);
 
     if (!req.user && !email) {
-      return res.status(400).json({ error: 'Укажите почту — без входа в аккаунт ответить можно только на неё' });
+      return res.status(400).json({ error: req.t('server.support.needEmail') });
     }
     if (email && !EMAIL_RE.test(email)) {
-      return res.status(400).json({ error: 'Некорректная почта' });
+      return res.status(400).json({ error: req.t('server.badEmail') });
     }
     if (!description) {
-      return res.status(400).json({ error: 'Опишите проблему' });
+      return res.status(400).json({ error: req.t('server.support.describe') });
     }
     if (description.length < 5) {
-      return res.status(400).json({ error: 'Слишком короткое описание' });
+      return res.status(400).json({ error: req.t('server.support.short') });
     }
 
     const ticket = await SupportTicket.create({
+      number: await nextNumber(),
       name,
       email,
       description,
+      lang: req.lang,
       userId: req.user ? req.user.id : null,
       username: req.user ? req.user.username || '' : '',
     });
 
     await notifyAdmins(req, ticket);
-    res.status(201).json({ ok: true, id: ticket._id });
+    res.status(201).json({ ok: true, id: ticket._id, number: ticket.number });
   } catch (err) {
     console.error('[support/create]', err);
-    res.status(500).json({ error: 'Не удалось отправить' });
+    res.status(500).json({ error: req.t('server.sendFailed') });
   }
 });
 
@@ -60,7 +71,7 @@ async function notifyAdmins(req, ticket) {
   const io = req.app.get('io');
   if (!io) return;
   const unreadCount = await SupportTicket.countDocuments({ status: 'unread' });
-  io.to('admins').emit('support:new', { ticket, unreadCount });
+  io.to('admins').emit('support:new', { ticket: briefOf(ticket), unreadCount });
   io.to('admins').emit('support:count', { unreadCount });
 }
 
@@ -111,6 +122,27 @@ function inboundLimited(email) {
   return arr.length > 10;
 }
 
+// Message-ID из In-Reply-To / References (строка или массив) → список
+function refsOf(mail) {
+  const raw = [mail.inReplyTo, ...(Array.isArray(mail.references) ? mail.references : [mail.references])];
+  return raw.flatMap((x) => String(x || '').match(/<[^<>\s]{1,250}>/g) || []).slice(0, 30);
+}
+
+// ответ человека на наше письмо: тикет ищем по Message-ID, иначе по «[#номер]» в теме.
+// Отправитель обязан совпасть с почтой тикета — иначе чужое письмо не попадёт в чужую переписку.
+async function findThreadTicket(mail, email) {
+  const refs = refsOf(mail);
+  let ticket = null;
+  const byId = ticketIdFromRefs(refs);
+  if (byId) ticket = await SupportTicket.findById(byId);
+  if (!ticket && refs.length) ticket = await SupportTicket.findOne({ mailIds: { $in: refs } });
+  if (!ticket) {
+    const m = String(mail.subject || '').match(/\[#(\d{1,9})\]/);
+    if (m) ticket = await SupportTicket.findOne({ number: Number(m[1]) });
+  }
+  return ticket && ticket.email === email ? ticket : null;
+}
+
 router.post('/inbound', express.text({ type: '*/*', limit: '2mb' }), async (req, res) => {
   const secret = process.env.INBOUND_EMAIL_SECRET;
   if (!secret) {
@@ -140,24 +172,43 @@ router.post('/inbound', express.text({ type: '*/*', limit: '2mb' }), async (req,
 
     const subject = String(mail.subject || '').trim().slice(0, 200);
     const body = stripQuoted(mail.text || htmlToText(mail.html));
-    const attachNote = mail.attachments?.length ? `\n\n[вложений: ${mail.attachments.length} — смотрите в почтовом ящике]` : '';
-    const description = ((body || '(пустое письмо)') + attachNote).slice(0, 5000);
+    const lang = guessLang(subject, body);
+    const attachNote = mail.attachments?.length ? '\n\n' + i18n.t(lang, 'server.support.attachments', { n: mail.attachments.length }) : '';
+    const text = ((body || i18n.t(lang, 'server.support.emptyMail')) + attachNote).slice(0, 5000);
+    const messageId = /^<[^<>\s]{1,250}>$/.test(String(mail.messageId || '')) ? mail.messageId : null;
+
+    // ответ на наше письмо → в ту же переписку, обращение снова «непрочитанное»
+    const thread = await findThreadTicket(mail, email);
+    if (thread) {
+      const update = {
+        $push: { messages: { $each: [{ from: 'user', kind: 'user', text }], $slice: -MAX_MESSAGES } },
+        $set: { status: 'unread', hasNewReply: true },
+      };
+      if (messageId) update.$push.mailIds = { $each: [messageId], $slice: -50 };
+      const ticket = await SupportTicket.findByIdAndUpdate(thread._id, update, { new: true });
+      await notifyAdmins(req, ticket);
+      console.log('[support/inbound] ответ → тикет #' + ticket.number);
+      return res.json({ ok: true, id: ticket._id, reply: true });
+    }
 
     // если почта принадлежит зарегистрированному пользователю — привязываем тикет к нему
     const user = await User.findOne({ email }).select('username').lean();
 
     const ticket = await SupportTicket.create({
+      number: await nextNumber(),
       name: String(from.name || '').trim().slice(0, 12),
       email,
       subject,
-      description,
+      description: text,
       source: 'email',
+      lang,
+      mailIds: messageId ? [messageId] : [],
       userId: user ? user._id : null,
       username: user ? user.username : '',
     });
 
     await notifyAdmins(req, ticket);
-    console.log('[support/inbound] письмо → тикет', String(ticket._id));
+    console.log('[support/inbound] письмо → тикет #' + ticket.number);
     res.status(201).json({ ok: true, id: ticket._id });
   } catch (err) {
     console.error('[support/inbound]', err.message);
@@ -165,20 +216,69 @@ router.post('/inbound', express.text({ type: '*/*', limit: '2mb' }), async (req,
   }
 });
 
-// админ: список (фильтр status)
+// ---- админка ----
+
+// карточка в списке: без переписки и служебных Message-ID
+function briefOf(t) {
+  const o = typeof t.toObject === 'function' ? t.toObject() : t;
+  const last = (o.messages || [])[o.messages?.length - 1];
+  return {
+    _id: o._id, number: o.number, name: o.name, email: o.email, source: o.source, subject: o.subject,
+    description: o.description, status: o.status, hasNewReply: !!o.hasNewReply, username: o.username,
+    lang: o.lang, createdAt: o.createdAt, updatedAt: o.updatedAt,
+    messagesCount: (o.messages || []).length, lastMessage: last ? { from: last.from, kind: last.kind, at: last.at } : null,
+  };
+}
+
+// старым обращениям (до нумерации) выдаём номера по порядку создания
+let numbersChecked = false;
+async function ensureNumbers() {
+  if (numbersChecked) return;
+  const rows = await SupportTicket.find({ number: { $exists: false } }).sort({ createdAt: 1 }).select('_id description').lean();
+  for (const r of rows) {
+    await SupportTicket.updateOne(
+      { _id: r._id, number: { $exists: false } },
+      { $set: { number: await nextNumber(), lang: guessLang(r.description) } }
+    );
+  }
+  numbersChecked = true;
+}
+
+async function broadcast(req, ticket) {
+  const unreadCount = await SupportTicket.countDocuments({ status: 'unread' });
+  const io = req.app.get('io');
+  if (io) {
+    io.to('admins').emit('support:updated', { ticket: briefOf(ticket), unreadCount });
+    io.to('admins').emit('support:count', { unreadCount });
+  }
+  return unreadCount;
+}
+
+const isId = (v) => /^[a-f0-9]{24}$/i.test(String(v || ''));
+
+// список: ?status=unread|accepted|trivial|answered или поиск по номеру ?q=123 (во всех статусах)
 router.get('/', auth, adminOnly, async (req, res) => {
   try {
-    const status = req.query.status || 'unread';
-    if (!['unread', 'accepted', 'trivial'].includes(status)) {
-      return res.status(400).json({ error: 'Неверный статус' });
+    await ensureNumbers();
+    const q = String(req.query.q || '').trim().replace(/^#/, '');
+    let filter;
+    if (q) {
+      if (!/^\d{1,9}$/.test(q)) return res.json({ tickets: [] });
+      filter = { number: Number(q) };
+    } else {
+      const status = req.query.status || 'unread';
+      if (!STATUSES.includes(status)) return res.status(400).json({ error: req.t('server.badStatus') });
+      filter = { status };
     }
-    const tickets = await SupportTicket.find({ status })
-      .sort({ createdAt: -1 })
+    const tickets = await SupportTicket.find(filter)
+      .sort({ updatedAt: -1 })
       .limit(200)
+      .select('-mailIds')
       .lean();
-    res.json({ tickets });
+    res.json({ tickets: tickets.map(briefOf) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[support/list]', err.message);
+    res.status(500).json({ error: req.t('server.serverError') });
   }
 });
 
@@ -188,35 +288,95 @@ router.get('/count', auth, adminOnly, async (req, res) => {
     const unreadCount = await SupportTicket.countDocuments({ status: 'unread' });
     res.json({ unreadCount });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: req.t('server.serverError') });
   }
 });
 
-// админ: смена статуса
+// полная карточка с перепиской + нижний блок ответа (подпись и история), ровно как уйдёт в письме
+router.get('/:id', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+    const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, { $set: { hasNewReply: false } }, { new: true })
+      .select('-mailIds').lean();
+    if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
+    res.json({
+      ticket: { ...briefOf(ticket), messages: ticket.messages || [] },
+      reply: ticket.email ? { subject: subjectOf(ticket), footer: footer(ticket, req.user.username) } : null,
+    });
+  } catch (err) {
+    console.error('[support/get]', err.message);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// админ: смена статуса. «Принято» и «Пустяк» отправляют человеку письмо (если есть почта)
 router.patch('/:id/status', auth, adminOnly, async (req, res) => {
   try {
-    if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Некорректный id' });
+    if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
     const status = req.body.status;
     if (!['accepted', 'trivial', 'unread'].includes(status)) {
-      return res.status(400).json({ error: 'Неверный статус' });
+      return res.status(400).json({ error: req.t('server.badStatus') });
     }
-    const ticket = await SupportTicket.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).lean();
-    if (!ticket) return res.status(404).json({ error: 'Не найдено' });
+    const ticket = await SupportTicket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
 
-    const unreadCount = await SupportTicket.countDocuments({ status: 'unread' });
-    const io = req.app.get('io');
-    if (io) {
-      io.to('admins').emit('support:updated', { ticket, unreadCount });
-      io.to('admins').emit('support:count', { unreadCount });
+    let emailed = false;
+    const changed = ticket.status !== status;
+    if (changed && status !== 'unread' && ticket.email) {
+      try {
+        const r = await sendSupportEmail(ticket, status);
+        emailed = r.emailed;
+        if (r.messageId) ticket.mailIds.push(r.messageId);
+      } catch (e) {
+        console.error('[support/status] письмо не отправлено:', e.message);
+      }
+      ticket.messages.push({ from: 'support', kind: status, text: '', author: req.user.username || '', emailed });
     }
+    ticket.status = status;
+    ticket.hasNewReply = false;
+    await ticket.save();
 
-    res.json({ ticket, unreadCount });
+    const unreadCount = await broadcast(req, ticket);
+    res.json({ ticket: briefOf(ticket), unreadCount, emailed, hadEmail: !!ticket.email });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[support/status]', err.message);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// админ: ответ на обращение письмом. Без почты ответить нельзя
+router.post('/:id/reply', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+    const text = String(req.body?.text || '').trim().slice(0, 5000);
+    if (!text) return res.status(400).json({ error: req.t('server.support.replyEmpty') });
+
+    const ticket = await SupportTicket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
+    if (!ticket.email) return res.status(400).json({ error: req.t('server.support.noEmail') });
+
+    let r;
+    try {
+      r = await sendSupportEmail(ticket, 'reply', { text, author: req.user.username || '' });
+    } catch (e) {
+      console.error('[support/reply] письмо не отправлено:', e.message);
+      r = { emailed: false };
+    }
+    if (!r.emailed) return res.status(502).json({ error: req.t('server.support.mailFailed') });
+
+    ticket.mailIds.push(r.messageId);
+    if (ticket.mailIds.length > 50) ticket.mailIds = ticket.mailIds.slice(-50);
+    ticket.messages.push({ from: 'support', kind: 'reply', text, author: req.user.username || '', emailed: true });
+    if (ticket.messages.length > MAX_MESSAGES) ticket.messages = ticket.messages.slice(-MAX_MESSAGES);
+    ticket.status = 'answered';
+    ticket.hasNewReply = false;
+    await ticket.save();
+
+    const unreadCount = await broadcast(req, ticket);
+    res.json({ ticket: briefOf(ticket), unreadCount });
+  } catch (err) {
+    console.error('[support/reply]', err.message);
+    res.status(500).json({ error: req.t('server.serverError') });
   }
 });
 

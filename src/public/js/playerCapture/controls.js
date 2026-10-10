@@ -39,7 +39,7 @@ function fillEpisodeSelects(meta) {
   (meta.seasons || [1]).forEach(s => {
     const opt = document.createElement('option');
     opt.value = s;
-    opt.textContent = `Сезон ${s}`;
+    opt.textContent = t('capture.season', { n: s });
     if (s === meta.currentSeason) opt.selected = true;
     seasonSelect.appendChild(opt);
   });
@@ -49,7 +49,7 @@ function fillEpisodeSelects(meta) {
   for (let i = 1; i <= totalEpisodes; i++) {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = `Серия ${i}`;
+    opt.textContent = t('capture.episode', { n: i });
     if (i === meta.currentEpisode) opt.selected = true;
     episodeSelect.appendChild(opt);
   }

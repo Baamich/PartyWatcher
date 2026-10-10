@@ -1,0 +1,184 @@
+<h1>C# bot</h1>
+<p class="docs-lead">We'll make a bot: it reads the chat, sees commands (for example, <code>!roulette 30</code>) and replies in the chat. Step by step, starting from zero.</p>
+
+<h2>What you'll get</h2>
+<ul>
+  <li>A viewer types <code>!top</code>, and the bot replies with a list.</li>
+  <li>A viewer types <code>!roulette 30</code>, the bot writes “spinning the roulette”, waits 5 seconds and names a number from 1 to 30.</li>
+</ul>
+<p>To add your own commands, just copy a ready piece of code (below).</p>
+
+<h2>Step 0. What to install</h2>
+<ol>
+  <li><b>.NET SDK</b> (version 8 or newer). Free download: <a href="https://dotnet.microsoft.com/download" target="_blank" rel="noopener">dotnet.microsoft.com/download</a>. Click the big <b>.NET SDK</b> button and install it like a regular program.</li>
+  <li>Check: open a <b>Terminal</b> (on Windows press <code>Win+R</code>, type <code>cmd</code>, <code>Enter</code>) and type:
+<pre><code>dotnet --version</code></pre>
+  It should show a number, for example <code>8.0.404</code>. If it says “command not found”, restart the computer and try again.</li>
+</ol>
+
+<h2>Step 1. Get a chat key</h2>
+<p>Do steps 1 and 2 from <a href="#chat-obs">Chat in OBS</a>. The key starts with <code>pwc_</code>. You can copy it in full with the <b>📋</b> button next to the key field in the “Chat API” block.</p>
+
+<h2>Step 2. Create the bot project</h2>
+<p>In the same terminal type these commands <b>one by one</b>, pressing <code>Enter</code> after each:</p>
+<pre><code>mkdir ChatBot
+cd ChatBot
+dotnet new console
+dotnet add package SocketIOClient</code></pre>
+<p>What this means: we created a <code>ChatBot</code> folder, went into it, created an empty program and added a piece that can listen to the chat. The <code>ChatBot</code> folder appears where the terminal is open (on Windows usually <code>C:\Users\YourName</code>).</p>
+
+<h2>Step 3. Paste the bot code</h2>
+<ol>
+  <li>Open the <code>ChatBot</code> folder and find the <code>Program.cs</code> file in it.</li>
+  <li>Open it with any editor (even Notepad will do).</li>
+  <li><b>Delete everything in it.</b></li>
+  <li>Paste the code below (the “Copy” button in the corner of the block).</li>
+  <li>Find the line with <code>ApiKey</code> and replace <code>pwc_PUT_YOUR_KEY_HERE</code> with your key. Keep the <code>"</code> quotes around the key.</li>
+  <li>Save the file (<code>Ctrl+S</code>).</li>
+</ol>
+
+<pre><code>// ===== 1. Include the needed "pieces" =====
+using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using SocketIOClient;
+
+// ===== 2. SETTINGS. Only ApiKey needs to be changed =====
+const string BaseUrl = "https://partywatcher.de";      // site address, don't touch
+const string ApiKey  = "pwc_PUT_YOUR_KEY_HERE";        // your chat key, inside the quotes
+
+// ===== 3. This is how the bot SENDS messages to the chat =====
+using var http = new HttpClient { BaseAddress = new Uri(BaseUrl) };
+http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
+
+// ===== 4. Memory for the roulette: who started it and when (so nobody spams) =====
+var cooldowns = new ConcurrentDictionary&lt;string, DateTime&gt;();
+
+// ===== 5. This is how the bot LISTENS to the chat =====
+var client = new SocketIO(new Uri(BaseUrl + "/chat"));
+
+// Once connected, tell the site: "I'm the bot of this channel".
+// If the connection drops, the bot reconnects and comes here again.
+client.OnConnected += async (_, _) =&gt;
+{
+    Console.WriteLine("Connected to the chat. Waiting for commands...");
+    await client.EmitAsync("chat:join", new object[] { new { chatKey = ApiKey } });
+};
+
+client.OnDisconnected += (_, reason) =&gt; Console.WriteLine("Connection lost: " + reason);
+
+// ===== 6. EVERY new chat message arrives here =====
+client.On("chat:message", async response =&gt;
+{
+    try
+    {
+        var msg = response.GetValue&lt;ChatMessage&gt;(0);
+
+        // Skip our own messages, otherwise the bot will start replying to itself.
+        if (msg.External &amp;&amp; msg.Source == "bot") return;
+
+        var text = msg.Text.Trim();   // message text without spaces at the edges
+
+        // ---------- EXAMPLE 1 and 2: the !top command ----------
+        // Example 1: the bot SEES the command (writes to the black window on your computer).
+        // Example 2: the bot REPLIES in the chat.
+        if (text.Equals("!top", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"{msg.SenderUsername} wrote !top");
+            await SendAsync("🏆 Top viewers: 1) Alex  2) Sam  3) Max");
+            return;
+        }
+
+        // ---------- EXAMPLE 3: the !roulette 30 command ----------
+        // Split the message into words: "!roulette" and "30".
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 2
+            &amp;&amp; parts[0].Equals("!roulette", StringComparison.OrdinalIgnoreCase)
+            &amp;&amp; int.TryParse(parts[1], out var max)     // the second word must be a number
+            &amp;&amp; max &gt;= 2 &amp;&amp; max &lt;= 1_000_000)           // and a reasonable one
+        {
+            // No more often than once in 15 seconds per person.
+            var now = DateTime.UtcNow;
+            if (cooldowns.TryGetValue(msg.SenderUsername, out var last)
+                &amp;&amp; now - last &lt; TimeSpan.FromSeconds(15)) return;
+            cooldowns[msg.SenderUsername] = now;
+
+            var who = msg.SenderUsername;
+            await SendAsync($"🎲 {who} spins the roulette 1–{max}… result in 5 seconds!");
+
+            // Wait 5 seconds "on the side" so the bot doesn't freeze and keeps reading the chat.
+            _ = Task.Run(async () =&gt;
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5));
+                var n = Random.Shared.Next(1, max + 1);   // random number from 1 to max
+                await SendAsync($"🎲 {who}, rolled {n} (out of {max})");
+            });
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Error: " + ex.Message);
+    }
+});
+
+// ===== 7. Start and keep running =====
+await client.ConnectAsync();
+await Task.Delay(Timeout.Infinite);
+
+// ===== 8. The "write to chat" function =====
+async Task SendAsync(string text, string username = "Bot")
+{
+    var resp = await http.PostAsJsonAsync("/api/chat/send", new { text, username, source = "bot" });
+    if (!resp.IsSuccessStatusCode)
+        Console.WriteLine($"Not sent ({(int)resp.StatusCode}): {await resp.Content.ReadAsStringAsync()}");
+}
+
+// ===== 9. What a message from the site looks like =====
+class ChatMessage
+{
+    [JsonPropertyName("senderUsername")] public string SenderUsername { get; set; } = "";
+    [JsonPropertyName("text")]           public string Text { get; set; } = "";
+    [JsonPropertyName("isOwner")]        public bool IsOwner { get; set; }
+    [JsonPropertyName("external")]       public bool External { get; set; }
+    [JsonPropertyName("source")]         public string? Source { get; set; }
+}</code></pre>
+
+<h2>Step 4. Run the bot</h2>
+<ol>
+  <li>In the terminal (it must be in the <code>ChatBot</code> folder) type:
+<pre><code>dotnet run</code></pre></li>
+  <li>Wait a few seconds. The line <b>“Connected to the chat. Waiting for commands...”</b> should appear. That means everything works.</li>
+  <li><b>Don't close</b> the terminal window: the bot works while it's open. To stop the bot, press <code>Ctrl+C</code> in it.</li>
+</ol>
+
+<h2>Step 5. Check it</h2>
+<ol>
+  <li>Open your chat, for example <code>https://partywatcher.de/streamers/baamich</code>.</li>
+  <li>Type <code>!top</code>. The bot should reply with a list.</li>
+  <li>Type <code>!roulette 30</code>. The bot writes “spins the roulette”, and after 5 seconds names a number from 1 to 30.</li>
+</ol>
+
+<h2>How to add your own command</h2>
+<p>Copy this piece and paste it into the code <b>right below the line</b> <code>var text = msg.Text.Trim();</code> (above “EXAMPLE 1 and 2”):</p>
+<pre><code>if (text.Equals("!hello", StringComparison.OrdinalIgnoreCase))
+{
+    await SendAsync($"Hello, {msg.SenderUsername}! 👋");
+    return;
+}</code></pre>
+<p>What to change: <code>!hello</code> to your command, and the text in <code>SendAsync(...)</code> to your reply. <code>{msg.SenderUsername}</code> inserts the name of whoever wrote it. After changes, stop the bot (<code>Ctrl+C</code>) and run it again (<code>dotnet run</code>).</p>
+
+<h2>Not working?</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>What you see</th><th>What to do</th></tr>
+  <tr><td><code>dotnet</code> not found</td><td>Install the .NET SDK (step 0) and restart the computer.</td></tr>
+  <tr><td>The bot doesn't print “Connected to the chat”</td><td>Check the internet and that <code>BaseUrl</code> is exactly <code>https://partywatcher.de</code>. If it is, check the package version: in the bot folder type <code>dotnet add package SocketIOClient</code> to update it.</td></tr>
+  <tr><td>“Not sent (401)”</td><td>The key is wrong. Copy it again from the studio (📋) and paste it between the quotes, without spaces.</td></tr>
+  <tr><td>“Not sent (429)”</td><td>The bot writes too often. Wait a few seconds.</td></tr>
+  <tr><td>The bot is connected but ignores commands</td><td>The command must be written exactly: <code>!top</code>, with no extra words. Restart the bot after editing the code.</td></tr>
+</table>
+</div>
+
+<p>Next: <a href="#chat-style">Chat styling</a>.</p>

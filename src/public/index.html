@@ -3,23 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/theme.js"></script>
+  <script src="/js/i18n.js?v=2" data-ns="index"></script>
+  <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-  <link rel="stylesheet" href="/css/common.css" />
-  <link rel="stylesheet" href="/css/index.css?v=3" />
-  <title>PartyWatcher — смотреть фильмы и видео вместе онлайн</title>
-  <meta name="description" content="PartyWatcher — бесплатный сервис для совместного просмотра. Создай комнату, отправь ссылку друзьям и смотри YouTube, Twitch и другие видео синхронно, с чатом и голосом.">
+  <link rel="stylesheet" href="/css/common.css?v=2" />
+  <link rel="stylesheet" href="/css/index.css?v=4" />
+  <title data-i18n="index.meta.title">PartyWatcher — смотреть фильмы и видео вместе онлайн</title>
+  <meta name="description" data-i18n-content="index.meta.description" content="PartyWatcher — бесплатный сервис для совместного просмотра. Создай комнату, отправь ссылку друзьям и смотри YouTube, Twitch и другие видео синхронно, с чатом и голосом.">
   <link rel="canonical" href="https://partywatcher.de/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="PartyWatcher" />
-  <meta property="og:title" content="PartyWatcher — смотреть фильмы и видео вместе онлайн" />
-  <meta property="og:description" content="Создай комнату, отправь ссылку друзьям и смотри видео синхронно с чатом и голосом." />
+  <meta property="og:title" data-i18n-content="index.meta.title" content="PartyWatcher — смотреть фильмы и видео вместе онлайн" />
+  <meta property="og:description" data-i18n-content="index.meta.ogDescription" content="Создай комнату, отправь ссылку друзьям и смотри видео синхронно с чатом и голосом." />
   <meta property="og:url" content="https://partywatcher.de/" />
 </head>
 <body>
   <div id="authBox">
     <section class="intro">
+      <div class="brand-row intro-brand-row">
       <div class="brand intro-brand">
         <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
@@ -28,97 +30,100 @@
         </svg>
         <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
       </div>
-      <h1>Смотри фильмы и видео вместе с друзьями</h1>
-      <p>PartyWatcher — сервис для совместного просмотра онлайн. Создай комнату, отправь ссылку, и все будут смотреть одно и то же видео синхронно: YouTube, Twitch, Google Диск и другие источники. В комнате есть чат и голосовая связь.</p>
+      <div data-lang-switch></div>
+      </div>
+      <h1 data-i18n="index.intro.title">Смотри фильмы и видео вместе с друзьями</h1>
+      <p data-i18n="index.intro.text">PartyWatcher — сервис для совместного просмотра онлайн. Создай комнату, отправь ссылку, и все будут смотреть одно и то же видео синхронно: YouTube, Twitch, Google Диск и другие источники. В комнате есть чат и голосовая связь.</p>
     </section>
     <div class="auth-card">
       <!-- ВХОД -->
       <div id="loginPanel">
-        <h2 class="auth-title">Вход</h2>
+        <h2 class="auth-title" data-i18n="index.login.title">Вход</h2>
         <div id="loginError" class="auth-error hidden"></div>
 
-        <label class="auth-label" for="loginInput">Логин или email</label>
-        <input id="loginInput" autocomplete="username" placeholder="Логин или email" />
+        <label class="auth-label" for="loginInput" data-i18n="index.login.login">Логин или email</label>
+        <input id="loginInput" autocomplete="username" placeholder="Логин или email" data-i18n-placeholder="index.login.login" />
 
-        <label class="auth-label" for="passwordInput">Пароль</label>
+        <label class="auth-label" for="passwordInput" data-i18n="index.login.password">Пароль</label>
         <div class="password-wrap">
-          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Пароль" />
-          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="passwordInput" aria-label="Показать пароль">👁</button>
+          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Пароль" data-i18n-placeholder="index.login.password" />
+          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="passwordInput" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
         </div>
 
-        <button class="auth-submit" data-click="login">Войти</button>
+        <button class="auth-submit" data-click="login" data-i18n="index.login.submit">Войти</button>
 
         <p class="auth-switch">
-          <button type="button" class="auth-link" data-click="showForgotPanel">Забыли пароль?</button>
+          <button type="button" class="auth-link" data-click="showForgotPanel" data-i18n="index.login.forgot">Забыли пароль?</button>
         </p>
         <p class="auth-switch">
-          Нет аккаунта?
-          <button type="button" class="auth-link" data-click="showRegisterPanel">Зарегистрироваться</button>
+          <span data-i18n="index.login.noAccount">Нет аккаунта?</span>
+          <button type="button" class="auth-link" data-click="showRegisterPanel" data-i18n="index.login.toRegister">Зарегистрироваться</button>
         </p>
       </div>
 
       <!-- СБРОС ПАРОЛЯ -->
       <div id="forgotPanel" class="hidden">
-        <h2 class="auth-title">Сброс пароля</h2>
+        <h2 class="auth-title" data-i18n="index.forgot.title">Сброс пароля</h2>
         <div id="forgotError" class="auth-error hidden"></div>
         <div id="forgotOk" class="support-ok hidden"></div>
 
-        <label class="auth-label" for="forgotEmail">Почта аккаунта</label>
+        <label class="auth-label" for="forgotEmail" data-i18n="index.forgot.email">Почта аккаунта</label>
         <input id="forgotEmail" type="email" autocomplete="email" placeholder="email@example.com" />
 
-        <button id="forgotBtn" class="auth-submit" data-click="sendForgot">Прислать ссылку</button>
+        <button id="forgotBtn" class="auth-submit" data-click="sendForgot" data-i18n="index.forgot.submit">Прислать ссылку</button>
 
         <p class="auth-switch">
-          <button type="button" class="auth-link" data-click="showLoginPanel">Вернуться ко входу</button>
+          <button type="button" class="auth-link" data-click="showLoginPanel" data-i18n="index.forgot.back">Вернуться ко входу</button>
         </p>
       </div>
 
       <!-- РЕГИСТРАЦИЯ -->
         <div id="registerPanel" class="hidden">
-        <h2 class="auth-title">Регистрация</h2>
+        <h2 class="auth-title" data-i18n="index.register.title">Регистрация</h2>
         <div id="registerError" class="auth-error hidden"></div>
 
-        <label class="auth-label" for="regUsername">Логин</label>
-        <input id="regUsername" autocomplete="username" placeholder="Логин" />
+        <label class="auth-label" for="regUsername" data-i18n="index.register.username">Логин</label>
+        <input id="regUsername" autocomplete="username" placeholder="Логин" data-i18n-placeholder="index.register.username" />
 
-        <label class="auth-label" for="regEmail">Почта</label>
+        <label class="auth-label" for="regEmail" data-i18n="index.register.email">Почта</label>
         <div class="field-wrap">
           <input id="regEmail" type="email" autocomplete="email" placeholder="email@example.com" />
           <span id="emailStatus" class="field-status" title=""></span>
         </div>
         <div id="emailHint" class="field-hint hidden"></div>
 
-        <label class="auth-label" for="regPassword">Пароль</label>
+        <label class="auth-label" for="regPassword" data-i18n="index.login.password">Пароль</label>
         <div class="password-wrap">
-          <input id="regPassword" type="password" autocomplete="new-password" placeholder="Пароль" />
-          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPassword" aria-label="Показать пароль">👁</button>
+          <input id="regPassword" type="password" autocomplete="new-password" placeholder="Пароль" data-i18n-placeholder="index.login.password" />
+          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPassword" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
         </div>
 
         <ul id="passwordRules" class="password-rules">
-          <li id="ruleLength" class="rule-bad">Минимум 8 символов</li>
-          <li id="ruleUpper" class="rule-bad">Первая буква — заглавная латиница (A–Z)</li>
-          <li id="ruleLetter" class="rule-bad">Есть буквы</li>
-          <li id="ruleDigit" class="rule-bad">Есть цифры</li>
-          <li id="ruleMatch" class="rule-bad">Пароли совпадают</li>
+          <li id="ruleLength" class="rule-bad" data-i18n="index.rules.length">Минимум 8 символов</li>
+          <li id="ruleUpper" class="rule-bad" data-i18n="index.rules.upper">Первая буква — заглавная латиница (A–Z)</li>
+          <li id="ruleLetter" class="rule-bad" data-i18n="index.rules.letter">Есть буквы</li>
+          <li id="ruleDigit" class="rule-bad" data-i18n="index.rules.digit">Есть цифры</li>
+          <li id="ruleMatch" class="rule-bad" data-i18n="index.rules.match">Пароли совпадают</li>
         </ul>
 
-        <label class="auth-label" for="regPasswordConfirm">Повторите пароль</label>
+        <label class="auth-label" for="regPasswordConfirm" data-i18n="index.register.confirm">Повторите пароль</label>
         <div class="password-wrap">
-          <input id="regPasswordConfirm" type="password" autocomplete="new-password" placeholder="Повторите пароль" />
-          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPasswordConfirm" aria-label="Показать пароль">👁</button>
+          <input id="regPasswordConfirm" type="password" autocomplete="new-password" placeholder="Повторите пароль" data-i18n-placeholder="index.register.confirm" />
+          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPasswordConfirm" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
         </div>
 
-        <button id="registerBtn" class="auth-submit" data-click="register" disabled>Зарегистрироваться</button>
+        <button id="registerBtn" class="auth-submit" data-click="register" disabled data-i18n="index.register.submit">Зарегистрироваться</button>
 
         <p class="auth-switch">
-          Уже есть аккаунт?
-          <button type="button" class="auth-link" data-click="showLoginPanel">Войти</button>
+          <span data-i18n="index.register.haveAccount">Уже есть аккаунт?</span>
+          <button type="button" class="auth-link" data-click="showLoginPanel" data-i18n="index.login.submit">Войти</button>
         </p>
       </div>
     </div><!-- /auth-card -->
   </div><!-- /authBox -->
   <div id="appBox" class="hidden" data-nosnippet>
     <div class="page-header">
+      <div class="brand-row">
       <div class="brand">
         <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <rect x="1" y="1" width="62" height="62" rx="15"
@@ -132,72 +137,74 @@
         </svg>
         <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
       </div>
+        <div data-lang-switch></div>
+      </div>
 
       <div class="header-right">
         <div class="corner-menu">
           <span class="corner-name" id="meName"></span>
-          <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
-          <button class="icon-btn" data-click="logout">Выйти</button>
+          <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
+          <button class="icon-btn" data-click="logout" data-i18n="common.header.logout">Выйти</button>
         </div>
-        <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn">Админ</button></a>
+        <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn" data-i18n="common.header.admin">Админ</button></a>
       </div>
     </div>
 
     <div class="layout">
       <nav class="nav-sidebar">
-        <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/">🏠 Комнаты</button>
-        <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/streams.html">📡 Прямые трансляции</button>
+        <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/" data-i18n="common.nav.rooms">🏠 Комнаты</button>
+        <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/streams.html" data-i18n="common.nav.streams">📡 Прямые трансляции</button>
       </nav>
 
       <div class="col-left">
-        <h2>Создать комнату</h2>
-        <input id="roomName" placeholder="Название комнаты" />
+        <h2 data-i18n="index.create.title">Создать комнату</h2>
+        <input id="roomName" placeholder="Название комнаты" data-i18n-placeholder="index.create.name" />
         <div class="type-row">
           <select id="videoType" data-change="onVideoTypeChange">
-            <option value="youtube_twitch">YouTube / Twitch (запись)</option>
-            <option value="drive">Google Диск</option>
-            <option value="player_capture">Захват плеера (фильм / сериал)</option>
-            <option value="direct">Прямая ссылка на видео</option>
+            <option value="youtube_twitch" data-i18n="index.type.youtube_twitch">YouTube / Twitch (запись)</option>
+            <option value="drive" data-i18n="index.type.drive">Google Диск</option>
+            <option value="player_capture" data-i18n="index.type.player_capture">Захват плеера (фильм / сериал)</option>
+            <option value="direct" data-i18n="index.type.direct">Прямая ссылка на видео</option>
           </select>
-          <button type="button" class="info-btn" data-click="toggleInfoPopup">i</button>
-          <button type="button" class="lock-btn lock-private" id="privacyToggle" data-click="togglePrivacy">🔒</button>
+          <button type="button" class="info-btn" data-click="toggleInfoPopup" data-i18n-title="index.create.info" data-i18n-aria-label="index.create.info">i</button>
+          <button type="button" class="lock-btn lock-private" id="privacyToggle" data-click="togglePrivacy" data-i18n-title="index.create.privacy" data-i18n-aria-label="index.create.privacy">🔒</button>
         </div>
         <div id="infoPopup" class="info-popup hidden"></div>
-        <input id="videoUrl" placeholder="Ссылка на видео" />
-        <button data-click="createRoom">Создать</button>
+        <input id="videoUrl" placeholder="Ссылка на видео" data-i18n-placeholder="index.create.url" />
+        <button data-click="createRoom" data-i18n="index.create.submit">Создать</button>
 
-        <h2>Войти по ключу</h2>
-        <input id="joinCodeInput" placeholder="Ключ комнаты" />
-        <button class="btn-mono" data-click="joinByCode">Войти</button>
+        <h2 data-i18n="index.join.title">Войти по ключу</h2>
+        <input id="joinCodeInput" placeholder="Ключ комнаты" data-i18n-placeholder="index.join.code" />
+        <button class="btn-mono" data-click="joinByCode" data-i18n="index.join.submit">Войти</button>
         </div>
 
         <div class="col-right">
-          <h2>Мои комнаты</h2>
+          <h2 data-i18n="index.mine.title">Мои комнаты</h2>
           <div id="roomList"></div>
         </div>
       </div>
 
       <!-- Публичные комнаты — на всю ширину -->
       <section class="public-section">
-        <h2>Публичные комнаты</h2>
+        <h2 data-i18n="index.public.title">Публичные комнаты</h2>
 
         <div class="public-search-wrap">
-          <input id="publicSearchInput" type="text" placeholder="Поиск по названию" data-keydown="handlePublicSearchKey" data-event />
-          <button type="button" class="search-icon-btn" data-click="onPublicFilterChange" aria-label="Искать">🔍</button>
+          <input id="publicSearchInput" type="text" placeholder="Поиск по названию" data-i18n-placeholder="index.public.search" data-keydown="handlePublicSearchKey" data-event />
+          <button type="button" class="search-icon-btn" data-click="onPublicFilterChange" aria-label="Искать" data-i18n-aria-label="common.search">🔍</button>
         </div>
 
         <div class="public-controls">
           <div class="public-filters">
             <select id="publicSort" data-change="onPublicFilterChange">
-              <option value="newest">Новые</option>
-              <option value="oldest">Старые</option>
-              <option value="most">Больше людей</option>
-              <option value="least">Меньше людей</option>
+              <option value="newest" data-i18n="index.public.sort.newest">Новые</option>
+              <option value="oldest" data-i18n="index.public.sort.oldest">Старые</option>
+              <option value="most" data-i18n="index.public.sort.most">Больше людей</option>
+              <option value="least" data-i18n="index.public.sort.least">Меньше людей</option>
             </select>
 
             <label class="filter-check">
               <input type="checkbox" id="onlyWithPeople" data-change="onPublicFilterChange" />
-              С людьми
+              <span data-i18n="index.public.withPeople">С людьми</span>
             </label>
           </div>
         </div>
@@ -208,7 +215,7 @@
     </div><!-- /appBox -->
 
     <!-- Служба поддержки FAB -->
-  <button type="button" id="supportFab" class="support-fab" title="Служба поддержки" aria-label="Служба поддержки">
+  <button type="button" id="supportFab" class="support-fab" title="Служба поддержки" aria-label="Служба поддержки" data-i18n-title="index.support.title" data-i18n-aria-label="index.support.title">
     <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M4 14v-2a8 8 0 0 1 16 0v2"/>
       <rect x="3" y="14" width="4" height="6" rx="1.5"/>
@@ -219,25 +226,25 @@
 
   <div id="supportModal" class="modal hidden" data-nosnippet>
     <div class="modal-content support-modal-content">
-      <button type="button" class="modal-close" id="supportModalClose" aria-label="Закрыть">×</button>
-      <h3 class="support-modal-title">Служба поддержки</h3>
-      <p class="support-modal-hint">Опишите проблему — мы постараемся помочь</p>
-      <label class="auth-label" for="supportName">Имя (необязательно)</label>
-      <input id="supportName" maxlength="12" placeholder="До 12 символов" />
-      <label class="auth-label" for="supportEmail" id="supportEmailLabel">Почта</label>
+      <button type="button" class="modal-close" id="supportModalClose" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 class="support-modal-title" data-i18n="index.support.title">Служба поддержки</h3>
+      <p class="support-modal-hint" data-i18n="index.support.hint">Опишите проблему — мы постараемся помочь</p>
+      <label class="auth-label" for="supportName" data-i18n="index.support.name">Имя (необязательно)</label>
+      <input id="supportName" maxlength="12" placeholder="До 12 символов" data-i18n-placeholder="index.support.namePh" />
+      <label class="auth-label" for="supportEmail" id="supportEmailLabel" data-i18n="index.register.email">Почта</label>
       <input id="supportEmail" type="email" maxlength="100" autocomplete="email" placeholder="email@example.com" />
-      <label class="auth-label" for="supportDesc">Описание проблемы</label>
-      <textarea id="supportDesc" maxlength="1000" rows="5" placeholder="Что случилось? (до 1000 символов)"></textarea>
+      <label class="auth-label" for="supportDesc" data-i18n="index.support.desc">Описание проблемы</label>
+      <textarea id="supportDesc" maxlength="1000" rows="5" placeholder="Что случилось? (до 1000 символов)" data-i18n-placeholder="index.support.descPh"></textarea>
       <div id="supportError" class="auth-error hidden"></div>
-      <div id="supportOk" class="support-ok hidden">Отправлено ✓</div>
-      <button type="button" id="supportSendBtn" class="auth-submit">Отправить</button>
+      <div id="supportOk" class="support-ok hidden" data-i18n="index.support.sent">Отправлено ✓</div>
+      <button type="button" id="supportSendBtn" class="auth-submit" data-i18n="index.support.send">Отправить</button>
     </div>
   </div>
   
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/page-transition.js"></script>
-  <script src="/js/index.js?v=4"></script>
+  <script src="/js/index.js?v=6"></script>
 </body>
 </html>

@@ -18,6 +18,15 @@
     ],
   };
   const WM = { profile: 1100, live: 1600 }; // ширина холста по режимам
+
+  // ошибка с ключом словаря: в браузере текст сразу переведён, на сервере роут переводит по e.i18nKey
+  function layoutError(key, vars) {
+    const g = typeof window !== 'undefined' ? window : null;
+    const e = new Error(g && g.t ? g.t('layout.err.' + key, vars) : key);
+    e.i18nKey = 'layout.err.' + key;
+    e.vars = vars;
+    return e;
+  }
   const LIMITS = {
     profile: { custom: 12, photos: 4, links: 12 },
     live: { custom: 8, photos: 2, links: 6 },
@@ -166,7 +175,7 @@
     if (type === 'shape' || type === 'image' || type === 'link') {
       if (b.img) {
         if (typeof b.img !== 'string' || b.img.length > MAX_IMG_CHARS || !IMG_RE.test(b.img)) {
-          throw new Error('Некорректное или слишком тяжёлое изображение');
+          throw layoutError('badImage');
         }
         o.img = b.img;
       }
@@ -199,7 +208,7 @@
   // null — сброс макета; иначе бросает Error с понятным текстом
   function sanitize(raw) {
     if (raw === null) return null;
-    if (!raw || typeof raw !== 'object') throw new Error('Некорректный макет');
+    if (!raw || typeof raw !== 'object') throw layoutError('badLayout');
     const out = { v: 1 };
     for (const mode of ['profile', 'live']) {
       const src = Array.isArray(raw[mode]?.blocks) ? raw[mode].blocks.slice(0, 60) : [];
@@ -215,14 +224,14 @@
       fixOrder(blocks);
       syncChat(blocks);
       const c = counts(blocks), L = LIMITS[mode];
-      if (c.custom > L.custom) throw new Error(`Слишком много блоков (максимум ${L.custom})`);
-      if (c.photos > L.photos) throw new Error(`Слишком много фото (максимум ${L.photos})`);
-      if (c.links > L.links) throw new Error(`Слишком много фото-кнопок (максимум ${L.links})`);
+      if (c.custom > L.custom) throw layoutError('tooManyBlocks', { n: L.custom });
+      if (c.photos > L.photos) throw layoutError('tooManyPhotos', { n: L.photos });
+      if (c.links > L.links) throw layoutError('tooManyLinks', { n: L.links });
       out[mode] = { blocks };
     }
     let imgChars = 0;
     for (const m of ['profile', 'live']) for (const b of out[m].blocks) imgChars += b.img ? b.img.length : 0;
-    if (imgChars > 4000000) throw new Error('Макет слишком тяжёлый: уменьши или убери часть фото');
+    if (imgChars > 4000000) throw layoutError('tooHeavy');
     return out;
   }
 
@@ -356,7 +365,7 @@
       if (url.length <= MAX_IMG_CHARS) return { url, w: c.width, h: c.height };
       side *= 0.75;
     }
-    throw new Error('Картинка слишком тяжёлая');
+    throw layoutError('imageTooHeavy');
   };
 
   return api;

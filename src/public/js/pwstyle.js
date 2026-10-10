@@ -134,7 +134,7 @@
       }
       const nick = document.createElement('span');
       nick.className = 'pv-nick' + (m.owner ? ' pv-nick--owner' : '');
-      nick.textContent = m.owner ? (ownerName || 'Стример') : m.nick;
+      nick.textContent = m.owner ? (ownerName || (typeof window !== 'undefined' && window.t ? window.t('common.streamer') : 'Стример')) : m.nick;
       if (!m.owner) {
         const c = m.color || (st.nickMode === 'auto' ? api.autoColor(m.nick) : null);
         if (st.nickPlate) {

@@ -15,7 +15,7 @@
   }
 
   if (!token) {
-    showError('Ссылка неполная. Запросите сброс пароля ещё раз на главной странице.');
+    showError(t('reset.badLink'));
     document.getElementById('resetForm').classList.add('hidden');
     return;
   }
@@ -52,7 +52,7 @@
     const input = document.getElementById(inputId);
     if (!input) return;
     input.type = input.type === 'password' ? 'text' : 'password';
-    if (el) el.setAttribute('aria-label', input.type === 'password' ? 'Показать пароль' : 'Скрыть пароль');
+    if (el) el.setAttribute('aria-label', input.type === 'password' ? t('index.password.show') : t('index.password.hide'));
   };
 
   window.submitReset = async function () {
@@ -65,7 +65,7 @@
       document.getElementById('resetOk').classList.remove('hidden');
       setTimeout(() => { location.href = '/'; }, 1500);
     } catch (e) {
-      showError(e.message || 'Не удалось сменить пароль');
+      showError(e.message || t('reset.failed'));
       btn.disabled = false;
     }
   };

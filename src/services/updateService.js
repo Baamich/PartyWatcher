@@ -2,6 +2,7 @@ const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config');
+const i18n = require('./i18n');
 
 const status = { state: 'idle', log: [], updatedAt: null };
 const HASH_RE = /^[0-9a-f]{7,40}$/i;
@@ -36,6 +37,10 @@ async function getCommits(limit = 100) {
     });
 }
 
+// служебная строка журнала: ключ словаря server.update.* — роут статуса переводит её на язык админа
+// (вывод git/npm/pm2 остаётся как есть — это строки)
+const L = (key, vars) => ({ k: 'server.update.' + key, v: vars });
+
 // Проверяет, что каждая зависимость из package.json реально установлена, и доустанавливает недостающие.
 // Страховка на случай, если npm install упал на середине или node_modules собран со старого package.json.
 async function ensureDependencies() {
@@ -43,7 +48,7 @@ async function ensureDependencies() {
   const missing = [];
   for (const [name, range] of Object.entries(pkg.dependencies || {})) {
     if (!PKG_NAME_RE.test(name) || !PKG_RANGE_RE.test(String(range))) {
-      status.log.push(`пропускаю зависимость с подозрительным именем/версией: ${name}`);
+      status.log.push(L('skipDep', { name }));
       continue;
     }
     if (!fs.existsSync(path.join(process.cwd(), 'node_modules', name, 'package.json'))) {
@@ -51,10 +56,10 @@ async function ensureDependencies() {
     }
   }
   if (!missing.length) {
-    status.log.push('все зависимости на месте');
+    status.log.push(L('depsOk'));
     return;
   }
-  status.log.push('не хватает пакетов: ' + missing.join(' ') + ' — доустанавливаю...');
+  status.log.push(L('depsMissing', { list: missing.join(' ') }));
   status.log.push(await run(`npm install --omit=dev --no-save ${missing.join(' ')}`));
 }
 
@@ -68,14 +73,14 @@ async function restartApps() {
       status.log.push(await run(`pm2 restart ${app}`));
     } catch (e) {
       // процесса может не быть (например, админка не запущена) — не повод считать обновление проваленным
-      status.log.push(`pm2 restart ${app} не удался: ${e.message.slice(0, 200)}`);
+      status.log.push(L('restartFailed', { app, error: e.message.slice(0, 200) }));
     }
   }
 }
 
 async function performUpdate(targetHash) {
   if (targetHash && !HASH_RE.test(targetHash)) {
-    throw new Error('Некорректный хэш коммита');
+    throw i18n.err('server.admin.badHash');
   }
 
   status.state = 'running';
@@ -93,14 +98,14 @@ async function performUpdate(targetHash) {
     status.log.push('npm install...');
     status.log.push(await run('npm install --omit=dev'));
 
-    status.log.push('проверка зависимостей...');
+    status.log.push(L('checkingDeps'));
     await ensureDependencies();
 
     status.log.push('pip install/upgrade yt-dlp...');
     try {
       status.log.push(await run('pip3 install --upgrade "yt-dlp[default]"'));
     } catch (e) {
-      status.log.push('обычный pip install не сработал (' + e.message.slice(0, 150) + '), пробую --break-system-packages...');
+      status.log.push(L('pipRetry', { error: e.message.slice(0, 150) }));
       status.log.push(await run('pip3 install --upgrade "yt-dlp[default]" --break-system-packages'));
     }
 
@@ -109,7 +114,7 @@ async function performUpdate(targetHash) {
     status.state = 'done';
   } catch (err) {
     status.state = 'error';
-    status.log.push('ОШИБКА: ' + err.message);
+    status.log.push(L('error', { error: err.i18nKey ? i18n.t(i18n.DEFAULT_LANG, err.i18nKey) : err.message }));
   }
 }
 

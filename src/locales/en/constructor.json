@@ -1,0 +1,237 @@
+{
+  "style": {
+    "0": "Classic",
+    "1": "Dark plates",
+    "2": "Glass",
+    "3": "Neon",
+    "4": "Gradient",
+    "5": "Outline",
+    "6": "Minimal",
+    "7": "Flat bar",
+    "8": "Ribbon",
+    "9": "Cyberpunk",
+    "10": "Pastel",
+    "11": "Retro"
+  },
+  "group": {
+    "0": "Layout",
+    "1": "Text",
+    "2": "Message",
+    "3": "Nicknames",
+    "4": "Animation and cleanup"
+  },
+  "f": {
+    "layout": "Chat view",
+    "valign": "Position on screen",
+    "align": "Alignment",
+    "maxw": "Max message width",
+    "gap": "Space between messages",
+    "opacity": "Whole chat opacity",
+    "size": "Text size",
+    "font": "Font (installed on the PC)",
+    "weight": "Weight",
+    "italic": "Italic text",
+    "ls": "Letter spacing",
+    "lh": "Line height",
+    "color": "Text color",
+    "shadow": "Text shadow",
+    "strokeOn": "Letter outline",
+    "strokeC": "Outline color",
+    "strokeW": "Outline width",
+    "bgOn": "Background under a message",
+    "bg": "Background color",
+    "bgalpha": "Background opacity",
+    "grad": "Background gradient",
+    "bg2": "Second gradient color",
+    "blur": "Blur under the plate",
+    "radius": "Corner radius",
+    "pad": "Inner padding",
+    "borderOn": "Border",
+    "bc": "Border color",
+    "bw": "Border width",
+    "stripeOn": "Colored stripe on the left",
+    "stripeC": "Stripe color",
+    "stripeW": "Stripe width",
+    "glowOn": "Glow around a message",
+    "glowC": "Glow color",
+    "glowS": "Glow strength",
+    "owner": "Plate on your nickname",
+    "nickMode": "Viewer nickname color",
+    "nickPlate": "Nickname on a colored plate",
+    "nickCaps": "NICKNAMES IN CAPS",
+    "showSrc": "Source labels (BOT, TWITCH)",
+    "anim": "Appear animation",
+    "fadeOn": "Messages disappear",
+    "fade": "After how many seconds",
+    "max": "Messages on screen"
+  },
+  "o": {
+    "layout": {
+      "list": "List",
+      "bar": "Flat bar at the bottom (one message)",
+      "row": "Single-line ribbon"
+    },
+    "valign": {
+      "bottom": "Bottom",
+      "top": "Top"
+    },
+    "align": {
+      "left": "Left",
+      "center": "Center",
+      "right": "Right"
+    },
+    "weight": {
+      "400": "Regular",
+      "500": "Medium",
+      "700": "Bold",
+      "800": "Extra bold"
+    },
+    "nickMode": {
+      "text": "Same as text",
+      "auto": "Colorful (like on the site)"
+    },
+    "anim": {
+      "slide": "Slide in",
+      "pop": "Pop",
+      "fade": "Fade in",
+      "none": "No animation"
+    }
+  },
+  "var": {
+    "user": "nickname of whoever used the command",
+    "streamer": "channel name",
+    "title": "stream title",
+    "viewers": "how many people are in the chat",
+    "uptime": "how long the stream has been live",
+    "count": "how many times the command has been used",
+    "args": "everything the viewer wrote after the command",
+    "target": "the first word after the command (without @) or the author's nickname",
+    "arg1": "the first word after the command",
+    "arg2": "the second word after the command",
+    "random": "random number 1–100",
+    "randomRange": "random number in a range; {random:30} — from 1 to 30",
+    "dice": "dice 1–6",
+    "coin": "heads or tails",
+    "choice": "random option from a list separated by |",
+    "calc": "calculator: + - * / % and parentheses",
+    "time": "Moscow time; {time:+1} — another time zone",
+    "date": "Moscow date"
+  },
+  "pageTitle": "PartyWatcher — Builder",
+  "chatTitle": "🧩 Chat builder",
+  "chatHint": "Set up the chat look and copy a ready OBS link. The chat key is added automatically.",
+  "readyStyles": "Ready-made styles",
+  "resetSettings": "↺ Reset settings",
+  "myPresets": "Your presets",
+  "cmdsTitle": "🤖 Chat commands",
+  "cmdsHint": "A viewer types <code>!command</code>, the bot replies in the chat.",
+  "publishPreset": "📤 Publish preset",
+  "createPlus": "＋ Create",
+  "create": "Create",
+  "th": {
+    "cmd": "Command",
+    "resp": "Response",
+    "uses": "Uses",
+    "on": "On"
+  },
+  "cmdEmpty": "No commands yet. Press “＋ Create”.",
+  "preview": "Preview",
+  "replay": "▶ Play animation",
+  "previewHint": "In the preview messages don't disappear; in OBS they vanish after the chosen time.",
+  "copyObs": "Copy OBS link 📋",
+  "obsWarn": "The link contains the chat key. Don't show it on stream.",
+  "saveAsPreset": "💾 Save as preset",
+  "picker": "Builder",
+  "pickChat": "💬 Chat",
+  "pickCmds": "🤖 Commands",
+  "examples": "Quick templates",
+  "argsLabel": "Arguments: what the viewer writes after the command",
+  "argPh": "name, e.g. number",
+  "argOptional": "optional",
+  "argAdd": "＋ Add",
+  "respLabel": "What the bot replies",
+  "varsLabel": "Variables (click to insert)",
+  "tryLabel": "Test: what the viewer writes",
+  "hexPh": "#ffffff or rgb(255,255,255)",
+  "choiceExample": "{choice:yes|no|maybe}",
+  "sampleArg": "test",
+  "error": "error",
+  "noPresets": "You haven't added or published any presets yet. Check out ready-made presets from other users:",
+  "openPresets": "open presets",
+  "needKey": {
+    "title": "Chat key required",
+    "text": "There is no chat key yet. Create it now?"
+  },
+  "sample": {
+    "owner": "Hi everyone! Starting the stream",
+    "hi": "Hi!",
+    "twitch": "Hello from Twitch 👋",
+    "bot": "🎲 Viewer1, rolled 17 (out of 30)"
+  },
+  "cmd": {
+    "loadFailed": "Could not load commands",
+    "edit": "Edit",
+    "toggleFailed": "Could not change",
+    "delTitle": "Delete the command?",
+    "delText": "Command !{name} will stop replying.",
+    "delFailed": "Could not delete",
+    "placeholderName": "command",
+    "usage": "The viewer writes:",
+    "newTitle": "New command",
+    "editTitle": "Edit command",
+    "saved": "Command saved",
+    "created": "Command created"
+  },
+  "arg": {
+    "remove": "Remove argument",
+    "value": "Value of the argument “{name}”",
+    "badName": "Argument name: 1–15 characters, letters, digits and _",
+    "tooMany": "No more than {n} arguments",
+    "exists": "This argument already exists"
+  },
+  "ex": {
+    "random": {
+      "label": "Random up to N",
+      "name": "random",
+      "arg": "number",
+      "response": "Random number up to {number}: {random:{number}}"
+    },
+    "dice": {
+      "label": "Dice",
+      "name": "dice",
+      "response": "🎲 {user} rolled the dice: {random:6}"
+    },
+    "coin": {
+      "label": "Coin",
+      "name": "coin",
+      "response": "{user}, it's {coin}"
+    },
+    "choice": {
+      "label": "Choice",
+      "name": "choose",
+      "response": "{user}, I choose: {choice:first|second|third}"
+    },
+    "calc": {
+      "label": "Calculator",
+      "name": "calc",
+      "arg": "expression",
+      "response": "{args} = {calc:{args}}"
+    },
+    "hug": {
+      "label": "Hug",
+      "name": "hug",
+      "arg": "whom",
+      "response": "{user} hugs {whom} 🤗"
+    },
+    "time": {
+      "label": "Time",
+      "name": "time",
+      "response": "It's {time:+3} in Moscow, {date:+3}"
+    },
+    "live": {
+      "label": "Stream",
+      "name": "stream",
+      "response": "Now playing “{title}”. Uptime: {uptime}. Viewers: {viewers}"
+    }
+  }
+}

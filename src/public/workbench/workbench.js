@@ -157,10 +157,10 @@ function escapeHtml(s) {
 
 function actionLogLabel(entry) {
   switch (entry.action) {
-    case 'clear_chat': return 'очистил(а) чат';
-    case 'delete_message': return `удалил(а) сообщение пользователя ${entry.targetUsername || ''}`;
-    case 'ban': return `заблокировал(а) пользователя ${entry.targetUsername || ''}`;
-    case 'timeout': return `ограничил(а) чат пользователю ${entry.targetUsername || ''} (${entry.details || ''})`;
+    case 'clear_chat': return t('workbench.log.clear_chat');
+    case 'delete_message': return t('workbench.log.delete_message', { name: entry.targetUsername || '' });
+    case 'ban': return t('workbench.log.ban', { name: entry.targetUsername || '' });
+    case 'timeout': return t('workbench.log.timeout', { name: entry.targetUsername || '', details: entry.details || '' });
     default: return entry.action;
   }
 }
@@ -170,7 +170,7 @@ function renderActionLogEntry(entry, atTop = false) {
   if (!box) return;
   const row = document.createElement('div');
   row.className = 'wb-actionlog-row';
-  const time = new Date(entry.createdAt || Date.now()).toLocaleTimeString();
+  const time = new Date(entry.createdAt || Date.now()).toLocaleTimeString(I18N.locale);
   row.innerHTML = `<span class="wb-actionlog-time">${time}</span><b>${escapeHtml(entry.actorUsername)}</b> — ${escapeHtml(actionLogLabel(entry))}`;
   if (atTop && box.firstChild) box.insertBefore(row, box.firstChild);
   else box.appendChild(row);
@@ -212,7 +212,7 @@ async function loadSettings() {
 
 function setGenerateBtnState(hasKey) {
   const btn = document.getElementById('generateKeyBtn');
-  btn.textContent = hasKey ? '🔄' : '🔄 Сгенерировать';
+  btn.textContent = hasKey ? '🔄' : t('workbench.key.generate');
 }
 
 function onGenerateKeyClick() {
@@ -238,9 +238,9 @@ async function doGenerateKey() {
     fullStreamKey = data.streamKey;
     document.getElementById('streamKeyInput').value = data.streamKeyMasked;
     setGenerateBtnState(true);
-    showToast('success', 'Ключ сгенерирован — скопируй его сейчас, полностью он больше не покажется');
+    showToast('success', t('workbench.key.generated'));
   } catch (err) {
-    showToast('error', err.message || 'Не удалось сгенерировать ключ');
+    showToast('error', err.message || t('workbench.key.generateFailed'));
   }
 }
 
@@ -268,12 +268,12 @@ function setLiveBadge(mode) {
   badge.classList.remove('is-live', 'is-reconnecting');
   if (mode === 'live') {
     badge.classList.add('is-live');
-    label.textContent = 'В эфире';
+    label.textContent = t('workbench.status.live');
   } else if (mode === 'reconnecting') {
     badge.classList.add('is-reconnecting');
-    label.textContent = 'Переподключение';
+    label.textContent = t('workbench.status.reconnecting');
   } else {
-    label.textContent = 'Офлайн';
+    label.textContent = t('workbench.status.offline');
     timer.textContent = '00:00:00';
   }
 }
@@ -518,9 +518,9 @@ async function copyStreamKey() {
       fullStreamKey = data.streamKey;
     }
     await navigator.clipboard.writeText(fullStreamKey);
-    showToast('success', 'Ключ скопирован');
+    showToast('success', t('workbench.key.copied'));
   } catch (err) {
-    showToast('error', err.message || 'Не удалось скопировать — возможно, ключ ещё не создан');
+    showToast('error', err.message || t('workbench.key.copyFailed'));
   }
 }
 
@@ -531,9 +531,9 @@ async function saveSettings() {
   };
   try {
     await api('/workbench/settings', { method: 'PATCH', body });
-    showToast('success', 'Сохранено');
+    showToast('success', t('common.saved'));
   } catch (err) {
-    showToast('error', err.message || 'Не удалось сохранить');
+    showToast('error', err.message || t('common.saveFailed'));
   }
 }
 
@@ -544,15 +544,15 @@ function escapeHtml(s) {
 }
 
 function buildMessageHtml(msg) {
-  if (msg.deleted) return `<span class="wb-msg-deleted">Сообщение удалено администратором</span>`;
+  if (msg.deleted) return `<span class="wb-msg-deleted">${t('workbench.chat.deletedByAdmin')}</span>`;
 
   // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick
-  const delBtn = `<button type="button" class="wb-mod-btn" title="Удалить" data-act="del" data-id="${escapeHtml(msg._id)}">🗑️</button>`;
+  const delBtn = `<button type="button" class="wb-mod-btn" title="${t('common.delete')}" data-act="del" data-id="${escapeHtml(msg._id)}">🗑️</button>`;
 
   // бан и таймаут — только для сообщений реальных юзеров (у сообщений из API юзера нет)
   const userBtns = !msg.external && msg.senderId ? `
-    <button type="button" class="wb-mod-btn" title="Заблокировать" data-act="ban" data-uid="${escapeHtml(msg.senderId)}" data-name="${escapeHtml(msg.senderUsername)}">🚫</button>
-    <button type="button" class="wb-mod-btn" title="Ограничить чат" data-act="timeout" data-uid="${escapeHtml(msg.senderId)}" data-name="${escapeHtml(msg.senderUsername)}">⏱️</button>
+    <button type="button" class="wb-mod-btn" title="${t('common.mod.ban')}" data-act="ban" data-uid="${escapeHtml(msg.senderId)}" data-name="${escapeHtml(msg.senderUsername)}">🚫</button>
+    <button type="button" class="wb-mod-btn" title="${t('common.mod.timeout')}" data-act="timeout" data-uid="${escapeHtml(msg.senderId)}" data-name="${escapeHtml(msg.senderUsername)}">⏱️</button>
   ` : '';
 
   // метка источника у внешних сообщений видна всегда — выдать бота за зрителя незаметно нельзя
@@ -568,7 +568,7 @@ function buildMessageHtml(msg) {
   return `
     ${delBtn}${userBtns}
     ${src}
-    <span class="wb-msg-author-wrap"><span class="${nickCls}"${nickStyle}>${escapeHtml(msg.senderUsername)}</span>:</span>
+    <span class="wb-msg-author-wrap"><span class="${nickCls}"${nickStyle}>${escapeHtml(I18N.sysName(msg.senderUsername))}</span>:</span>
     <span class="wb-msg-text">${escapeHtml(msg.text)}</span>
   `;
 }
@@ -603,9 +603,9 @@ function deleteMessage(messageId) {
 }
 
 async function onClearChatClick() {
-  const ok = await PW.confirm('Все сообщения исчезнут у всех зрителей.', {
-    title: 'Очистить чат?',
-    okText: 'Очистить',
+  const ok = await PW.confirm(t('common.chat.clearText'), {
+    title: t('common.chat.clearTitle'),
+    okText: t('common.chat.clearOk'),
     danger: true,
   });
   if (ok) socket?.emit('chat:clear');
@@ -613,14 +613,14 @@ async function onClearChatClick() {
 
 function copyRtmpUrl() {
   navigator.clipboard.writeText('rtmp://live.partywatcher.de/live')
-    .then(() => showToast('success', 'Адрес сервера скопирован'))
-    .catch(() => showToast('error', 'Не удалось скопировать'));
+    .then(() => showToast('success', t('workbench.key.serverCopied')))
+    .catch(() => showToast('error', t('workbench.copyFailed')));
 }
 
 async function openBanConfirm(userId, username) {
-  const ok = await PW.confirm(`${username} не сможет писать в чат канала.`, {
-    title: 'Заблокировать пользователя?',
-    okText: 'Заблокировать',
+  const ok = await PW.confirm(t('common.mod.banText', { name: username }), {
+    title: t('common.mod.banTitle'),
+    okText: t('common.mod.ban'),
     danger: true,
   });
   if (ok) socket?.emit('chat:ban', { userId, username });
@@ -628,7 +628,7 @@ async function openBanConfirm(userId, username) {
 
 function openTimeoutModal(userId, username) {
   timeoutTarget = { userId, username };
-  document.getElementById('timeoutModalName').textContent = `Ограничить чат: ${username}`;
+  document.getElementById('timeoutModalName').textContent = t('workbench.timeout.title', { name: username });
   document.getElementById('timeoutModal').classList.remove('hidden');
 }
 
@@ -700,7 +700,7 @@ function initChat(streamerNameLower) {
       socket.once('connect', () => resolve(true));
       setTimeout(() => resolve(socket.connected), 1500); // не ждём вечно один попыточный тик
     }),
-    () => showToast('error', 'Не удалось восстановить соединение с чатом. Обнови страницу.')
+    () => showToast('error', t('workbench.chat.reconnectFailed'))
   );
 }
 
@@ -739,7 +739,7 @@ function setChatApiKeyUi(masked) {
   const input = document.getElementById('chatApiKeyInput');
   const btn = document.getElementById('chatApiGenerateBtn');
   if (input) input.value = masked || '';
-  if (btn) btn.textContent = masked ? '🔄' : '🔄 Сгенерировать';
+  if (btn) btn.textContent = masked ? '🔄' : t('workbench.key.generate');
 }
 
 function toggleChatApi() {
@@ -786,9 +786,9 @@ async function doGenerateChatKey() {
     const data = await api('/workbench/chat-key/generate', { method: 'POST' });
     chatApiFullKey = data.chatApiKey;
     setChatApiKeyUi(data.chatApiKeyMasked);
-    showToast('success', 'Ключ чата сгенерирован — скопируй его или ссылку для OBS');
+    showToast('success', t('workbench.chatApi.generated'));
   } catch (err) {
-    showToast('error', err.message || 'Не удалось сгенерировать ключ чата');
+    showToast('error', err.message || t('workbench.chatApi.generateFailed'));
   }
 }
 
@@ -804,9 +804,9 @@ async function copyChatApiKey() {
   try {
     const key = await getChatApiKey();
     await navigator.clipboard.writeText(key);
-    showToast('success', 'API-ключ чата скопирован');
+    showToast('success', t('workbench.chatApi.copied'));
   } catch (err) {
-    showToast('error', err.message || 'Не удалось скопировать — возможно, ключ ещё не создан');
+    showToast('error', err.message || t('workbench.key.copyFailed'));
   }
 }
 
@@ -815,9 +815,9 @@ async function copyChatOverlayUrl() {
     const key = await getChatApiKey();
     const url = `${location.origin}/overlay/chat.html#key=${encodeURIComponent(key)}`;
     await navigator.clipboard.writeText(url);
-    showToast('success', 'Ссылка для OBS скопирована');
+    showToast('success', t('workbench.chatApi.obsCopied'));
   } catch (err) {
-    showToast('error', err.message || 'Не удалось скопировать — возможно, ключ ещё не создан');
+    showToast('error', err.message || t('workbench.key.copyFailed'));
   }
 }
 
@@ -833,13 +833,13 @@ function renderViewersList(viewers) {
   if (!list) return;
   list.innerHTML = '';
   if (!viewers || !viewers.length) {
-    list.innerHTML = '<div class="wb-viewer-row guest">Никого нет</div>';
+    list.innerHTML = `<div class="wb-viewer-row guest">${t('common.viewers.none')}</div>`;
     return;
   }
   viewers.forEach((v) => {
     const row = document.createElement('div');
     row.className = 'wb-viewer-row' + (v.isGuest ? ' guest' : '');
-    row.textContent = v.username;
+    row.textContent = v.isGuest ? t('common.viewers.guests', { n: v.guests || 1 }) : v.username;
     list.appendChild(row);
   });
 }
@@ -880,7 +880,7 @@ function bindPip() {
   const sync = () => {
     const on = document.pictureInPictureElement === video;
     btn.classList.toggle('active', on);
-    btn.textContent = on ? '⧉ Вернуть в плеер' : '⧉ Мини-окно';
+    btn.textContent = on ? t('workbench.player.backToPlayer') : t('workbench.player.mini');
   };
 
   video.addEventListener('enterpictureinpicture', sync);

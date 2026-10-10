@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const i18n = require('../services/i18n');
 const PROXY_SERVER = process.env.PROXY_SERVER;
 const PROXY_USER = process.env.PROXY_USER;
 const PROXY_PASS = process.env.PROXY_PASS;
@@ -457,12 +458,12 @@ async function warmStream(targetUrl) {
 router.get('/relay', auth, async (req, res) => {
   const targetUrl = req.query.url;
   if (typeof targetUrl !== 'string' || targetUrl.length > 4000 || !targetUrl.startsWith('http')) {
-    return res.status(400).json({ error: 'Нужен валидный url' });
+    return res.status(400).json({ error: req.t('server.relay.badUrl') });
   }
   try {
     await assertPublicHttpUrl(targetUrl);
   } catch (e) {
-    return res.status(400).json({ error: e.message });
+    return res.status(400).json({ error: i18n.errText(req, e) });
   }
 
   try {
@@ -481,7 +482,7 @@ router.get('/relay', auth, async (req, res) => {
 
     if (!downloadResult.ok) {
       console.error('[stream-relay] CDN отказал:', downloadResult.status, targetUrl.slice(0, 120));
-      return res.status(downloadResult.status || 502).json({ error: `CDN вернул ${downloadResult.status}` });
+      return res.status(downloadResult.status || 502).json({ error: req.t('server.relay.cdnStatus', { status: downloadResult.status }) });
     }
 
     if (downloadResult.cached) {

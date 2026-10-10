@@ -1,4 +1,5 @@
 // Шаблоны ответов для команд чата. Без eval: свой разбор переменных и калькулятора.
+const i18n = require('./i18n');
 const RESERVED = new Set([
   'user', 'streamer', 'title', 'viewers', 'uptime', 'count', 'args', 'target',
   'random', 'dice', 'coin', 'choice', 'calc', 'time', 'date',
@@ -12,17 +13,17 @@ const randInt = (a, b) => {
   return a + Math.floor(Math.random() * (b - a + 1));
 };
 
-// из тела запроса → [{ name, optional }] или { error }
+// из тела запроса → [{ name, optional }] или { error: ключ словаря, vars }
 function parseArgsInput(raw) {
   if (raw == null) return { args: [] };
-  if (!Array.isArray(raw) || raw.length > MAX_ARGS) return { error: `Аргументов может быть не больше ${MAX_ARGS}` };
+  if (!Array.isArray(raw) || raw.length > MAX_ARGS) return { error: 'server.cmd.tooManyArgs', vars: { n: MAX_ARGS } };
   const seen = new Set();
   const args = [];
   for (const a of raw) {
     const name = String(a?.name ?? '').trim().toLowerCase();
-    if (!ARG_NAME_RE.test(name)) return { error: 'Название аргумента: 1–15 символов, буквы, цифры и _' };
-    if (RESERVED.has(name) || /^arg\d+$/.test(name)) return { error: `Название «${name}» занято под переменную` };
-    if (seen.has(name)) return { error: `Аргумент «${name}» повторяется` };
+    if (!ARG_NAME_RE.test(name)) return { error: 'server.cmd.argName' };
+    if (RESERVED.has(name) || /^arg\d+$/.test(name)) return { error: 'server.cmd.argReserved', vars: { name } };
+    if (seen.has(name)) return { error: 'server.cmd.argDup', vars: { name } };
     seen.add(name);
     args.push({ name, optional: !!a?.optional });
   }
@@ -104,7 +105,7 @@ function shifted(param) {
 }
 
 // null — неизвестная переменная (останется в тексте как есть)
-function evalToken(body, vars) {
+function evalToken(body, vars, lang) {
   const idx = body.indexOf(':');
   const key = (idx === -1 ? body : body.slice(0, idx)).trim().toLowerCase();
   const param = idx === -1 ? null : body.slice(idx + 1);
@@ -120,7 +121,7 @@ function evalToken(body, vars) {
       return '?';
     }
     case 'dice': return param === null ? randInt(1, 6) : null;
-    case 'coin': return param === null ? (Math.random() < 0.5 ? 'орёл' : 'решка') : null;
+    case 'coin': return param === null ? i18n.t(lang, Math.random() < 0.5 ? 'server.cmd.heads' : 'server.cmd.tails') : null;
     case 'choice': {
       if (param === null) return null;
       const opts = param.split('|').map((x) => x.trim()).filter(Boolean);
@@ -142,13 +143,13 @@ function evalToken(body, vars) {
 }
 
 // самые внутренние {…} считаются первыми, поэтому {random:{число}} работает
-function renderTemplate(template, vars) {
+function renderTemplate(template, vars, lang) {
   let out = String(template ?? '');
   for (let pass = 0; pass < 6; pass++) {
     let changed = false;
     out = out.replace(/\{([^{}]*)\}/g, (m, body) => {
       changed = true;
-      const r = evalToken(body, vars);
+      const r = evalToken(body, vars, lang);
       return r === null ? '\u0001' + body + '\u0002' : String(r);
     });
     if (!changed) break;
@@ -156,12 +157,13 @@ function renderTemplate(template, vars) {
   return out.replace(/\u0001/g, '{').replace(/\u0002/g, '}').slice(0, 500);
 }
 
-// cmd: { name, args, response }, argv: слова после команды, ctx: { user, streamer, title, viewers, uptime, count }
+// cmd: { name, args, response }, argv: слова после команды, ctx: { user, streamer, title, viewers, uptime, count, lang }
+// lang — язык служебных слов ответа (орёл/решка, «Использование»)
 function buildReply(cmd, argv, ctx) {
   const declared = Array.isArray(cmd.args) ? cmd.args : [];
   let needed = 0;
   declared.forEach((a, i) => { if (!a.optional) needed = i + 1; });
-  if (argv.length < needed) return { text: `Использование: ${usageOf(cmd)}`, usage: true };
+  if (argv.length < needed) return { text: i18n.t(ctx.lang, 'server.cmd.usage', { usage: usageOf(cmd) }), usage: true };
 
   const vars = {
     user: clean(ctx.user),
@@ -176,7 +178,7 @@ function buildReply(cmd, argv, ctx) {
   for (let i = 0; i < 9; i++) vars['arg' + (i + 1)] = argv[i] ?? '';
   declared.forEach((a, i) => { vars[a.name] = argv[i] ?? ''; });
 
-  return { text: renderTemplate(cmd.response, vars), usage: false };
+  return { text: renderTemplate(cmd.response, vars, ctx.lang), usage: false };
 }
 
 module.exports = { parseArgsInput, parseCommandLine, buildReply, usageOf, MAX_ARGS };

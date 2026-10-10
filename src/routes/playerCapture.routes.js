@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const i18n = require('../services/i18n');
 const { warmStream } = require('./streamProxy.routes'); // переиспользуем гонку referer+proxy вместо дублирования
 
 // папка для отладочных скриншотов — внутри проекта, чтобы отдавать через статику
@@ -428,7 +429,7 @@ router.post('/extract', auth, async (req, res) => {
   if (!puppeteer) {
     return res.json({
       success: false,
-      error: 'puppeteer-core не установлен',
+      error: req.t('server.capture.noPuppeteer'),
       streams: [],
       playerIframes: [],
       meta: null,
@@ -439,12 +440,12 @@ router.post('/extract', auth, async (req, res) => {
   const requestedSeason = Number(req.body.season) || 1;
 
   if (typeof url !== 'string' || url.length > 2000 || !url.startsWith('http')) {
-    return res.status(400).json({ error: 'Нужна валидная ссылка' });
+    return res.status(400).json({ error: req.t('server.capture.badUrl') });
   }
   try {
     await assertPublicHttpUrl(url);
   } catch (e) {
-    return res.status(400).json({ error: e.message });
+    return res.status(400).json({ error: i18n.errText(req, e) });
   }
 
   // запускать Chromium может только хост комнаты и только по ссылке этой комнаты
@@ -494,7 +495,7 @@ router.post('/extract', auth, async (req, res) => {
     if (req.body.onlyCache) {
       return res.json({
         success: false,
-        error: 'Поток ещё не готов — подожди хоста',
+        error: req.t('server.capture.notReady'),
         streams: [],
         playerIframes: [],
         meta: null,
@@ -506,7 +507,7 @@ router.post('/extract', auth, async (req, res) => {
   if (!mayExtract) {
     return res.json({
       success: false,
-      error: 'Поток ещё не готов — подожди хоста',
+      error: req.t('server.capture.notReady'),
       streams: [],
       playerIframes: [],
       meta: null,
@@ -886,7 +887,7 @@ router.post('/extract', auth, async (req, res) => {
       console.warn('[player-capture] навигация провалилась, страница пуста — прерываю');
       return {
         success: false,
-        error: 'Не удалось открыть страницу (сайт недоступен через прокси или ссылка битая). Проверь прокси/URL.',
+        error: req.t('server.capture.openFailed'),
         streams: [],
         playerIframes: [],
         meta: null,
@@ -2715,8 +2716,8 @@ router.post('/extract', auth, async (req, res) => {
       playerIframes: uniqueIframes,
       meta,
       message: success
-        ? `Найдено потоков: ${uniqueStreams.length}, iframe: ${uniqueIframes.length}`
-        : 'Ничего не найдено',
+        ? req.t('server.capture.found', { streams: uniqueStreams.length, iframes: uniqueIframes.length })
+        : req.t('server.capture.nothing'),
     };
 
       return responseData;

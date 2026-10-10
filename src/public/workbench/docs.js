@@ -1,51 +1,20 @@
-const DOCS_BASE = '/workbench/docs/pages/';
+// страницы документации лежат в src/locales/<язык>/docs/*.html (по языку посетителя)
+const DOCS_BASE = `/locales/${I18N.lang}/docs/`;
 const DOCS_HOME = 'intro';
 
 // ---- оглавление: сюда добавляются новые главы и страницы ----
+// названия глав и страниц — в словаре: docs.ch.<глава>, docs.page.<страница>.title / .desc
 const DOCS_CHAPTERS = [
-  {
-    id: 'stream',
-    title: 'Трансляция',
-    pages: [
-      { id: 'stream-obs', title: 'Подключение трансляции из OBS', desc: 'Ключ, сервер, настройки кодирования' },
-    ],
-  },
-  {
-    id: 'chat',
-    title: 'Чат',
-    pages: [
-      { id: 'chat-obs', title: 'Чат в OBS', desc: 'Как показать чат на стриме' },
-      { id: 'chat-code', title: 'Бот на C#', desc: 'Команды, ответы, !рулетка' },
-      { id: 'chat-style', title: 'Стилизация чата', desc: 'Цвета, шрифты, фон, свой CSS' },
-      { id: 'chat-reference', title: 'Справочник API', desc: 'Запросы, поля, события, ошибки' },
-      { id: 'chat-security', title: 'Безопасность и лимиты', desc: 'Как защищён ключ и что нельзя' },
-    ],
-  },
-  {
-    id: 'constructor',
-    title: 'Конструктор',
-    pages: [
-      { id: 'constructor-chat', title: 'Конструктор чата', desc: 'Вид чата без кода и ссылка для OBS' },
-      { id: 'constructor-commands', title: 'Команды чата', desc: 'Свои команды !команда и переменные' },
-    ],
-  },
-  {
-    id: 'editor',
-    title: 'Редактор профиля',
-    pages: [
-      { id: 'editor-standard', title: 'Стандартный редактор', desc: 'Баннер, аватар и описание' },
-      { id: 'editor-pro', title: 'Профессиональный редактор', desc: 'Блоки, фигуры, текст, кнопки, эфир' },
-    ],
-  },
-  {
-    id: 'presets',
-    title: 'Пре-сеты',
-    pages: [
-      { id: 'presets-styles', title: 'Стили чата', desc: 'Добавить чужой стиль или опубликовать свой' },
-      { id: 'presets-commands', title: 'Команды', desc: 'Готовые команды от других стримеров' },
-    ],
-  },
-];
+  ['stream', ['stream-obs']],
+  ['chat', ['chat-obs', 'chat-code', 'chat-style', 'chat-reference', 'chat-security']],
+  ['constructor', ['constructor-chat', 'constructor-commands']],
+  ['editor', ['editor-standard', 'editor-pro']],
+  ['presets', ['presets-styles', 'presets-commands']],
+].map(([id, pages]) => ({
+  id,
+  title: t('docs.ch.' + id),
+  pages: pages.map((pid) => ({ id: pid, title: t(`docs.page.${pid}.title`), desc: t(`docs.page.${pid}.desc`) })),
+}));
 
 let myStreamerNameLower = null;
 let loadToken = 0;
@@ -85,14 +54,14 @@ function goTo(id) {
 // ---------- список глав (справа) ----------
 
 function renderToc() {
-  let html = '<div class="docs-toc-title">Документация</div>';
-  html += `<a class="docs-toc-home" data-page="${DOCS_HOME}" href="#${DOCS_HOME}">🏠 О документации</a>`;
+  let html = `<div class="docs-toc-title">${t('docs.title')}</div>`;
+  html += `<a class="docs-toc-home" data-page="${DOCS_HOME}" href="#${DOCS_HOME}">🏠 ${t('docs.about')}</a>`;
 
   DOCS_CHAPTERS.forEach((ch) => {
     html += `
       <div class="docs-ch" data-chapter="${ch.id}">
         <button type="button" class="docs-ch-head" data-chapter="${ch.id}" aria-expanded="false">
-          ${CHEVRON}<span>Глава ${ch.num}. ${ch.title}</span>
+          ${CHEVRON}<span>${t('docs.chapter', { n: ch.num })} ${ch.title}</span>
         </button>
         <div class="docs-ch-pages">
           <div class="docs-ch-pages-inner">
@@ -161,7 +130,7 @@ function renderPager(id) {
   const link = (pg, dir) =>
     pg
       ? `<a class="docs-pager-link ${dir}" href="#${pg.id}">
-           <small>${dir === 'prev' ? '← Назад' : 'Дальше →'}</small>
+           <small>${dir === 'prev' ? t('docs.prev') : t('docs.next')}</small>
            <span>${pg.num} ${pg.title}</span>
          </a>`
       : '<span></span>';
@@ -184,15 +153,15 @@ function enhanceCode(root) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'docs-copy';
-    btn.textContent = 'Копировать';
+    btn.textContent = t('docs.copy');
     btn.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(text);
-        btn.textContent = 'Скопировано ✓';
+        btn.textContent = t('docs.copied');
       } catch (_) {
-        btn.textContent = 'Не вышло';
+        btn.textContent = t('docs.copyFailed');
       }
-      setTimeout(() => { btn.textContent = 'Копировать'; }, 1500);
+      setTimeout(() => { btn.textContent = t('docs.copy'); }, 1500);
     });
     wrap.appendChild(btn);
   });
@@ -201,7 +170,7 @@ function enhanceCode(root) {
 // ---------- загрузка страницы в то же окно ----------
 
 async function loadPage(id) {
-  const page = id === DOCS_HOME ? { num: '', title: 'О документации' } : findPage(id);
+  const page = id === DOCS_HOME ? { num: '', title: t('docs.about') } : findPage(id);
   if (!page) {
     location.replace('#' + DOCS_HOME);
     return;
@@ -233,8 +202,8 @@ async function loadPage(id) {
   } catch (err) {
     if (token !== loadToken) return;
     contentEl.innerHTML =
-      '<h1>Не удалось загрузить страницу</h1>' +
-      `<p class="docs-lead">Проверь, что файл есть на сервере: <code>${DOCS_BASE}${id}.html</code></p>`;
+      `<h1>${t('docs.loadFailed')}</h1>` +
+      `<p class="docs-lead">${t('docs.checkFile')} <code>${DOCS_BASE}${id}.html</code></p>`;
   } finally {
     if (token === loadToken) contentEl.removeAttribute('aria-busy');
   }

@@ -4,21 +4,28 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Room = require('../models/Room');
 const { ensureExtraction, getCachedUrl, getJobInfo, publicJob } = require('../services/ytdlpAgeGate');
+const i18n = require('../services/i18n');
+
+// ошибка задачи хранится ключом словаря — переводим на язык того, кто спрашивает
+function translateJob(req, info) {
+  if (info && info.error) return { ...info, error: req.t(info.error) };
+  return info;
+}
 
 // Комната, где текущий юзер хост, а видео из YouTube. Иначе отвечает ошибкой и возвращает null.
 async function loadOwnedYoutubeRoom(req, res) {
   const code = String(req.body?.code ?? req.query?.code ?? ''); // String(): в запрос нельзя подсунуть объект-оператор Mongo
   const room = code ? await Room.findOne({ code }) : null;
   if (!room) {
-    res.status(404).json({ error: 'Комната не найдена' });
+    res.status(404).json({ error: req.t('server.room.notFound') });
     return null;
   }
   if (String(room.owner) !== String(req.user.id)) {
-    res.status(403).json({ error: 'Только хост может переключить источник' });
+    res.status(403).json({ error: req.t('server.yt.hostOnly') });
     return null;
   }
   if (room.video.type !== 'youtube') {
-    res.status(400).json({ error: 'Это действие только для видео YouTube' });
+    res.status(400).json({ error: req.t('server.yt.onlyYoutube') });
     return null;
   }
   return room;
@@ -64,12 +71,12 @@ router.post('/age-restricted-extract', auth, async (req, res) => {
         .catch((e) => console.warn('[youtube-capture] скачивание не удалось:', String(e.message).slice(0, 200)));
     }
 
-    res.status(202).json({ success: true, ...publicJob(job) });
+    res.status(202).json({ success: true, ...translateJob(req, publicJob(job)) });
   } catch (err) {
-    if (err.code === 'BAD_URL') return res.status(400).json({ error: err.message });
-    if (err.code === 'QUEUE_FULL') return res.status(429).json({ error: err.message });
+    if (err.code === 'BAD_URL') return res.status(400).json({ error: i18n.errText(req, err) });
+    if (err.code === 'QUEUE_FULL') return res.status(429).json({ error: i18n.errText(req, err) });
     console.error('[youtube-capture/extract]', err);
-    res.status(500).json({ error: 'Не удалось запустить скачивание' });
+    res.status(500).json({ error: req.t('server.yt.startFailed') });
   }
 });
 
@@ -87,10 +94,10 @@ router.get('/age-restricted-status', auth, async (req, res) => {
       return res.json({ status: 'done', url: cached });
     }
 
-    res.json(getJobInfo(room.video.url) || { status: 'idle' });
+    res.json(translateJob(req, getJobInfo(room.video.url)) || { status: 'idle' });
   } catch (err) {
     console.error('[youtube-capture/status]', err);
-    res.status(500).json({ error: 'Не удалось узнать статус' });
+    res.status(500).json({ error: req.t('server.yt.statusFailed') });
   }
 });
 

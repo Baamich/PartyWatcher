@@ -113,7 +113,7 @@
   }
 
   if (!key) {
-    showError('В ссылке нет ключа (#key=...)');
+    showError(t('overlay.noKey'));
     return;
   }
 
@@ -140,7 +140,7 @@
 
     const nick = document.createElement('span');
     nick.className = 'nick' + (msg.isOwner ? ' nick--owner' : '');
-    nick.textContent = msg.senderUsername;
+    nick.textContent = I18N.sysName(msg.senderUsername);
 
     if (!msg.isOwner) {
       let c = null;
@@ -195,5 +195,5 @@
     box.querySelectorAll('[data-id="' + CSS.escape(String(messageId)) + '"]').forEach((el) => el.remove());
   });
   socket.on('chat:cleared', () => { box.innerHTML = ''; });
-  socket.on('chat:overlay-error', (e) => showError((e && e.error) || 'Неверный ключ чата'));
+  socket.on('chat:overlay-error', (e) => showError((e && e.error) || t('overlay.badKey')));
 })();

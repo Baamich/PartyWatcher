@@ -42,10 +42,10 @@ async function auth(req, res, next) {
   } catch (e) {
     if (e.code === 'NO_TOKEN') {
       console.log('[auth] REJECT (no token) →', req.originalUrl);
-      return res.status(401).json({ error: 'Не авторизован' });
+      return res.status(401).json({ error: req.t('server.notAuthorized') });
     }
     console.log('[auth] REJECT (invalid token) →', req.originalUrl, e.message);
-    return res.status(401).json({ error: 'Невалидный токен' });
+    return res.status(401).json({ error: req.t('server.badToken') });
   }
 }
 

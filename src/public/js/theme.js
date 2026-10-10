@@ -92,9 +92,9 @@ function closeModal(id) {
     input.value = isPrompt ? String(opts.defaultValue ?? '') : '';
     input.placeholder = opts.placeholder || '';
 
-    okBtn.textContent = opts.okText || 'ОК';
+    okBtn.textContent = opts.okText || t('common.dialog.ok');
     okBtn.classList.toggle('pw-danger', !!opts.danger);
-    cancelBtn.textContent = opts.cancelText || 'Отмена';
+    cancelBtn.textContent = opts.cancelText || t('common.dialog.cancel');
     cancelBtn.classList.toggle('hidden', opts.kind === 'alert');
 
     overlay.classList.remove('hidden');
@@ -183,9 +183,9 @@ function closeModal(id) {
   }
   PW.toast = toast;
 
-  // обычный alert() → всплывашка (цвет подбираем по тексту)
-  const ERR_RE = /не удалось|ошибк|нельзя|не найден|не может|заблокирован|кикнули|отключился|заполнен|не поддерж|слишком/i;
-  const OK_RE = /скопирован|сохранён|сохранен|готово|отправлен|успешно/i;
+  // обычный alert() → всплывашка (цвет подбираем по тексту, русскому или английскому)
+  const ERR_RE = /не удалось|ошибк|нельзя|не найден|не может|заблокирован|кикнули|отключился|заполнен|не поддерж|слишком|could not|couldn't|failed|error|cannot|can't|not found|blocked|kicked|disconnected|not supported|too (many|long|large|big)/i;
+  const OK_RE = /скопирован|сохранён|сохранен|готово|отправлен|успешно|copied|saved|done|sent|success/i;
   window.alert = function (msg) {
     const text = String(msg ?? '');
     toast(text, OK_RE.test(text) ? 'success' : ERR_RE.test(text) ? 'error' : 'info', 4500);

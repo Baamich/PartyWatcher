@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   const S = window.PWStyle;
+  const tr = (k, v) => window.t(k, v); // здесь есть переменная t (тип пре-сета), поэтому перевод — tr
   const LS_KEY = 'pw_ctor_chat'; // тот же ключ, что у Конструктора
 
   const el = (tag, cls, text) => {
@@ -16,10 +17,10 @@
     '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
 
   const SAMPLE = [
-    { owner: true, text: 'Всем привет! Начинаем стрим' },
-    { nick: 'Viewer1', text: 'Привет!' },
-    { nick: 'viewer123', color: '#4ade80', src: 'twitch', text: 'Привет из твича 👋' },
-    { nick: 'Бот', src: 'bot', text: '🎲 Viewer1, выпало 17 (из 30)' },
+    { owner: true, text: tr('constructor.sample.owner') },
+    { nick: 'Viewer1', text: tr('constructor.sample.hi') },
+    { nick: 'viewer123', color: '#4ade80', src: 'twitch', text: tr('constructor.sample.twitch') },
+    { nick: tr('common.sys.bot'), src: 'bot', text: tr('constructor.sample.bot') },
   ];
 
   const usageText = (args) => (args || []).map((a) => (a.optional ? `[${a.name}]` : `<${a.name}>`)).join(' ');
@@ -43,12 +44,12 @@
   function commandBox(item) {
     const box = el('div', 'pst-cmd');
     const r1 = el('div', 'pst-cmd-row');
-    r1.append(el('span', 'pst-cmd-lbl', 'Ввод:'), el('code', null, item.preview?.line || '!' + item.data.name));
+    r1.append(el('span', 'pst-cmd-lbl', tr('presets.input')), el('code', null, item.preview?.line || '!' + item.data.name));
     const r2 = el('div', 'pst-cmd-row');
-    r2.append(el('span', 'pst-cmd-lbl', 'Вывод:'), el('span', 'pst-cmd-out', item.preview?.text || '…'));
+    r2.append(el('span', 'pst-cmd-lbl', tr('presets.output')), el('span', 'pst-cmd-out', item.preview?.text || '…'));
     box.append(r1, r2);
     const u = usageText(item.data.args);
-    if (u) box.appendChild(el('div', 'pst-cmd-usage', 'Аргументы: ' + u));
+    if (u) box.appendChild(el('div', 'pst-cmd-usage', tr('presets.args') + ' ' + u));
     return box;
   }
 
@@ -61,7 +62,7 @@
     if (o.onTrash && (item.canDelete || item.added)) {
       const d = el('button', 'pst-del');
       d.type = 'button';
-      d.title = item.canDelete ? 'Удалить пре-сет' : 'Убрать у себя';
+      d.title = item.canDelete ? tr('presets.delete') : tr('presets.unadd');
       d.setAttribute('aria-label', d.title);
       d.innerHTML = ICON_TRASH; // статичная иконка из константы выше
       d.addEventListener('click', () => o.onTrash(item));
@@ -72,26 +73,26 @@
     main.appendChild(item.type === 'style' ? styleStage(item.data, item.authorName) : commandBox(item));
     main.appendChild(el('h3', 'pst-name', item.name));
     if (item.description) main.appendChild(el('p', 'pst-desc', item.description));
-    const tag = item.mine ? ' · ваш' : item.added ? ' · добавлен' : '';
+    const tag = item.mine ? ' · ' + tr('presets.tagMine') : item.added ? ' · ' + tr('presets.tagAdded') : '';
     main.appendChild(el('div', 'pst-meta',
-      `${item.type === 'style' ? 'Стиль' : 'Команда'} · от ${item.authorName} · ${new Date(item.createdAt).toLocaleDateString('ru-RU')}${tag}`));
+      `${item.type === 'style' ? tr('presets.typeStyle') : tr('presets.typeCommand')} · ${tr('presets.by', { name: item.authorName })} · ${new Date(item.createdAt).toLocaleDateString(I18N.locale)}${tag}`));
     card.appendChild(main);
 
     const foot = el('div', 'pst-foot');
     if (o.readonly) {
       foot.append(el('span', 'pst-count', '👥 ' + item.adds), el('span', 'pst-count', '♥ ' + item.likes));
     } else {
-      const add = el('button', 'pst-add' + (item.added ? ' on' : ''), item.added ? '✓ Добавлено' : '＋ Добавить');
+      const add = el('button', 'pst-add' + (item.added ? ' on' : ''), item.added ? tr('presets.added') : tr('presets.add'));
       add.type = 'button';
-      if (item.mine) { add.disabled = true; add.textContent = 'Ваш пре-сет'; }
+      if (item.mine) { add.disabled = true; add.textContent = tr('presets.yours'); }
       add.addEventListener('click', () => o.onAdd && o.onAdd(item));
 
       const adds = el('span', 'pst-count', '👥 ' + item.adds);
-      adds.title = 'Сколько человек добавили';
+      adds.title = tr('presets.addsTitle');
 
       const like = el('button', 'pst-like' + (item.liked ? ' on' : ''), '♥ ' + item.likes);
       like.type = 'button';
-      like.title = item.mine ? 'Свой пре-сет лайкать нельзя' : 'Нравится';
+      like.title = item.mine ? tr('presets.noSelfLike') : tr('presets.like');
       if (item.mine) like.disabled = true;
       like.addEventListener('click', () => o.onLike && o.onLike(item));
 
@@ -104,28 +105,27 @@
   // ---------- удаление / убрать у себя ----------
   async function deleteItem(item, after) {
     const ok = await PW.confirm(
-      `Вы уверены, что хотите удалить пре-сет: «${item.name}»?` +
-      (item.adds ? ' Из списка он пропадёт у всех, но уже добавленные стили и команды останутся у пользователей.' : ''),
-      { title: 'Удалить пре-сет?', okText: 'Да', cancelText: 'Нет', danger: true }
+      tr('presets.del.text', { name: item.name }) + (item.adds ? ' ' + tr('presets.del.textAdded') : ''),
+      { title: tr('presets.del.title'), okText: tr('presets.yes'), cancelText: tr('presets.no'), danger: true }
     );
     if (!ok) return;
     try {
       await api('/presets/' + item.id, { method: 'DELETE' });
-      PW.toast('Пре-сет удалён', 'success');
+      PW.toast(tr('presets.del.done'), 'success');
       after && after('deleted');
-    } catch (e) { PW.toast(e.message || 'Не удалось удалить', 'error'); }
+    } catch (e) { PW.toast(e.message || tr('presets.del.failed'), 'error'); }
   }
 
   async function unaddItem(item, after) {
-    const extra = item.type === 'command' ? ` Команда !${item.data.name} тоже удалится из твоих команд.` : ' Текущие настройки Конструктора не изменятся.';
-    const ok = await PW.confirm(`Убрать пре-сет «${item.name}» из добавленных?${extra}`,
-      { title: 'Убрать пре-сет?', okText: 'Да', cancelText: 'Нет', danger: true });
+    const extra = ' ' + (item.type === 'command' ? tr('presets.unaddCmd', { name: item.data.name }) : tr('presets.unaddStyle'));
+    const ok = await PW.confirm(tr('presets.unaddText', { name: item.name }) + extra,
+      { title: tr('presets.unaddTitle'), okText: tr('presets.yes'), cancelText: tr('presets.no'), danger: true });
     if (!ok) return;
     try {
       await api(`/presets/${item.id}/add`, { method: 'DELETE' });
-      PW.toast('Пре-сет убран', 'success');
+      PW.toast(tr('presets.unaddDone'), 'success');
       after && after('unadded');
-    } catch (e) { PW.toast(e.message || 'Не удалось убрать', 'error'); }
+    } catch (e) { PW.toast(e.message || tr('presets.unaddFailed'), 'error'); }
   }
 
   const trash = (item, after) => (item.canDelete ? deleteItem(item, after) : unaddItem(item, after));
@@ -151,13 +151,13 @@
 
     const name = el('input');
     name.maxLength = 40;
-    name.placeholder = 'Название (обязательно), например: Неоновая лента';
+    name.placeholder = tr('presets.pub.namePh');
     const desc = el('textarea');
     desc.rows = 3;
     desc.maxLength = 200;
-    desc.placeholder = 'Описание (необязательно, до 200 символов)';
+    desc.placeholder = tr('presets.pub.descPh');
     const err = el('p', 'ctor-error hidden');
-    const submit = el('button', 'auth-submit', 'Опубликовать');
+    const submit = el('button', 'auth-submit', tr('presets.pub.submit'));
     submit.type = 'button';
 
     const typeRow = el('div', 'pst-seg');
@@ -167,7 +167,7 @@
 
     function drawTypeRow() {
       typeRow.replaceChildren();
-      [['style', 'Стиль чата'], ['command', 'Команда']].forEach(([k, label]) => {
+      [['style', tr('presets.pub.typeStyle')], ['command', tr('presets.typeCommand')]].forEach(([k, label]) => {
         const b = el('button', k === t ? 'active' : '', label);
         b.type = 'button';
         b.addEventListener('click', async () => { t = k; drawTypeRow(); await ensureCmds(); drawBody(); });
@@ -192,19 +192,19 @@
       err.classList.add('hidden');
       if (t === 'style') {
         body.append(
-          el('p', 'wb-hint', 'Будет опубликован стиль из Конструктора чата, который сейчас сохранён в этом браузере.'),
-          styleStage(currentStyle(), 'Стример')
+          el('p', 'wb-hint', tr('presets.pub.styleHint')),
+          styleStage(currentStyle(), tr('common.streamer'))
         );
         submit.disabled = false;
       } else if (!cmds.length) {
-        body.appendChild(el('p', 'wb-hint', 'У тебя пока нет команд. Создай команду в «Командах чата», потом опубликуй её.'));
+        body.appendChild(el('p', 'wb-hint', tr('presets.pub.noCmds')));
         submit.disabled = true;
       } else {
         const c = cmds[parseInt(select.value, 10) || 0];
         body.append(
-          el('div', 'auth-label', 'Какую команду опубликовать'),
+          el('div', 'auth-label', tr('presets.pub.whichCmd')),
           select,
-          el('p', 'wb-hint', 'Ответ: ' + c.response)
+          el('p', 'wb-hint', tr('presets.pub.response') + ' ' + c.response)
         );
         submit.disabled = false;
       }
@@ -222,19 +222,19 @@
       submit.disabled = true;
       try {
         await api('/presets', { method: 'POST', body: payload });
-        PW.toast('Пре-сет опубликован', 'success');
+        PW.toast(tr('presets.pub.done'), 'success');
         close();
         onDone && onDone();
       } catch (e) {
-        err.textContent = e.message || 'Не удалось опубликовать';
+        err.textContent = e.message || tr('presets.pub.failed');
         err.classList.remove('hidden');
         submit.disabled = false;
       }
     });
 
-    box.append(closeBtn, el('h3', null, 'Опубликовать пре-сет'));
+    box.append(closeBtn, el('h3', null, tr('presets.pub.title')));
     if (!type) box.appendChild(typeRow);
-    box.append(body, el('label', 'auth-label', 'Название'), name, el('label', 'auth-label', 'Описание'), desc, err, submit);
+    box.append(body, el('label', 'auth-label', tr('presets.pub.name')), name, el('label', 'auth-label', tr('presets.pub.desc')), desc, err, submit);
 
     drawTypeRow();
     await ensureCmds();

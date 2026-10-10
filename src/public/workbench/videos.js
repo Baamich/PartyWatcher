@@ -9,14 +9,14 @@ function escapeHtml(s) {
 }
 
 function fmt(d) {
-  return new Date(d).toLocaleString('ru-RU', {
+  return new Date(d).toLocaleString(I18N.locale, {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
 }
 
 function fmtDay(d) {
-  return new Date(d).toLocaleDateString('ru-RU', {
+  return new Date(d).toLocaleDateString(I18N.locale, {
     day: '2-digit', month: '2-digit', year: 'numeric',
   });
 }
@@ -77,9 +77,9 @@ async function confirmDelVod() {
 }
 
 function vodStatusLabel(v) {
-  if (v.status === 'recording') return '<span class="badge-rec">идёт запись</span>';
-  if (v.status === 'processing') return '<span class="badge-rec">сжимается…</span>';
-  if (v.published) return '<span class="badge-pub">на профиле</span>';
+  if (v.status === 'recording') return `<span class="badge-rec">${t('videos.status.recording')}</span>`;
+  if (v.status === 'processing') return `<span class="badge-rec">${t('videos.status.processing')}</span>`;
+  if (v.published) return `<span class="badge-pub">${t('videos.status.published')}</span>`;
   return '';
 }
 
@@ -91,9 +91,9 @@ function buildVodCard(v) {
 
   card.innerHTML = `
     <div class="vod-card-top">
-      <div class="vod-card-head">Запись стрима ${escapeHtml(fmtDay(v.createdAt))}<span class="vod-status-slot">${vodStatusLabel(v)}</span></div>
+      <div class="vod-card-head">${escapeHtml(t('videos.card.title', { date: fmtDay(v.createdAt) }))}<span class="vod-status-slot">${vodStatusLabel(v)}</span></div>
       <div class="vod-meta">${escapeHtml(fmt(v.createdAt))} — ${escapeHtml(fmt(v.expiresAt))}
-        <span class="vod-meta-note">(после срока удалится, в том числе с профиля)</span>
+        <span class="vod-meta-note">${t('videos.card.expiryNote')}</span>
       </div>
     </div>
     <div class="vod-card-body">
@@ -101,25 +101,25 @@ function buildVodCard(v) {
         <div class="vod-media">
           ${v.url
             ? `<video src="${v.url}" controls preload="metadata"></video>`
-            : '<div class="vod-pending">Файл ещё пишется…</div>'}
+            : `<div class="vod-pending">${t('videos.card.pending')}</div>`}
         </div>
         <div class="vod-meta-fields">
           <div class="vod-field">
-            <span class="vod-field-label">Название</span>
+            <span class="vod-field-label">${t('videos.name')}</span>
             <span class="vod-field-val">${escapeHtml(v.title || '—')}</span>
           </div>
           <div class="vod-field">
-            <span class="vod-field-label">Описание</span>
+            <span class="vod-field-label">${t('videos.desc')}</span>
             <span class="vod-field-val">${escapeHtml(v.description || '—')}</span>
           </div>
         </div>
       </div>
       <div class="vod-side-actions">
         <button type="button" class="icon-btn" data-pub ${v.status !== 'ready' ? 'disabled' : ''}>
-          ${v.published ? 'Снять с профиля' : 'Опубликовать'}
+          ${v.published ? t('videos.unpublish') : t('videos.publish')}
         </button>
-        <button type="button" class="icon-btn" data-edit>Редактировать</button>
-        <button type="button" class="icon-btn vod-btn-danger" data-del>Удалить</button>
+        <button type="button" class="icon-btn" data-edit>${t('videos.edit')}</button>
+        <button type="button" class="icon-btn vod-btn-danger" data-del>${t('common.delete')}</button>
       </div>
     </div>
   `;
@@ -144,7 +144,7 @@ function patchVodCard(card, v) {
     const pubBtn = card.querySelector('[data-pub]');
     if (pubBtn && v.status === 'ready') {
       pubBtn.disabled = false;
-      pubBtn.textContent = v.published ? 'Снять с профиля' : 'Опубликовать';
+      pubBtn.textContent = v.published ? t('videos.unpublish') : t('videos.publish');
     }
     return;
   }
@@ -162,7 +162,7 @@ function patchVodCard(card, v) {
   if (pubBtn) {
     pubBtn.disabled = v.status !== 'ready';
     if (v.status === 'ready') {
-      pubBtn.textContent = v.published ? 'Снять с профиля' : 'Опубликовать';
+      pubBtn.textContent = v.published ? t('videos.unpublish') : t('videos.publish');
     }
   }
 }
@@ -178,7 +178,7 @@ async function loadVods({ silent = false } = {}) {
   }
 
   if (!vods.length) {
-    if (!silent) list.innerHTML = '<p class="wb-subpage-hint">Записей пока нет — они появятся после эфира.</p>';
+    if (!silent) list.innerHTML = `<p class="wb-subpage-hint">${t('videos.empty')}</p>`;
     return;
   }
 

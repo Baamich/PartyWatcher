@@ -1,0 +1,134 @@
+<h1>Chat styling</h1>
+<p class="docs-lead">How to change the look of the chat in OBS: colors, font, background, size. There are two ways: a simple one (via the link) and a flexible one (via your own CSS).</p>
+
+<div class="docs-note">
+  <p>Easier without code: open the <a href="#constructor-chat">Chat builder</a>, everything is set up with the mouse there and the link is built automatically.</p>
+</div>
+
+<h2>Way 1. Parameters in the link (the simplest)</h2>
+<p>Take the OBS link (the “OBS link” button in the “Chat API” block) and append the parameters you need to its end. Each parameter starts with <code>&amp;</code>. Then paste the link into the OBS source: right-click the source → <b>Properties</b> → the <b>URL</b> field.</p>
+
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Append</th><th>What it does</th></tr>
+  <tr><td><code>&amp;size=30</code></td><td>Text size, a number from 10 to 80. Default: 22.</td></tr>
+  <tr><td><code>&amp;font=Arial</code></td><td>Font. Any font installed on your computer works. Write spaces as they are: <code>&amp;font=Comic Sans MS</code>.</td></tr>
+  <tr><td><code>&amp;color=ffe066</code></td><td>Text color. 6 color characters <b>without the hash</b>.</td></tr>
+  <tr><td><code>&amp;bg=000000</code></td><td>Background color under each message (black). Without the hash.</td></tr>
+  <tr><td><code>&amp;bgalpha=55</code></td><td>Background opacity: 0 — invisible, 100 — solid. If <code>bg</code> is given and <code>bgalpha</code> is not, it is 60.</td></tr>
+  <tr><td><code>&amp;owner=7c3aed</code></td><td>Color of the plate on your nickname (red by default). Without the hash.</td></tr>
+  <tr><td><code>&amp;shadow=0</code></td><td>Remove the text shadow.</td></tr>
+  <tr><td><code>&amp;fade=40</code></td><td>A message disappears after 40 seconds. 0 — never disappears.</td></tr>
+  <tr><td><code>&amp;max=15</code></td><td>How many messages to keep on screen (5 to 100).</td></tr>
+  <tr><td><code>&amp;layout=bar</code></td><td>View: <code>bar</code> — a flat bar with one message, <code>row</code> — a single-line ribbon.</td></tr>
+  <tr><td><code>&amp;valign=top</code></td><td>Stick the chat to the top of the screen.</td></tr>
+  <tr><td><code>&amp;align=center</code></td><td>Alignment: <code>center</code> or <code>right</code>.</td></tr>
+  <tr><td><code>&amp;maxw=70</code>, <code>&amp;opacity=80</code></td><td>Max message width and chat opacity, in percent.</td></tr>
+  <tr><td><code>&amp;weight=700</code>, <code>&amp;italic=1</code></td><td>Weight (400, 500, 700, 800) and italic text.</td></tr>
+  <tr><td><code>&amp;ls=1</code>, <code>&amp;lh=150</code></td><td>Letter spacing in pixels and line height in percent.</td></tr>
+  <tr><td><code>&amp;stroke=000000&amp;strokew=3</code></td><td>Letter outline: color and width (1–6).</td></tr>
+  <tr><td><code>&amp;bg2=7c3aed</code></td><td>Second background color: the background becomes a gradient (needs <code>bg</code>).</td></tr>
+  <tr><td><code>&amp;blur=12</code></td><td>Blur under the plate (needs <code>bg</code>).</td></tr>
+  <tr><td><code>&amp;radius=12</code>, <code>&amp;pad=12</code>, <code>&amp;gap=8</code></td><td>Corner radius, inner padding, space between messages.</td></tr>
+  <tr><td><code>&amp;bc=ffffff&amp;bw=2</code></td><td>Border: color and width.</td></tr>
+  <tr><td><code>&amp;stripe=7c3aed&amp;stripew=5</code></td><td>Colored stripe on the left: color and width.</td></tr>
+  <tr><td><code>&amp;glow=a855f7&amp;glows=14</code></td><td>Glow around a message: color and strength.</td></tr>
+  <tr><td><code>&amp;nickmode=auto</code></td><td>Colorful viewer nicknames (like on the site).</td></tr>
+  <tr><td><code>&amp;nickplate=1</code>, <code>&amp;ncaps=1</code>, <code>&amp;src=0</code></td><td>Nickname on a colored plate, NICKNAMES IN CAPS, hide the BOT and TWITCH labels.</td></tr>
+  <tr><td><code>&amp;anim=pop</code></td><td>Appear animation: <code>pop</code>, <code>fade</code> or <code>none</code>.</td></tr>
+</table>
+</div>
+
+<div class="docs-note">
+  <p><b>Where to get a color.</b> Open any “color picker” in the browser, choose a color and copy its code like <code>#ffe066</code>. Write it in the link without the <code>#</code> sign: <code>ffe066</code>.</p>
+</div>
+
+<p>Example of a ready link (replace the key with yours):</p>
+<pre><code>https://partywatcher.de/overlay/chat.html#key=pwc_...&amp;size=28&amp;color=ffe066&amp;bg=000000&amp;bgalpha=55&amp;owner=7c3aed&amp;fade=40</code></pre>
+
+<h2>Way 2. Your own CSS (for those who want more)</h2>
+<p>CSS is “styling rules”. OBS has a special field for them.</p>
+<ol>
+  <li>In OBS right-click the chat source → <b>Properties</b>.</li>
+  <li>Find the <b>Custom CSS</b> field. There is already something in it, <b>don't delete it</b>.</li>
+  <li>Add your rules <b>at the end</b> (on a new line).</li>
+  <li>Click <b>OK</b>. If the look didn't change, open Properties again and click <b>“Refresh cache of current page”</b>.</li>
+</ol>
+
+<h3>What the chat consists of (names you can change)</h3>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Name</th><th>What it is</th></tr>
+  <tr><td><code>#chat</code></td><td>The whole list of messages</td></tr>
+  <tr><td><code>.msg</code></td><td>One whole message (nickname and text)</td></tr>
+  <tr><td><code>.nick</code></td><td>Nickname</td></tr>
+  <tr><td><code>.nick--owner</code></td><td>The channel owner's nickname (with a plate)</td></tr>
+  <tr><td><code>.sep</code></td><td>The colon after the nickname</td></tr>
+  <tr><td><code>.text</code></td><td>Message text</td></tr>
+  <tr><td><code>.src</code></td><td>Source label, for example TWITCH or BOT</td></tr>
+</table>
+</div>
+
+<h3>Variables: the simplest way in CSS</h3>
+<p>You can change one “setting” instead of a whole rule:</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Variable</th><th>What it changes</th></tr>
+  <tr><td><code>--fs</code></td><td>Text size, for example <code>30px</code></td></tr>
+  <tr><td><code>--font</code></td><td>Font, for example <code>"Impact", sans-serif</code></td></tr>
+  <tr><td><code>--text</code></td><td>Text color</td></tr>
+  <tr><td><code>--msg-bg</code></td><td>Message background, for example <code>rgba(0, 0, 0, 0.5)</code></td></tr>
+  <tr><td><code>--owner-bg</code></td><td>Color of the owner's nickname plate</td></tr>
+  <tr><td><code>--text-shadow</code></td><td>Text shadow (<code>none</code> — no shadow)</td></tr>
+  <tr><td><code>--gap</code></td><td>Space between messages, for example <code>12px</code></td></tr>
+</table>
+</div>
+<pre><code>:root {
+  --fs: 30px;
+  --text: #ffe066;
+  --msg-bg: rgba(0, 0, 0, 0.5);
+}</code></pre>
+
+<h3>Ready recipes (copy and paste)</h3>
+
+<p><b>Dark “plates” under messages:</b></p>
+<pre><code>.msg {
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  padding: 4px 12px;
+}</code></pre>
+
+<p><b>Remove the TWITCH / BOT labels:</b></p>
+<pre><code>.src { display: none; }</code></pre>
+
+<p><b>Show only the text, without nicknames:</b></p>
+<pre><code>.nick, .sep { display: none; }</code></pre>
+
+<p><b>Bigger, colored nickname:</b></p>
+<pre><code>.nick {
+  color: #ffd166 !important;
+  font-size: 1.15em;
+}</code></pre>
+
+<p><b>A 500-pixel-wide chat, stuck to the right:</b></p>
+<pre><code>#chat {
+  left: auto;
+  width: 500px;
+}</code></pre>
+
+<p><b>Align messages to the right edge:</b></p>
+<pre><code>.msg {
+  align-self: flex-end;
+  text-align: right;
+}</code></pre>
+
+<p><b>More air between messages:</b></p>
+<pre><code>:root { --gap: 14px; }</code></pre>
+
+<div class="docs-note">
+  <p><b>If a rule didn't work</b>, add <code>!important</code> at its end before the semicolon, for example <code>color: red !important;</code>.</p>
+  <p><b>About fonts.</b> Only fonts already installed on the computer with OBS work. Downloading a new font and installing it in Windows takes a minute, then restart OBS.</p>
+  <p><b>Link and CSS together.</b> If a parameter is given in the link (for example, <code>size</code>), it wins over <code>--fs</code> in CSS. Use one of them for each setting.</p>
+</div>
+
+<p>Next: <a href="#chat-reference">API reference</a>.</p>

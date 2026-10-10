@@ -1,6 +1,6 @@
 // index.js (playerCapture)
 
-import { showEpisodeControls, hideEpisodeControls } from './controls.js';
+import { showEpisodeControls, hideEpisodeControls } from './controls.js?v=2';
 
 const HLS_CONFIG = {
   enableWorker: true,
@@ -78,7 +78,7 @@ function makeReloader(ctx) {
   const { container, videoUrl, isOwner } = ctx;
   return async (episode, playerLabel, season) => {
     try { ctx.current?.destroy?.(); } catch (_) {}
-    showLoading(container, `Загружаем${playerLabel ? ` «${playerLabel}»` : ` серию ${episode}`}...`);
+    showLoading(container, playerLabel ? t('capture.loadingPlayer', { name: playerLabel }) : t('capture.loadingEpisode', { n: episode }));
 
     let data;
     try {
@@ -99,7 +99,7 @@ function makeReloader(ctx) {
       player = renderPlayerIframe(data.playerIframes[0], meta, { isOwner, container, videoUrl });
     } else {
       player = renderFallback(videoUrl, meta, {
-        isOwner, container, videoUrl, errorMessage: data.error || data.message || 'Не удалось загрузить',
+        isOwner, container, videoUrl, errorMessage: data.error || data.message || t('capture.loadFailed'),
       });
     }
     if (typeof window.__onCapturePlayerReload === 'function') window.__onCapturePlayerReload(player);
@@ -121,7 +121,7 @@ function setupControls(meta, ctx, streamsList, switchQuality) {
 }
 
 export async function renderPlayerCapture(video, { isOwner, container }) {
-  showLoading(container, 'Ищем видеопоток...');
+  showLoading(container, t('capture.searching'));
 
   const meta = video.meta || {};
   const season = meta.currentSeason || null;
@@ -148,7 +148,7 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
         tried.add(label);
 
         console.log('[playerCapture] нет streams, пробую плеер:', label);
-        showLoading(container, `Пробуем плеер «${label}»...`);
+        showLoading(container, t('capture.tryingPlayer', { name: label }));
 
         const next = await requestExtract({ url: video.url, season, episode, player: label });
         console.log('[playerCapture] extract result (player:', label, '):', next);
@@ -179,7 +179,7 @@ export async function renderPlayerCapture(video, { isOwner, container }) {
     return renderFallback(video.url, m, {
       isOwner,
       container,
-      errorMessage: data.error || data.message || 'Не удалось найти плеер',
+      errorMessage: data.error || data.message || t('capture.playerNotFound'),
       videoUrl: video.url,
     });
   } catch (e) {
@@ -225,7 +225,7 @@ function loadScriptOnce(src) {
     s.onload = () => resolve();
     s.onerror = () => {
       s.remove();
-      reject(new Error('Не удалось загрузить ' + src));
+      reject(new Error(t('capture.scriptFailed', { src })));
     };
     document.head.appendChild(s);
   });
@@ -610,7 +610,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
 
 export function renderFromStreams(streams, meta, { isOwner, container, videoUrl }) {
   if (!streams?.length) {
-    return renderFallback(videoUrl || '', meta || {}, { isOwner, container, errorMessage: 'Нет потоков', videoUrl });
+    return renderFallback(videoUrl || '', meta || {}, { isOwner, container, errorMessage: t('capture.noStreams'), videoUrl });
   }
   const best = pickBestStream(streams);
   const m = { ...(meta || {}), currentQuality: best?.quality || null };
@@ -631,13 +631,12 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
       background:#111;
     ">
       <div style="font-size:48px; margin-bottom:16px;">🎬</div>
-      <h3 style="margin:0 0 8px;">Не удалось встроить плеер</h3>
+      <h3 style="margin:0 0 8px;">${escHtml(t('capture.embedFailed'))}</h3>
       <p style="opacity:0.7; margin:0 0 12px; max-width:420px; line-height:1.5;">
-        ${escHtml(errorMessage || 'Сайт использует сильную защиту')}
+        ${escHtml(errorMessage || t('capture.strongProtection'))}
       </p>
       <p style="opacity:0.5; font-size:13px; max-width:420px;">
-        Если есть выбор плеера (например «4К Качество») — переключи его справа<br>
-        и подожди повторной загрузки.
+        ${t('capture.switchPlayerHint')}
       </p>
     </div>
   `;

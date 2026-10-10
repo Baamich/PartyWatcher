@@ -38,6 +38,7 @@ const CHAT_ROUTES =  require('./routes/chat');
 const NEWS_ROUTES = require('./routes/news');
 const securityHeaders = require('./middleware/securityHeaders');
 const cspRoutes = require('./routes/csp.routes');
+const i18n = require('./services/i18n');
 
 async function start() {
   await connectDB();
@@ -69,6 +70,12 @@ async function start() {
   app.use('/api/streamers', express.json({ limit: '15mb' })); // аватар, баннер, макет
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
+  app.use(i18n.middleware); // req.lang и req.t для сообщений API
+  app.get('/locales/:lang.js', i18n.bundle); // словари для браузера (src/locales)
+  // страницы документации студии: src/locales/<язык>/docs/*.html
+  for (const lang of i18n.LANGS) {
+    app.use(`/locales/${lang}/docs`, express.static(path.join(i18n.LOCALES_DIR, lang, 'docs'), { index: false }));
+  }
 
   // API не должно кэшироваться ни браузером, ни Cloudflare — иначе статус isLive/чат зависают на старом значении
   app.use('/api', (req, res, next) => {
@@ -168,10 +175,11 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
   // единый обработчик ошибок — ПОСЛЕДНИМ в цепочке
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
-    if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Слишком большой запрос' });
-    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Некорректный JSON' });
+    const tr = req.t || ((k) => i18n.t(i18n.DEFAULT_LANG, k));
+    if (err.type === 'entity.too.large') return res.status(413).json({ error: tr('server.tooLarge') });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: tr('server.badJson') });
     console.error('[error]', req.method, req.originalUrl, err);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    res.status(500).json({ error: tr('server.serverError') });
   });
 
   server.listen(config.port, () => {

@@ -5,6 +5,7 @@ const { verifyToken } = require('../middleware/auth');
 const Room = require('../models/Room');
 const ChatMessage = require('../models/ChatMessage');
 const SupportTicket = require('../models/SupportTicket');
+const i18n = require('../services/i18n');
 
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
 if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
@@ -76,12 +77,13 @@ function registerRoomSocket(io) {
     const token =
       socket.handshake.auth?.token ||
       socket.handshake.headers?.cookie?.match(/(?:^|;\s*)token=([^;]+)/)?.[1];
-    if (!token) return next(new Error('Не авторизован'));
+    socket.data.lang = i18n.langFromHeaders(socket.handshake.headers); // язык сообщений этому сокету
+    if (!token) return next(new Error(i18n.t(socket.data.lang, 'server.notAuthorized')));
     try {
       socket.user = await verifyToken(token); // заодно отсекает токены, отозванные сменой пароля
       next();
     } catch {
-      next(new Error('Невалидный токен'));
+      next(new Error(i18n.t(socket.data.lang, 'server.badToken')));
     }
   });
 
@@ -132,10 +134,10 @@ function registerRoomSocket(io) {
       // Только строка из 6 символов. Объект вроде { $regex: '^a' } иначе позволил бы перебором
       // «угадать» чужую приватную комнату и прочитать её чат и ссылку на видео.
       if (typeof code !== 'string' || !ROOM_CODE_RE.test(code)) {
-        return socket.emit('room:error', { error: 'Комната не найдена' });
+        return socket.emit('room:error', { error: i18n.t(socket.data.lang, 'server.room.notFound') });
       }
       const room = await Room.findOne({ code });
-      if (!room) return socket.emit('room:error', { error: 'Комната не найдена' });
+      if (!room) return socket.emit('room:error', { error: i18n.t(socket.data.lang, 'server.room.notFound') });
 
       const isBanned = room.bannedUsers.some((id) => String(id) === String(socket.user.id));
       if (isBanned) return socket.emit('room:banned');
@@ -267,7 +269,7 @@ function registerRoomSocket(io) {
         streams,
         playerIframes: playerIframes || [],
         meta: meta || {},
-        message: `Найдено потоков: ${streams.length}`,
+        message: i18n.t(socket.data.lang, 'server.capture.foundStreams', { n: streams.length }),
       }, seasonNum);
 
       const room = await Room.findOne({ code }).select('video.meta playback').lean();

@@ -27,7 +27,7 @@ function isCurrentlyLive(streamKey) {
 
 async function requireStreamer(req, res, next) {
   const me = await User.findById(req.user.id);
-  if (!me || !me.streamerName) return res.status(403).json({ error: 'У тебя ещё нет профиля стримера' });
+  if (!me || !me.streamerName) return res.status(403).json({ error: req.t('server.presets.noStreamer') });
   req.streamerUser = me;
   next();
 }
@@ -89,7 +89,7 @@ router.post('/stream-key/generate', auth, requireStreamer, async (req, res) => {
 
 // POST /workbench/stream-key/reveal — получить полный ключ для копирования
 router.post('/stream-key/reveal', auth, requireStreamer, async (req, res) => {
-  if (!req.streamerUser.streamKey) return res.status(404).json({ error: 'Ключ ещё не создан' });
+  if (!req.streamerUser.streamKey) return res.status(404).json({ error: req.t('server.wb.noKey') });
   res.json({ streamKey: req.streamerUser.streamKey });
 });
 
@@ -97,11 +97,11 @@ router.post('/stream-key/reveal', auth, requireStreamer, async (req, res) => {
 router.patch('/settings', auth, requireStreamer, async (req, res) => {
   const { streamTitle, streamDescription } = req.body;
   if (streamTitle !== undefined) {
-    if (String(streamTitle).length > 140) return res.status(400).json({ error: 'Название слишком длинное (максимум 140 символов)' });
+    if (String(streamTitle).length > 140) return res.status(400).json({ error: req.t('server.wb.titleLong') });
     req.streamerUser.streamTitle = String(streamTitle).trim();
   }
   if (streamDescription !== undefined) {
-    if (String(streamDescription).length > 2000) return res.status(400).json({ error: 'Описание слишком длинное (максимум 2000 символов)' });
+    if (String(streamDescription).length > 2000) return res.status(400).json({ error: req.t('server.streamers.bioLong') });
     req.streamerUser.streamDescription = String(streamDescription).trim();
   }
   await req.streamerUser.save();
@@ -118,7 +118,7 @@ router.get('/bans', auth, requireStreamer, async (req, res) => {
 
 // DELETE /workbench/bans/:userId — разблокировать
 router.delete('/bans/:userId', auth, requireStreamer, async (req, res) => {
-  if (!/^[a-f0-9]{24}$/i.test(req.params.userId)) return res.status(400).json({ error: 'Некорректный id' });
+  if (!/^[a-f0-9]{24}$/i.test(req.params.userId)) return res.status(400).json({ error: req.t('server.badId') });
   await ChannelBan.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
   chatBus.emitToUser(req.streamerUser.streamerNameLower, req.params.userId, 'chat:restriction', { type: 'none' });
   res.json({ status: 'ok' });
@@ -134,7 +134,7 @@ router.get('/layout', auth, requireStreamer, async (req, res) => {
 router.put('/layout', auth, requireStreamer, async (req, res) => {
   const { panels } = req.body;
   if (panels !== null && typeof panels !== 'object') {
-    return res.status(400).json({ error: 'Некорректный формат расположения' });
+    return res.status(400).json({ error: req.t('server.wb.badLayout') });
   }
   await WorkbenchLayout.findOneAndUpdate(
     { userId: req.streamerUser._id },
@@ -182,7 +182,7 @@ router.get('/vods', auth, requireStreamer, async (req, res) => {
 // PATCH /workbench/vods/:id
 router.patch('/vods/:id', auth, requireStreamer, async (req, res) => {
   const vod = await StreamVod.findOne({ _id: req.params.id, userId: req.streamerUser._id });
-  if (!vod) return res.status(404).json({ error: 'Не найдено' });
+  if (!vod) return res.status(404).json({ error: req.t('server.notFound') });
   if (req.body.title !== undefined) vod.title = String(req.body.title).slice(0, 140);
   if (req.body.description !== undefined) vod.description = String(req.body.description).slice(0, 2000);
   if (req.body.published !== undefined) vod.published = !!req.body.published;
@@ -193,7 +193,7 @@ router.patch('/vods/:id', auth, requireStreamer, async (req, res) => {
 // DELETE /workbench/vods/:id
 router.delete('/vods/:id', auth, requireStreamer, async (req, res) => {
   const vod = await StreamVod.findOne({ _id: req.params.id, userId: req.streamerUser._id });
-  if (!vod) return res.status(404).json({ error: 'Не найдено' });
+  if (!vod) return res.status(404).json({ error: req.t('server.notFound') });
   try {
     fs.unlinkSync(path.join(process.cwd(), 'media', vod.fileRel));
   } catch (_) {}
@@ -211,7 +211,7 @@ router.post('/chat-key/generate', auth, requireStreamer, async (req, res) => {
 
 // POST /workbench/chat-key/reveal — получить полный ключ для копирования
 router.post('/chat-key/reveal', auth, requireStreamer, async (req, res) => {
-  if (!req.streamerUser.chatApiKey) return res.status(404).json({ error: 'Ключ чата ещё не создан' });
+  if (!req.streamerUser.chatApiKey) return res.status(404).json({ error: req.t('server.wb.noChatKey') });
   res.json({ chatApiKey: req.streamerUser.chatApiKey });
 });
 
@@ -231,18 +231,19 @@ router.get('/commands', auth, requireStreamer, async (req, res) => {
 
 // POST /workbench/commands/preview — как ответил бы на такое сообщение (для конструктора)
 router.post('/commands/preview', auth, requireStreamer, (req, res) => {
-  const name = cleanCommandName(req.body?.name) || 'команда';
+  const name = cleanCommandName(req.body?.name) || req.t('server.cmd.placeholderName');
   const argsRes = parseArgsInput(req.body?.args);
-  if (argsRes.error) return res.json({ text: '⚠ ' + argsRes.error, usage: false });
+  if (argsRes.error) return res.json({ text: '⚠ ' + req.t(argsRes.error, argsRes.vars), usage: false });
   const response = String(req.body?.response ?? '').slice(0, 400);
   const parsed = parseCommandLine(req.body?.line) || { name, argv: [] };
   const out = buildReply({ name, args: argsRes.args, response }, parsed.argv, {
     user: 'Viewer1',
     streamer: req.streamerUser.streamerName,
-    title: req.streamerUser.streamTitle || 'Играем с друзьями',
+    title: req.streamerUser.streamTitle || req.t('server.cmd.sampleTitle'),
     viewers: 12,
-    uptime: '1ч 05м',
+    uptime: req.t('server.cmd.uptimeHM', { h: 1, m: '05' }),
     count: 7,
+    lang: req.lang,
   });
   res.json(out);
 });
@@ -254,43 +255,43 @@ router.post('/commands', auth, requireStreamer, async (req, res) => {
   const response = String(req.body?.response ?? '').trim();
   const argsRes = parseArgsInput(req.body?.args);
 
-  if (!COMMAND_NAME_RE.test(name)) return res.status(400).json({ error: 'Команда: 1–20 символов, буквы, цифры и _' });
-  if (argsRes.error) return res.status(400).json({ error: argsRes.error });
-  if (!response) return res.status(400).json({ error: 'Напиши, что должен ответить бот' });
-  if (response.length > 400) return res.status(400).json({ error: 'Ответ слишком длинный (максимум 400 символов)' });
+  if (!COMMAND_NAME_RE.test(name)) return res.status(400).json({ error: req.t('server.presets.cmdName') });
+  if (argsRes.error) return res.status(400).json({ error: req.t(argsRes.error, argsRes.vars) });
+  if (!response) return res.status(400).json({ error: req.t('server.wb.needResponse') });
+  if (response.length > 400) return res.status(400).json({ error: req.t('server.wb.responseLong') });
   if ((await ChatCommand.countDocuments({ streamerNameLower: nameLower })) >= MAX_COMMANDS) {
-    return res.status(400).json({ error: `Можно создать не больше ${MAX_COMMANDS} команд` });
+    return res.status(400).json({ error: req.t('server.wb.maxCommands', { n: MAX_COMMANDS }) });
   }
 
   try {
     const cmd = await ChatCommand.create({ streamerNameLower: nameLower, name, response, args: argsRes.args });
     res.status(201).json(cmd);
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ error: 'Такая команда уже есть' });
+    if (err.code === 11000) return res.status(409).json({ error: req.t('server.wb.cmdExists') });
     throw err;
   }
 });
 
 // PATCH /workbench/commands/:id { name?, response?, args?, enabled? }
 router.patch('/commands/:id', auth, requireStreamer, async (req, res) => {
-  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Некорректный id' });
+  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
   const cmd = await ChatCommand.findOne({ _id: req.params.id, streamerNameLower: req.streamerUser.streamerNameLower });
-  if (!cmd) return res.status(404).json({ error: 'Команда не найдена' });
+  if (!cmd) return res.status(404).json({ error: req.t('server.wb.cmdNotFound') });
 
   if (req.body?.name !== undefined) {
     const name = cleanCommandName(req.body.name);
-    if (!COMMAND_NAME_RE.test(name)) return res.status(400).json({ error: 'Команда: 1–20 символов, буквы, цифры и _' });
+    if (!COMMAND_NAME_RE.test(name)) return res.status(400).json({ error: req.t('server.presets.cmdName') });
     cmd.name = name;
   }
   if (req.body?.response !== undefined) {
     const response = String(req.body.response).trim();
-    if (!response) return res.status(400).json({ error: 'Напиши, что должен ответить бот' });
-    if (response.length > 400) return res.status(400).json({ error: 'Ответ слишком длинный (максимум 400 символов)' });
+    if (!response) return res.status(400).json({ error: req.t('server.wb.needResponse') });
+    if (response.length > 400) return res.status(400).json({ error: req.t('server.wb.responseLong') });
     cmd.response = response;
   }
   if (req.body?.args !== undefined) {
     const argsRes = parseArgsInput(req.body.args);
-    if (argsRes.error) return res.status(400).json({ error: argsRes.error });
+    if (argsRes.error) return res.status(400).json({ error: req.t(argsRes.error, argsRes.vars) });
     cmd.args = argsRes.args;
   }
   if (req.body?.enabled !== undefined) cmd.enabled = !!req.body.enabled;
@@ -299,14 +300,14 @@ router.patch('/commands/:id', auth, requireStreamer, async (req, res) => {
     await cmd.save();
     res.json(cmd);
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ error: 'Такая команда уже есть' });
+    if (err.code === 11000) return res.status(409).json({ error: req.t('server.wb.cmdExists') });
     throw err;
   }
 });
 
 // DELETE /workbench/commands/:id
 router.delete('/commands/:id', auth, requireStreamer, async (req, res) => {
-  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Некорректный id' });
+  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
   await ChatCommand.deleteOne({ _id: req.params.id, streamerNameLower: req.streamerUser.streamerNameLower });
   res.json({ ok: true });
 });

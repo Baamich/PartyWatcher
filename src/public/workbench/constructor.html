@@ -3,32 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/theme.js"></script>
+  <script src="/js/i18n.js?v=2" data-ns="workbench,constructor,presets"></script>
+  <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/css/common.css?v=2" />
   <link rel="stylesheet" href="/workbench/workbench.css" />
   <link rel="stylesheet" href="/workbench/constructor.css" />
   <link rel="stylesheet" href="/workbench/presets.css" />
-  <title>PartyWatcher — Конструктор</title>
+  <title data-i18n="constructor.pageTitle">PartyWatcher — Конструктор</title>
 </head>
 <body>
   <div class="page-header">
-    <a href="/streams.html" class="brand">
-      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
-        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span class="brand-stack">
-        <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
-        <span class="brand-live-tag">LIVE</span>
-      </span>
-    </a>
+    <div class="brand-row">
+      <a href="/streams.html" class="brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="brand-stack">
+          <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+          <span class="brand-live-tag">LIVE</span>
+        </span>
+      </a>
+      <div data-lang-switch></div>
+    </div>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" data-click="goProfile">← Профиль</button>
-        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+        <button class="icon-btn" data-click="goProfile" data-i18n="workbench.profile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
       </div>
     </div>
   </div>
@@ -37,67 +41,67 @@
     <div class="wb-subpage ctor-layout">
       
       <nav class="wb-nav wb-nav-static">
-        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
-        <button type="button" class="wb-nav-btn active">🧩 Конструктор</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html">🎨 Пре-сеты</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html" data-i18n="workbench.nav.news">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html" data-i18n="workbench.nav.stream">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html" data-i18n="workbench.nav.videos">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html" data-i18n="workbench.nav.activity">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn active" data-i18n="workbench.nav.constructor">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html" data-i18n="workbench.nav.presets">🎨 Пре-сеты</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html" data-i18n="workbench.nav.docs">📚 Документация</button>
       </nav>
 
 
       <main class="wb-subpage-main ctor-main">
         <section id="ctorChat" class="ctor-panel">
-          <h1 class="wb-subpage-title">🧩 Конструктор чата</h1>
-          <p class="wb-subpage-hint">Настрой вид чата и скопируй готовую ссылку для OBS. Ключ чата подставится сам.</p>
-          <h3 class="ctor-group">Готовые стили</h3>
+          <h1 class="wb-subpage-title" data-i18n="constructor.chatTitle">🧩 Конструктор чата</h1>
+          <p class="wb-subpage-hint" data-i18n="constructor.chatHint">Настрой вид чата и скопируй готовую ссылку для OBS. Ключ чата подставится сам.</p>
+          <h3 class="ctor-group" data-i18n="constructor.readyStyles">Готовые стили</h3>
           <div id="ctorPresets" class="ctor-presets"></div>
           <div id="ctorFields"></div>
-          <button type="button" class="icon-btn ctor-reset" data-click="resetChat">↺ Сбросить настройки</button>
-          <h3 class="ctor-group">Ваши пре-сеты</h3>
+          <button type="button" class="icon-btn ctor-reset" data-click="resetChat" data-i18n="constructor.resetSettings">↺ Сбросить настройки</button>
+          <h3 class="ctor-group" data-i18n="constructor.myPresets">Ваши пре-сеты</h3>
           <div id="ctorMyStyles" class="pst-grid"></div>
         </section>
 
         <section id="ctorCmds" class="ctor-panel hidden">
           <div class="ctor-cmds-head">
             <div>
-              <h1 class="wb-subpage-title">🤖 Команды чата</h1>
-              <p class="wb-subpage-hint">Зритель пишет <code>!команда</code>, бот отвечает в чат.</p>
+              <h1 class="wb-subpage-title" data-i18n="constructor.cmdsTitle">🤖 Команды чата</h1>
+              <p class="wb-subpage-hint" data-i18n-html="constructor.cmdsHint">Зритель пишет <code>!команда</code>, бот отвечает в чат.</p>
             </div>
             <div class="ctor-cmds-btns">
-              <button type="button" class="icon-btn" data-click="publishCmdPreset">📤 Опубликовать пре-сет</button>
-              <button type="button" data-click="openCmdModal">＋ Создать</button>
+              <button type="button" class="icon-btn" data-click="publishCmdPreset" data-i18n="constructor.publishPreset">📤 Опубликовать пре-сет</button>
+              <button type="button" data-click="openCmdModal" data-i18n="constructor.createPlus">＋ Создать</button>
             </div>
           </div>
           <div id="cmdTable" class="cmd-table-wrap hidden">
             <table class="cmd-table">
               <thead>
-                <tr><th></th><th>Команда</th><th>Ответ</th><th>Исп.</th><th>Вкл.</th><th></th></tr>
+                <tr><th></th><th data-i18n="constructor.th.cmd">Команда</th><th data-i18n="constructor.th.resp">Ответ</th><th data-i18n="constructor.th.uses">Исп.</th><th data-i18n="constructor.th.on">Вкл.</th><th></th></tr>
               </thead>
               <tbody id="cmdList"></tbody>
             </table>
           </div>
-          <p id="cmdEmpty" class="wb-subpage-hint">Команд пока нет. Нажми «＋ Создать».</p>
-          <h3 class="ctor-group">Ваши пре-сеты</h3>
+          <p id="cmdEmpty" class="wb-subpage-hint" data-i18n="constructor.cmdEmpty">Команд пока нет. Нажми «＋ Создать».</p>
+          <h3 class="ctor-group" data-i18n="constructor.myPresets">Ваши пре-сеты</h3>
           <div id="ctorMyCmds" class="pst-grid"></div>
         </section>
       </main>
 
       <aside class="ctor-side">
-        <h2>Предпросмотр</h2>
+        <h2 data-i18n="constructor.preview">Предпросмотр</h2>
         <div id="pvStage" class="ctor-stage"></div>
-        <button type="button" class="icon-btn ctor-replay" data-click="replayAnim">▶ Показать анимацию</button>
-        <p class="wb-hint">В предпросмотре сообщения не исчезают, в OBS они пропадут через выбранное время.</p>
-        <button type="button" id="ctorCopyBtn" class="auth-submit" data-click="copyObsLink">Скопировать ссылку для OBS 📋</button>
-        <p class="wb-hint">В ссылке лежит ключ чата. Не показывай её на стриме.</p>
-        <button type="button" id="ctorSaveBtn" class="icon-btn pst-save" data-click="publishStylePreset">💾 Сохранить как пре-сет</button>
+        <button type="button" class="icon-btn ctor-replay" data-click="replayAnim" data-i18n="constructor.replay">▶ Показать анимацию</button>
+        <p class="wb-hint" data-i18n="constructor.previewHint">В предпросмотре сообщения не исчезают, в OBS они пропадут через выбранное время.</p>
+        <button type="button" id="ctorCopyBtn" class="auth-submit" data-click="copyObsLink" data-i18n="constructor.copyObs">Скопировать ссылку для OBS 📋</button>
+        <p class="wb-hint" data-i18n="constructor.obsWarn">В ссылке лежит ключ чата. Не показывай её на стриме.</p>
+        <button type="button" id="ctorSaveBtn" class="icon-btn pst-save" data-click="publishStylePreset" data-i18n="constructor.saveAsPreset">💾 Сохранить как пре-сет</button>
       </aside>
 
       <aside class="ctor-picker">
-        <h2>Конструктор</h2>
-        <button type="button" class="ctor-pick active" data-mode="chat" data-click="pickCtor" data-arg="chat">💬 Чат</button>
-        <button type="button" class="ctor-pick" data-mode="cmds" data-click="pickCtor" data-arg="cmds">🤖 Команды</button>
+        <h2 data-i18n="constructor.picker">Конструктор</h2>
+        <button type="button" class="ctor-pick active" data-mode="chat" data-click="pickCtor" data-arg="chat" data-i18n="constructor.pickChat">💬 Чат</button>
+        <button type="button" class="ctor-pick" data-mode="cmds" data-click="pickCtor" data-arg="cmds" data-i18n="constructor.pickCmds">🤖 Команды</button>
       </aside>
 
     </div>
@@ -106,43 +110,43 @@
   <div id="cmdModal" class="modal hidden">
     <div class="modal-content cmd-modal">
       <button type="button" class="modal-close" data-click="closeCmdModal">×</button>
-      <h3 id="cmdModalTitle" style="margin:0 0 10px">Новая команда</h3>
+      <h3 id="cmdModalTitle" style="margin:0 0 10px" data-i18n="constructor.cmd.newTitle">Новая команда</h3>
 
-      <div class="auth-label">Быстрые заготовки</div>
+      <div class="auth-label" data-i18n="constructor.examples">Быстрые заготовки</div>
       <div id="cmdExamples" class="cmd-vars"></div>
 
-      <label class="auth-label" for="cmdName">Команда</label>
-      <div class="cmd-name-row"><span>!</span><input id="cmdName" maxlength="20" placeholder="рандом" autocomplete="off" /></div>
+      <label class="auth-label" for="cmdName" data-i18n="constructor.th.cmd">Команда</label>
+      <div class="cmd-name-row"><span>!</span><input id="cmdName" maxlength="20" placeholder="рандом" data-i18n-placeholder="constructor.ex.random.name" autocomplete="off" /></div>
 
-      <div class="auth-label">Аргументы: то, что зритель пишет после команды</div>
+      <div class="auth-label" data-i18n="constructor.argsLabel">Аргументы: то, что зритель пишет после команды</div>
       <div id="cmdArgs" class="cmd-vars"></div>
       <div class="cmd-arg-add">
-        <input id="cmdArgName" maxlength="15" placeholder="название, например число" autocomplete="off" />
-        <label class="cmd-arg-opt"><input type="checkbox" id="cmdArgOpt" /> необязательный</label>
-        <button type="button" class="icon-btn" data-click="addCmdArg">＋ Добавить</button>
+        <input id="cmdArgName" maxlength="15" placeholder="название, например число" data-i18n-placeholder="constructor.argPh" autocomplete="off" />
+        <label class="cmd-arg-opt"><input type="checkbox" id="cmdArgOpt" /> <span data-i18n="constructor.argOptional">необязательный</span></label>
+        <button type="button" class="icon-btn" data-click="addCmdArg" data-i18n="constructor.argAdd">＋ Добавить</button>
       </div>
       <p class="wb-hint" id="cmdUsage"></p>
 
-      <label class="auth-label" for="cmdResp">Что ответит бот</label>
-      <textarea id="cmdResp" rows="4" maxlength="400" placeholder="Случайное число до {число}: {random:{число}}"></textarea>
+      <label class="auth-label" for="cmdResp" data-i18n="constructor.respLabel">Что ответит бот</label>
+      <textarea id="cmdResp" rows="4" maxlength="400" placeholder="Случайное число до {число}: {random:{число}}" data-i18n-placeholder="constructor.ex.random.response"></textarea>
 
-      <div class="auth-label">Переменные (нажми, чтобы вставить)</div>
+      <div class="auth-label" data-i18n="constructor.varsLabel">Переменные (нажми, чтобы вставить)</div>
       <div id="cmdVars" class="cmd-vars"></div>
 
-      <label class="auth-label" for="cmdTry">Проверка: что напишет зритель</label>
+      <label class="auth-label" for="cmdTry" data-i18n="constructor.tryLabel">Проверка: что напишет зритель</label>
       <input id="cmdTry" class="cmd-try" maxlength="120" autocomplete="off" />
       <div id="cmdPreview" class="ctor-stage ctor-stage--small"></div>
 
       <p id="cmdError" class="ctor-error hidden"></p>
-      <button type="button" id="cmdSubmitBtn" class="auth-submit" data-click="saveCommand">Создать</button>
+      <button type="button" id="cmdSubmitBtn" class="auth-submit" data-click="saveCommand" data-i18n="constructor.create">Создать</button>
     </div>
   </div>
 
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
-  <script src="/js/minipip.js"></script>
-  <script src="/js/pwstyle.js"></script>
-  <script src="/workbench/presets-shared.js"></script>
-  <script src="/workbench/constructor.js?v=2"></script>
+  <script src="/js/minipip.js?v=2"></script>
+  <script src="/js/pwstyle.js?v=2"></script>
+  <script src="/workbench/presets-shared.js?v=2"></script>
+  <script src="/workbench/constructor.js?v=3"></script>
 </body>
 </html>

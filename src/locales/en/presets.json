@@ -1,0 +1,80 @@
+{
+  "pageTitle": "PartyWatcher — Presets",
+  "hint": "Ready-made chat styles and commands from other streamers. Add them in one click or share your own.",
+  "publishBtn": "＋ Publish preset",
+  "filter": {
+    "all": "All",
+    "style": "Styles",
+    "command": "Commands"
+  },
+  "sort": {
+    "likes": "Most liked",
+    "adds": "Most added",
+    "new": "Newest"
+  },
+  "searchPh": "Search by name…",
+  "empty": "Nothing found. Try another query or publish your own preset.",
+  "more": "Show more",
+  "mineEmpty": "You haven't added or published any presets yet. Check out ready-made presets from other users above or <a href=\"#pstListWrap\">go to the list</a>.",
+  "input": "Input:",
+  "output": "Output:",
+  "args": "Arguments:",
+  "delete": "Delete preset",
+  "unadd": "Remove from mine",
+  "tagMine": "yours",
+  "tagAdded": "added",
+  "typeStyle": "Style",
+  "typeCommand": "Command",
+  "by": "by {name}",
+  "added": "✓ Added",
+  "add": "＋ Add",
+  "addOk": "Add",
+  "yours": "Your preset",
+  "addsTitle": "How many people added it",
+  "noSelfLike": "You can't like your own preset",
+  "like": "Like",
+  "yes": "Yes",
+  "no": "No",
+  "del": {
+    "title": "Delete the preset?",
+    "text": "Are you sure you want to delete the preset “{name}”?",
+    "textAdded": "It will disappear from the list for everyone, but styles and commands already added stay with users.",
+    "done": "Preset deleted",
+    "failed": "Could not delete"
+  },
+  "unaddTitle": "Remove the preset?",
+  "unaddText": "Remove the preset “{name}” from your added ones?",
+  "unaddCmd": "Command !{name} will also be removed from your commands.",
+  "unaddStyle": "Your current Builder settings won't change.",
+  "unaddDone": "Preset removed",
+  "unaddFailed": "Could not remove",
+  "loadFailed": "Could not load presets",
+  "loadMineFailed": "Could not load your presets",
+  "likeFailed": "Could not like",
+  "addFailed": "Could not add",
+  "addStyle": {
+    "title": "Add the style?",
+    "text": "The style “{name}” will replace your current Chat builder settings.",
+    "done": "Style added and applied: open the “Builder”"
+  },
+  "cmdTaken": {
+    "title": "Command name is taken",
+    "text": "You already have command !{name}. What should the new one be called?"
+  },
+  "cmdAdded": "Command !{name} added to “Chat commands”",
+  "pub": {
+    "title": "Publish preset",
+    "name": "Name",
+    "desc": "Description",
+    "namePh": "Name (required), e.g. Neon ribbon",
+    "descPh": "Description (optional, up to 200 characters)",
+    "submit": "Publish",
+    "typeStyle": "Chat style",
+    "styleHint": "The Chat builder style currently saved in this browser will be published.",
+    "noCmds": "You have no commands yet. Create one in “Chat commands”, then publish it.",
+    "whichCmd": "Which command to publish",
+    "response": "Response:",
+    "done": "Preset published",
+    "failed": "Could not publish"
+  }
+}

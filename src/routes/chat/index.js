@@ -61,21 +61,21 @@ function extractKey(req) {
 router.post('/send', async (req, res) => {
   try {
     const key = extractKey(req);
-    if (!key) return res.status(401).json({ error: 'Нужен API-ключ (Authorization: Bearer <ключ>)' });
+    if (!key) return res.status(401).json({ error: req.t('server.chatApi.needKey') });
 
     const streamer = await User.findOne({ chatApiKey: key }).select('_id streamerNameLower').lean();
     if (!streamer || !streamer.streamerNameLower) {
-      return res.status(401).json({ error: 'Неверный API-ключ' });
+      return res.status(401).json({ error: req.t('server.chatApi.badKey') });
     }
 
     const retryAfter = checkRate(String(streamer._id));
     if (retryAfter > 0) {
       res.setHeader('Retry-After', String(retryAfter));
-      return res.status(429).json({ error: `Слишком много сообщений, повтори через ${retryAfter} с`, retryAfter });
+      return res.status(429).json({ error: req.t('server.chatApi.tooMany', { n: retryAfter }), retryAfter });
     }
 
     const text = String(req.body?.text ?? '').trim().slice(0, 500);
-    if (!text) return res.status(400).json({ error: 'Пустое сообщение' });
+    if (!text) return res.status(400).json({ error: req.t('server.chatApi.empty') });
 
     const username = String(req.body?.username || 'Бот').trim().slice(0, 32) || 'Бот';
     const source = String(req.body?.source || 'api')
@@ -111,7 +111,7 @@ router.post('/send', async (req, res) => {
     res.json({ ok: true, id: String(msg._id) });
   } catch (err) {
     console.error('[POST /api/chat/send]', err);
-    res.status(500).json({ error: 'Не удалось отправить сообщение' });
+    res.status(500).json({ error: req.t('server.chatApi.sendFailed') });
   }
 });
 

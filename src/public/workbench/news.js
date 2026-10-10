@@ -10,7 +10,7 @@ let bodySpell = null;
 const $ = (id) => document.getElementById(id);
 
 function fmtDate(d) {
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(d).toLocaleDateString(I18N.locale, { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 async function goProfile() {
@@ -49,20 +49,39 @@ function buildNewsRow(n) {
 
   const date = document.createElement('div');
   date.className = 'news-card-date';
-  date.textContent = fmtDate(n.publishedAt) + (n.editedAt ? ' · изменено ' + fmtDate(n.editedAt) : '');
+  date.textContent = fmtDate(n.publishedAt) + (n.editedAt ? ' · ' + t('news.edited', { date: fmtDate(n.editedAt) }) : '');
 
   const title = document.createElement('h2');
   title.className = 'news-card-title';
-  title.textContent = n.title;
 
-  body.append(date, title);
+  const text = document.createElement('div');
+  text.className = 'news-card-text'; // white-space: pre-wrap: показываем ровно как написано
 
-  if (n.body) {
-    const text = document.createElement('div');
-    text.className = 'news-card-text'; // white-space: pre-wrap: показываем ровно как написано
-    text.textContent = n.body;
-    body.appendChild(text);
+  body.append(date, title, text);
+
+  // автоперевод: показываем на языке читателя, оригинал — по кнопке
+  let showOriginal = !n.translation;
+  const paint = () => {
+    const src = showOriginal ? n : n.translation;
+    title.textContent = src.title;
+    text.textContent = src.body || '';
+    text.classList.toggle('hidden', !src.body);
+    if (toggle) toggle.textContent = showOriginal ? t('news.tr.showTranslation') : t('news.tr.showOriginal');
+  };
+  let toggle = null;
+  if (n.translation) {
+    const note = document.createElement('div');
+    note.className = 'news-tr-note';
+    const label = document.createElement('span');
+    label.textContent = t('news.tr.auto') + ' · ';
+    toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'news-tr-toggle';
+    toggle.onclick = () => { showOriginal = !showOriginal; paint(); };
+    note.append(label, toggle);
+    body.appendChild(note);
   }
+  paint();
 
   card.appendChild(body);
   row.appendChild(card);
@@ -74,13 +93,13 @@ function buildNewsRow(n) {
     const edit = document.createElement('button');
     edit.type = 'button';
     edit.className = 'icon-btn';
-    edit.textContent = '✏️ Изменить';
+    edit.textContent = t('news.editBtn');
     edit.onclick = () => openNewsModal(n);
 
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'icon-btn';
-    del.textContent = '🗑 Удалить';
+    del.textContent = t('news.delBtn');
     del.onclick = () => openDelNews(n.id);
 
     actions.append(edit, del);
@@ -108,7 +127,7 @@ async function loadNews() {
     if (!data.items.length) {
       const empty = document.createElement('p');
       empty.className = 'wb-subpage-hint';
-      empty.textContent = from || to ? 'За выбранный период новостей нет.' : 'Новостей пока нет.';
+      empty.textContent = from || to ? t('news.emptyPeriod') : t('news.empty');
       list.appendChild(empty);
       return;
     }
@@ -117,7 +136,7 @@ async function loadNews() {
     list.innerHTML = '';
     const err = document.createElement('p');
     err.style.color = 'var(--danger)';
-    err.textContent = e.message || 'Не удалось загрузить новости';
+    err.textContent = e.message || t('news.loadFailed');
     list.appendChild(err);
   }
 }
@@ -179,13 +198,13 @@ function setupSpell(field, listEl) {
   function render(matches) {
     listEl.innerHTML = '';
     if (!matches.length) {
-      listEl.textContent = '✓ Ошибок не найдено';
+      listEl.textContent = t('news.spell.ok');
       return;
     }
 
     const head = document.createElement('div');
     head.className = 'news-spell-title';
-    head.textContent = `Найдено замечаний: ${matches.length}`;
+    head.textContent = t('news.spell.found', { n: matches.length });
     listEl.appendChild(head);
 
     matches.forEach((m) => {
@@ -229,7 +248,7 @@ function setupSpell(field, listEl) {
       render(data.matches || []);
     } catch (e) {
       if (mine !== token) return;
-      listEl.textContent = 'Проверка орфографии сейчас недоступна';
+      listEl.textContent = t('news.spell.unavailable');
     }
   }
 
@@ -267,11 +286,11 @@ function openNewsModal(item) {
   imageRemoved = false;
   pendingImage = null;
 
-  $('newsModalTitle').textContent = item ? 'Изменить новость' : 'Новая новость';
-  $('newsPublishBtn').textContent = item ? 'Сохранить' : 'Опубликовать';
+  $('newsModalTitle').textContent = item ? t('news.editTitle') : t('news.newTitle');
+  $('newsPublishBtn').textContent = item ? t('common.save') : t('news.publish');
   $('newsDateInfo').textContent = item
-    ? `Опубликовано: ${fmtDate(item.publishedAt)} (дата не меняется)`
-    : `Дата: ${fmtDate(new Date())} (ставится сама)`;
+    ? t('news.publishedAt', { date: fmtDate(item.publishedAt) })
+    : t('news.dateAuto', { date: fmtDate(new Date()) });
 
   $('newsTitleInput').value = item ? item.title : '';
   $('newsBodyInput').value = item ? item.body : '';
@@ -299,7 +318,7 @@ async function publishNews() {
   const body = $('newsBodyInput').value; // без обрезки: как написал, так и сохранится
 
   if (title.length < 3) {
-    showFormError('Заголовок слишком короткий (минимум 3 символа)');
+    showFormError(t('news.titleShort'));
     return;
   }
 
@@ -316,7 +335,7 @@ async function publishNews() {
     closeNewsModal();
     await loadNews();
   } catch (e) {
-    showFormError(e.message || 'Не удалось сохранить');
+    showFormError(e.message || t('common.saveFailed'));
   } finally {
     btn.disabled = false;
   }
@@ -339,7 +358,7 @@ async function confirmDelNews() {
   try {
     await api('/news/' + delNewsId, { method: 'DELETE' });
   } catch (e) {
-    alert(e.message || 'Не удалось удалить');
+    PW.toast(e.message || t('news.delFailed'), 'error');
   }
   closeDelNews();
   loadNews();
@@ -372,7 +391,7 @@ async function init() {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 15 * 1024 * 1024) {
-      showFormError('Картинка больше 15 МБ, выбери поменьше');
+      showFormError(t('news.imageTooBig'));
       e.target.value = '';
       return;
     }
@@ -384,7 +403,7 @@ async function init() {
       pendingImage = null;
       e.target.value = '';
       renderImageUi();
-      showFormError('Не удалось прочитать картинку');
+      showFormError(t('news.imageReadFailed'));
     }
   });
 

@@ -9,6 +9,7 @@ const adminRoutes = require('./routes/admin.routes');
 const supportRoutes = require('./routes/support.routes');
 const cspRoutes = require('./routes/csp.routes');
 const securityHeaders = require('./middleware/securityHeaders');
+const i18n = require('./services/i18n');
 
 async function start() {
   await connectDB();
@@ -24,6 +25,8 @@ async function start() {
   });
   app.use(express.json());
   app.use(cookieParser());
+  app.use(i18n.middleware);
+  app.get('/locales/:lang.js', i18n.bundle);
 
   // API
   app.use('/api/support', supportRoutes);

@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/theme.js"></script>
+  <script src="/js/i18n.js?v=2" data-ns="room,capture"></script>
+  <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-  <link rel="stylesheet" href="/css/common.css" />
-  <link rel="stylesheet" href="/css/room.css" />
-  <title>Комната — PartyWatcher</title>
+  <link rel="stylesheet" href="/css/common.css?v=2" />
+  <link rel="stylesheet" href="/css/room.css?v=2" />
+  <title data-i18n="room.pageTitle">Комната — PartyWatcher</title>
   <meta name="robots" content="noindex, nofollow" />
 </head>
 <body>
@@ -18,38 +19,38 @@
     <div id="fsActivityCatcher"></div>
     
     <div id="overlay">
-      <span id="overlayText">Загрузка комнаты...</span>
-      <button id="startBtn" class="hidden">▶ Начать просмотр</button>
+      <span id="overlayText" data-i18n="room.loading">Загрузка комнаты...</span>
+      <button id="startBtn" class="hidden" data-i18n="room.start">▶ Начать просмотр</button>
     </div>
 
-    <button id="fsChatToggleBtn" class="fs-draggable hidden" type="button" title="Чат (зажми, чтобы передвинуть)">💬</button>
-    <button id="ccBtn" class="fs-draggable" title="Субтитры">CC</button>
-    <button id="volumeBtn" class="fs-draggable" title="Громкость (зажми, чтобы передвинуть)">🔊</button>
+    <button id="fsChatToggleBtn" class="fs-draggable hidden" type="button" title="Чат (зажми, чтобы передвинуть)" data-i18n-title="room.fs.chat">💬</button>
+    <button id="ccBtn" class="fs-draggable" title="Субтитры" data-i18n-title="room.fs.subtitles">CC</button>
+    <button id="volumeBtn" class="fs-draggable" title="Громкость (зажми, чтобы передвинуть)" data-i18n-title="room.fs.volume">🔊</button>
     <div id="volumePopup" class="hidden">
       <input id="volumeSlider" type="range" min="0" max="100" value="30">
     </div>
-    <button id="fullscreenBtn" class="fs-draggable" title="Полноэкранный режим (зажми, чтобы передвинуть)">⛶</button>
+    <button id="fullscreenBtn" class="fs-draggable" title="Полноэкранный режим (зажми, чтобы передвинуть)" data-i18n-title="room.fs.fullscreen">⛶</button>
 
     <div id="fsChatPanel" class="hidden">
       <div id="fsChatHandle">
-        <button type="button" id="fsSettingsBtn" aria-label="Участники комнаты" title="Участники комнаты">
+        <button type="button" id="fsSettingsBtn" aria-label="Участники комнаты" title="Участники комнаты" data-i18n-title="room.participants.title" data-i18n-aria-label="room.participants.title">
           ⚙️
           <span id="fsSettingsBadge" class="fs-settings-badge hidden">0</span>
         </button>
-        <button type="button" id="fsChatClose" aria-label="Закрыть чат">×</button>
+        <button type="button" id="fsChatClose" aria-label="Закрыть чат" data-i18n-aria-label="room.fs.closeChat">×</button>
       </div>
 
       <div id="fsParticipantsPanel" class="hidden">
         <div id="fsParticipantsHeader">
-          <span>Участники: <b id="fsParticipantCount">0</b></span>
-          <button type="button" id="fsBannedListBtn" class="hidden">Заблокированные</button>
-          <button type="button" id="fsParticipantsClose" aria-label="Закрыть">×</button>
+          <span><span data-i18n="room.participants.count">Участники:</span> <b id="fsParticipantCount">0</b></span>
+          <button type="button" id="fsBannedListBtn" class="hidden" data-i18n="room.banned.btn">Заблокированные</button>
+          <button type="button" id="fsParticipantsClose" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
         </div>
         <div id="fsParticipantsList"></div>
 
         <div id="fsBannedView" class="hidden">
           <div id="fsBannedHeader">
-            <button type="button" id="fsBannedBackBtn">← Назад к участникам</button>
+            <button type="button" id="fsBannedBackBtn" data-i18n="room.banned.back">← Назад к участникам</button>
           </div>
           <div id="fsBannedList"></div>
         </div>
@@ -57,11 +58,11 @@
 
       <div id="fsMessages"></div>
       <form id="fsChatForm" data-submit="sendMessage" data-event data-arg="fs">
-        <input id="fsChatInput" type="text" placeholder="Сообщение..." autocomplete="off" maxlength="500">
+        <input id="fsChatInput" type="text" placeholder="Сообщение..." data-i18n-placeholder="room.chat.placeholder" autocomplete="off" maxlength="500">
         <button type="submit">➤</button>
       </form>
 
-      <div id="fsChatResizeHandle" title="Потяни, чтобы изменить размер"></div>
+      <div id="fsChatResizeHandle" title="Потяни, чтобы изменить размер" data-i18n-title="room.fs.resize"></div>
     </div>
 
     <div id="fsNotice" class="hidden"></div>
@@ -70,79 +71,80 @@
   <div id="chat">
     <div id="roomHeader">
       <div id="copyToast" class="copy-toast hidden"></div>
-      <button data-click="leaveRoom">← Назад</button>
+      <button data-click="leaveRoom" data-i18n="room.back">← Назад</button>
       <div id="roomMeta">
         <span class="room-meta-line">
-          Название:
-          <b id="roomNameValue" class="copyable" title="Нажми, чтобы скопировать"></b>
+          <span data-i18n="room.meta.name">Название:</span>
+          <b id="roomNameValue" class="copyable" title="Нажми, чтобы скопировать" data-i18n-title="room.meta.copyHint"></b>
         </span>
         <span class="room-meta-line">
-          Ключ:
-          <b id="roomCodeValue" class="copyable" title="Нажми, чтобы скопировать"></b>
+          <span data-i18n="room.meta.code">Ключ:</span>
+          <b id="roomCodeValue" class="copyable" title="Нажми, чтобы скопировать" data-i18n-title="room.meta.copyHint"></b>
         </span>
       </div>
-      <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+      <div class="lang-switch--right" data-lang-switch></div>
+      <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
       <button data-click="openSettings">⚙️ <span id="participantCount">0</span></button>
     </div>
 
     <!-- Вкладки -->
     <div id="viewToggle" class="view-toggle">
       <div class="view-toggle-tabs">
-        <button id="btnShowChat" class="active" data-click="setViewMode" data-arg="chat">Чат</button>
-        <button id="btnShowVideo" data-click="setViewMode" data-arg="video">Видео</button>
+        <button id="btnShowChat" class="active" data-click="setViewMode" data-arg="chat" data-i18n="room.tabs.chat">Чат</button>
+        <button id="btnShowVideo" data-click="setViewMode" data-arg="video" data-i18n="room.tabs.video">Видео</button>
       </div>
-      <button type="button" id="voiceCallBtn" class="voice-call-btn" title="Голосовая связь" data-click="onVoiceCallBtnClick">📞</button>
-      <button type="button" id="voiceSettingsBtn" class="voice-call-btn voice-settings-btn" title="Настройки звука">🎚️</button>
+      <button type="button" id="voiceCallBtn" class="voice-call-btn" title="Голосовая связь" data-i18n-title="room.voice.title" data-click="onVoiceCallBtnClick">📞</button>
+      <button type="button" id="voiceSettingsBtn" class="voice-call-btn voice-settings-btn" title="Настройки звука" data-i18n-title="room.voiceSettings.title">🎚️</button>
     </div>
 
     <div id="voiceCallPanel" class="voice-call-panel hidden">
       <div class="voice-call-gradient" id="voiceCallJoinArea">
-        <span id="voiceCallPanelText">Присоединиться к звонку</span>
+        <span id="voiceCallPanelText" data-i18n="room.voice.join">Присоединиться к звонку</span>
       </div>
       <div class="voice-call-side">
         <div id="voiceAvatars" class="voice-avatars"></div>
-        <span id="voiceCountText" class="voice-count-text">В звонке: 0</span>
-        <button type="button" id="voiceMuteBtn" class="voice-mute-btn hidden" title="Выключить микрофон (M)">🎙️</button>
-        <button type="button" id="voiceHangupBtn" class="voice-hangup-btn hidden" title="Выйти из звонка">📴</button>
+        <span id="voiceCountText" class="voice-count-text">0</span>
+        <button type="button" id="voiceMuteBtn" class="voice-mute-btn hidden" title="Выключить микрофон (M)" data-i18n-title="room.voice.muteHint">🎙️</button>
+        <button type="button" id="voiceHangupBtn" class="voice-hangup-btn hidden" title="Выйти из звонка" data-i18n-title="room.voice.hangup">📴</button>
       </div>
     </div>
 
     <div id="hostControls" class="host-controls hidden">
       <div class="episode-row">
-        <label>Сезон</label>
+        <label data-i18n="room.host.season">Сезон</label>
         <select id="seasonSelect" data-change="onEpisodeChange"></select>
       </div>
       <div class="episode-row">
-        <label>Серия</label>
+        <label data-i18n="room.host.episode">Серия</label>
         <select id="episodeSelect" data-change="onEpisodeChange"></select>
       </div>
       <div class="episode-row" id="voiceRow">
-        <label>Озвучка</label>
+        <label data-i18n="room.host.voice">Озвучка</label>
         <select id="voiceSelect" data-change="onEpisodeChange"></select>
       </div>
       <div class="episode-row" id="playerRow" style="display:none;">
-        <label>Плеер</label>
+        <label data-i18n="room.host.player">Плеер</label>
         <select id="playerSelect" data-change="onEpisodeChange"></select>
       </div>
       <div class="episode-row" id="qualityRow" style="display:none;">
-        <label>Качество</label>
+        <label data-i18n="room.host.quality">Качество</label>
         <select id="qualitySelect" data-change="onQualityChange"></select>
       </div>
 
       <div class="video-change-block">
-        <div class="video-change-title">Смена ссылки</div>
-        <div class="video-change-mode">Режим: <b id="videoChangeModeLabel">—</b></div>
-        <input id="videoChangeUrl" type="url" placeholder="Новая ссылка на видео" autocomplete="off" />
-        <button type="button" id="videoChangeBtn" data-click="changeVideoUrl">Сменить</button>
+        <div class="video-change-title" data-i18n="room.change.title">Смена ссылки</div>
+        <div class="video-change-mode"><span data-i18n="room.change.mode">Режим:</span> <b id="videoChangeModeLabel">—</b></div>
+        <input id="videoChangeUrl" type="url" placeholder="Новая ссылка на видео" data-i18n-placeholder="room.change.placeholder" autocomplete="off" />
+        <button type="button" id="videoChangeBtn" data-click="changeVideoUrl" data-i18n="room.change.submit">Сменить</button>
       </div>
     </div>
 
-    <button class="btn-mono" id="resyncBtn" data-click="resync">🔄 Синхронизировать</button>
+    <button class="btn-mono" id="resyncBtn" data-click="resync" data-i18n="room.resync">🔄 Синхронизировать</button>
 
     <div id="messages"></div>
     <form id="chatForm" data-submit="sendMessage" data-event>
-      <button type="button" id="lockButtonsBtn" title="Заблокировать/разблокировать кнопки плеера">🔓</button>
-      <input id="chatInput" placeholder="Сообщение..." />
+      <button type="button" id="lockButtonsBtn" title="Заблокировать/разблокировать кнопки плеера" data-i18n-title="room.lock.title">🔓</button>
+      <input id="chatInput" placeholder="Сообщение..." data-i18n-placeholder="room.chat.placeholder" />
       <button type="submit">➤</button>
     </form>
   </div>
@@ -150,17 +152,17 @@
   <div id="settingsModal" class="modal hidden">
     <div class="modal-content">
       <button class="modal-close" data-click="closeModal" data-arg="settingsModal">✕</button>
-      <h3>Участники комнаты</h3>
+      <h3 data-i18n="room.participants.title">Участники комнаты</h3>
       <div id="participantsList"></div>
-      <button data-click="copyRoomLink">📋 Скопировать ссылку</button>
-      <button id="bannedListBtn" class="hidden" data-click="openBannedList">Заблокированные</button>
+      <button data-click="copyRoomLink" data-i18n="room.copyLink">📋 Скопировать ссылку</button>
+      <button id="bannedListBtn" class="hidden" data-click="openBannedList" data-i18n="room.banned.btn">Заблокированные</button>
     </div>
   </div>
 
   <div id="bannedModal" class="modal hidden">
     <div class="modal-content">
       <button class="modal-close" data-click="closeModal" data-arg="bannedModal">✕</button>
-      <h3>Заблокированные пользователи</h3>
+      <h3 data-i18n="room.banned.title">Заблокированные пользователи</h3>
       <div id="bannedList"></div>
     </div>
   </div>
@@ -168,15 +170,15 @@
   <div id="ageGateModal" class="modal hidden">
     <div class="modal-content age-gate-content">
       <div class="age-gate-icon">🔞</div>
-      <h3>Подтверждение возраста</h3>
-      <p class="age-gate-text">
+      <h3 data-i18n="room.ageGate.title">Подтверждение возраста</h3>
+      <p class="age-gate-text" data-i18n="room.ageGate.text">
         Это видео недоступно для встраивания без подтверждения возраста
         (возрастные ограничения YouTube). Подтверждая, вы соглашаетесь,
         что вам есть 18 лет.
       </p>
       <div class="age-gate-actions">
-        <button id="ageGateConfirmBtn">Мне есть 18, продолжить</button>
-        <button id="ageGateCancelBtn" class="icon-btn">Отмена</button>
+        <button id="ageGateConfirmBtn" data-i18n="room.ageGate.confirm">Мне есть 18, продолжить</button>
+        <button id="ageGateCancelBtn" class="icon-btn" data-i18n="common.dialog.cancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -184,13 +186,13 @@
  <div id="voiceCallConfirmModal" class="modal hidden">
     <div class="modal-content age-gate-content">
       <div class="age-gate-icon">📞</div>
-      <h3>Голосовая связь</h3>
-      <p class="age-gate-text">
+      <h3 data-i18n="room.voice.title">Голосовая связь</h3>
+      <p class="age-gate-text" data-i18n="room.voice.confirmText">
         Вы действительно хотите начать голосовую связь? Браузер запросит доступ к микрофону.
       </p>
       <div class="age-gate-actions">
-        <button type="button" id="voiceCallConfirmBtn">Да, начать</button>
-        <button type="button" id="voiceCallCancelBtn" class="icon-btn">Отмена</button>
+        <button type="button" id="voiceCallConfirmBtn" data-i18n="room.voice.confirmYes">Да, начать</button>
+        <button type="button" id="voiceCallCancelBtn" class="icon-btn" data-i18n="common.dialog.cancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -198,46 +200,46 @@
   <div id="voiceSettingsModal" class="modal hidden">
     <div class="modal-content voice-settings-content">
       <button class="modal-close" data-click="closeModal" data-arg="voiceSettingsModal">✕</button>
-      <h3>Настройки звука</h3>
+      <h3 data-i18n="room.voiceSettings.title">Настройки звука</h3>
 
-      <label for="micSelect">Микрофон</label>
+      <label for="micSelect" data-i18n="room.voiceSettings.mic">Микрофон</label>
       <select id="micSelect"></select>
       <div id="micBtHint" class="voice-settings-hint voice-bt-hint hidden"></div>
 
       <label class="voice-settings-check">
         <input id="micProcToggle" type="checkbox" checked>
-        Шумо- и эхоподавление браузера
+        <span data-i18n="room.voiceSettings.processing">Шумо- и эхоподавление браузера</span>
       </label>
-      <div class="voice-settings-hint">
+      <div class="voice-settings-hint" data-i18n="room.voiceSettings.processingHint">
         Если голос звучит «как в банке», попробуй выключить. На колонках (без наушников) лучше оставить включённым.
       </div>
 
-      <label for="micGainSlider">Громкость микрофона: <b id="micGainValue">100%</b></label>
+      <label for="micGainSlider"><span data-i18n="room.voiceSettings.gain">Громкость микрофона:</span> <b id="micGainValue">100%</b></label>
       <input id="micGainSlider" type="range" min="50" max="400" value="100">
       <div class="mic-level"><div id="micLevelBar"></div></div>
-      <div class="voice-settings-hint">
+      <div class="voice-settings-hint" data-i18n="room.voiceSettings.levelHint">
         Полоска показывает, как тебя слышат. Когда говоришь обычным голосом, она должна доходить хотя бы до середины.
         Если еле двигается, подними громкость. Работает во время звонка.
       </div>
 
       <label class="voice-settings-check">
         <input id="duckToggle" type="checkbox" checked>
-        Приглушать видео, пока кто-то говорит
+        <span data-i18n="room.voiceSettings.duck">Приглушать видео, пока кто-то говорит</span>
       </label>
-      <label for="duckSlider">Насколько приглушать: <b id="duckValue">65%</b></label>
+      <label for="duckSlider"><span data-i18n="room.voiceSettings.duckAmount">Насколько приглушать:</span> <b id="duckValue">65%</b></label>
       <input id="duckSlider" type="range" min="0" max="90" value="65">
 
-      <label>Качество связи (обновляется каждые 2 сек)</label>
-      <div id="voiceStatsList" class="voice-stats">Появится, когда зайдёшь в звонок.</div>
+      <label data-i18n="room.voiceSettings.quality">Качество связи (обновляется каждые 2 сек)</label>
+      <div id="voiceStatsList" class="voice-stats" data-i18n="room.voiceSettings.statsEmpty">Появится, когда зайдёшь в звонок.</div>
     </div>
   </div>
 
   <div id="voiceAudioContainer" style="display:none"></div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/wakelock.js"></script>
-  <script src="/js/room.js?v=6"></script>
+  <script src="/js/room.js?v=8"></script>
 </body>
 </html>

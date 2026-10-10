@@ -3,70 +3,74 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="/js/theme.js"></script>
+    <script src="/js/i18n.js?v=2" data-ns="streams"></script>
+    <script src="/js/theme.js?v=2"></script>
     <script src="/js/favicon.js"></script>
     <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-    <link rel="stylesheet" href="/css/common.css" />
+    <link rel="stylesheet" href="/css/common.css?v=2" />
     <link rel="stylesheet" href="/streams/streams.css" />
-    <title>PartyWatcher — Трансляции</title>
+    <title data-i18n="streams.pageTitle">PartyWatcher — Трансляции</title>
   </head>
   <body>
     <div class="page-header">
-      <a href="/streams.html" class="brand">
-        <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
-          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <span class="brand-stack">
-          <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
-          <span class="brand-live-tag">LIVE</span>
-        </span>
-      </a>
+      <div class="brand-row">
+        <a href="/streams.html" class="brand">
+          <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+            <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand-stack">
+            <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+            <span class="brand-live-tag">LIVE</span>
+          </span>
+        </a>
+        <div data-lang-switch></div>
+      </div>
 
       <div class="header-right">
         <div class="corner-menu">
           <span class="corner-name" id="meName"></span>
-          <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
-          <button class="icon-btn my-profile-btn" data-click="goToMyProfile">👤 Стрим-профиль</button>
+          <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
+          <button class="icon-btn my-profile-btn" data-click="goToMyProfile" data-i18n="common.header.streamProfile">👤 Стрим-профиль</button>
         </div>
       </div>
     </div>
 
     <nav class="nav-sidebar">
-      <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/">🏠 Комнаты</button>
-      <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/streams.html">📡 Прямые трансляции</button>
+      <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/" data-i18n="common.nav.rooms">🏠 Комнаты</button>
+      <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/streams.html" data-i18n="common.nav.streams">📡 Прямые трансляции</button>
     </nav>
 
     <div class="streams-layout">
       <div class="streams-search-wrap">
-        <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера"
+        <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера" data-i18n-placeholder="streams.searchPh"
               autocomplete="off"
               data-keydown="handleStreamerSearchKey" data-event
               data-input="handleStreamerSearchInput"
               data-blur="hideSuggestionsSoon" />
-        <button type="button" class="search-icon-btn" data-click="onStreamerSearch" aria-label="Искать">🔍</button>
+        <button type="button" class="search-icon-btn" data-click="onStreamerSearch" aria-label="Искать" data-i18n-aria-label="common.search">🔍</button>
         <div id="searchSuggestions" class="search-suggestions hidden"></div>
       </div>
 
       <section class="streams-section">
         <div class="streams-section-head">
-          <h2>Активные стримеры</h2>
-          <span class="streams-section-hint">часто стримящие за последнее время</span>
+          <h2 data-i18n="streams.active">Активные стримеры</h2>
+          <span class="streams-section-hint" data-i18n="streams.activeHint">часто стримящие за последнее время</span>
         </div>
         <!-- будет потом считываться по итогу окончания стрима (накопленные часы эфира) -->
         <div id="activeStreamersRow" class="active-streamers-row"></div>
       </section>
 
       <section class="streams-section">
-        <h2>Все стримеры</h2>
+        <h2 data-i18n="streams.all">Все стримеры</h2>
         <div id="streamersGrid" class="streamers-grid"></div>
       </section>
     </div>
 
-    <script src="/js/api.js"></script>
+    <script src="/js/api.js?v=2"></script>
     <script src="/js/actions.js?v=3"></script>
     <script src="/js/page-transition.js"></script>
-    <script src="/streams/streams.js"></script>
+    <script src="/streams/streams.js?v=3"></script>
   </body>
   </html>

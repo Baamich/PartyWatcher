@@ -5,6 +5,8 @@ const News = require('../../models/News');
 const User = require('../../models/User');
 const auth = require('../../middleware/auth');
 const adminOnly = require('../../middleware/adminOnly');
+const i18n = require('../../services/i18n');
+const { translate, detectLang } = require('../../services/translator');
 
 const router = express.Router();
 
@@ -16,18 +18,18 @@ const IMAGE_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 const safeAdminOnly = (req, res, next) => Promise.resolve(adminOnly(req, res, next)).catch(next);
 const adminGuard = [auth, safeAdminOnly];
 
-// ---- проверки: возвращают текст ошибки или null ----
+// ---- проверки: возвращают ключ словаря ошибки (перевод — req.t) или null ----
 function checkTitle(title) {
-  if (title.length < 3 || title.length > 140) return 'Заголовок: от 3 до 140 символов';
+  if (title.length < 3 || title.length > 140) return 'server.news.titleLen';
   return null;
 }
 function checkBody(body) {
-  if (body.length > 5000) return 'Описание слишком длинное (максимум 5000 символов)';
+  if (body.length > 5000) return 'server.news.bodyLong';
   return null;
 }
 function checkImage(image) {
-  if (image.length > MAX_IMAGE_CHARS) return 'Картинка слишком большая';
-  if (!IMAGE_RE.test(image)) return 'Нужна картинка PNG, JPEG или WebP';
+  if (image.length > MAX_IMAGE_CHARS) return 'server.news.imageBig';
+  if (!IMAGE_RE.test(image)) return 'server.news.imageType';
   return null;
 }
 
@@ -44,12 +46,54 @@ async function isAdminRequest(req) {
   }
 }
 
-function serialize(n) {
-  const stamp = new Date(n.editedAt || n.publishedAt).getTime(); // меняется при правке, браузер не держит старую картинку
+const stampOf = (n) => new Date(n.editedAt || n.publishedAt).getTime(); // меняется при каждой правке
+
+// ---- автоперевод: делаем один раз после публикации/правки и храним в базе ----
+// Очередь последовательная (провайдер с лимитами); после ошибки (например, кончилась дневная квота) — пауза 30 мин
+const translating = new Set();
+const failedAt = new Map();
+let queue = Promise.resolve();
+
+function scheduleTranslation(id) {
+  id = String(id);
+  const failed = failedAt.get(id);
+  if (translating.has(id) || (failed && Date.now() - failed < 30 * 60 * 1000)) return;
+  translating.add(id);
+  queue = queue.then(() => translateNews(id)).catch(() => {}).finally(() => translating.delete(id));
+}
+
+async function translateNews(id) {
+  try {
+    const n = await News.findById(id).lean();
+    if (!n) return;
+    const from = detectLang(n.title + '\n' + n.body);
+    const tr = {};
+    for (const to of i18n.LANGS) {
+      if (to === from) continue;
+      const texts = n.body ? [n.title, n.body] : [n.title];
+      const [title, body = ''] = await translate(texts, from, to);
+      tr[to] = { title: String(title).slice(0, 300), body: String(body).slice(0, 8000) };
+    }
+    // новость успели изменить, пока переводили, — этот перевод уже не про неё
+    await News.updateOne({ _id: id, editedAt: n.editedAt ?? null }, { $set: { lang: from, tr, trStamp: stampOf(n) } });
+    failedAt.delete(id);
+  } catch (e) {
+    failedAt.set(id, Date.now());
+    if (failedAt.size > 1000) failedAt.clear();
+    console.warn('[news translate]', id, e.message);
+  }
+}
+
+// lang — язык читателя: если новость на другом языке и свежий перевод готов, отдаём его рядом с оригиналом
+function serialize(n, lang) {
+  const stamp = stampOf(n); // меняется при правке, браузер не держит старую картинку
+  const fresh = n.trStamp === stamp && n.tr && n.tr[lang];
   return {
     id: n._id,
     title: n.title,
     body: n.body,
+    lang: n.lang || null,
+    translation: fresh && n.lang && n.lang !== lang ? { title: n.tr[lang].title, body: n.tr[lang].body } : null,
     publishedAt: n.publishedAt,
     editedAt: n.editedAt || null,
     imageUrl: n.hasImage ? `/api/news/${n._id}/image?v=${stamp}` : null,
@@ -68,10 +112,13 @@ router.get('/', async (req, res) => {
     const filter = Object.keys(range).length ? { publishedAt: range } : {};
     const items = await News.find(filter).sort({ publishedAt: -1 }).limit(100).lean();
 
-    res.json({ canManage: await isAdminRequest(req), items: items.map(serialize) });
+    // старые новости без перевода (или изменённые после него) переводим в фоне — увидят при следующем открытии
+    items.filter((n) => n.trStamp !== stampOf(n)).slice(0, 10).forEach((n) => scheduleTranslation(n._id));
+
+    res.json({ canManage: await isAdminRequest(req), items: items.map((n) => serialize(n, req.lang)) });
   } catch (err) {
     console.error('[GET /news]', err);
-    res.status(500).json({ error: 'Не удалось загрузить новости' });
+    res.status(500).json({ error: req.t('server.news.loadFailed') });
   }
 });
 
@@ -98,7 +145,7 @@ router.post('/', adminGuard, async (req, res) => {
     const image = req.body?.image ? String(req.body.image) : null;
 
     const err = checkTitle(title) || checkBody(body) || (image ? checkImage(image) : null);
-    if (err) return res.status(400).json({ error: err });
+    if (err) return res.status(400).json({ error: req.t(err) });
 
     const me = await User.findById(req.user.id).select('username').lean();
     const news = await News.create({
@@ -109,10 +156,11 @@ router.post('/', adminGuard, async (req, res) => {
       authorUsername: me?.username || '',
     });
 
-    res.status(201).json(serialize(news));
+    scheduleTranslation(news._id);
+    res.status(201).json(serialize(news, req.lang));
   } catch (err) {
     console.error('[POST /news]', err);
-    res.status(500).json({ error: 'Не удалось опубликовать новость' });
+    res.status(500).json({ error: req.t('server.news.publishFailed') });
   }
 });
 
@@ -121,19 +169,19 @@ router.post('/', adminGuard, async (req, res) => {
 router.patch('/:id', adminGuard, async (req, res) => {
   try {
     const news = await News.findById(req.params.id);
-    if (!news) return res.status(404).json({ error: 'Новость не найдена' });
+    if (!news) return res.status(404).json({ error: req.t('server.news.notFound') });
 
     if (req.body?.title !== undefined) {
       const title = String(req.body.title).trim();
       const err = checkTitle(title);
-      if (err) return res.status(400).json({ error: err });
+      if (err) return res.status(400).json({ error: req.t(err) });
       news.title = title;
     }
 
     if (req.body?.body !== undefined) {
       const body = String(req.body.body);
       const err = checkBody(body);
-      if (err) return res.status(400).json({ error: err });
+      if (err) return res.status(400).json({ error: req.t(err) });
       news.body = body;
     }
 
@@ -143,7 +191,7 @@ router.patch('/:id', adminGuard, async (req, res) => {
     } else if (req.body?.image) {
       const image = String(req.body.image);
       const err = checkImage(image);
-      if (err) return res.status(400).json({ error: err });
+      if (err) return res.status(400).json({ error: req.t(err) });
       news.image = image;
       news.hasImage = true;
     }
@@ -151,10 +199,11 @@ router.patch('/:id', adminGuard, async (req, res) => {
     news.editedAt = new Date();
     await news.save();
 
-    res.json(serialize(news));
+    scheduleTranslation(news._id);
+    res.json(serialize(news, req.lang));
   } catch (err) {
     console.error('[PATCH /news/:id]', err);
-    res.status(400).json({ error: 'Не удалось сохранить изменения' });
+    res.status(400).json({ error: req.t('server.saveChangesFailed') });
   }
 });
 
@@ -164,7 +213,7 @@ router.delete('/:id', adminGuard, async (req, res) => {
     await News.deleteOne({ _id: req.params.id });
     res.json({ ok: true });
   } catch (_) {
-    res.status(400).json({ error: 'Не удалось удалить' });
+    res.status(400).json({ error: req.t('server.deleteFailed') });
   }
 });
 
@@ -194,7 +243,7 @@ router.post('/spellcheck', adminGuard, async (req, res) => {
     });
   } catch (err) {
     console.warn('[news spellcheck]', err.message);
-    res.status(502).json({ error: 'Проверка орфографии сейчас недоступна' });
+    res.status(502).json({ error: req.t('server.news.spellUnavailable') });
   }
 });
 

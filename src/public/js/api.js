@@ -11,7 +11,11 @@ async function api(path, options = {}) {
     ...opts,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Ошибка запроса');
+  if (!res.ok) {
+    const err = new Error(data.error || (window.t ? t('common.requestFailed') : 'Request failed'));
+    err.status = res.status; // текст ошибки переведён, поэтому проверяем код, а не слова
+    throw err;
+  }
   return data;
   
 }

@@ -3,30 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/theme.js"></script>
+  <script src="/js/i18n.js?v=2" data-ns="workbench,activity"></script>
+  <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/css/common.css?v=2" />
   <link rel="stylesheet" href="/workbench/workbench.css" />
-  <title>PartyWatcher — Актив канала</title>
+  <title data-i18n="activity.pageTitle">PartyWatcher — Актив канала</title>
 </head>
 <body>
     <div class="page-header">
-    <a href="/streams.html" class="brand">
-      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
-        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span class="brand-stack">
-        <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
-        <span class="brand-live-tag">LIVE</span>
-      </span>
-    </a>
+    <div class="brand-row">
+      <a href="/streams.html" class="brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="brand-stack">
+          <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+          <span class="brand-live-tag">LIVE</span>
+        </span>
+      </a>
+      <div data-lang-switch></div>
+    </div>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" id="profileBtn" data-click="goProfile">← Профиль</button>
-        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
+        <button class="icon-btn" id="profileBtn" data-click="goProfile" data-i18n="workbench.profile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
       </div>
     </div>
   </div>
@@ -34,32 +38,32 @@
   <div class="wb-outer">
     <div class="wb-subpage">
       <nav class="wb-nav wb-nav-static">
-        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html">🧩 Конструктор</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html">🎨 Пре-сеты</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html" data-i18n="workbench.nav.news">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html" data-i18n="workbench.nav.stream">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html" data-i18n="workbench.nav.videos">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html" data-i18n="workbench.nav.activity">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html" data-i18n="workbench.nav.constructor">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html" data-i18n="workbench.nav.presets">🎨 Пре-сеты</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html" data-i18n="workbench.nav.docs">📚 Документация</button>
       </nav>
 
       
       <div class="wb-subpage-main">
         <section class="wb-panel">
-          <h2>Заблокированные пользователи</h2>
+          <h2 data-i18n="activity.bans">Заблокированные пользователи</h2>
           <div id="bansList"></div>
         </section>
         <section class="wb-panel">
-          <h2>Подписчики</h2>
-          <p style="color:var(--text-muted); font-size:14px;">Система подписок ещё не реализована — появится отдельным шагом.</p>
+          <h2 data-i18n="activity.subs">Подписчики</h2>
+          <p style="color:var(--text-muted); font-size:14px;" data-i18n="activity.subsSoon">Система подписок ещё не реализована — появится отдельным шагом.</p>
         </section>
       </div>
     </div>
   </div>
 
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
-  <script src="/workbench/channel-activity.js"></script>
-  <script src="/js/minipip.js"></script>
+  <script src="/workbench/channel-activity.js?v=3"></script>
+  <script src="/js/minipip.js?v=2"></script>
 </body>
 </html>

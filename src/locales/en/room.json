@@ -1,0 +1,172 @@
+{
+  "pageTitle": "Room — PartyWatcher",
+  "loading": "Loading the room...",
+  "start": "▶ Start watching",
+  "back": "← Back",
+  "resync": "🔄 Sync",
+  "copyLink": "📋 Copy link",
+  "system": "System",
+  "error": "Room error",
+  "fs": {
+    "chat": "Chat (hold to move)",
+    "subtitles": "Subtitles",
+    "volume": "Volume (hold to move)",
+    "fullscreen": "Fullscreen (hold to move)",
+    "closeChat": "Close chat",
+    "resize": "Drag to resize"
+  },
+  "meta": {
+    "name": "Name:",
+    "code": "Key:",
+    "copyHint": "Click to copy",
+    "untitled": "Untitled"
+  },
+  "tabs": {
+    "chat": "Chat",
+    "video": "Video"
+  },
+  "chat": {
+    "placeholder": "Message..."
+  },
+  "participants": {
+    "title": "Room participants",
+    "count": "Participants:",
+    "host": "(Host)",
+    "you": "(you)"
+  },
+  "banned": {
+    "btn": "Blocked",
+    "back": "← Back to participants",
+    "title": "Blocked users",
+    "empty": "The list is empty",
+    "unban": "Unblock"
+  },
+  "kick": {
+    "btn": "Kick",
+    "title": "Kick the participant?",
+    "text": "{name} will be kicked from the room and blocked in it."
+  },
+  "kicked": {
+    "title": "You were kicked from the room",
+    "text": "Access to it is blocked."
+  },
+  "bannedMe": {
+    "title": "You are blocked",
+    "text": "You can't enter this room."
+  },
+  "deleted": {
+    "title": "The room is gone",
+    "text": "The owner deleted this room."
+  },
+  "host": {
+    "season": "Season",
+    "episode": "Episode",
+    "voice": "Voice-over",
+    "player": "Player",
+    "quality": "Quality"
+  },
+  "change": {
+    "title": "Change link",
+    "mode": "Mode:",
+    "placeholder": "New video link",
+    "submit": "Change",
+    "changing": "Changing...",
+    "noUrl": "Paste a new link",
+    "failed": "Could not change the video"
+  },
+  "videoType": {
+    "youtube": "YouTube",
+    "twitch": "Twitch",
+    "drive": "Google Drive",
+    "player_capture": "Player capture",
+    "direct": "Direct link",
+    "vk": "VK"
+  },
+  "lock": {
+    "title": "Lock/unlock player buttons",
+    "tooltip": "Lock/unlock moving the player buttons"
+  },
+  "overlay": {
+    "ready": "Ready to watch",
+    "hostWatching": "The host is watching — click to join",
+    "hostPaused": "The host has paused — click to join",
+    "videoChanged": "The host changed the video — click to continue",
+    "streamUpdated": "Stream updated — click to continue",
+    "episodeChanged": "The host changed the episode — click to continue",
+    "episodeError": "Failed to load the episode"
+  },
+  "ageGate": {
+    "title": "Age confirmation",
+    "text": "This video cannot be embedded without age confirmation (YouTube age restriction). By confirming, you agree that you are 18 or older.",
+    "confirm": "I'm 18+, continue",
+    "waitHost": "YouTube blocked the video — waiting for the host to confirm 18+",
+    "declined": "This video is unavailable without age confirmation",
+    "downloading": "Downloading the video…",
+    "downloadFailed": "Could not download the video",
+    "jobLost": "The task was lost, try again",
+    "tooLong": "Taking too long, try later",
+    "queued": "Waiting in the server queue… {sec} s",
+    "progress": "Downloading the video…{pct} ({sec} s)",
+    "getFailed": "Could not get the video:",
+    "hostEnabled": "The host enabled 18+ content. Reload the page if you are ready to confirm your age."
+  },
+  "copy": {
+    "linkOk": "Room link copied",
+    "linkFailed": "Could not copy the link",
+    "nameOk": "Name copied",
+    "codeOk": "Key copied",
+    "failed": "Could not copy"
+  },
+  "sys": {
+    "joined": "{name} joined",
+    "episodeChanged": "The host switched to Season {season}, Episode {episode}",
+    "videoChanged": "The host changed the video",
+    "viewerHelp": "When the host starts the video, you need to start it on your side manually (button or space). After that you can press “Sync”, and the site will adjust you automatically if you fall behind by more than {n} seconds."
+  },
+  "voice": {
+    "title": "Voice chat",
+    "join": "Join the call",
+    "inCall": "You are in the call",
+    "count": "In call: {n}",
+    "countLaggy": "In call: {n} (may lag)",
+    "muteHint": "Mute microphone (M)",
+    "hangup": "Leave the call",
+    "confirmText": "Do you really want to start voice chat? The browser will ask for microphone access.",
+    "confirmYes": "Yes, start",
+    "micLost": "The microphone was disconnected — call ended",
+    "full": {
+      "one": "The call is full (max {n} person)",
+      "other": "The call is full (max {n} people)"
+    },
+    "fullTryLater": {
+      "one": "The call is already full (max {n} person) — try later.",
+      "other": "The call is already full (max {n} people) — try later."
+    },
+    "micDenied": "Could not access the microphone:",
+    "btWarn": "Microphone “{label}” is a Bluetooth headset: it may make the movie sound “like in a tin can”. Choose another microphone in 🎚️ Sound settings."
+  },
+  "voiceSettings": {
+    "title": "Sound settings",
+    "mic": "Microphone",
+    "micDefault": "Default",
+    "micN": "Microphone {n}",
+    "processing": "Browser noise and echo suppression",
+    "processingHint": "If your voice sounds “like in a tin can”, try turning it off. With speakers (no headphones) it is better to keep it on.",
+    "gain": "Microphone volume:",
+    "levelHint": "The bar shows how others hear you. When you speak normally it should reach at least the middle. If it barely moves, raise the volume. Works during a call.",
+    "duck": "Lower the video volume while someone is speaking",
+    "duckAmount": "How much to lower:",
+    "quality": "Connection quality (updated every 2 s)",
+    "statsEmpty": "Shown once you join the call.",
+    "btHint": "A Bluetooth microphone is selected. While it is on, the headphones switch to headset mode and the movie sounds “like in a tin can”. Choose the laptop or a wired microphone and the headphones stay in normal mode.",
+    "switchFailed": "Could not switch the microphone:",
+    "applyFailed": "Could not apply the setting:"
+  },
+  "stats": {
+    "turn": "via TURN",
+    "direct": "direct",
+    "noPeers": "Not connected to anyone yet.",
+    "row": "{name}: {route}, ping {rtt} ms, loss {loss}, jitter {jitter} ms",
+    "connecting": "{name}: connecting…"
+  }
+}

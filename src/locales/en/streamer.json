@@ -1,0 +1,43 @@
+{
+  "pageTitle": "PartyWatcher — Streamer",
+  "back": "Back",
+  "edit": "✏️ Edit",
+  "notFound": "Streamer not found",
+  "more": "…more",
+  "vods": "Recordings",
+  "vod": "Recording",
+  "noBio": "No description yet",
+  "live": {
+    "offline": "Not live",
+    "loading": "Loading the stream...",
+    "unmute": "🔊 Turn on sound",
+    "chat": "Chat",
+    "fullscreen": "Fullscreen",
+    "quality": "Quality settings",
+    "settings": "🛠️ Stream settings",
+    "toggle": "Show/hide the stream",
+    "playerFailed": "Could not load the player",
+    "backToPlayer": "Back to the player"
+  },
+  "quality": {
+    "auto": "Auto",
+    "source": "Source",
+    "sourceP": "Source ({h}p)",
+    "level": "Level {n}"
+  },
+  "viewers": {
+    "title": "Viewers"
+  },
+  "chat": {
+    "placeholder": "Message...",
+    "clear": "Clear chat",
+    "banned": "You are banned from this channel's chat",
+    "timedOut": "Your chat access is restricted for:"
+  },
+  "auth": {
+    "title": "Sign in to chat",
+    "text": "You can watch without an account, but to send messages you need to sign in or sign up.",
+    "login": "Sign in",
+    "register": "Sign up"
+  }
+}

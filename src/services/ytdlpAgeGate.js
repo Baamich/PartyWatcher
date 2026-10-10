@@ -4,6 +4,7 @@
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const i18n = require('./i18n');
 
 const YTDLP = process.env.YT_DLP_PATH || 'yt-dlp';
 const COOKIES_PATH = process.env.YT_COOKIES_PATH || '/home/ubuntu/PartyWatcher/yt-cookies.txt';
@@ -77,26 +78,27 @@ function cleanupPartials(id) {
 }
 
 // ---------- ошибки простым языком (в логи пишется полный текст) ----------
+// возвращает ключ словаря: job.error хранит ключ, роут переводит его на язык хоста
 
 function friendlyError(raw) {
   const s = String(raw || '');
-  if (/не запустился|ENOENT/i.test(s)) return 'На сервере не найден yt-dlp';
+  if (/не запустился|ENOENT/i.test(s)) return 'server.yt.err.noYtdlp';
   if (/confirm your age|age-restricted|age verification|inappropriate for some users/i.test(s)) {
-    return 'YouTube требует вход в аккаунт 18+: обнови файл cookies на сервере (yt-cookies.txt)';
+    return 'server.yt.err.age';
   }
   if (/not a bot|Sign in to confirm/i.test(s)) {
-    return 'YouTube блокирует сервер: нужны свежие cookies или другой IP';
+    return 'server.yt.err.bot';
   }
   if (/Video unavailable|private video|has been removed|not available in your country/i.test(s)) {
-    return 'Видео недоступно (приватное, удалено или закрыто для региона сервера)';
+    return 'server.yt.err.unavailable';
   }
   if (/Requested format is not available|n challenge|nsig|JS runtime/i.test(s)) {
-    return 'yt-dlp не смог расшифровать ссылки: обнови yt-dlp и проверь JS-runtime (deno)';
+    return 'server.yt.err.decode';
   }
-  if (/no such option/i.test(s)) return 'yt-dlp на сервере устарел: поставь свежий бинарник и укажи YT_DLP_PATH в .env';
-  if (/403/i.test(s)) return 'YouTube отклонил загрузку (403): обнови yt-dlp и cookies';
-  if (/таймаут/i.test(s)) return 'Загрузка зависла и была остановлена';
-  return 'Не удалось скачать видео (подробности в логах сервера)';
+  if (/no such option/i.test(s)) return 'server.yt.err.outdated';
+  if (/403/i.test(s)) return 'server.yt.err.forbidden';
+  if (/таймаут/i.test(s)) return 'server.yt.err.timeout';
+  return 'server.yt.err.generic';
 }
 
 // ---------- запуск yt-dlp ----------
@@ -217,7 +219,7 @@ async function runJob(job, id) {
 function ensureExtraction(videoUrl) {
   const id = extractYoutubeId(videoUrl);
   if (!id) {
-    const e = new Error('Не удалось распознать ссылку YouTube');
+    const e = i18n.err('server.yt.badUrl');
     e.code = 'BAD_URL';
     throw e;
   }
@@ -227,7 +229,7 @@ function ensureExtraction(videoUrl) {
   if (existing && existing.status === 'done' && fs.existsSync(cachePath(id))) return existing;
 
   if (queued >= MAX_QUEUE) {
-    const e = new Error('Сервер сейчас занят, попробуй через пару минут');
+    const e = i18n.err('server.yt.busy');
     e.code = 'QUEUE_FULL';
     throw e;
   }

@@ -11,6 +11,11 @@ const newsSchema = new mongoose.Schema(
     authorUsername: { type: String, default: '' },
     publishedAt: { type: Date, default: Date.now, index: true },
     editedAt: { type: Date, default: null },
+    // автоперевод: язык оригинала, переводы { en: { title, body } } и метка версии (editedAt || publishedAt),
+    // для которой они сделаны — после правки старый перевод не показывается, пока не будет нового
+    lang: { type: String, default: null },
+    tr: { type: mongoose.Schema.Types.Mixed, default: null },
+    trStamp: { type: Number, default: null },
   },
   { versionKey: false }
 );

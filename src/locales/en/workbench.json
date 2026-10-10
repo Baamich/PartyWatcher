@@ -1,0 +1,95 @@
+{
+  "pageTitle": "PartyWatcher — Creator studio",
+  "profile": "← Profile",
+  "resetLayout": "↺ Default",
+  "copyFailed": "Could not copy",
+  "nav": {
+    "news": "📰 News",
+    "stream": "📡 Stream manager",
+    "videos": "🎬 Video studio",
+    "activity": "🛡️ Channel activity",
+    "constructor": "🧩 Builder",
+    "presets": "🎨 Presets",
+    "docs": "📚 Docs"
+  },
+  "key": {
+    "title": "Stream key",
+    "none": "No key yet",
+    "copy": "Copy key",
+    "generate": "🔄 Generate",
+    "server": "Server:",
+    "generated": "Key generated — copy it now, it won't be shown in full again",
+    "generateFailed": "Could not generate the key",
+    "copied": "Key copied",
+    "copyFailed": "Could not copy — maybe the key has not been created yet",
+    "serverCopied": "Server address copied"
+  },
+  "player": {
+    "title": "Stream",
+    "status": "Stream status",
+    "mini": "⧉ Mini window",
+    "backToPlayer": "⧉ Back to the player",
+    "reconnecting": "Reconnecting…"
+  },
+  "status": {
+    "offline": "Offline",
+    "live": "Live",
+    "reconnecting": "Reconnecting"
+  },
+  "settings": {
+    "title": "Stream settings",
+    "name": "Stream title",
+    "namePh": "What is the stream about?",
+    "desc": "Description",
+    "descPh": "Tell more"
+  },
+  "log": {
+    "title": "Action log",
+    "clear_chat": "cleared the chat",
+    "delete_message": "deleted a message from {name}",
+    "ban": "banned {name}",
+    "timeout": "timed out {name} ({details})"
+  },
+  "chat": {
+    "title": "Chat",
+    "clear": "Clear chat",
+    "placeholder": "Write to the chat…",
+    "deletedByAdmin": "Message deleted by a moderator",
+    "reconnectFailed": "Could not reconnect to the chat. Reload the page."
+  },
+  "viewers": {
+    "title": "Viewers"
+  },
+  "chatApi": {
+    "title": "Chat API",
+    "docs": "📖 Docs",
+    "docsTitle": "Open the chat docs",
+    "obs": "OBS link (Browser Source) 📋",
+    "hint": "Send to the chat: <code>POST /api/chat/send</code> with the header <code>Authorization: Bearer key</code>",
+    "generated": "Chat key generated — copy it or the OBS link",
+    "generateFailed": "Could not generate the chat key",
+    "copied": "Chat API key copied",
+    "obsCopied": "OBS link copied"
+  },
+  "timeout": {
+    "title": "Timeout: {name}",
+    "h": "h",
+    "m": "m",
+    "s": "s",
+    "ok": "Timeout"
+  },
+  "regen": {
+    "title": "Generate a new key?",
+    "text": "The old key stops working immediately — if a stream is running with it, it will be cut off.",
+    "ok": "Yes, generate"
+  },
+  "resetModal": {
+    "title": "Restore the default window layout?",
+    "text": "All moved and resized windows will return to their original places.",
+    "ok": "Yes, restore"
+  },
+  "chatRegen": {
+    "title": "Generate a new chat key?",
+    "text": "The old key will stop working: the OBS overlay, bots and bridges will need the new one."
+  }
+}

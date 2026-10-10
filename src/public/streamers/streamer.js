@@ -35,7 +35,7 @@ function renderProfile(streamer) {
   const expandBtn = document.getElementById('bioExpandBtn');
 
   if (!bio) {
-    bioShortEl.textContent = 'Описание пока не заполнено';
+    bioShortEl.textContent = t('streamer.noBio');
     expandBtn.classList.add('hidden');
   } else {
     bioShortEl.textContent = bio;
@@ -43,7 +43,7 @@ function renderProfile(streamer) {
   }
 
   document.getElementById('bioModalName').textContent = streamer.streamerName;
-  document.getElementById('bioModalText').textContent = bio || 'Описание пока не заполнено';
+  document.getElementById('bioModalText').textContent = bio || t('streamer.noBio');
 }
 
 function openBioModal() { document.getElementById('bioModal').classList.remove('hidden'); }
@@ -84,7 +84,7 @@ function renderVodGrid(vods) {
         <div class="vod-card-title"></div>
         <div class="vod-card-meta"></div>
       </div>`;
-    card.querySelector('.vod-card-title').textContent = v.title || 'Запись';
+    card.querySelector('.vod-card-title').textContent = v.title || t('streamer.vod');
     card.querySelector('.vod-card-meta').textContent = new Date(v.createdAt).toLocaleString('ru-RU');
     grid.appendChild(card);
   });
@@ -102,7 +102,7 @@ function renderVodColumn(vods) {
         <div class="vod-card-title"></div>
         <div class="vod-card-meta"></div>
       </div>`;
-    card.querySelector('.vod-card-title').textContent = v.title || 'Запись';
+    card.querySelector('.vod-card-title').textContent = v.title || t('streamer.vod');
     card.querySelector('.vod-card-meta').textContent = new Date(v.createdAt).toLocaleString('ru-RU');
     card.onclick = () => switchToVodPlayback(v);
     list.appendChild(card);
@@ -184,7 +184,7 @@ function startLiveSession() {
   if (currentStreamer?.isLive && currentStreamer?.streamPlaybackId) {
     offline.classList.add('hidden');
     overlay.classList.remove('hidden');
-    overlayText.textContent = 'Загрузка эфира...';
+    overlayText.textContent = t('streamer.live.loading');
     startBtn.classList.remove('hidden');
     startBtn.onclick = () => {
       video.muted = false;
@@ -198,7 +198,7 @@ function startLiveSession() {
       console.error('[live] не удалось запустить плеер:', e.message);
       overlay.classList.add('hidden');
       offline.classList.remove('hidden');
-      offline.textContent = 'Не удалось загрузить плеер';
+      offline.textContent = t('streamer.live.playerFailed');
     }
   } else {
     video.classList.add('hidden');
@@ -308,15 +308,15 @@ function populateQualityMenu(levels) {
     return btn;
   };
 
-  popup.appendChild(makeOption('Авто', 'auto', -1));
+  popup.appendChild(makeOption(t('streamer.quality.auto'), 'auto', -1));
 
   // сначала источник, дальше по убыванию высоты
   items.sort((a, b) => (b.key === 'source') - (a.key === 'source') || b.height - a.height);
 
   items.forEach(({ idx, key, height }) => {
     const label = key === 'source'
-      ? (height ? `Источник (${height}p)` : 'Источник')
-      : (height ? `${height}p` : `Уровень ${idx}`);
+      ? (height ? t('streamer.quality.sourceP', { h: height }) : t('streamer.quality.source'))
+      : (height ? `${height}p` : t('streamer.quality.level', { n: idx }));
     popup.appendChild(makeOption(label, key || `lvl${idx}`, idx));
   });
 }
@@ -656,17 +656,17 @@ function liveEscapeHtml(s) {
 }
 
 function buildLiveMessageHtml(msg) {
-  if (msg.deleted) return `<span style="color:var(--text-muted);font-style:italic;">Сообщение удалено</span>`;
+  if (msg.deleted) return `<span style="color:var(--text-muted);font-style:italic;">${t('common.chat.deleted')}</span>`;
 
   // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick
   const delBtn = isOwnerFlag
-    ? `<button type="button" class="live-mod-btn" title="Удалить" data-act="del" data-id="${liveEscapeHtml(msg._id)}">🗑️</button>`
+    ? `<button type="button" class="live-mod-btn" title="${t('common.delete')}" data-act="del" data-id="${liveEscapeHtml(msg._id)}">🗑️</button>`
     : '';
 
   // бан и таймаут — только для сообщений реальных юзеров
   const userBtns = isOwnerFlag && !msg.external && msg.senderId ? `
-    <button type="button" class="live-mod-btn" title="Заблокировать" data-act="ban" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">🚫</button>
-    <button type="button" class="live-mod-btn" title="Ограничить чат" data-act="timeout" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">⏱️</button>
+    <button type="button" class="live-mod-btn" title="${t('common.mod.ban')}" data-act="ban" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">🚫</button>
+    <button type="button" class="live-mod-btn" title="${t('common.mod.timeout')}" data-act="timeout" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">⏱️</button>
   ` : '';
 
   const src = msg.external
@@ -678,7 +678,7 @@ function buildLiveMessageHtml(msg) {
     ? ` style="color:${msg.nickColor}"`
     : '';
 
-  return `${delBtn}${userBtns}${src}<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(msg.senderUsername)}</b>: ${liveEscapeHtml(msg.text)}`;
+  return `${delBtn}${userBtns}${src}<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(I18N.sysName(msg.senderUsername))}</b>: ${liveEscapeHtml(msg.text)}`;
 }
 
 function renderLiveMessage(msg) {
@@ -695,20 +695,20 @@ function liveDeleteMessage(messageId) {
   liveSocket?.emit('chat:delete', { messageId });
 }
 async function liveBanUser(userId, username) {
-  const ok = await PW.confirm(`${username} не сможет писать в чат канала.`, {
-    title: 'Заблокировать пользователя?',
-    okText: 'Заблокировать',
+  const ok = await PW.confirm(t('common.mod.banText', { name: username }), {
+    title: t('common.mod.banTitle'),
+    okText: t('common.mod.ban'),
     danger: true,
   });
   if (!ok) return;
   liveSocket?.emit('chat:ban', { userId, username });
 }
 async function liveTimeoutUser(userId, username) {
-  const secStr = await PW.prompt(`На сколько секунд ограничить чат для ${username}?`, {
-    title: 'Ограничить чат',
+  const secStr = await PW.prompt(t('common.mod.timeoutText', { name: username }), {
+    title: t('common.mod.timeout'),
     defaultValue: '300',
     inputType: 'number',
-    okText: 'Ограничить',
+    okText: t('common.mod.timeoutOk'),
   });
   const seconds = parseInt(secStr, 10);
   if (!seconds || seconds <= 0) return;
@@ -719,9 +719,9 @@ window.liveBanUser = liveBanUser;
 window.liveTimeoutUser = liveTimeoutUser;
 
 document.getElementById('liveClearChatBtn')?.addEventListener('click', async () => {
-  const ok = await PW.confirm('Все сообщения исчезнут у всех зрителей.', {
-    title: 'Очистить чат?',
-    okText: 'Очистить',
+  const ok = await PW.confirm(t('common.chat.clearText'), {
+    title: t('common.chat.clearTitle'),
+    okText: t('common.chat.clearOk'),
     danger: true,
   });
   if (ok) liveSocket?.emit('chat:clear');
@@ -753,13 +753,13 @@ function renderViewersList(viewers) {
   if (!list) return;
   list.innerHTML = '';
   if (!liveViewersCache.length) {
-    list.innerHTML = '<div class="live-viewer-row guest">Никого нет</div>';
+    list.innerHTML = `<div class="live-viewer-row guest">${t('common.viewers.none')}</div>`;
     return;
   }
   liveViewersCache.forEach((v) => {
     const row = document.createElement('div');
     row.className = 'live-viewer-row' + (v.isGuest ? ' guest' : '');
-    row.textContent = v.username;
+    row.textContent = v.isGuest ? t('common.viewers.guests', { n: v.guests || 1 }) : v.username;
     list.appendChild(row);
   });
 }
@@ -790,7 +790,7 @@ function applyLiveRestriction(r) {
   box.classList.remove('hidden');
 
   if (r.type === 'ban') {
-    box.textContent = 'Вам закрыт доступ в чат этого канала';
+    box.textContent = t('streamer.chat.banned');
     return;
   }
 
@@ -798,7 +798,7 @@ function applyLiveRestriction(r) {
   const tick = () => {
     const left = until - Date.now();
     if (left <= 0) { clearInterval(liveRestrictTimer); free(); return; }
-    box.textContent = 'Вам ограничили доступ в чат на: ' + fmtHMS(left);
+    box.textContent = t('streamer.chat.timedOut') + ' ' + fmtHMS(left);
   };
   tick();
   liveRestrictTimer = setInterval(tick, 1000);
@@ -814,7 +814,7 @@ function connectLiveChat(nameLower) {
   liveSocket.on('chat:message', renderLiveMessage);
   liveSocket.on('chat:message-deleted', ({ messageId }) => {
     document.querySelectorAll(`[data-id="${messageId}"]`).forEach((row) => {
-      row.innerHTML = `<span style="color:var(--text-muted);font-style:italic;">Сообщение удалено</span>`;
+      row.innerHTML = `<span style="color:var(--text-muted);font-style:italic;">${t('common.chat.deleted')}</span>`;
     });
   });
   liveSocket.on('chat:cleared', () => { document.getElementById('liveMessages').innerHTML = ''; });
@@ -913,7 +913,7 @@ async function loadProfile() {
     b = await api('/streamers/' + enc + '/bundle' + q);
   } catch (err) {
     console.warn('[loadProfile]', err.message);
-    if (!cached || /не найден/i.test(err.message || '')) {
+    if (!cached || err.status === 404) {
       if (cached) PWCache.del(nameLower);
       showNotFound();
     }
@@ -1184,7 +1184,7 @@ applyVolumeToLive(getSavedVolume());
     const on = document.pictureInPictureElement === video;
     btn.classList.toggle('active', on);
     btn.textContent = on ? '↩' : '⧉';
-    btn.title = on ? 'Вернуть в плеер' : 'Мини-окно поверх всех окон';
+    btn.title = on ? t('streamer.live.backToPlayer') : t('common.mini.pip');
   };
 
   // кнопка видна, только пока в плеере реально есть эфир

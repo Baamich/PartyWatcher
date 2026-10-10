@@ -1,0 +1,9 @@
+{
+  "pageTitle": "New password — PartyWatcher",
+  "title": "New password",
+  "done": "Password changed ✓ Redirecting to the site…",
+  "submit": "Save password",
+  "home": "Home",
+  "badLink": "The link is incomplete. Request a password reset again on the home page.",
+  "failed": "Could not change the password"
+}

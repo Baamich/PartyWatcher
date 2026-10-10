@@ -19,11 +19,11 @@ function handleSearchKey(e) {
 async function performSearch(q) {
   const heading = document.getElementById('resultsHeading');
   const grid = document.getElementById('resultsGrid');
-  heading.textContent = `Возможно, вы имели в виду:`;
+  heading.textContent = t('streams.didYouMean');
 
   try {
     const results = await api('/streamers?q=' + encodeURIComponent(q) + '&limit=20');
-    renderStreamersList(grid, results, `По запросу «${q}» никого не нашли`);
+    renderStreamersList(grid, results, t('streams.noResults', { q }));
   } catch (err) {
     console.warn('[performSearch]', err.message);
   }

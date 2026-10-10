@@ -4,6 +4,7 @@
 const dns = require('dns');
 const net = require('net');
 const { Agent } = require('undici');
+const i18n = require('./i18n');
 
 const HOST_OK_TTL_MS = 60_000;
 const hostOkCache = new Map(); // имя хоста → до какого времени считаем его адрес публичным
@@ -50,7 +51,7 @@ function guardedLookup(hostname, options, callback) {
     if (err) return callback(err);
     const list = Array.isArray(address) ? address : [{ address }];
     if (list.some((a) => isPrivateAddress(a.address))) {
-      return callback(new Error('Адрес во внутренней сети запрещён'));
+      return callback(i18n.err('server.ssrf.private'));
     }
     callback(null, address, family);
   });
@@ -64,17 +65,17 @@ async function assertPublicHttpUrl(urlString) {
   try {
     u = new URL(String(urlString));
   } catch {
-    throw new Error('Некорректная ссылка');
+    throw i18n.err('server.ssrf.badUrl');
   }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Разрешены только http и https');
-  if (u.username || u.password) throw new Error('Ссылки с логином и паролем не поддерживаются');
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw i18n.err('server.ssrf.protocol');
+  if (u.username || u.password) throw i18n.err('server.ssrf.credentials');
 
   const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
   if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
-    throw new Error('Адрес во внутренней сети запрещён');
+    throw i18n.err('server.ssrf.private');
   }
   if (net.isIP(host)) {
-    if (isPrivateAddress(host)) throw new Error('Адрес во внутренней сети запрещён');
+    if (isPrivateAddress(host)) throw i18n.err('server.ssrf.private');
     return u;
   }
 
@@ -83,7 +84,7 @@ async function assertPublicHttpUrl(urlString) {
 
   const records = await dns.promises.lookup(host, { all: true });
   if (!records.length || records.some((r) => isPrivateAddress(r.address))) {
-    throw new Error('Адрес во внутренней сети запрещён');
+    throw i18n.err('server.ssrf.private');
   }
   if (hostOkCache.size > 500) hostOkCache.clear();
   hostOkCache.set(host, Date.now() + HOST_OK_TTL_MS);
@@ -106,7 +107,7 @@ async function safeFetch(url, options = {}, { guarded = true, maxRedirects = 4 }
     }
     return res;
   }
-  throw new Error('Слишком много редиректов');
+  throw i18n.err('server.ssrf.redirects');
 }
 
 module.exports = { assertPublicHttpUrl, safeFetch, isPrivateAddress };

@@ -7,7 +7,7 @@ async function unbanUser(userId, row) {
     await api('/workbench/bans/' + encodeURIComponent(userId), { method: 'DELETE' });
     row.remove();
   } catch (err) {
-    alert(err.message || 'Не удалось разблокировать');
+    PW.toast(err.message || t('activity.unbanFailed'), 'error');
   }
 }
 
@@ -16,7 +16,7 @@ async function loadBans() {
   try {
     const bans = await api('/workbench/bans');
     if (!bans.length) {
-      box.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">Заблокированных нет</p>';
+      box.innerHTML = `<p style="color:var(--text-muted); font-size:14px;">${t('activity.noBans')}</p>`;
       return;
     }
     box.innerHTML = '';
@@ -33,7 +33,7 @@ async function loadBans() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-btn';
-      btn.textContent = 'Разблокировать';
+      btn.textContent = t('activity.unban');
       btn.onclick = () => unbanUser(b.userId, row);
 
       row.append(name, btn);

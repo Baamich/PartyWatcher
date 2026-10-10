@@ -261,3 +261,125 @@ button {
   color: var(--text);
   border: 1px solid var(--border);
 }
+
+/* ===== поддержка: поиск, номер, переписка, ответ ===== */
+.support-admin-header {
+  gap: 10px;
+}
+.support-search {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+.support-search input {
+  width: min(220px, 100%);
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.support-num {
+  color: var(--text);
+}
+.support-new {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.support-card--fresh {
+  border-color: var(--danger);
+}
+.support-card-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(1);
+  box-shadow: none;
+}
+
+/* окна поверх панели обращений (у неё z-index 100) */
+.support-layer {
+  z-index: 110;
+}
+.support-layer--top {
+  z-index: 120;
+}
+.ticket-view,
+.reply-modal {
+  width: min(720px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ticket-view-title {
+  margin: 0 28px 4px 0;
+  font-size: 17px;
+  word-break: break-word;
+}
+.ticket-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.ticket-msg {
+  max-width: 88%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.ticket-msg--user {
+  align-self: flex-start;
+}
+.ticket-msg--support {
+  align-self: flex-end;
+  background: var(--surface-alt);
+  border-color: var(--accent-text);
+}
+.ticket-msg-head {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.ticket-msg-text {
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.reply-modal input[readonly] {
+  opacity: 0.75;
+}
+.reply-modal textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  resize: vertical;
+}
+/* нижний блок письма: виден, но не редактируется */
+.reply-footer {
+  margin: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  cursor: not-allowed;
+}

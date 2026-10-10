@@ -7,6 +7,7 @@ const User = require('../models/User');
 const chatBus = require('../services/chatBus');
 const ChatCommand = require('../models/ChatCommand');
 const { parseCommandLine, buildReply } = require('../services/chatCommands');
+const i18n = require('../services/i18n');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
@@ -50,11 +51,12 @@ async function getRestriction(streamerNameLower, userId) {
   return { type: 'none' };
 }
 
-function formatUptime(startedAt, isLive) {
-  if (!isLive || !startedAt) return 'офлайн';
+// lang — язык того, кто вызвал команду (ответ бота уходит в общий чат на его языке)
+function formatUptime(startedAt, isLive, lang) {
+  if (!isLive || !startedAt) return i18n.t(lang, 'server.cmd.offline');
   const m = Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000);
   const h = Math.floor(m / 60);
-  return h > 0 ? `${h}ч ${m % 60}м` : `${m}м`;
+  return h > 0 ? i18n.t(lang, 'server.cmd.uptimeHM', { h, m: m % 60 }) : i18n.t(lang, 'server.cmd.uptimeM', { m });
 }
 
 module.exports = function registerChatSocket(io) {
@@ -95,8 +97,9 @@ module.exports = function registerChatSocket(io) {
 
     if (guestCount > 0) {
       list.push({
-        username: guestCount === 1 ? 'Гость' : `Гости (${guestCount})`,
+        username: guestCount === 1 ? 'Гость' : `Гости (${guestCount})`, // старые клиенты; новые пишут сами по guests
         isGuest: true,
+        guests: guestCount,
       });
     }
 
@@ -111,7 +114,7 @@ module.exports = function registerChatSocket(io) {
   const COMMAND_COOLDOWN_MS = 3000;
   const commandLastUsed = new Map(); // `${канал}:${команда}` → время последнего ответа
 
-  async function runChatCommand(nameLower, text, username) {
+  async function runChatCommand(nameLower, text, username, lang) {
     const parsed = parseCommandLine(text);
     if (!parsed) return;
 
@@ -136,8 +139,9 @@ module.exports = function registerChatSocket(io) {
       streamer: streamer?.streamerName || nameLower,
       title: streamer?.streamTitle || '',
       viewers: buildViewersPayload(nameLower).count,
-      uptime: formatUptime(streamer?.liveStartedAt, streamer?.isLive),
+      uptime: formatUptime(streamer?.liveStartedAt, streamer?.isLive, lang),
       count: (cmd.uses || 0) + 1,
+      lang,
     });
     if (!reply.usage) {
       ChatCommand.updateOne({ _id: cmd._id }, { $inc: { uses: 1 } }).catch(() => {});
@@ -192,7 +196,7 @@ module.exports = function registerChatSocket(io) {
         // вход по API-ключу (OBS-оверлей, бот): только чтение, в списке зрителей не светится
         streamer = await User.findOne({ chatApiKey: keyStr }).select('_id streamerNameLower').lean();
         if (!streamer || !streamer.streamerNameLower) {
-          return socket.emit('chat:overlay-error', { error: 'Неверный ключ чата' });
+          return socket.emit('chat:overlay-error', { error: i18n.t(i18n.langFromHeaders(socket.handshake.headers), 'server.chatApi.badChatKey') });
         }
         currentStreamerNameLower = streamer.streamerNameLower;
         socket.data.isOverlay = true;
@@ -269,7 +273,7 @@ module.exports = function registerChatSocket(io) {
         isOwner: !!socket.data.isOwner,
       });
 
-      runChatCommand(currentStreamerNameLower, trimmed, authUser.username).catch((e) =>
+      runChatCommand(currentStreamerNameLower, trimmed, authUser.username, i18n.langFromHeaders(socket.handshake.headers)).catch((e) =>
         console.warn('[chat command]', e.message)
       );
     });
@@ -318,7 +322,8 @@ module.exports = function registerChatSocket(io) {
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:user-timeout', { userId, until });
       chatBus.emitToUser(currentStreamerNameLower, userId, 'chat:restriction', { type: 'timeout', until });
       const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-      logAction(nsp, currentStreamerNameLower, authUser.username, 'timeout', username, `${h}ч ${m}м ${s}с`);
+      const pad = (n) => String(n).padStart(2, '0');
+      logAction(nsp, currentStreamerNameLower, authUser.username, 'timeout', username, `${pad(h)}:${pad(m)}:${pad(s)}`); // без слов: журнал читают на разных языках
     });
 
     socket.on('chat:clear', async () => {

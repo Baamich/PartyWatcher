@@ -3,64 +3,103 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/theme.js"></script>
+  <script src="/js/i18n.js?v=2" data-ns="admin"></script>
+  <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-  <link rel="stylesheet" href="/css/common.css" />
-  <link rel="stylesheet" href="/css/admin.css?v=2" />
+  <link rel="stylesheet" href="/css/common.css?v=2" />
+  <link rel="stylesheet" href="/css/admin.css?v=3" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>Админка — PartyWatcher</title>
+  <title data-i18n="admin.pageTitle">Админка — PartyWatcher</title>
 </head>
 <body>
   <div class="corner-menu">
-    <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
-    <button class="icon-btn" data-href="/">← Назад</button>
+    <div data-lang-switch></div>
+    <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
+    <button class="icon-btn" data-href="/" data-i18n="admin.back">← Назад</button>
         <button class="icon-btn support-admin-btn" id="supportAdminBtn" type="button">
-      Жалобы
+      <span data-i18n="admin.tickets">Жалобы</span>
       <span class="support-badge" id="supportBadge">0</span>
     </button>
   </div>
 
-  <h2>Панель администратора</h2>
+  <h2 data-i18n="admin.title">Панель администратора</h2>
 
   <div class="admin-grid">
     <div class="panel panel-update">
-      <h3>Обновление</h3>
-      <button data-click="runUpdate">Обновить с GitHub (последний коммит)</button>
+      <h3 data-i18n="admin.update.title">Обновление</h3>
+      <button data-click="runUpdate" data-i18n="admin.update.run">Обновить с GitHub (последний коммит)</button>
       <div id="log"></div>
     </div>
 
     <div class="panel panel-commits">
-      <h3>История коммитов</h3>
+      <h3 data-i18n="admin.commits.title">История коммитов</h3>
       <input
         type="text"
         id="commitSearch"
         placeholder="Поиск по хэшу или сообщению..."
+        data-i18n-placeholder="admin.commits.search"
         data-input="filterCommits"
       />
-      <div id="commitList" class="commit-list">Загрузка...</div>
-      <button id="revertBtn" data-click="revertToCommit" disabled>Вернуться к коммиту</button>
+      <div id="commitList" class="commit-list" data-i18n="common.loading">Загрузка...</div>
+      <button id="revertBtn" data-click="revertToCommit" disabled data-i18n="admin.commits.revert">Вернуться к коммиту</button>
     </div>
   </div>
 
-    <div id="supportAdminOverlay" class="support-admin-overlay hidden">
+  <div id="supportAdminOverlay" class="support-admin-overlay hidden">
     <div class="support-admin-panel">
       <div class="support-admin-header">
-        <h3>Обращения в поддержку</h3>
-        <button type="button" class="modal-close" id="supportAdminClose">×</button>
+        <h3 data-i18n="admin.support.title">Обращения в поддержку</h3>
+        <div class="support-search">
+          <input id="supportSearch" type="search" inputmode="numeric" maxlength="10" autocomplete="off"
+                 placeholder="Поиск по номеру #" data-i18n-placeholder="admin.support.searchPh" />
+        </div>
+        <button type="button" class="modal-close" id="supportAdminClose" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
       </div>
       <div class="support-tabs">
-        <button type="button" class="support-tab active" data-status="unread">Непрочитанные</button>
-        <button type="button" class="support-tab" data-status="accepted">Приняты</button>
-        <button type="button" class="support-tab" data-status="trivial">Пустяк</button>
+        <button type="button" class="support-tab active" data-status="unread" data-i18n="admin.support.unread">Непрочитанные</button>
+        <button type="button" class="support-tab" data-status="accepted" data-i18n="admin.support.acceptedTab">Приняты</button>
+        <button type="button" class="support-tab" data-status="trivial" data-i18n="admin.support.trivial">Пустяк</button>
+        <button type="button" class="support-tab" data-status="answered" data-i18n="admin.support.answeredTab">Отвечено</button>
       </div>
       <div id="supportTicketsList" class="support-tickets-list"></div>
     </div>
   </div>
 
+  <!-- просмотр обращения: вся переписка -->
+  <div id="ticketViewModal" class="modal support-layer hidden">
+    <div class="modal-content ticket-view">
+      <button type="button" class="modal-close" data-close="ticketViewModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 id="ticketViewTitle" class="ticket-view-title"></h3>
+      <div id="ticketViewMeta" class="support-card-meta"></div>
+      <div id="ticketViewThread" class="ticket-thread"></div>
+      <div id="ticketViewActions" class="support-card-actions"></div>
+    </div>
+  </div>
+
+  <!-- ответ на обращение -->
+  <div id="replyModal" class="modal support-layer support-layer--top hidden">
+    <div class="modal-content reply-modal">
+      <button type="button" class="modal-close" data-close="replyModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 id="replyTitle" class="ticket-view-title"></h3>
+      <label class="auth-label" for="replyTo" data-i18n="admin.reply.to">Кому</label>
+      <input id="replyTo" readonly />
+      <label class="auth-label" for="replySubject" data-i18n="admin.reply.subject">Тема</label>
+      <input id="replySubject" readonly />
+      <label class="auth-label" for="replyText" data-i18n="admin.reply.text">Ответ</label>
+      <textarea id="replyText" rows="7" maxlength="5000" placeholder="Текст ответа" data-i18n-placeholder="admin.reply.textPh"></textarea>
+      <div class="auth-label" data-i18n="admin.reply.footer">Добавится к письму автоматически (не редактируется)</div>
+      <pre id="replyFooter" class="reply-footer" aria-readonly="true"></pre>
+      <div class="support-card-actions">
+        <button type="button" id="replySendBtn" data-i18n="admin.reply.send">Отправить</button>
+        <button type="button" class="btn-trivial" data-close="replyModal" data-i18n="common.dialog.cancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
-  <script src="/js/admin.js?v=2"></script>
+  <script src="/js/admin.js?v=4"></script>
 </body>
 </html>

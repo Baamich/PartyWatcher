@@ -1,0 +1,73 @@
+{
+  "pageTitle": "Admin — PartyWatcher",
+  "back": "← Back",
+  "tickets": "Tickets",
+  "title": "Admin panel",
+  "error": "Error:",
+  "update": {
+    "title": "Update",
+    "run": "Update from GitHub (latest commit)",
+    "starting": "Starting...",
+    "startFailed": "Start failed:",
+    "done": "Done",
+    "error": "Error"
+  },
+  "commits": {
+    "title": "Commit history",
+    "search": "Search by hash or message...",
+    "revert": "Revert to commit",
+    "loadFailed": "Could not load commits:",
+    "empty": "Nothing found"
+  },
+  "revert": {
+    "title": "Revert the project?",
+    "text": "The project will go back to the selected commit and the server will restart.",
+    "ok": "Revert"
+  },
+  "support": {
+    "title": "Support requests",
+    "unread": "Unread",
+    "acceptedTab": "Accepted",
+    "trivial": "Trivial",
+    "accept": "Accept",
+    "empty": "Empty",
+    "fromEmail": "✉️ email",
+    "fromSite": "🌐 site",
+    "noName": "No name",
+    "searchPh": "Search by number #",
+    "answeredTab": "Answered",
+    "view": "View",
+    "reply": "Reply",
+    "noEmail": "no email",
+    "noEmailHint": "No email given — a reply cannot be sent",
+    "newReply": "new reply",
+    "messages": {
+      "one": "{n} message in the conversation",
+      "other": "{n} messages in the conversation"
+    },
+    "notFound": "No request with this number",
+    "mailSent": "Status changed, email sent",
+    "mailNotSent": "Status changed, but the email was not sent (check SMTP)",
+    "savedNoMail": "Status changed (no email — nothing was sent)"
+  },
+  "thread": {
+    "title": "Request #{n}",
+    "lang": "email language: {lang}",
+    "statusMail": "Notification sent: “{status}”",
+    "emailed": "email sent",
+    "notEmailed": "no email",
+    "support": "Support ({name})",
+    "user": "User"
+  },
+  "reply": {
+    "title": "Reply to request #{n}",
+    "to": "To",
+    "subject": "Subject",
+    "text": "Reply",
+    "textPh": "Reply text",
+    "footer": "Added to the email automatically (not editable)",
+    "send": "Send",
+    "empty": "Write the reply text",
+    "sent": "Reply sent"
+  }
+}

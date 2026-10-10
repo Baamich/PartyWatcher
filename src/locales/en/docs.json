@@ -1,0 +1,71 @@
+{
+  "pageTitle": "PartyWatcher — Docs",
+  "title": "Docs",
+  "about": "About the docs",
+  "tocLabel": "Docs chapters",
+  "chapter": "Chapter {n}.",
+  "prev": "← Back",
+  "next": "Next →",
+  "copy": "Copy",
+  "copied": "Copied ✓",
+  "copyFailed": "Failed",
+  "loadFailed": "Could not load the page",
+  "checkFile": "Check that the file exists on the server:",
+  "ch": {
+    "stream": "Streaming",
+    "chat": "Chat",
+    "constructor": "Builder",
+    "editor": "Profile editor",
+    "presets": "Presets"
+  },
+  "page": {
+    "stream-obs": {
+      "title": "Streaming from OBS",
+      "desc": "Key, server, encoding settings"
+    },
+    "chat-obs": {
+      "title": "Chat in OBS",
+      "desc": "How to show the chat on stream"
+    },
+    "chat-code": {
+      "title": "C# bot",
+      "desc": "Commands, replies, !roulette"
+    },
+    "chat-style": {
+      "title": "Chat styling",
+      "desc": "Colors, fonts, background, custom CSS"
+    },
+    "chat-reference": {
+      "title": "API reference",
+      "desc": "Requests, fields, events, errors"
+    },
+    "chat-security": {
+      "title": "Security and limits",
+      "desc": "How the key is protected and what is not allowed"
+    },
+    "constructor-chat": {
+      "title": "Chat builder",
+      "desc": "Chat look without code and an OBS link"
+    },
+    "constructor-commands": {
+      "title": "Chat commands",
+      "desc": "Your own !commands and variables"
+    },
+    "editor-standard": {
+      "title": "Standard editor",
+      "desc": "Banner, avatar and description"
+    },
+    "editor-pro": {
+      "title": "Pro editor",
+      "desc": "Blocks, shapes, text, buttons, live page"
+    },
+    "presets-styles": {
+      "title": "Chat styles",
+      "desc": "Add someone's style or publish your own"
+    },
+    "presets-commands": {
+      "title": "Commands",
+      "desc": "Ready-made commands from other streamers"
+    }
+  }
+}

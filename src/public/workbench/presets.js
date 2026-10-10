@@ -49,7 +49,7 @@ async function loadList(reset) {
     $('pstMore').classList.toggle('hidden', !r.hasMore);
     checkEmpty();
   } catch (e) {
-    if (tk === listToken) PW.toast(e.message || 'Не удалось загрузить пре-сеты', 'error');
+    if (tk === listToken) PW.toast(e.message || t('presets.loadFailed'), 'error');
   } finally {
     if (tk === listToken) $('pstMore').disabled = false;
   }
@@ -64,7 +64,7 @@ async function loadMine() {
     all.forEach((it) => box.appendChild(makeCard(it)));
     $('pstMineEmpty').classList.toggle('hidden', all.length > 0);
   } catch (e) {
-    PW.toast(e.message || 'Не удалось загрузить ваши пре-сеты', 'error');
+    PW.toast(e.message || t('presets.loadMineFailed'), 'error');
   }
 }
 
@@ -77,7 +77,7 @@ async function onLike(item) {
     item.likes = r.likes;
     paint(item.id);
   } catch (e) {
-    PW.toast(e.message || 'Не удалось поставить лайк', 'error');
+    PW.toast(e.message || t('presets.likeFailed'), 'error');
   }
 }
 
@@ -86,33 +86,33 @@ async function onAdd(item) {
 
   try {
     if (item.type === 'style') {
-      const ok = await PW.confirm(`Стиль «${item.name}» заменит текущие настройки в Конструкторе чата.`,
-        { title: 'Добавить стиль?', okText: 'Добавить' });
+      const ok = await PW.confirm(t('presets.addStyle.text', { name: item.name }),
+        { title: t('presets.addStyle.title'), okText: t('presets.addOk') });
       if (!ok) return;
       const r = await api(`/presets/${item.id}/add`, { method: 'POST', body: {} });
       PWPresets.applyStyle(r.data);
       item.added = true;
       item.adds = r.adds ?? item.adds + 1;
-      PW.toast('Стиль добавлен и применён: открой «Конструктор»', 'success');
+      PW.toast(t('presets.addStyle.done'), 'success');
     } else {
       let name = item.data.name;
       let existing = [];
       try { existing = (await api('/workbench/commands')).map((c) => c.name); } catch (_) {}
       if (existing.includes(name)) {
-        const v = await PW.prompt(`Команда !${name} у тебя уже есть. Как назвать новую?`,
-          { title: 'Имя команды занято', defaultValue: name + '2', okText: 'Добавить' });
+        const v = await PW.prompt(t('presets.cmdTaken.text', { name }),
+          { title: t('presets.cmdTaken.title'), defaultValue: name + '2', okText: t('presets.addOk') });
         if (!v) return;
         name = String(v).trim().replace(/^!+/, '').toLowerCase();
       }
       const r = await api(`/presets/${item.id}/add`, { method: 'POST', body: { name } });
       item.added = true;
       item.adds = r.adds ?? item.adds + 1;
-      PW.toast(`Команда !${name} добавлена в «Команды чата»`, 'success');
+      PW.toast(t('presets.cmdAdded', { name }), 'success');
     }
     paint(item.id);
     loadMine();
   } catch (e) {
-    PW.toast(e.message || 'Не удалось добавить', 'error');
+    PW.toast(e.message || t('presets.addFailed'), 'error');
   }
 }
 

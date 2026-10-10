@@ -27,10 +27,10 @@ function renderStreamerCard(streamer) {
       ${streamer.streamerAvatarUrl
         ? `<img class="streamer-avatar" src="${esc(streamer.streamerAvatarUrl)}" loading="lazy" />`
         : `<div class="streamer-avatar-fallback">${esc(streamerInitial(streamer.streamerName))}</div>`}
-      ${streamer.isLive ? '<span class="live-badge">В ЭФИРЕ</span>' : ''}
+      ${streamer.isLive ? `<span class="live-badge">${t('streams.liveBadge')}</span>` : ''}
     </div>
     <div class="streamer-name" title="${esc(streamer.streamerName)}">${esc(streamer.streamerName)}</div>
-    <div class="streamer-meta">${streamer.isLive ? 'в эфире' : 'офлайн'}</div>
+    <div class="streamer-meta">${streamer.isLive ? t('streams.live') : t('streams.offline')}</div>
   `;
   card.onclick = () => (location.href = `/streamers/${encodeURIComponent(streamer.streamerName.toLowerCase())}`);
   return card;
@@ -57,7 +57,7 @@ async function loadStreamers() {
     renderStreamersList(
       document.getElementById('streamersGrid'),
       streamers,
-      'Стримеров пока нет'
+      t('streams.noStreamers')
     );
 
     // будет потом считываться по итогу окончания стрима (сортировка по накопленным часам эфира)
@@ -65,7 +65,7 @@ async function loadStreamers() {
     renderStreamersList(
       document.getElementById('activeStreamersRow'),
       active,
-      'Сейчас никто не стримит'
+      t('streams.nobodyLive')
     );
   } catch (err) {
     console.warn('[loadStreamers]', err.message);
@@ -113,7 +113,7 @@ function renderSuggestions(streamers, query) {
   if (!box) return;
 
   if (!streamers.length) {
-    box.innerHTML = `<div class="suggestion-item" style="cursor:default;color:var(--text-muted);">Ничего не найдено</div>`;
+    box.innerHTML = `<div class="suggestion-item" style="cursor:default;color:var(--text-muted);">${t('streams.nothingFound')}</div>`;
     box.classList.remove('hidden');
     return;
   }
@@ -127,7 +127,7 @@ function renderSuggestions(streamers, query) {
         ? `<img class="suggestion-avatar" src="${esc(s.streamerAvatarUrl)}" />`
         : `<div class="suggestion-avatar-fallback">${esc(streamerInitial(s.streamerName))}</div>`}
       <span class="suggestion-name">${esc(s.streamerName)}</span>
-      ${s.isLive ? '<span class="suggestion-badge">В ЭФИРЕ</span>' : ''}
+      ${s.isLive ? `<span class="suggestion-badge">${t('streams.liveBadge')}</span>` : ''}
     `;
     row.onclick = () => (location.href = `/streamers/${encodeURIComponent(s.streamerName.toLowerCase())}`);
     box.appendChild(row);
@@ -147,7 +147,7 @@ function hideSuggestionsSoon() {
 async function goToMyProfile() {
   const me = await initMeName();
   if (!me) {
-    alert('Сначала войди в аккаунт');
+    PW.toast(t('streams.signInFirst'), 'info');
     return;
   }
   if (me.streamerName) {

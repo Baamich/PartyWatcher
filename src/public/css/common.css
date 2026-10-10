@@ -658,3 +658,138 @@ body.page-fade-out {
 .pw-toast--info { border-left-color: var(--text-muted); }
 .pw-toast--out { opacity: 0; transform: translateY(6px); transition: opacity 0.25s ease, transform 0.25s ease; }
 @keyframes pw-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* =========================================
+   ПОЛОСЫ ПРОКРУТКИ (под тему сайта, на всех страницах)
+   ========================================= */
+
+[data-theme="dark"] {
+  color-scheme: dark; /* системные элементы (полосы в iframe, списки select, календарь) — тёмные */
+  --scroll-thumb: #3a3733;
+  --scroll-thumb-hover: #57524b;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --scroll-thumb: #c3c8d5;
+  --scroll-thumb-hover: #a2a9ba;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scroll-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scroll-thumb-hover);
+}
+
+/* Firefox: ::-webkit-scrollbar не знает */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+}
+
+/* =========================================
+   ПЕРЕКЛЮЧАТЕЛЬ ЯЗЫКА (рисует js/i18n.js в [data-lang-switch])
+   ========================================= */
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.lang-switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+[data-theme] .lang-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.lang-flag {
+  display: block;
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.lang-caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.lang-switch.open .lang-caret {
+  transform: rotate(180deg);
+}
+
+.lang-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  min-width: 100%;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+
+[data-theme] .lang-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 10px;
+  background: none;
+  box-shadow: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+[data-theme] .lang-item:hover {
+  background: var(--surface-alt);
+  box-shadow: none;
+}
+
+[data-theme] .lang-item.active {
+  color: var(--accent-text);
+}
+
+/* меню языка открывается влево, если переключатель стоит у правого края */
+.lang-switch--right .lang-menu {
+  left: auto;
+  right: 0;
+}

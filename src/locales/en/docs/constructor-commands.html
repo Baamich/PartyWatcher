@@ -1,0 +1,69 @@
+<h1>Chat commands</h1>
+<p class="docs-lead">Your own commands like <code>!rules</code> or <code>!random 30</code>: a viewer types a command, the bot replies in the chat. No coding needed.</p>
+
+<h2>How to create a command</h2>
+<ol>
+  <li>Open <b>🧩 Builder</b> and choose <b>🤖 Commands</b> on the right.</li>
+  <li>Click <b>“＋ Create”</b>. At the top there are <b>quick templates</b> (Random, Dice, Coin and others): click any of them and everything is filled in.</li>
+  <li>In the <b>Command</b> field write the name without the exclamation mark, for example <code>rules</code> (letters, digits and <code>_</code>, up to 20 characters).</li>
+  <li>In the <b>What the bot replies</b> field write the text (up to 400 characters). The variable buttons insert variables into the text.</li>
+  <li>At the bottom of the window you can see how the reply will look. You can change the <b>“what the viewer writes”</b> field to test different cases.</li>
+  <li>Click <b>“Create”</b>.</li>
+</ol>
+
+<h2>Arguments: commands with a parameter</h2>
+<p>An argument is a word the viewer writes after the command. For example, in <code>!random 30</code> the “number” argument equals 30.</p>
+<ol>
+  <li>In the command window, in the <b>Arguments</b> block, write a name, for example <code>number</code>, and click <b>“＋ Add”</b>. The “optional” checkbox lets the viewer skip this argument.</li>
+  <li>Use the name in curly braces in the reply: <code>{number}</code>.</li>
+</ol>
+<pre><code>Command:   random
+Argument:  number
+Reply:     Random number up to {number}: {random:{number}}</code></pre>
+<p>A viewer types <code>!random 30</code>, the bot replies: “Random number up to 30: 21”. If the viewer forgot the number, the bot hints: “Usage: !random &lt;number&gt;”. Up to 5 arguments are allowed.</p>
+
+<h2>Variables</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Variable</th><th>What gets inserted</th></tr>
+  <tr><td><code>{user}</code></td><td>Nickname of whoever used the command</td></tr>
+  <tr><td><code>{streamer}</code></td><td>Your channel name</td></tr>
+  <tr><td><code>{title}</code></td><td>Stream title</td></tr>
+  <tr><td><code>{viewers}</code></td><td>How many people are in the chat now</td></tr>
+  <tr><td><code>{uptime}</code></td><td>How long the stream has been live (or “offline”)</td></tr>
+  <tr><td><code>{count}</code></td><td>How many times this command has been used</td></tr>
+  <tr><td><code>{args}</code></td><td>Everything the viewer wrote after the command</td></tr>
+  <tr><td><code>{arg1}</code>, <code>{arg2}</code>, …</td><td>The first, second word after the command</td></tr>
+  <tr><td><code>{target}</code></td><td>The first word after the command without <code>@</code> (if there is none, the author's nickname)</td></tr>
+  <tr><td><code>{number}</code> (your own name)</td><td>The value of your argument</td></tr>
+  <tr><td><code>{random}</code></td><td>A random number from 1 to 100</td></tr>
+  <tr><td><code>{random:30}</code>, <code>{random:5-10}</code></td><td>A random number from 1 to 30, from 5 to 10</td></tr>
+  <tr><td><code>{dice}</code></td><td>Dice: a number from 1 to 6</td></tr>
+  <tr><td><code>{coin}</code></td><td>“heads” or “tails” (in the language of whoever used the command)</td></tr>
+  <tr><td><code>{choice:yes|no|maybe}</code></td><td>A random option from a list (separated by <code>|</code>)</td></tr>
+  <tr><td><code>{calc:2+2*3}</code></td><td>Calculator: <code>+ - * / %</code> and parentheses</td></tr>
+  <tr><td><code>{time}</code>, <code>{date}</code></td><td>Moscow time and date. <code>{time:+1}</code> — for another time zone</td></tr>
+</table>
+</div>
+<p>Variables can be nested: <code>{random:{number}}</code>, <code>{calc:{args}}</code>.</p>
+
+<h2>Examples</h2>
+<pre><code>!dice       →  🎲 {user} rolled the dice: {random:6}
+!hug        →  {user} hugs {whom} 🤗              (argument “whom”)
+!calc       →  {args} = {calc:{args}}            (argument “expression”)
+!time       →  It's {time:+3} in Moscow, {date:+3}</code></pre>
+
+<h2>Command table</h2>
+<p>All commands are shown in a table: on the left a pencil (<b>edit</b>), then the name with arguments, the reply, how many times it was used, a toggle and on the right a trash can (<b>delete</b>). The toggle turns the command on and off: green means the bot replies, light means the command is off but not deleted.</p>
+
+<h2>Good to know</h2>
+<ul>
+  <li>The bot replies as <b>Bot</b> with the <code>BOT</code> label.</li>
+  <li>The bot repeats one command no more often than once every 3 seconds, so it doesn't flood the chat.</li>
+  <li>You can create up to 50 commands.</li>
+  <li>Commands work when a viewer writes right on the site. Messages that come via the API (for example, a bridge from Twitch) don't trigger commands.</li>
+  <li>Curly braces are removed from what the viewer writes in arguments, so nobody can inject their own variables into someone else's reply.</li>
+</ul>
+<div class="docs-note">
+  <p>If you have your own C# bot (<a href="#chat-code">C# bot</a>) and it replies to the same command, the reply will come twice. Pick one.</p>
+</div>

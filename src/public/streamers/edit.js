@@ -18,7 +18,7 @@ async function init() {
   try {
     me = await api('/auth/me');
   } catch {
-    await PW.alert('Чтобы редактировать профиль, нужно войти в аккаунт.', { title: 'Нужен вход' });
+    await PW.alert(t('editor.needLogin'), { title: t('editor.needLoginTitle') });
     location.href = '/';
     return;
   }
@@ -54,7 +54,7 @@ function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.onerror = () => reject(new Error(t('editor.readFailed')));
     reader.readAsDataURL(file);
   });
 }
@@ -64,12 +64,12 @@ async function onImageSelected(event, kind) {
   if (!file) return;
 
   if (!file.type.startsWith('image/')) {
-    showToast('error', 'Нужно выбрать картинку');
+    showToast('error', t('editor.needImage'));
     event.target.value = '';
     return;
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    showToast('error', 'Файл слишком большой (максимум 4 МБ)');
+    showToast('error', t('editor.fileTooBig'));
     event.target.value = '';
     return;
   }
@@ -90,7 +90,7 @@ async function submitStreamerName() {
 
   const name = document.getElementById('newStreamerName').value.trim();
   if (!name) {
-    errEl.textContent = 'Введите имя';
+    errEl.textContent = t('editor.create.empty');
     errEl.classList.remove('hidden');
     return;
   }
@@ -103,7 +103,7 @@ async function submitStreamerName() {
     document.getElementById('createNameSection').classList.add('hidden');
     await showEditSection(result.streamerName);
   } catch (err) {
-    errEl.textContent = err.message || 'Не удалось создать имя';
+    errEl.textContent = err.message || t('editor.create.failed');
     errEl.classList.remove('hidden');
   }
 }
@@ -111,7 +111,7 @@ async function submitStreamerName() {
 async function submitProfile() {
   const bioEl = document.getElementById('bioInput');
   if (!bioEl) {
-    showToast('error', 'Форма не загружена — обнови страницу');
+    showToast('error', t('editor.formMissing'));
     return;
   }
 
@@ -121,9 +121,9 @@ async function submitProfile() {
 
   try {
     await api('/streamers/me', { method: 'PATCH', body });
-    showToast('success', 'Сохранено');
+    showToast('success', t('editor.savedShort'));
   } catch (err) {
-    showToast('error', err.message || 'Не удалось сохранить');
+    showToast('error', err.message || t('editor.saveFailed'));
   }
 }
 

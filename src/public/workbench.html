@@ -3,31 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/theme.js"></script>
+  <script src="/js/i18n.js?v=2" data-ns="workbench"></script>
+  <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
-  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/css/common.css?v=2" />
   <link rel="stylesheet" href="/workbench/workbench.css" />
-  <title>PartyWatcher — Творческая студия</title>
+  <title data-i18n="workbench.pageTitle">PartyWatcher — Творческая студия</title>
 </head>
 <body>
   <div class="page-header">
-    <a href="/streams.html" class="brand">
-      <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
-        <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span class="brand-stack">
-        <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
-        <span class="brand-live-tag">LIVE</span>
-      </span>
-    </a>
+    <div class="brand-row">
+      <a href="/streams.html" class="brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
+          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="brand-stack">
+          <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+          <span class="brand-live-tag">LIVE</span>
+        </span>
+      </a>
+      <div data-lang-switch></div>
+    </div>
     <div class="header-right">
       <div class="corner-menu">
-        <button class="icon-btn" data-click="goToMyStreamerProfile">← Профиль</button>
-        <button class="icon-btn theme-toggle" data-click="toggleTheme">🌙</button>
-        <button class="icon-btn" data-click="onResetLayoutClick">↺ По умолчанию</button>
+        <button class="icon-btn" data-click="goToMyStreamerProfile" data-i18n="workbench.profile">← Профиль</button>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
+        <button class="icon-btn" data-click="onResetLayoutClick" data-i18n="workbench.resetLayout">↺ По умолчанию</button>
       </div>
     </div>
   </div>
@@ -38,25 +42,25 @@
     <div id="wbCanvas" class="wb-canvas">
 
       <nav id="wbNavFixed" class="wb-nav">
-        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html">📰 Новости</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench.html">📡 Управление трансляцией</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html">🎬 Видеостудия</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html">🛡️ Актив канала</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html">🧩 Конструктор</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html">🎨 Пре-сеты</button>
-        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html">📚 Документация</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/news.html" data-i18n="workbench.nav.news">📰 Новости</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench.html" data-i18n="workbench.nav.stream">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html" data-i18n="workbench.nav.videos">🎬 Видеостудия</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html" data-i18n="workbench.nav.activity">🛡️ Актив канала</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html" data-i18n="workbench.nav.constructor">🧩 Конструктор</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/presets.html" data-i18n="workbench.nav.presets">🎨 Пре-сеты</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/docs.html" data-i18n="workbench.nav.docs">📚 Документация</button>
       </nav>
 
       <div id="keyPanel" class="wb-window">
-        <div class="wb-window-titlebar">Ключ трансляции</div>
+        <div class="wb-window-titlebar" data-i18n="workbench.key.title">Ключ трансляции</div>
         <div class="wb-window-content">
           <div class="wb-key-row">
-            <input id="streamKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
-            <button type="button" class="icon-btn" data-click="copyStreamKey">📋</button>
-            <button type="button" id="generateKeyBtn" class="icon-btn" data-click="onGenerateKeyClick">🔄 Сгенерировать</button>
+            <input id="streamKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" data-i18n-placeholder="workbench.key.none" />
+            <button type="button" class="icon-btn" data-click="copyStreamKey" data-i18n-title="workbench.key.copy">📋</button>
+            <button type="button" id="generateKeyBtn" class="icon-btn" data-click="onGenerateKeyClick" data-i18n="workbench.key.generate">🔄 Сгенерировать</button>
           </div>
           <p class="wb-hint">
-            Сервер:
+            <span data-i18n="workbench.key.server">Сервер:</span>
             <button type="button" class="wb-rtmp-copy-btn" data-click="copyRtmpUrl">rtmp://live.partywatcher.de/live 📋</button>
           </p>
         </div>
@@ -65,38 +69,38 @@
 
       <div id="playerPanel" class="wb-window">
         <div class="wb-window-titlebar wb-player-titlebar">
-          <span>Трансляция</span>
-          <div class="wb-live-status" id="liveStatusBadge" title="Статус эфира">
+          <span data-i18n="workbench.player.title">Трансляция</span>
+          <div class="wb-live-status" id="liveStatusBadge" title="Статус эфира" data-i18n-title="workbench.player.status">
             <span class="wb-live-dot" id="liveStatusDot"></span>
-            <span class="wb-live-label" id="liveStatusLabel">Офлайн</span>
+            <span class="wb-live-label" id="liveStatusLabel" data-i18n="workbench.status.offline">Офлайн</span>
             <span class="wb-live-timer" id="liveStatusTimer">00:00:00</span>
           </div>
         </div>
         <div class="wb-window-content wb-player-content">
-          <button type="button" id="pipBtn" class="wb-mini-btn" title="Мини-окно поверх всех окон" data-click="togglePip">⧉ Мини-окно</button>
-          <div id="playerOffline" class="wb-player-offline">Стрим сейчас офлайн</div>
+          <button type="button" id="pipBtn" class="wb-mini-btn" title="Мини-окно поверх всех окон" data-i18n-title="common.mini.pip" data-click="togglePip" data-i18n="workbench.player.mini">⧉ Мини-окно</button>
+          <div id="playerOffline" class="wb-player-offline" data-i18n="common.mini.offline">Стрим сейчас офлайн</div>
           <video id="playerVideo" class="wb-player hidden" controls muted playsinline></video>
-          <div id="playerReconnecting" class="wb-player-reconnecting hidden">Переподключение…</div>
+          <div id="playerReconnecting" class="wb-player-reconnecting hidden" data-i18n="workbench.player.reconnecting">Переподключение…</div>
         </div>
         <div class="wb-resize-handle"></div>
       </div>
 
       <div id="settingsPanel" class="wb-window">
-        <div class="wb-window-titlebar">Настройки стрима</div>
+        <div class="wb-window-titlebar" data-i18n="workbench.settings.title">Настройки стрима</div>
         <div class="wb-window-content">
-          <label class="auth-label" for="streamTitleInput">Название стрима</label>
-          <input id="streamTitleInput" maxlength="140" placeholder="О чём стрим?" />
+          <label class="auth-label" for="streamTitleInput" data-i18n="workbench.settings.name">Название стрима</label>
+          <input id="streamTitleInput" maxlength="140" placeholder="О чём стрим?" data-i18n-placeholder="workbench.settings.namePh" />
 
-          <label class="auth-label" for="streamDescInput">Описание</label>
-          <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее"></textarea>
+          <label class="auth-label" for="streamDescInput" data-i18n="workbench.settings.desc">Описание</label>
+          <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее" data-i18n-placeholder="workbench.settings.descPh"></textarea>
 
-          <button type="button" class="auth-submit" data-click="saveSettings">Сохранить</button>
+          <button type="button" class="auth-submit" data-click="saveSettings" data-i18n="common.save">Сохранить</button>
         </div>
         <div class="wb-resize-handle"></div>
       </div>
 
       <div id="actionLogPanel" class="wb-window">
-        <div class="wb-window-titlebar">Журнал действий</div>
+        <div class="wb-window-titlebar" data-i18n="workbench.log.title">Журнал действий</div>
         <div class="wb-window-content">
           <div id="actionLogList" class="wb-actionlog-list no-scrollbar"></div>
         </div>
@@ -105,48 +109,48 @@
 
       <div id="chatPanel" class="wb-window">
         <div class="wb-window-titlebar wb-chat-titlebar">
-          <span>Чат</span>
+          <span data-i18n="workbench.chat.title">Чат</span>
           <div class="wb-chat-head-right">
-            <button type="button" id="wbViewersBtn" class="wb-viewers-btn" title="Зрители" data-click="toggleViewersPanel" data-event>
+            <button type="button" id="wbViewersBtn" class="wb-viewers-btn" title="Зрители" data-i18n-title="workbench.viewers.title" data-click="toggleViewersPanel" data-event>
               👁 <span id="viewersCount">0</span>
             </button>
             <div class="wb-tooltip-wrap">
               <button type="button" class="wb-clear-chat-btn" data-click="onClearChatClick">🧹</button>
-              <span class="wb-tooltip">Очистить чат</span>
+              <span class="wb-tooltip" data-i18n="workbench.chat.clear">Очистить чат</span>
             </div>
           </div>
         </div>
         <div class="wb-window-content wb-chat-content">
           <div class="wb-chatapi-bar">
-            <button type="button" id="chatApiToggle" class="wb-chatapi-toggle" title="API чата" aria-expanded="false" data-click="toggleChatApi">
+            <button type="button" id="chatApiToggle" class="wb-chatapi-toggle" title="API чата" data-i18n-title="workbench.chatApi.title" aria-expanded="false" data-click="toggleChatApi">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
-              <span>API чата</span>
+              <span data-i18n="workbench.chatApi.title">API чата</span>
             </button>
-            <a class="wb-chatapi-doc" href="/workbench/docs.html#chat-obs" title="Открыть документацию по чату">📖 Документация</a>
+            <a class="wb-chatapi-doc" href="/workbench/docs.html#chat-obs" title="Открыть документацию по чату" data-i18n-title="workbench.chatApi.docsTitle" data-i18n="workbench.chatApi.docs">📖 Документация</a>
           </div>
 
           <div id="chatApiBlock" class="wb-chatapi-block hidden">
             <div class="wb-key-row">
-              <input id="chatApiKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" />
-              <button type="button" class="icon-btn" title="Скопировать ключ" data-click="copyChatApiKey">📋</button>
-              <button type="button" id="chatApiGenerateBtn" class="icon-btn" data-click="onChatApiGenerateClick">🔄 Сгенерировать</button>
+              <input id="chatApiKeyInput" class="wb-key-input" readonly placeholder="Ключ ещё не создан" data-i18n-placeholder="workbench.key.none" />
+              <button type="button" class="icon-btn" title="Скопировать ключ" data-i18n-title="workbench.key.copy" data-click="copyChatApiKey">📋</button>
+              <button type="button" id="chatApiGenerateBtn" class="icon-btn" data-click="onChatApiGenerateClick" data-i18n="workbench.key.generate">🔄 Сгенерировать</button>
             </div>
-            <button type="button" class="wb-rtmp-copy-btn wb-chatapi-obs-btn" data-click="copyChatOverlayUrl">Ссылка для OBS (Browser Source) 📋</button>
-            <p class="wb-hint">Отправка в чат: <code>POST /api/chat/send</code> с заголовком <code>Authorization: Bearer ключ</code></p>
+            <button type="button" class="wb-rtmp-copy-btn wb-chatapi-obs-btn" data-click="copyChatOverlayUrl" data-i18n="workbench.chatApi.obs">Ссылка для OBS (Browser Source) 📋</button>
+            <p class="wb-hint" data-i18n-html="workbench.chatApi.hint">Отправка в чат: <code>POST /api/chat/send</code> с заголовком <code>Authorization: Bearer ключ</code></p>
           </div>
 
           <div id="chatMessages" class="wb-chat-messages no-scrollbar"></div>
           <div class="wb-chat-input-row">
-            <input id="chatInput" placeholder="Написать в чат…" data-keydown="handleChatKey" data-event />
+            <input id="chatInput" placeholder="Написать в чат…" data-i18n-placeholder="workbench.chat.placeholder" data-keydown="handleChatKey" data-event />
             <button type="button" data-click="sendChatMessage">➤</button>
           </div>
 
           <div id="wbViewersPanel" class="wb-viewers-panel">
             <div class="wb-viewers-panel-header">
-              <span>Зрители</span>
-              <button type="button" class="wb-viewers-close" aria-label="Закрыть" data-click="toggleViewersPanel">×</button>
+              <span data-i18n="workbench.viewers.title">Зрители</span>
+              <button type="button" class="wb-viewers-close" aria-label="Закрыть" data-i18n-aria-label="common.close" data-click="toggleViewersPanel">×</button>
             </div>
             <div id="wbViewersList" class="wb-viewers-list no-scrollbar"></div>
           </div>
@@ -162,50 +166,50 @@
       <button type="button" class="modal-close" data-click="closeTimeoutModal">×</button>
       <h3 id="timeoutModalName"></h3>
       <div class="wb-timeout-inputs">
-        <input id="timeoutHours" type="number" min="0" max="99" value="0" /> ч
-        <input id="timeoutMinutes" type="number" min="0" max="59" value="5" /> м
-        <input id="timeoutSeconds" type="number" min="0" max="59" value="0" /> с
+        <input id="timeoutHours" type="number" min="0" max="99" value="0" /> <span data-i18n="workbench.timeout.h">ч</span>
+        <input id="timeoutMinutes" type="number" min="0" max="59" value="5" /> <span data-i18n="workbench.timeout.m">м</span>
+        <input id="timeoutSeconds" type="number" min="0" max="59" value="0" /> <span data-i18n="workbench.timeout.s">с</span>
       </div>
-      <button type="button" class="auth-submit" data-click="confirmTimeout">Ограничить</button>
+      <button type="button" class="auth-submit" data-click="confirmTimeout" data-i18n="workbench.timeout.ok">Ограничить</button>
     </div>
   </div>
 
   <div id="regenConfirmModal" class="modal hidden">
     <div class="modal-content">
       <button type="button" class="modal-close" data-click="closeRegenConfirm">×</button>
-      <h3>Сгенерировать новый ключ?</h3>
-      <p class="wb-hint">Старый ключ сразу перестанет работать — если сейчас идёт трансляция через него, она оборвётся.</p>
-      <button type="button" class="auth-submit" data-click="confirmRegenerateKey">Да, сгенерировать</button>
-      <button type="button" class="icon-btn" data-click="closeRegenConfirm">Отмена</button>
+      <h3 data-i18n="workbench.regen.title">Сгенерировать новый ключ?</h3>
+      <p class="wb-hint" data-i18n="workbench.regen.text">Старый ключ сразу перестанет работать — если сейчас идёт трансляция через него, она оборвётся.</p>
+      <button type="button" class="auth-submit" data-click="confirmRegenerateKey" data-i18n="workbench.regen.ok">Да, сгенерировать</button>
+      <button type="button" class="icon-btn" data-click="closeRegenConfirm" data-i18n="common.dialog.cancel">Отмена</button>
     </div>
   </div>
 
   <div id="resetLayoutModal" class="modal hidden">
     <div class="modal-content">
       <button type="button" class="modal-close" data-click="closeResetLayoutModal">×</button>
-      <h3>Вернуть расположение окон по умолчанию?</h3>
-      <p class="wb-hint">Все передвинутые и растянутые окна вернутся на исходные места.</p>
-      <button type="button" class="auth-submit" data-click="confirmResetLayout">Да, вернуть</button>
-      <button type="button" class="icon-btn" data-click="closeResetLayoutModal">Отмена</button>
+      <h3 data-i18n="workbench.resetModal.title">Вернуть расположение окон по умолчанию?</h3>
+      <p class="wb-hint" data-i18n="workbench.resetModal.text">Все передвинутые и растянутые окна вернутся на исходные места.</p>
+      <button type="button" class="auth-submit" data-click="confirmResetLayout" data-i18n="workbench.resetModal.ok">Да, вернуть</button>
+      <button type="button" class="icon-btn" data-click="closeResetLayoutModal" data-i18n="common.dialog.cancel">Отмена</button>
     </div>
   </div>
 
   <div id="chatKeyRegenModal" class="modal hidden">
     <div class="modal-content">
       <button type="button" class="modal-close" data-click="closeChatKeyRegen">×</button>
-      <h3>Сгенерировать новый ключ чата?</h3>
-      <p class="wb-hint">Старый ключ перестанет работать: оверлей в OBS, боты и мосты придётся перенастроить на новый.</p>
-      <button type="button" class="auth-submit" data-click="confirmChatKeyRegen">Да, сгенерировать</button>
-      <button type="button" class="icon-btn" data-click="closeChatKeyRegen">Отмена</button>
+      <h3 data-i18n="workbench.chatRegen.title">Сгенерировать новый ключ чата?</h3>
+      <p class="wb-hint" data-i18n="workbench.chatRegen.text">Старый ключ перестанет работать: оверлей в OBS, боты и мосты придётся перенастроить на новый.</p>
+      <button type="button" class="auth-submit" data-click="confirmChatKeyRegen" data-i18n="workbench.regen.ok">Да, сгенерировать</button>
+      <button type="button" class="icon-btn" data-click="closeChatKeyRegen" data-i18n="common.dialog.cancel">Отмена</button>
     </div>
   </div>
 
   <script src="/vendor/hls.min.js"></script>
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/minipip.js"></script>
-  <script src="/workbench/workbench.js"></script>
+  <script src="/js/minipip.js?v=2"></script>
+  <script src="/workbench/workbench.js?v=2"></script>
 </body>
 </html>

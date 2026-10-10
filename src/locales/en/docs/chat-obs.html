@@ -1,0 +1,84 @@
+<h1>Chat in OBS</h1>
+<p class="docs-lead">We'll show the chat right on your stream. Viewers will see messages on screen, and you won't have to switch to the site.</p>
+
+<h2>What you need beforehand</h2>
+<ul>
+  <li>You have already gone live following the <a href="#stream-obs">guide</a> (or at least set up OBS).</li>
+</ul>
+
+<h2>Step 1. Open “Chat API”</h2>
+<ol>
+  <li>Open the studio: <code>https://partywatcher.de/workbench.html</code>.</li>
+  <li>On the right find the <b>“Chat”</b> window. Above the messages there is a thin bar with an arrow <b>▲ Chat API</b>. Click it.</li>
+  <li>The bar expands and the chat window gets taller. Inside there is a field and buttons.</li>
+</ol>
+
+<figure class="docs-figure">
+  <img src="/workbench/docs/img/chat-obs-1.png" alt="The expanded “Chat API” block in the studio">
+  <figcaption>The expanded “Chat API” block</figcaption>
+</figure>
+
+<h2>Step 2. Create a chat key</h2>
+<ol>
+  <li>Click <b>“🔄 Generate”</b>. Something like <code>****a1b2</code> appears in the field: that's the hidden key, only its end is visible.</li>
+  <li>You don't need to copy anything else, just use the link button next.</li>
+</ol>
+
+<h2>Step 3. Copy the OBS link</h2>
+<p>Click <b>“OBS link (Browser Source) 📋”</b>. That's it, the link is in your clipboard. It looks like this (the key inside is not shown):</p>
+<pre><code>https://partywatcher.de/overlay/chat.html#key=pwc_...</code></pre>
+
+<h2>Step 4. Add the chat to OBS</h2>
+<ol>
+  <li>In OBS find the <b>Sources</b> panel at the bottom and click <b>“+”</b>.</li>
+  <li>Choose <b>Browser</b> in the list.</li>
+  <li>Choose <b>“Create new”</b>, name it, for example, <code>Chat</code>, click <b>OK</b>.</li>
+  <li>In the window that opens, paste the link into the <b>URL</b> field (<code>Ctrl+V</code>).</li>
+  <li><b>Width</b>: <code>400</code>, <b>Height</b>: <code>700</code>. (You can resize it with the mouse later.)</li>
+  <li>Find the <b>“Shutdown source when not visible”</b> checkbox and <b>uncheck</b> it. Otherwise the chat will miss messages when you switch scenes.</li>
+  <li>Click <b>OK</b>.</li>
+</ol>
+
+<figure class="docs-figure">
+  <img src="/workbench/docs/img/chat-obs-2.png" alt="Browser Source properties window in OBS">
+  <figcaption>“Browser” source properties in OBS: URL, width and height</figcaption>
+</figure>
+
+<h2>Step 5. Put the chat where you want</h2>
+<p>The chat appears on the scene as an invisible frame. Drag it to the corner you want, and use the red dots on the edges to stretch or shrink it.</p>
+
+<h2>Check it</h2>
+<ol>
+  <li>Open your profile in the browser, for example <code>https://partywatcher.de/streamers/(your name)</code>.</li>
+  <li>Write any message in the chat.</li>
+  <li>The message should appear in OBS. Your nickname will have a red plate.</li>
+</ol>
+
+<h2>Simple settings via the link</h2>
+<p>You can append parameters to the end of the link. Each starts with <code>&amp;</code>:</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Append</th><th>What happens</th></tr>
+  <tr><td><code>&amp;size=30</code></td><td>Bigger text (a number from 10 to 80)</td></tr>
+  <tr><td><code>&amp;fade=40</code></td><td>A message disappears after 40 seconds</td></tr>
+  <tr><td><code>&amp;max=15</code></td><td>No more than 15 messages on screen</td></tr>
+</table>
+</div>
+<p>Example: <code>https://partywatcher.de/overlay/chat.html#key=pwc_...&amp;size=30&amp;fade=40</code></p>
+<p>More settings (colors, font, background) are in the <a href="#chat-style">Chat styling</a> chapter.</p>
+
+<h2>Not working?</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>What you see</th><th>What to do</th></tr>
+  <tr><td>“The link has no key”</td><td>You pasted the link without <code>#key=...</code>. Copy it again with the button in the studio.</td></tr>
+  <tr><td>“Invalid chat key”</td><td>The key was regenerated. Copy the new link and paste it into the source (right-click the source → Properties → URL).</td></tr>
+  <tr><td>The chat is empty</td><td>Nobody has written anything yet. Write something yourself. If it doesn't appear, click “Refresh cache of current page” in the source.</td></tr>
+</table>
+</div>
+
+<div class="docs-warn">
+  <p>The link contains the chat key. Don't show it on stream (for example, when opening the source properties) and don't send it to anyone. More: <a href="#chat-security">Security and limits</a>.</p>
+</div>
+
+<p>Next: <a href="#chat-code">C# bot</a>.</p>

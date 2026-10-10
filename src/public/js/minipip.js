@@ -119,13 +119,13 @@
 
   // Возвращает текст ошибки или null, если всё получилось
   async function enterPip({ video: v, streamer, returnPath }) {
-    if (!pipSupported()) return 'Браузер не поддерживает мини-окно';
-    if (!v || v.classList.contains('hidden') || v.readyState < 1) return 'Мини-окно доступно, пока идёт эфир';
+    if (!pipSupported()) return t('common.mini.unsupported');
+    if (!v || v.classList.contains('hidden') || v.readyState < 1) return t('common.mini.onlyLive');
 
     try {
       await v.requestPictureInPicture();
     } catch (err) {
-      return 'Не удалось открыть мини-окно: ' + (err.message || err.name);
+      return t('common.mini.openFailed') + ' ' + (err.message || err.name);
     }
 
     if (root) destroyFloating(); // на этой странице уже был угловой мини-плеер другого стрима — заменяем
@@ -315,17 +315,17 @@
       <div class="pwmini-head">
         <span class="pwmini-dot"></span>
         <span class="pwmini-title"></span>
-        <input type="range" class="pwmini-vol" min="0" max="100" title="Громкость">
-        <button type="button" class="pwmini-btn" data-act="mute" title="Звук">🔇</button>
-        <button type="button" class="pwmini-btn" data-act="pip" title="Мини-окно поверх всех окон">⧉</button>
-        <button type="button" class="pwmini-btn" data-act="back" title="К плееру">↩</button>
-        <button type="button" class="pwmini-btn" data-act="close" title="Закрыть и выключить звук">×</button>
+        <input type="range" class="pwmini-vol" min="0" max="100" title="${t('common.mini.volume')}">
+        <button type="button" class="pwmini-btn" data-act="mute" title="${t('common.mini.sound')}">🔇</button>
+        <button type="button" class="pwmini-btn" data-act="pip" title="${t('common.mini.pip')}">⧉</button>
+        <button type="button" class="pwmini-btn" data-act="back" title="${t('common.mini.back')}">↩</button>
+        <button type="button" class="pwmini-btn" data-act="close" title="${t('common.mini.close')}">×</button>
       </div>
       <div class="pwmini-body">
         <video class="pwmini-hidden" playsinline></video>
-        <div class="pwmini-offline">Загрузка…</div>
+        <div class="pwmini-offline">${t('common.loading')}</div>
       </div>
-      <div class="pwmini-resize" title="Потяни, чтобы изменить размер"></div>
+      <div class="pwmini-resize" title="${t('common.resize')}"></div>
     `;
     document.body.appendChild(root);
 
@@ -394,7 +394,7 @@
 
   function showOffline(text) {
     if (!root) return;
-    offlineEl.textContent = text || 'Стрим сейчас офлайн';
+    offlineEl.textContent = text || t('common.mini.offline');
     offlineEl.style.display = 'flex';
     video.classList.add('pwmini-hidden');
   }
@@ -448,7 +448,7 @@
         video.classList.remove('pwmini-hidden');
         playVideo();
       } else {
-        showOffline('Браузер не поддерживает HLS');
+        showOffline(t('common.mini.noHls'));
       }
     });
   }
@@ -479,7 +479,7 @@
       if (res.status === 404) {
         currentPlaybackId = undefined;
         destroyHls();
-        showOffline('Стример не найден');
+        showOffline(t('common.mini.notFound'));
         return;
       }
       if (!res.ok) throw new Error('HTTP ' + res.status);

@@ -1,0 +1,11 @@
+{
+  "err": {
+    "badImage": "Invalid or too large image",
+    "badLayout": "Invalid layout",
+    "tooManyBlocks": "Too many blocks (max {n})",
+    "tooManyPhotos": "Too many photos (max {n})",
+    "tooManyLinks": "Too many photo buttons (max {n})",
+    "tooHeavy": "The layout is too heavy: shrink or remove some photos",
+    "imageTooHeavy": "The image is too heavy"
+  }
+}

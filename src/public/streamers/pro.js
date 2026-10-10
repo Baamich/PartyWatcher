@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   const P = window.PWLayout;
+  const tr = (k, v) => window.t(k, v); // в этом файле t — частое имя переменной, поэтому перевод через tr
   const $ = (id) => document.getElementById(id);
   const root = $('proEditor');
   if (!P || !root) return;
@@ -103,9 +104,9 @@
     else if (e.code === 'KeyY') { e.preventDefault(); redo(); }
   });
 
-  const TITLES = { banner: 'Баннер', avatar: 'Аватар', info: 'Имя и описание', vods: 'Записи', player: 'Плеер', chat: 'Чат', shape: 'Фигура', text: 'Текст', image: 'Фото', link: 'Фото-кнопка' };
-  const SHAPE_OPTS = [['rect', 'Квадрат'], ['circle', 'Круг'], ['triangle', 'Треугольник']];
-  const FONT_OPTS = [['system', 'Обычный'], ['serif', 'С засечками'], ['mono', 'Моноширинный'], ['rounded', 'Округлый'], ['display', 'Плакатный']];
+  const TITLES = Object.fromEntries(['banner', 'avatar', 'info', 'vods', 'player', 'chat', 'shape', 'text', 'image', 'link'].map((k) => [k, tr('editor.block.' + k)]));
+  const SHAPE_OPTS = ['rect', 'circle', 'triangle'].map((k) => [k, tr('editor.shape.' + k)]);
+  const FONT_OPTS = ['system', 'serif', 'mono', 'rounded', 'display'].map((k) => [k, tr('editor.font.' + k)]);
 
   // ---------- мелкие помощники для DOM ----------
   function E(tag, props = {}, ...kids) {
@@ -151,13 +152,13 @@
       P.paintShape(f, b);
       P.applyFit(f, b);
     } else if (b.type === 'info') {
-      f.append(E('b', { textContent: sd.streamerName || '' }), E('span', { textContent: ($('bioInput').value || 'Описание').slice(0, 120) }));
+      f.append(E('b', { textContent: sd.streamerName || '' }), E('span', { textContent: ($('bioInput').value || tr('editor.bioStub')).slice(0, 120) }));
     } else if (b.type === 'vods') {
-      f.append(E('div', { textContent: 'Записи' }), E('div', { className: 'ph-grid' + (b.o === 'v' ? ' ph-grid-v' : '') }, ...Array.from({ length: b.o === 'v' ? 4 : 6 }, () => E('i'))));
+      f.append(E('div', { textContent: tr('editor.block.vods') }), E('div', { className: 'ph-grid' + (b.o === 'v' ? ' ph-grid-v' : '') }, ...Array.from({ length: b.o === 'v' ? 4 : 6 }, () => E('i'))));
     } else if (b.type === 'player') {
-      f.append(E('span', { textContent: '▶ Плеер эфира' }));
+      f.append(E('span', { textContent: tr('editor.stub.player') }));
     } else if (b.type === 'chat') {
-      f.append(E('div', { className: 'ph-chat-h', textContent: '💬 Чат' }), ...[0, 1, 2, 3, 4].map(() => E('div', { className: 'ph-line' })));
+      f.append(E('div', { className: 'ph-chat-h', textContent: tr('editor.stub.chat') }), ...[0, 1, 2, 3, 4].map(() => E('div', { className: 'ph-line' })));
     }
     return f;
   }
@@ -175,7 +176,7 @@
     if (mode === 'live' && b.type === 'image') el.classList.add('pw-back');
     if (b.id === selId) el.classList.add('sel');
 
-    const dots = E('button', { type: 'button', className: 'pw-dots', textContent: '⋯', title: 'Настройки блока' });
+    const dots = E('button', { type: 'button', className: 'pw-dots', textContent: '⋯', title: tr('editor.blockSettings') });
     dots.addEventListener('pointerdown', (e) => e.stopPropagation());
     dots.addEventListener('click', (e) => { e.stopPropagation(); selId = b.id; stage.querySelectorAll('.sel').forEach((x) => x.classList.remove('sel')); el.classList.add('sel'); openMenu(b, dots); });
     const rsz = E('div', { className: 'pw-rsz' });
@@ -209,8 +210,8 @@
   // на телефоне эфир показывается обычной вёрстке: плеер сверху, чат снизу
   function mobileLiveMock() {
     return E('div', { className: 'ph-m-live' },
-      E('div', { className: 'pw-fill ph-player' }, E('span', { textContent: '▶ Плеер эфира' })),
-      E('div', { className: 'pw-fill ph-chat' }, E('div', { className: 'ph-chat-h', textContent: '💬 Чат' }), ...[0, 1, 2, 3, 4].map(() => E('div', { className: 'ph-line' }))));
+      E('div', { className: 'pw-fill ph-player' }, E('span', { textContent: tr('editor.stub.player') })),
+      E('div', { className: 'pw-fill ph-chat' }, E('div', { className: 'ph-chat-h', textContent: tr('editor.stub.chat') }), ...[0, 1, 2, 3, 4].map(() => E('div', { className: 'ph-line' }))));
   }
   function refreshMenu() {
     if (!menuId || menu.classList.contains('hidden')) return;
@@ -226,13 +227,13 @@
   function updateInfo() {
     if (phone) {
       $('proInfo').textContent = mode === 'live'
-        ? 'Так эфир выглядит на телефоне: плеер сверху, чат снизу (свой макет работает от 900 px)'
-        : 'Так профиль выглядит на телефоне (только просмотр)';
+        ? tr('editor.phone.live')
+        : tr('editor.phone.profile');
       return;
     }
     const c = P.counts(blocks()), L = P.LIMITS[mode];
-    $('proInfo').textContent = `Блоки ${c.custom}/${L.custom} · Фото ${c.photos}/${L.photos} · Кнопки ${c.links}/${L.links}` +
-      (mode === 'live' ? ' · В эфире без ножниц, фото — только фон' : '');
+    $('proInfo').textContent = tr('editor.info', { c: c.custom, cm: L.custom, p: c.photos, pm: L.photos, l: c.links, lm: L.links }) +
+      (mode === 'live' ? tr('editor.infoLive') : '');
   }
 
   new ResizeObserver(() => fitScale()).observe(stage);
@@ -297,12 +298,12 @@
   // ---------- кнопки-ссылки и слои ----------
   function addLink() {
     if (!canAdd('link')) return;
-    addBlock({ id: uid(), type: 'link', x: (curW() - 220) / 2, y: 80, w: 220, h: 64, fill: '#7c5cff', label: 'Кнопка', url: '', shape: 'rect', lc: '#ffffff', lf: 18, rd: 12 });
+    addBlock({ id: uid(), type: 'link', x: (curW() - 220) / 2, y: 80, w: 220, h: 64, fill: '#7c5cff', label: tr('editor.linkLabel'), url: '', shape: 'rect', lc: '#ffffff', lf: 18, rd: 12 });
   }
 
   function toLink(b) {
-    if (P.counts(blocks()).links >= P.LIMITS[mode].links) return toast(`Максимум кнопок: ${P.LIMITS[mode].links}`);
-    if (b.shape === 'poly') return toast('Фигуру из своей линии кнопкой не сделать');
+    if (P.counts(blocks()).links >= P.LIMITS[mode].links) return toast(tr('editor.max.links', { n: P.LIMITS[mode].links }));
+    if (b.shape === 'poly') return toast(tr('editor.polyNoLink'));
     if (b.type === 'text') {
       const st = b.st;
       Object.assign(b, { label: String(b.text || '').slice(0, 40), lc: st.color, lf: Math.min(80, st.fs), fill: st.bg, rd: Math.min(100, st.radius), shape: 'rect' });
@@ -319,11 +320,11 @@
   function fromLink(b) {
     const L = P.LIMITS[mode], c = P.counts(blocks());
     if (b.img) {
-      if (c.photos >= L.photos) return toast(`Максимум фото: ${L.photos}`);
+      if (c.photos >= L.photos) return toast(tr('editor.max.photos', { n: L.photos }));
       b.type = 'image';
     } else {
-      if (mode === 'live') return toast('В эфире без фото блок бывает только текстом или кнопкой');
-      if (c.custom >= L.custom) return toast(`Максимум своих блоков: ${L.custom}`);
+      if (mode === 'live') return toast(tr('editor.liveNoShape'));
+      if (c.custom >= L.custom) return toast(tr('editor.max.custom', { n: L.custom }));
       b.type = 'shape';
     }
     for (const k of ['url', 'label', 'lc', 'lf', 'rd']) delete b[k];
@@ -336,7 +337,7 @@
     const rest = blocks().filter((x) => x !== b);
     layout[mode].blocks = dir > 0 ? rest.concat(b) : [b].concat(rest);
     P.fixOrder(layout[mode].blocks);
-    if (b.type === 'avatar' && dir < 0) toast('Аватар всегда лежит выше баннера', 'info');
+    if (b.type === 'avatar' && dir < 0) toast(tr('editor.avatarAbove'), 'info');
     touch();
     renderStage();
   }
@@ -352,9 +353,9 @@
 
   function canAdd(type) {
     const c = P.counts(blocks()), L = P.LIMITS[mode];
-    if ((type === 'text' || type === 'shape') && c.custom >= L.custom) { toast(`Максимум своих блоков: ${L.custom}`); return false; }
-    if (type === 'image' && c.photos >= L.photos) { toast(`Максимум фото: ${L.photos}`); return false; }
-    if (type === 'link' && c.links >= L.links) { toast(`Максимум фото-кнопок: ${L.links}`); return false; }
+    if ((type === 'text' || type === 'shape') && c.custom >= L.custom) { toast(tr('editor.max.custom', { n: L.custom })); return false; }
+    if (type === 'image' && c.photos >= L.photos) { toast(tr('editor.max.photos', { n: L.photos })); return false; }
+    if (type === 'link' && c.links >= L.links) { toast(tr('editor.max.photoLinks', { n: L.links })); return false; }
     return true;
   }
 
@@ -440,7 +441,7 @@
     if (pts) {
       const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
       const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xs) - x, h = Math.max(...ys) - y;
-      if (pts.length < 8 || w < 30 || h < 30) { toast('Линия слишком короткая'); return; }
+      if (pts.length < 8 || w < 30 || h < 30) { toast(tr('editor.lineTooShort')); return; }
       const step = Math.max(1, Math.ceil(pts.length / 60));
       const points = pts.filter((_, i) => i % step === 0).map((p) => [+(((p.x - x) / w) * 100).toFixed(1), +(((p.y - y) / h) * 100).toFixed(1)]);
       box = { x, y, w, h, points };
@@ -450,7 +451,7 @@
     const isText = tool === 'text';
     if (!canAdd(isText ? 'text' : 'shape')) { setTool('select'); return; }
     const b = { id: uid(), x: box.x, y: box.y, w: box.w, h: box.h };
-    if (isText) { b.type = 'text'; b.text = 'Текст'; b.st = defaultStyle(); }
+    if (isText) { b.type = 'text'; b.text = tr('editor.block.text'); b.st = defaultStyle(); }
     else {
       b.type = 'shape';
       b.fill = '#b89bff';
@@ -466,7 +467,7 @@
   async function changeBuiltinPhoto(b) {
     const f = await pickFile();
     if (!f) return;
-    if (f.size > 4 * 1024 * 1024) return toast('Файл слишком большой (максимум 4 МБ)');
+    if (f.size > 4 * 1024 * 1024) return toast(tr('editor.fileTooBig'));
     try {
       const { url, w, h } = await P.imageToDataUrl(f, b.type === 'banner' ? 1600 : 512);
       b.ia = +(w / h).toFixed(3);
@@ -479,7 +480,7 @@
   }
 
   async function setPhoto(b) {
-    if (b.type === 'shape' && !b.img && P.counts(blocks()).photos >= P.LIMITS[mode].photos) return toast(`Максимум фото: ${P.LIMITS[mode].photos}`);
+    if (b.type === 'shape' && !b.img && P.counts(blocks()).photos >= P.LIMITS[mode].photos) return toast(tr('editor.max.photos', { n: P.LIMITS[mode].photos }));
     const f = await pickFile();
     if (!f) return;
     try {
@@ -524,83 +525,83 @@
     const set = (fn) => (v) => { fn(v); touch(); renderStage(); };
     const t = b.type;
 
-    if (t === 'banner' || t === 'avatar') add(button('🖼 Изменить фото', () => changeBuiltinPhoto(b)));
-    if (t === 'avatar') add(row('Форма', select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
+    if (t === 'banner' || t === 'avatar') add(button(tr('editor.m.changePhoto'), () => changeBuiltinPhoto(b)));
+    if (t === 'avatar') add(row(tr('editor.m.shape'), select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
 
     if (t === 'shape') {
-      if (b.shape !== 'poly') add(row('Форма', select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
-      add(row('Заливка', color(b.fill, set((v) => (b.fill = v)))));
-      add(button(b.img ? '🖼 Заменить фото' : '🖼 Вставить фото в фигуру', () => setPhoto(b)));
-      if (b.img) add(button('Убрать фото', () => { delete b.img; delete b.fit; delete b.ia; touch(); renderStage(); }, 'pm-flat'));
+      if (b.shape !== 'poly') add(row(tr('editor.m.shape'), select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
+      add(row(tr('editor.m.fill'), color(b.fill, set((v) => (b.fill = v)))));
+      add(button(b.img ? tr('editor.m.replacePhoto') : tr('editor.m.photoIntoShape'), () => setPhoto(b)));
+      if (b.img) add(button(tr('editor.m.removePhoto'), () => { delete b.img; delete b.fit; delete b.ia; touch(); renderStage(); }, 'pm-flat'));
     }
 
     if (t === 'image') {
-      add(button('🖼 Заменить фото', () => setPhoto(b)));
-      add(row('Форма', select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
+      add(button(tr('editor.m.replacePhoto'), () => setPhoto(b)));
+      add(row(tr('editor.m.shape'), select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
     }
 
     if (t === 'link') {
-      add(button('🖼 Заменить фото', () => setPhoto(b)));
-      add(row('Подпись', E('input', { type: 'text', value: b.label || '', maxLength: 40, oninput: (e) => { b.label = e.target.value; touch(); renderStage(); } })));
-      add(row('Ссылка', E('input', { type: 'text', value: b.url || '', placeholder: 'https://…', maxLength: 500, oninput: (e) => { b.url = e.target.value.trim(); touch(); } })));
-      add(E('div', { className: 'pm-hint', textContent: 'Только http:// или https://' }));
-      add(row('Форма', select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
-      add(row('Цвет кнопки', color(b.fill || '#7c5cff', set((v) => (b.fill = v)))));
-      if (b.img) add(button('Убрать фото', () => { delete b.img; delete b.fit; delete b.ia; touch(); renderStage(); }, 'pm-flat'));
-      add(row('Цвет текста', color(b.lc || '#ffffff', set((v) => (b.lc = v)))));
-      add(row('Размер текста', numInput(b.lf || 16, 8, 80, set((v) => (b.lf = v)))));
-      if ((b.shape || 'rect') === 'rect') add(row('Скругление', numInput(b.rd || 0, 0, 100, set((v) => (b.rd = v)))));
+      add(button(tr('editor.m.replacePhoto'), () => setPhoto(b)));
+      add(row(tr('editor.m.label'), E('input', { type: 'text', value: b.label || '', maxLength: 40, oninput: (e) => { b.label = e.target.value; touch(); renderStage(); } })));
+      add(row(tr('editor.m.url'), E('input', { type: 'text', value: b.url || '', placeholder: 'https://…', maxLength: 500, oninput: (e) => { b.url = e.target.value.trim(); touch(); } })));
+      add(E('div', { className: 'pm-hint', textContent: tr('editor.m.urlHint') }));
+      add(row(tr('editor.m.shape'), select(SHAPE_OPTS, b.shape, set((v) => (b.shape = v)))));
+      add(row(tr('editor.m.buttonColor'), color(b.fill || '#7c5cff', set((v) => (b.fill = v)))));
+      if (b.img) add(button(tr('editor.m.removePhoto'), () => { delete b.img; delete b.fit; delete b.ia; touch(); renderStage(); }, 'pm-flat'));
+      add(row(tr('editor.m.textColor'), color(b.lc || '#ffffff', set((v) => (b.lc = v)))));
+      add(row(tr('editor.m.textSize'), numInput(b.lf || 16, 8, 80, set((v) => (b.lf = v)))));
+      if ((b.shape || 'rect') === 'rect') add(row(tr('editor.m.radius'), numInput(b.rd || 0, 0, 100, set((v) => (b.rd = v)))));
     }
 
     if (t === 'text') {
       const st = b.st;
       add(E('textarea', { className: 'pm-area', value: b.text, maxLength: 1000, oninput: (e) => { b.text = e.target.value; touch(); renderStage(); } }));
-      add(row('Шрифт', select(FONT_OPTS, st.font, set((v) => (st.font = v)))));
-      add(row('Размер', numInput(st.fs, 8, 200, set((v) => (st.fs = v)))));
-      add(row('Цвет текста', color(st.color, set((v) => (st.color = v)))));
-      add(row('Цвет фона', color(st.bg, set((v) => (st.bg = v)))));
-      add(row('Прозрачность фона', range(st.bgOpacity, 0, 1, 0.05, set((v) => (st.bgOpacity = v)))));
+      add(row(tr('editor.m.font'), select(FONT_OPTS, st.font, set((v) => (st.font = v)))));
+      add(row(tr('editor.m.size'), numInput(st.fs, 8, 200, set((v) => (st.fs = v)))));
+      add(row(tr('editor.m.textColor'), color(st.color, set((v) => (st.color = v)))));
+      add(row(tr('editor.m.bgColor'), color(st.bg, set((v) => (st.bg = v)))));
+      add(row(tr('editor.m.bgOpacity'), range(st.bgOpacity, 0, 1, 0.05, set((v) => (st.bgOpacity = v)))));
       add(E('div', { className: 'pm-seg' },
-        ...[['bold', 'Ж'], ['italic', 'К'], ['underline', 'Ч']].map(([k, l]) =>
+        ...['bold', 'italic', 'underline'].map((k) => [k, tr('editor.m.' + k)]).map(([k, l]) =>
           button(l, (e) => { st[k] = !st[k]; touch(); e.currentTarget.classList.toggle('on', st[k]); renderStage(); }, 'pm-flat' + (st[k] ? ' on' : '')))));
-      add(row('По горизонтали', select([['left', 'Слева'], ['center', 'По центру'], ['right', 'Справа']], st.align, set((v) => (st.align = v)))));
-      add(row('По вертикали', select([['top', 'Сверху'], ['center', 'По центру'], ['bottom', 'Снизу']], st.va, set((v) => (st.va = v)))));
-      add(row('Скругление', numInput(st.radius, 0, 200, set((v) => (st.radius = v)))));
-      add(row('Отступ', numInput(st.pad, 0, 60, set((v) => (st.pad = v)))));
-      add(row('Рамка: цвет', color(st.bc, set((v) => (st.bc = v)))));
-      add(row('Рамка: толщина', numInput(st.bw, 0, 12, set((v) => (st.bw = v)))));
-      add(row('Межбуквенный', numInput(st.ls, -2, 20, set((v) => (st.ls = v)), 0.5)));
-      add(row('Тень текста', E('input', { type: 'checkbox', checked: st.shadow, onchange: (e) => { st.shadow = e.target.checked; touch(); renderStage(); } })));
-      add(row('Прозрачность', range(st.opacity, 0.1, 1, 0.05, set((v) => (st.opacity = v)))));
+      add(row(tr('editor.m.hAlign'), select([['left', tr('editor.m.left')], ['center', tr('editor.m.center')], ['right', tr('editor.m.right')]], st.align, set((v) => (st.align = v)))));
+      add(row(tr('editor.m.vAlign'), select([['top', tr('editor.m.top')], ['center', tr('editor.m.center')], ['bottom', tr('editor.m.bottom')]], st.va, set((v) => (st.va = v)))));
+      add(row(tr('editor.m.radius'), numInput(st.radius, 0, 200, set((v) => (st.radius = v)))));
+      add(row(tr('editor.m.pad'), numInput(st.pad, 0, 60, set((v) => (st.pad = v)))));
+      add(row(tr('editor.m.borderColor'), color(st.bc, set((v) => (st.bc = v)))));
+      add(row(tr('editor.m.borderWidth'), numInput(st.bw, 0, 12, set((v) => (st.bw = v)))));
+      add(row(tr('editor.m.letterSpacing'), numInput(st.ls, -2, 20, set((v) => (st.ls = v)), 0.5)));
+      add(row(tr('editor.m.textShadow'), E('input', { type: 'checkbox', checked: st.shadow, onchange: (e) => { st.shadow = e.target.checked; touch(); renderStage(); } })));
+      add(row(tr('editor.m.opacity'), range(st.opacity, 0.1, 1, 0.05, set((v) => (st.opacity = v)))));
     }
 
-    if (t === 'banner' || t === 'avatar' || b.img) add(button('🎯 Как показывать фото', () => openFit(b), 'pm-flat'));
-    if (t === 'vods') add(button(b.o === 'v' ? '↔ Показать горизонтально' : '↕ Показать вертикально', () => { b.o = b.o === 'v' ? 'h' : 'v'; touch(); renderStage(); }, 'pm-flat'));
-    if (t === 'shape' || t === 'image' || t === 'text') add(button('🔗 Сделать кнопкой', () => toLink(b), 'pm-flat'));
-    if (t === 'link') add(button('▢ Сделать обычным блоком', () => fromLink(b), 'pm-flat'));
+    if (t === 'banner' || t === 'avatar' || b.img) add(button(tr('editor.fit.title'), () => openFit(b), 'pm-flat'));
+    if (t === 'vods') add(button(b.o === 'v' ? tr('editor.m.horizontal') : tr('editor.m.vertical'), () => { b.o = b.o === 'v' ? 'h' : 'v'; touch(); renderStage(); }, 'pm-flat'));
+    if (t === 'shape' || t === 'image' || t === 'text') add(button(tr('editor.m.toLink'), () => toLink(b), 'pm-flat'));
+    if (t === 'link') add(button(tr('editor.m.fromLink'), () => fromLink(b), 'pm-flat'));
     if (t !== 'avatar' && t !== 'banner' && !(t === 'image' && mode === 'live')) {
-      add(button('⬆ На передний план', () => moveLayer(b, 1), 'pm-flat'));
-      add(button('⬇ На задний план', () => moveLayer(b, -1), 'pm-flat'));
+      add(button(tr('editor.m.front'), () => moveLayer(b, 1), 'pm-flat'));
+      add(button(tr('editor.m.back'), () => moveLayer(b, -1), 'pm-flat'));
     }
 
     if (P.defOf(mode, b.id)) {
-      add(button('↺ Сбросить размер и место', () => {
+      add(button(tr('editor.m.resetPlace'), () => {
         Object.assign(b, P.clone(P.defOf(mode, b.id)));
         P.syncChat(blocks());
         touch(); renderStage(); closeMenu();
       }, 'pm-flat'));
-      if (t === 'player' || t === 'chat') add(E('div', { className: 'pm-hint', textContent: t === 'player' ? 'Плеер можно увеличить и уменьшить максимум на 10%. Высота чата подстроится.' : 'Чат можно расширить, высота равна высоте плеера.' }));
+      if (t === 'player' || t === 'chat') add(E('div', { className: 'pm-hint', textContent: t === 'player' ? tr('editor.m.playerHint') : tr('editor.m.chatHint') }));
     } else {
-      add(button('🗑 Удалить блок', () => removeBlock(b.id), 'pm-danger'));
+      add(button(tr('editor.m.delete'), () => removeBlock(b.id), 'pm-danger'));
     }
 
-    menu.replaceChildren(E('div', { className: 'pm-title', textContent: TITLES[t] || 'Блок' }), body);
+    menu.replaceChildren(E('div', { className: 'pm-title', textContent: TITLES[t] || tr('editor.block.default') }), body);
     menu.classList.remove('hidden');
   }
 
   // ---------- подгон фото ----------
   const FIT0 = { m: 'cover', z: 1, x: 50, y: 50 };
-  const FIT_MODES = [['cover', 'Заполнить'], ['contain', 'Целиком'], ['stretch', 'Растянуть']];
+  const FIT_MODES = ['cover', 'contain', 'stretch'].map((k) => [k, tr('editor.fit.' + k)]);
   const clamp = (v, a, z) => Math.min(z, Math.max(a, v));
 
   function photoUrl(b) {
@@ -611,10 +612,10 @@
 
   async function openFit(b) {
     const url = photoUrl(b);
-    if (!url) return toast('Сначала загрузи фото');
+    if (!url) return toast(tr('editor.fit.noPhoto'));
     const im = new Image();
     im.src = url;
-    try { await im.decode(); } catch { return toast('Не удалось открыть фото'); }
+    try { await im.decode(); } catch { return toast(tr('editor.fit.openFailed')); }
     closeMenu();
 
     const prevFit = b.fit ? { ...b.fit } : undefined;
@@ -646,8 +647,8 @@
       zoom.value = fit.z;
       modeBtns.forEach((btn, i) => btn.classList.toggle('on', FIT_MODES[i][0] === fit.m));
       const full = Math.abs(r.w - b.w) < 1 && Math.abs(r.h - b.h) < 1;
-      info.textContent = `Блок ${b.w}×${b.h} · масштаб ${Math.round(fit.z * 100)}% · ` +
-        (fit.m === 'contain' ? 'фото целиком' : full ? 'обрезки нет' : 'часть фото обрезана, выбери какую показывать');
+      info.textContent = tr('editor.fit.info', { w: b.w, h: b.h, z: Math.round(fit.z * 100) }) +
+        (fit.m === 'contain' ? tr('editor.fit.whole') : full ? tr('editor.fit.noCrop') : tr('editor.fit.cropped'));
       const f = stage.querySelector(`[data-id="${b.id}"] .pw-fill`);
       if (f) P.applyFit(f, b); // блок на сцене меняется вместе с окном
     }
@@ -691,16 +692,16 @@
     const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); finish(false); } };
 
     const panel = E('div', { className: 'pro-fit' },
-      E('div', { className: 'pm-title', textContent: 'Как показывать фото' }),
+      E('div', { className: 'pm-title', textContent: tr('editor.fit.title') }),
       area,
       info,
       E('div', { className: 'pm-seg' }, ...modeBtns),
-      row('Масштаб', zoom),
-      E('div', { className: 'pm-hint', textContent: 'Тяни фото мышкой, чтобы выбрать, что показывать. Колёсико мыши меняет масштаб. Тусклая часть не попадёт в блок.' }),
+      row(tr('editor.fit.zoom'), zoom),
+      E('div', { className: 'pm-hint', textContent: tr('editor.fit.hint') }),
       E('div', { className: 'pm-seg' },
-        button('Сбросить', () => { Object.assign(fit, FIT0); draw(); }, 'pm-flat'),
-        button('Отмена', () => finish(false), 'pm-flat'),
-        button('Готово', () => finish(true))));
+        button(tr('editor.fit.reset'), () => { Object.assign(fit, FIT0); draw(); }, 'pm-flat'),
+        button(tr('common.dialog.cancel'), () => finish(false), 'pm-flat'),
+        button(tr('editor.fit.done'), () => finish(true))));
     const back = E('div', { className: 'pro-fit-back' }, panel);
     back.addEventListener('pointerdown', (e) => { if (e.target === back) finish(false); });
 
@@ -713,7 +714,7 @@
   // ---------- верхняя панель ----------
   root.querySelectorAll('[data-tool]').forEach((btn) => btn.addEventListener('click', () => {
     const t = btn.dataset.tool;
-    if (phone) return toast('В режиме телефона можно только смотреть');
+    if (phone) return toast(tr('editor.phoneReadOnly'));
     shapeMenu.classList.add('hidden');
     closeMenu();
     if (t === 'scissors') {
@@ -768,7 +769,7 @@
       const r = await api('/streamers/' + encodeURIComponent(name.toLowerCase()) + '/layout');
       layout = P.withDefaults(r.layout);
     } catch (err) {
-      return toast(err.message || 'Не удалось загрузить макет');
+      return toast(err.message || tr('editor.loadFailed'));
     }
     mode = 'profile';
     phone = false;
@@ -783,7 +784,7 @@
   }
 
   async function closeEditor() {
-    if (dirty && !(await PW.confirm('Несохранённые изменения пропадут.', { title: 'Перейти в профиль?', okText: 'Перейти', danger: true }))) return;
+    if (dirty && !(await PW.confirm(tr('editor.leave.text'), { title: tr('editor.leave.title'), okText: tr('editor.leave.ok'), danger: true }))) return;
     closeMenu();
     goToOwnProfile();
   }
@@ -791,7 +792,7 @@
   async function save() {
     for (const m of ['profile', 'live']) {
       for (const b of layout[m].blocks) {
-        if (b.type === 'link' && b.url && !/^https?:\/\//i.test(b.url)) return toast('Ссылка должна начинаться с http:// или https://');
+        if (b.type === 'link' && b.url && !/^https?:\/\//i.test(b.url)) return toast(tr('editor.badUrl'));
       }
     }
     try {
@@ -802,12 +803,12 @@
       if (Object.keys(patch).length) await api('/streamers/me', { method: 'PATCH', body: patch });
       savedHi = hi;
       dirty = false;
-      toast('Макет сохранён', 'success');
-    } catch (err) { toast(err.message || 'Не удалось сохранить'); }
+      toast(tr('editor.layoutSaved'), 'success');
+    } catch (err) { toast(err.message || tr('editor.saveFailed')); }
   }
 
   async function resetLayout() {
-    if (!(await PW.confirm('Все свои блоки пропадут, базовые вернутся на места.', { title: 'Сбросить макет?', okText: 'Сбросить', danger: true }))) return;
+    if (!(await PW.confirm(tr('editor.resetConfirm.text'), { title: tr('editor.resetConfirm.title'), okText: tr('editor.fit.reset'), danger: true }))) return;
     try {
       await api('/streamers/me/layout', { method: 'PUT', body: { layout: null } });
       layout = P.withDefaults(null);
@@ -816,7 +817,7 @@
       selId = null;
       closeMenu();
       renderStage();
-    } catch (err) { toast(err.message || 'Не удалось сбросить'); }
+    } catch (err) { toast(err.message || tr('editor.resetFailed')); }
   }
 
   $('openProBtn').addEventListener('click', open);

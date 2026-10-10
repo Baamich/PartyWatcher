@@ -1,0 +1,67 @@
+<h1>API reference</h1>
+<p class="docs-lead">All chat requests and events in one place. This page is for those who write a bot or a bridge themselves. If you just show the chat in OBS, you don't need it.</p>
+
+<h2>How to send a message to the chat</h2>
+<p>Send a <code>POST</code> request to:</p>
+<pre><code>https://partywatcher.de/api/chat/send</code></pre>
+<p>Put the chat key in the headers: <code>Authorization: Bearer pwc_...</code> (or <code>X-Api-Key: pwc_...</code>). Don't put the key in the URL: it would end up in logs.</p>
+
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Body field (JSON)</th><th>What it is</th></tr>
+  <tr><td><code>text</code></td><td>Message text. Required, up to 500 characters.</td></tr>
+  <tr><td><code>username</code></td><td>Sender name, up to 32 characters. If omitted, it will be “Bot”.</td></tr>
+  <tr><td><code>source</code></td><td>A label for where the message comes from: Latin letters, digits, <code>_</code> and <code>-</code>, up to 16 characters. For example <code>twitch</code>, <code>vk</code>, <code>bot</code>. If omitted, it will be <code>api</code>.</td></tr>
+  <tr><td><code>color</code></td><td>Nickname color as <code>#rrggbb</code>, for example <code>#9146ff</code>. Optional.</td></tr>
+</table>
+</div>
+
+<p>Terminal example (replace the key with yours):</p>
+<pre><code>curl -X POST https://partywatcher.de/api/chat/send \
+  -H "Authorization: Bearer pwc_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello from twitch","username":"viewer123","source":"twitch","color":"#9146ff"}'</code></pre>
+
+<h3>What the site responds</h3>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Code</th><th>What it means</th></tr>
+  <tr><td><code>200</code></td><td>All good, the message is in the chat.</td></tr>
+  <tr><td><code>400</code></td><td>The message is empty.</td></tr>
+  <tr><td><code>401</code></td><td>The key is missing or wrong.</td></tr>
+  <tr><td><code>429</code></td><td>Too often. The response has <code>Retry-After</code>: in how many seconds you can try again.</td></tr>
+  <tr><td><code>500</code></td><td>An error on the site side. Try later.</td></tr>
+</table>
+</div>
+
+<h2>How to read the chat</h2>
+<p>Connect via Socket.IO to <code>https://partywatcher.de/chat</code>. Right after connecting, send the <code>chat:join</code> event with the body <code>{ "chatKey": "your key" }</code>. Such a connection is read-only and doesn't appear in the viewer list.</p>
+
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Event</th><th>When it arrives</th></tr>
+  <tr><td><code>chat:history</code></td><td>Right after joining: up to 50 latest messages.</td></tr>
+  <tr><td><code>chat:message</code></td><td>A new message appeared (from a viewer or via the API).</td></tr>
+  <tr><td><code>chat:message-deleted</code></td><td>A message was deleted. The event has <code>messageId</code>.</td></tr>
+  <tr><td><code>chat:cleared</code></td><td>The chat was cleared.</td></tr>
+  <tr><td><code>chat:overlay-error</code></td><td>The key is wrong. The event has <code>error</code>.</td></tr>
+</table>
+</div>
+
+<h3>What's inside a message</h3>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Field</th><th>What it is</th></tr>
+  <tr><td><code>_id</code></td><td>Message id.</td></tr>
+  <tr><td><code>senderUsername</code></td><td>Sender name.</td></tr>
+  <tr><td><code>text</code></td><td>Text.</td></tr>
+  <tr><td><code>isOwner</code></td><td><code>true</code> if the channel owner writes.</td></tr>
+  <tr><td><code>external</code></td><td><code>true</code> if the message came via the API (from a bot or a bridge).</td></tr>
+  <tr><td><code>source</code></td><td>Source label (for messages via the API).</td></tr>
+  <tr><td><code>nickColor</code></td><td>Nickname color <code>#rrggbb</code> or <code>null</code>.</td></tr>
+  <tr><td><code>senderId</code></td><td>Site user id. For messages via the API it is <code>null</code>.</td></tr>
+  <tr><td><code>createdAt</code></td><td>When it was sent.</td></tr>
+</table>
+</div>
+
+<p>Next: <a href="#chat-security">Security and limits</a>.</p>
