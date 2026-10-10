@@ -309,22 +309,29 @@ router.get('/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-// админ: смена статуса (переносить можно в любой момент, в т.ч. обратно в «непрочитанные»).
-// «Принято» и «Пустяк» отправляют человеку письмо (если есть почта) — каждое не больше одного раза на обращение
+// обработать можно только непрочитанное: статус меняем атомарно (условие status: 'unread'),
+// поэтому двойной клик или два админа одновременно не отправят два письма
+async function claimUnread(ticket, status) {
+  if (ticket.status !== 'unread') return false;
+  const r = await SupportTicket.updateOne({ _id: ticket._id, status: 'unread' }, { $set: { status, hasNewReply: false } });
+  return r.modifiedCount === 1;
+}
+
+// админ: «Принято» / «Пустяк» — только из непрочитанных; обработанное обращение не меняется (только через базу).
+// Оба статуса отправляют человеку письмо (если есть почта)
 router.patch('/:id/status', auth, adminOnly, async (req, res) => {
   try {
     if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
     const status = req.body.status;
-    if (!['accepted', 'trivial', 'unread'].includes(status)) {
+    if (!['accepted', 'trivial'].includes(status)) {
       return res.status(400).json({ error: req.t('server.badStatus') });
     }
     const ticket = await SupportTicket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
+    if (!(await claimUnread(ticket, status))) return res.status(409).json({ error: req.t('server.support.closed') });
 
     let emailed = false;
-    const changed = ticket.status !== status;
-    const mailAlready = ticket.messages.some((m) => m.kind === status && m.emailed);
-    if (changed && status !== 'unread' && ticket.email && !mailAlready) {
+    if (ticket.email) {
       try {
         const r = await sendSupportEmail(ticket, status);
         emailed = r.emailed;
@@ -339,7 +346,7 @@ router.patch('/:id/status', auth, adminOnly, async (req, res) => {
     await ticket.save();
 
     const unreadCount = await broadcast(req, ticket);
-    res.json({ ticket: briefOf(ticket), unreadCount, emailed, mailAlready, hadEmail: !!ticket.email });
+    res.json({ ticket: briefOf(ticket), unreadCount, emailed, hadEmail: !!ticket.email });
   } catch (err) {
     console.error('[support/status]', err.message);
     res.status(500).json({ error: req.t('server.serverError') });
@@ -356,6 +363,7 @@ router.post('/:id/reply', auth, adminOnly, async (req, res) => {
     const ticket = await SupportTicket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
     if (!ticket.email) return res.status(400).json({ error: req.t('server.support.noEmail') });
+    if (!(await claimUnread(ticket, 'answered'))) return res.status(409).json({ error: req.t('server.support.closed') });
 
     let r;
     try {
@@ -364,7 +372,11 @@ router.post('/:id/reply', auth, adminOnly, async (req, res) => {
       console.error('[support/reply] письмо не отправлено:', e.message);
       r = { emailed: false };
     }
-    if (!r.emailed) return res.status(502).json({ error: req.t('server.support.mailFailed') });
+    if (!r.emailed) {
+      // письмо не ушло — возвращаем «непрочитанное», чтобы админ мог отправить ещё раз
+      await SupportTicket.updateOne({ _id: ticket._id, status: 'answered' }, { $set: { status: 'unread' } });
+      return res.status(502).json({ error: req.t('server.support.mailFailed') });
+    }
 
     ticket.mailIds.push(r.messageId);
     if (ticket.mailIds.length > 50) ticket.mailIds = ticket.mailIds.slice(-50);

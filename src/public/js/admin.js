@@ -127,16 +127,18 @@ function pollStatus(log) {
     }
   }
 
-  // кнопки действий: просмотр, ответ (только при почте) и перенос в любой другой статус — в любой момент
+  // кнопки действий: «Просмотреть» есть всегда; ответить и перенести — только пока обращение непрочитанное.
+  // Обработанное (принято/пустяк/отвечено) больше не меняется — только через базу. Ответ человека на письмо
+  // снова делает его непрочитанным, и кнопки возвращаются
   function actionsHtml(tk, withView) {
     const id = escapeHtml(tk._id);
     const noMail = !tk.email;
     let html = '';
     if (withView) html += `<button type="button" class="btn-trivial" data-act="view" data-id="${id}">${t('admin.support.view')}</button>`;
+    if (tk.status !== 'unread') return html;
     html += `<button type="button" data-act="reply" data-id="${id}"${noMail ? ' disabled' : ''} title="${escapeHtml(noMail ? t('admin.support.noEmailHint') : t('admin.support.reply'))}">${t('admin.support.reply')}</button>`;
-    if (tk.status !== 'accepted') html += `<button type="button" data-act="accepted" data-id="${id}">${t('admin.support.accept')}</button>`;
-    if (tk.status !== 'trivial') html += `<button type="button" class="btn-trivial" data-act="trivial" data-id="${id}">${t('admin.support.trivial')}</button>`;
-    if (tk.status !== 'unread') html += `<button type="button" class="btn-trivial" data-act="unread" data-id="${id}">${t('admin.support.toUnread')}</button>`;
+    html += `<button type="button" data-act="accepted" data-id="${id}">${t('admin.support.accept')}</button>`;
+    html += `<button type="button" class="btn-trivial" data-act="trivial" data-id="${id}">${t('admin.support.trivial')}</button>`;
     return html;
   }
 
@@ -268,9 +270,7 @@ function pollStatus(log) {
     try {
       const data = await api('/support/' + encodeURIComponent(id) + '/status', { method: 'PATCH', body: { status } });
       if (data.unreadCount != null) setBadge(data.unreadCount);
-      if (status === 'unread') PW.toast(t('admin.support.saved'), 'info');
-      else if (data.emailed) PW.toast(t('admin.support.mailSent'), 'success');
-      else if (data.mailAlready) PW.toast(t('admin.support.mailAlready'), 'info');
+      if (data.emailed) PW.toast(t('admin.support.mailSent'), 'success');
       else if (data.hadEmail) PW.toast(t('admin.support.mailNotSent'), 'error');
       else PW.toast(t('admin.support.savedNoMail'), 'info');
       if (!viewModal.classList.contains('hidden') && openTicket?.ticket._id === id) await openView(id);

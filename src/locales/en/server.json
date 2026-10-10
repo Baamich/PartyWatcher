@@ -167,7 +167,8 @@
     "noEmail": "The request has no email — a reply cannot be sent",
     "mailFailed": "The email was not sent: check the SMTP settings on the server",
     "attachments": "[attachments: {n} — see the mailbox]",
-    "emptyMail": "(empty email)"
+    "emptyMail": "(empty email)",
+    "closed": "This request has already been processed — it can only be viewed"
   },
   "yt": {
     "hostOnly": "Only the host can switch the source",
