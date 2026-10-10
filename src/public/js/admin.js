@@ -153,8 +153,8 @@ function pollStatus(log) {
       <div class="support-card${tk.hasNewReply ? ' support-card--fresh' : ''}" data-id="${escapeHtml(tk._id)}">
         <div class="support-card-meta">${metaHtml(tk)}</div>
         <div class="support-card-name">${escapeHtml(tk.name || t('admin.support.noName'))}${tk.email ? ' · ' + escapeHtml(tk.email) : ' · ' + t('admin.support.noEmail')}</div>
-        ${tk.subject ? `<div class="support-card-subject">${escapeHtml(tk.subject)}</div>` : ''}
-        <div class="support-card-desc">${escapeHtml(tk.description)}</div>
+        ${tk.subject ? `<div class="support-card-subject" data-no-i18n>${escapeHtml(tk.subject)}</div>` : ''}
+        <div class="support-card-desc" data-no-i18n>${escapeHtml(tk.description)}</div>
         ${tk.messagesCount ? `<div class="support-card-meta">${t('admin.support.messages', { n: tk.messagesCount })}</div>` : ''}
         <div class="support-card-actions">${actionsHtml(tk, true)}</div>
       </div>`;
@@ -198,7 +198,7 @@ function pollStatus(log) {
     return `
       <div class="ticket-msg ${support ? 'ticket-msg--support' : 'ticket-msg--user'}">
         <div class="ticket-msg-head">${escapeHtml(who)} · ${formatDate(m.at)}${escapeHtml(mail)}</div>
-        <div class="ticket-msg-text">${body}</div>
+        <div class="ticket-msg-text" data-no-i18n>${body}</div>
       </div>`;
   }
 
@@ -333,6 +333,12 @@ function pollStatus(log) {
     if (e.key !== 'Escape') return;
     if (!replyModal.classList.contains('hidden')) replyModal.classList.add('hidden');
     else if (!viewModal.classList.contains('hidden')) viewModal.classList.add('hidden');
+  });
+
+  // язык сменили без перезагрузки: даты и подписи карточек — заново
+  window.addEventListener('pw:langchange', () => {
+    if (!overlay.classList.contains('hidden')) loadTickets();
+    if (openTicket && !viewModal.classList.contains('hidden')) renderView();
   });
 
   refreshCount();

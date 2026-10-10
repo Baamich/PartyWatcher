@@ -165,4 +165,4 @@ function bundle(req, res) {
   res.send(body);
 }
 
-module.exports = { LANGS, DEFAULT_LANG, COOKIE, VERSION, t, err, errText, langFromHeaders, langFromAccept, middleware, bundle, LOCALES_DIR };
+module.exports = { LANGS, DEFAULT_LANG, COOKIE, VERSION, normLang, t, err, errText, langFromHeaders, langFromAccept, middleware, bundle, LOCALES_DIR };

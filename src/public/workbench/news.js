@@ -56,6 +56,8 @@ function buildNewsRow(n) {
 
   const text = document.createElement('div');
   text.className = 'news-card-text'; // white-space: pre-wrap: показываем ровно как написано
+  title.setAttribute('data-no-i18n', ''); // текст автора — не словарный
+  text.setAttribute('data-no-i18n', '');
 
   body.append(date, title, text);
 
@@ -108,6 +110,9 @@ function buildNewsRow(n) {
 
   return row;
 }
+
+// язык сменили без перезагрузки — перечитываем: перевод новостей и даты на новом языке
+window.addEventListener('pw:langchange', () => loadNews());
 
 async function loadNews() {
   const list = $('newsList');

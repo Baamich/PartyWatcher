@@ -804,6 +804,7 @@ function applyLiveRestriction(r) {
   liveRestrictTimer = setInterval(tick, 1000);
 }
 
+window.addEventListener('pw:langchange', (e) => liveSocket?.emit('lang:set', e.detail.lang)); // язык ответов бота
 function connectLiveChat(nameLower) {
   liveSocket = io('/chat', { reconnection: false });
 

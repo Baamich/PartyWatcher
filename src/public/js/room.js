@@ -1527,6 +1527,8 @@ async function init() {
   initLockButtonsControl();
 
   socket = io({ transports: ['websocket', 'polling'] }); // через туннель длинные polling-запросы чаще рвутся, WebSocket стабильнее
+  // язык сменили без перезагрузки — сервер дальше пишет этому сокету на новом языке
+  window.addEventListener('pw:langchange', (e) => socket.emit('lang:set', e.detail.lang));
   socket.on('connect', () => socket.emit('room:join', { code }));
 
   window.socket = socket;

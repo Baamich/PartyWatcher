@@ -650,6 +650,7 @@ function confirmTimeout() {
 
 let chatReconnectScheduler = null;
 
+window.addEventListener('pw:langchange', (e) => socket?.emit('lang:set', e.detail.lang)); // язык ответов бота
 function initChat(streamerNameLower) {
   // reconnection: false — отключаем встроенную схему socket.io, управляем сами по своему графику
   socket = io('/chat', { reconnection: false });

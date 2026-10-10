@@ -88,6 +88,9 @@ function registerRoomSocket(io) {
   });
 
     io.on('connection', (socket) => {
+    // смена языка без перезагрузки страницы: дальше сообщения этому сокету — на новом языке
+    socket.on('lang:set', (l) => { socket.data.lang = i18n.normLang(l) || socket.data.lang; });
+
     // админы сразу в комнату support-событий
     if (socket.user?.role === 'admin') {
       socket.join('admins');

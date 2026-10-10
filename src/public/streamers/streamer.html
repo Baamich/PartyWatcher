@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/i18n.js?v=4" data-ns="streamer,layout"></script>
+  <script src="/js/i18n.js?v=5" data-ns="streamer,layout"></script>
   <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
@@ -83,7 +83,7 @@
             </button>
             <button type="button" id="liveClearChatBtn" class="live-clear-chat-btn hidden" title="Очистить чат" data-i18n-title="streamer.chat.clear">🧹</button>
           </div>
-          <div id="liveMessages"></div>
+          <div id="liveMessages" data-no-i18n></div>
           <form id="liveChatForm">
             <input id="liveChatInput" placeholder="Сообщение..." data-i18n-placeholder="streamer.chat.placeholder" autocomplete="off" maxlength="500">
             <button type="submit">➤</button>
@@ -180,6 +180,6 @@
   <script src="/js/pwlayout.js?v=2"></script>
   <script src="/js/pwcache.js"></script>
   <script src="/streamers/pro-view.js?v=2"></script>
-  <script src="/streamers/streamer.js?v=3"></script>
+  <script src="/streamers/streamer.js?v=4"></script>
 </body>
 </html>

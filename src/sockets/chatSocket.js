@@ -174,6 +174,9 @@ module.exports = function registerChatSocket(io) {
   nsp.on('connection', (socket) => {
     const authUser = socket.data.authUser;
     socket.data.userId = authUser?.id ? String(authUser.id) : null;
+    // язык ответов этому сокету: с cookie при подключении, дальше — по lang:set (смена языка без перезагрузки)
+    socket.data.lang = i18n.langFromHeaders(socket.handshake.headers);
+    socket.on('lang:set', (l) => { socket.data.lang = i18n.normLang(l) || socket.data.lang; });
       let currentStreamerNameLower = null;
       let lastSendAt = 0;
 
@@ -196,7 +199,7 @@ module.exports = function registerChatSocket(io) {
         // вход по API-ключу (OBS-оверлей, бот): только чтение, в списке зрителей не светится
         streamer = await User.findOne({ chatApiKey: keyStr }).select('_id streamerNameLower').lean();
         if (!streamer || !streamer.streamerNameLower) {
-          return socket.emit('chat:overlay-error', { error: i18n.t(i18n.langFromHeaders(socket.handshake.headers), 'server.chatApi.badChatKey') });
+          return socket.emit('chat:overlay-error', { error: i18n.t(socket.data.lang, 'server.chatApi.badChatKey') });
         }
         currentStreamerNameLower = streamer.streamerNameLower;
         socket.data.isOverlay = true;
@@ -273,7 +276,7 @@ module.exports = function registerChatSocket(io) {
         isOwner: !!socket.data.isOwner,
       });
 
-      runChatCommand(currentStreamerNameLower, trimmed, authUser.username, i18n.langFromHeaders(socket.handshake.headers)).catch((e) =>
+      runChatCommand(currentStreamerNameLower, trimmed, authUser.username, socket.data.lang).catch((e) =>
         console.warn('[chat command]', e.message)
       );
     });

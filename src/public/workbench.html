@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/i18n.js?v=4" data-ns="workbench"></script>
+  <script src="/js/i18n.js?v=5" data-ns="workbench"></script>
   <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
@@ -141,7 +141,7 @@
             <p class="wb-hint" data-i18n-html="workbench.chatApi.hint">Отправка в чат: <code>POST /api/chat/send</code> с заголовком <code>Authorization: Bearer ключ</code></p>
           </div>
 
-          <div id="chatMessages" class="wb-chat-messages no-scrollbar"></div>
+          <div id="chatMessages" class="wb-chat-messages no-scrollbar" data-no-i18n></div>
           <div class="wb-chat-input-row">
             <input id="chatInput" placeholder="Написать в чат…" data-i18n-placeholder="workbench.chat.placeholder" data-keydown="handleChatKey" data-event />
             <button type="button" data-click="sendChatMessage">➤</button>
@@ -210,6 +210,6 @@
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/minipip.js?v=2"></script>
-  <script src="/workbench/workbench.js?v=2"></script>
+  <script src="/workbench/workbench.js?v=3"></script>
 </body>
 </html>

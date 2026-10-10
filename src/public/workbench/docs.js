@@ -1,5 +1,6 @@
 // страницы документации лежат в src/locales/<язык>/docs/*.html (по языку посетителя)
-const DOCS_BASE = `/locales/${I18N.lang}/docs/`;
+// страницы документации лежат отдельно на каждом языке; язык может смениться без перезагрузки
+const docsBase = () => `/locales/${I18N.lang}/docs/`;
 const DOCS_HOME = 'intro';
 
 // ---- оглавление: сюда добавляются новые главы и страницы ----
@@ -21,6 +22,7 @@ let loadToken = 0;
 const openChapters = new Set();
 
 const contentEl = document.getElementById('docsContent');
+contentEl?.setAttribute('data-no-i18n', ''); // текст страницы — целиком из файла нужного языка
 const tocEl = document.getElementById('docsToc');
 const pagerEl = document.getElementById('docsPager');
 
@@ -186,7 +188,7 @@ async function loadPage(id) {
   renderPager(id);
 
   try {
-    const res = await fetch(`${DOCS_BASE}${id}.html`, { cache: 'no-cache' });
+    const res = await fetch(`${docsBase()}${id}.html`, { cache: 'no-cache' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const html = await res.text();
     if (token !== loadToken) return; // успели кликнуть дальше — этот ответ уже не нужен
@@ -203,13 +205,14 @@ async function loadPage(id) {
     if (token !== loadToken) return;
     contentEl.innerHTML =
       `<h1>${t('docs.loadFailed')}</h1>` +
-      `<p class="docs-lead">${t('docs.checkFile')} <code>${DOCS_BASE}${id}.html</code></p>`;
+      `<p class="docs-lead">${t('docs.checkFile')} <code>${docsBase()}${id}.html</code></p>`;
   } finally {
     if (token === loadToken) contentEl.removeAttribute('aria-busy');
   }
 }
 
 window.addEventListener('hashchange', () => loadPage(getHashId()));
+window.addEventListener('pw:langchange', () => loadPage(getHashId())); // та же страница на новом языке
 
 // ---------- кнопка «← Профиль» ----------
 

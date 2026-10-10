@@ -1,5 +1,5 @@
 // Локализация в браузере. Подключается ПЕРВЫМ скриптом в <head> (без defer/async):
-//   <script src="/js/i18n.js?v=4" data-ns="index"></script>
+//   <script src="/js/i18n.js?v=5" data-ns="index"></script>
 // data-ns — разделы словаря этой страницы (common грузится всегда), файлы — src/locales/<язык>/<раздел>.json.
 // В JS:     t('room.copied'), t('room.viewers', { n: 5 }) — значение-объект { one, few, many, other } = плюрал.
 // В HTML:   data-i18n="ключ" (текст), data-i18n-html (разметка), data-i18n-placeholder, data-i18n-title,
@@ -45,7 +45,7 @@
     return 'en';
   }
 
-  const lang = detect();
+  let lang = detect();
   document.documentElement.setAttribute('lang', lang);
 
   // словари этой страницы — синхронно, сразу после этого скрипта (до остальных <script>)
@@ -54,13 +54,16 @@
   const nsList = ['common'].concat(ns.split(',').map((s) => s.trim()).filter(Boolean));
   // &h= — версия словарей из cookie pw_i18n (ставит сервер при открытии страницы): с ней словарь берётся
   // из кэша браузера без запроса к серверу, поэтому смена языка и переходы быстрые. Без cookie — свежий запрос
-  if (!window.PW_I18N_DATA) {
+  function bundleUrl(l) {
     const ver = document.cookie.match(/(?:^|;\s*)pw_i18n=([0-9a-f]+)/);
-    document.write('<script src="/locales/' + lang + '.js?ns=' + encodeURIComponent(nsList.join(',')) +
-      (ver ? '&h=' + ver[1] : '') + '"><\/script>');
+    return '/locales/' + l + '.js?ns=' + encodeURIComponent(nsList.join(',')) + (ver ? '&h=' + ver[1] : '');
+  }
+  if (!window.PW_I18N_DATA) {
+    document.write('<script src="' + bundleUrl(lang) + '"><\/script>');
   }
 
-  const pluralRules = typeof Intl !== 'undefined' && Intl.PluralRules ? new Intl.PluralRules(lang) : null;
+  const makePlural = (l) => (typeof Intl !== 'undefined' && Intl.PluralRules ? new Intl.PluralRules(l) : null);
+  let pluralRules = makePlural(lang);
 
   function dict() {
     return window.PW_I18N_DATA || {};
@@ -140,18 +143,142 @@
     return k && has(k) ? t(k) : name;
   }
 
-  function setLang(next) {
-    if (!LANGS[next] || next === lang) return;
+  // ===== смена языка на лету, без перезагрузки страницы =====
+  // 1) словарь нового языка: из памяти или /locales/<язык>.js (кэшируется браузером по версии &h=);
+  // 2) разметка с data-i18n — переводится заново по ключам;
+  // 3) текст, который JS уже нарисовал через t(), узнаём по старому словарю (точное совпадение или шаблон
+  //    с {подстановками}/плюралом) и меняем на тот же ключ нового языка. Пользовательский текст не трогаем:
+  //    его контейнеры помечаются data-no-i18n (чат, описания обращений, новости);
+  // 4) событие pw:langchange — страница перерисовывает то, что зависит от языка иначе (даты, документация, сокеты).
+  const dataByLang = {};
+
+  // тот же адрес, что и у <script> при загрузке страницы (общий кэш браузера), но читаем как данные:
+  // ответ — «window.PW_I18N_DATA={...};», берём JSON между «=» и последней «;»
+  const BUNDLE_PREFIX = 'window.PW_I18N_DATA=';
+  function loadBundle(l) {
+    if (dataByLang[l]) return Promise.resolve(dataByLang[l]);
+    return fetch(bundleUrl(l), { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((body) => {
+        if (body.indexOf(BUNDLE_PREFIX) !== 0) throw new Error('bad bundle');
+        const data = JSON.parse(body.slice(BUNDLE_PREFIX.length, body.lastIndexOf(';')));
+        dataByLang[l] = data;
+        return data;
+      });
+  }
+
+  const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // обратный словарь: текст на старом языке → ключ (и шаблоны для строк с {подстановками})
+  function buildReverse(data) {
+    const exact = new Map();
+    const tpl = [];
+    for (const key of Object.keys(data)) {
+      const val = data[key];
+      const plural = typeof val === 'object';
+      const forms = plural ? Object.values(val) : [val];
+      for (const f of forms) {
+        if (typeof f !== 'string' || f.length > 500 || /<[a-z!/]/i.test(f)) continue; // разметку не узнаём
+        const s = f.trim();
+        if (!s) continue;
+        if (s.indexOf('{') !== -1) {
+          const parts = s.split(/\{(\w+)\}/); // литерал, имя, литерал, имя, ...
+          const names = [];
+          let src = '';
+          for (let i = 0; i < parts.length; i++) {
+            if (i % 2) { names.push(parts[i]); src += '([\\s\\S]+?)'; } else src += escRe(parts[i]);
+          }
+          if (parts.filter((p, i) => i % 2 === 0).join('').trim().length < 2) continue; // «{name}» — подходит ко всему
+          tpl.push({ re: new RegExp('^' + src + '$'), names, key });
+        } else if (!plural && !exact.has(s)) {
+          exact.set(s, key); // у одинаковых текстов берём первый ключ — переводы у них совпадают
+        }
+      }
+    }
+    return { exact, tpl };
+  }
+
+  function convert(text, rev) {
+    const s = text.trim();
+    if (!s || s.length > 500) return null;
+    const k = rev.exact.get(s);
+    if (k) return has(k) ? t(k) : null;
+    for (const tp of rev.tpl) {
+      const m = tp.re.exec(s);
+      if (!m) continue;
+      if (!has(tp.key)) return null;
+      const vars = {};
+      tp.names.forEach((n, i) => { vars[n] = m[i + 1]; });
+      return t(tp.key, vars);
+    }
+    return null;
+  }
+
+  const NO_TEXT = '[data-no-i18n],script,style,textarea,code,pre,[contenteditable=""],[contenteditable="true"],[data-i18n],[data-i18n-html]';
+  const LIVE_ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
+
+  function retranslateDom(rev) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const edits = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const v = n.nodeValue;
+      if (!v || !v.trim() || !n.parentElement || n.parentElement.closest(NO_TEXT)) continue;
+      const out = convert(v, rev);
+      if (out != null) edits.push([n, v.replace(v.trim(), out)]);
+    }
+    edits.forEach(([n, v]) => { n.nodeValue = v; });
+
+    document.body.querySelectorAll(LIVE_ATTRS.map((a) => '[' + a + ']').join(',')).forEach((el) => {
+      if (el.closest('[data-no-i18n]')) return;
+      for (const a of LIVE_ATTRS) {
+        if (!el.hasAttribute(a) || el.hasAttribute('data-i18n-' + a)) continue;
+        const out = convert(el.getAttribute(a), rev);
+        if (out != null) el.setAttribute(a, out);
+      }
+    });
+    if (!document.querySelector('title[data-i18n]')) {
+      const out = convert(document.title, rev);
+      if (out != null) document.title = out;
+    }
+  }
+
+  function saveCookie(l) {
     const host = location.hostname;
     const domain = /(^|\.)partywatcher\.de$/i.test(host) ? '; domain=.partywatcher.de' : '';
     const secure = location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = COOKIE + '=' + next + '; path=/; max-age=31536000; SameSite=Lax' + domain + secure;
-    // отклик сразу, пока страница перезагружается: новый флаг, меню закрыто, курсор «ожидание»
-    document.querySelectorAll('.lang-switch-btn .lang-flag').forEach((img) => { img.src = LANGS[next].flag; });
-    document.querySelectorAll('.lang-menu').forEach((m) => m.classList.add('hidden'));
-    document.documentElement.style.cursor = 'progress';
-    location.reload();
+    document.cookie = COOKIE + '=' + l + '; path=/; max-age=31536000; SameSite=Lax' + domain + secure;
   }
+
+  let switching = null;
+  function setLang(next) {
+    if (!LANGS[next] || next === lang) return Promise.resolve();
+    saveCookie(next); // запросы к API с этого момента идут уже с новым языком
+    const oldData = dict();
+    dataByLang[lang] = oldData;
+    const job = loadBundle(next).then((data) => {
+      if (switching !== job) return; // успели выбрать другой язык
+      const rev = buildReverse(oldData);
+      window.PW_I18N_DATA = data;
+      lang = next;
+      pluralRules = makePlural(next);
+      window.I18N.lang = next;
+      window.I18N.locale = LANGS[next].locale;
+      document.documentElement.setAttribute('lang', next);
+      apply(document);
+      retranslateDom(rev);
+      refreshSwitches();
+      window.dispatchEvent(new CustomEvent('pw:langchange', { detail: { lang: next } }));
+    }).catch(() => location.reload()); // словарь не загрузился — по-старому, перезагрузкой
+    switching = job;
+    return job;
+  }
+
+  // другая вкладка сменила язык (общая cookie) — подтягиваемся, когда на эту вкладку вернутся
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const c = readCookie();
+    if (c && c !== lang) setLang(c);
+  });
 
   // ===== переключатель языка =====
   function flagImg(code) {
@@ -174,6 +301,8 @@
     btn.className = 'icon-btn lang-switch-btn';
     btn.setAttribute('aria-haspopup', 'listbox');
     btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('data-i18n-aria-label', 'common.lang.choose');
+    btn.setAttribute('data-i18n-title', 'common.lang.choose');
     btn.setAttribute('aria-label', t('common.lang.choose'));
     btn.title = t('common.lang.choose');
     btn.appendChild(flagImg(lang));
@@ -185,11 +314,13 @@
     const menu = document.createElement('ul');
     menu.className = 'lang-menu hidden';
     menu.setAttribute('role', 'listbox');
+    menu.setAttribute('data-no-i18n', ''); // «RU»/«EN» — названия, не переводим
     for (const code of Object.keys(LANGS)) {
       const li = document.createElement('li');
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'lang-item' + (code === lang ? ' active' : '');
+      item.dataset.lang = code;
       item.setAttribute('role', 'option');
       item.setAttribute('aria-selected', code === lang ? 'true' : 'false');
       item.title = LANGS[code].name;
@@ -197,7 +328,7 @@
       const label = document.createElement('span');
       label.textContent = LANGS[code].label;
       item.appendChild(label);
-      item.addEventListener('click', () => setLang(code));
+      item.addEventListener('click', () => { close(); setLang(code); });
       li.appendChild(item);
       menu.appendChild(li);
     }
@@ -222,6 +353,16 @@
 
   function renderSwitches(root) {
     (root || document).querySelectorAll('[data-lang-switch]').forEach(renderSwitch);
+  }
+
+  // после смены языка: флаг на кнопке и отметка в меню
+  function refreshSwitches() {
+    document.querySelectorAll('.lang-switch-btn .lang-flag').forEach((img) => { img.src = LANGS[lang].flag; });
+    document.querySelectorAll('.lang-item[data-lang]').forEach((item) => {
+      const on = item.dataset.lang === lang;
+      item.classList.toggle('active', on);
+      item.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
   }
 
   document.addEventListener('DOMContentLoaded', () => {

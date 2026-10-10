@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/js/i18n.js?v=4" data-ns="room,capture"></script>
+  <script src="/js/i18n.js?v=5" data-ns="room,capture"></script>
   <script src="/js/theme.js?v=2"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
@@ -56,7 +56,7 @@
         </div>
       </div>
 
-      <div id="fsMessages"></div>
+      <div id="fsMessages" data-no-i18n></div>
       <form id="fsChatForm" data-submit="sendMessage" data-event data-arg="fs">
         <input id="fsChatInput" type="text" placeholder="Сообщение..." data-i18n-placeholder="room.chat.placeholder" autocomplete="off" maxlength="500">
         <button type="submit">➤</button>
@@ -75,7 +75,7 @@
       <div id="roomMeta">
         <span class="room-meta-line">
           <span data-i18n="room.meta.name">Название:</span>
-          <b id="roomNameValue" class="copyable" title="Нажми, чтобы скопировать" data-i18n-title="room.meta.copyHint"></b>
+          <b id="roomNameValue" class="copyable" data-no-i18n title="Нажми, чтобы скопировать" data-i18n-title="room.meta.copyHint"></b>
         </span>
         <span class="room-meta-line">
           <span data-i18n="room.meta.code">Ключ:</span>
@@ -141,7 +141,7 @@
 
     <button class="btn-mono" id="resyncBtn" data-click="resync" data-i18n="room.resync">🔄 Синхронизировать</button>
 
-    <div id="messages"></div>
+    <div id="messages" data-no-i18n></div>
     <form id="chatForm" data-submit="sendMessage" data-event>
       <button type="button" id="lockButtonsBtn" title="Заблокировать/разблокировать кнопки плеера" data-i18n-title="room.lock.title">🔓</button>
       <input id="chatInput" placeholder="Сообщение..." data-i18n-placeholder="room.chat.placeholder" />
@@ -240,6 +240,6 @@
   <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/wakelock.js"></script>
-  <script src="/js/room.js?v=9"></script>
+  <script src="/js/room.js?v=10"></script>
 </body>
 </html>
