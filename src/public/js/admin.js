@@ -127,7 +127,7 @@ function pollStatus(log) {
     }
   }
 
-  // кнопки действий: просмотр, ответ (только при почте), статусы, которых у обращения ещё нет
+  // кнопки действий: просмотр, ответ (только при почте) и перенос в любой другой статус — в любой момент
   function actionsHtml(tk, withView) {
     const id = escapeHtml(tk._id);
     const noMail = !tk.email;
@@ -136,6 +136,7 @@ function pollStatus(log) {
     html += `<button type="button" data-act="reply" data-id="${id}"${noMail ? ' disabled' : ''} title="${escapeHtml(noMail ? t('admin.support.noEmailHint') : t('admin.support.reply'))}">${t('admin.support.reply')}</button>`;
     if (tk.status !== 'accepted') html += `<button type="button" data-act="accepted" data-id="${id}">${t('admin.support.accept')}</button>`;
     if (tk.status !== 'trivial') html += `<button type="button" class="btn-trivial" data-act="trivial" data-id="${id}">${t('admin.support.trivial')}</button>`;
+    if (tk.status !== 'unread') html += `<button type="button" class="btn-trivial" data-act="unread" data-id="${id}">${t('admin.support.toUnread')}</button>`;
     return html;
   }
 
@@ -267,11 +268,11 @@ function pollStatus(log) {
     try {
       const data = await api('/support/' + encodeURIComponent(id) + '/status', { method: 'PATCH', body: { status } });
       if (data.unreadCount != null) setBadge(data.unreadCount);
-      if (status !== 'unread') {
-        if (data.emailed) PW.toast(t('admin.support.mailSent'), 'success');
-        else if (data.hadEmail) PW.toast(t('admin.support.mailNotSent'), 'error');
-        else PW.toast(t('admin.support.savedNoMail'), 'info');
-      }
+      if (status === 'unread') PW.toast(t('admin.support.saved'), 'info');
+      else if (data.emailed) PW.toast(t('admin.support.mailSent'), 'success');
+      else if (data.mailAlready) PW.toast(t('admin.support.mailAlready'), 'info');
+      else if (data.hadEmail) PW.toast(t('admin.support.mailNotSent'), 'error');
+      else PW.toast(t('admin.support.savedNoMail'), 'info');
       if (!viewModal.classList.contains('hidden') && openTicket?.ticket._id === id) await openView(id);
       await loadTickets();
     } catch (e) {

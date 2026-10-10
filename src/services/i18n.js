@@ -2,12 +2,14 @@
 // Сервер: req.t('server.roomNotFound', { n: 3 }); браузер получает словари через GET /locales/<язык>.js?ns=common,index
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const LOCALES_DIR = path.join(__dirname, '..', 'locales');
 const LANGS = ['ru', 'en'];
 const DEFAULT_LANG = 'ru';   // запасной словарь (если ключа нет в нужном языке) и язык логов
 const DETECT_FALLBACK = 'en'; // язык гостя, если ни cookie, ни языки браузера/системы не подошли
 const COOKIE = 'pw_lang';
+const VER_COOKIE = 'pw_i18n'; // версия словарей: браузер добавляет её к адресу словаря (&h=) и кэширует его навсегда
 const PLURAL_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other'];
 
 // { ru: { common: { 'common.logout': 'Выйти', ... }, server: {...} }, en: {...} }
@@ -48,6 +50,8 @@ function load() {
   }
 }
 load();
+// меняется при любой правке словаря (после рестарта) — у браузеров сразу новый адрес, старый кэш не мешает
+const VERSION = crypto.createHash('sha1').update(JSON.stringify(dicts)).digest('hex').slice(0, 10);
 
 function normLang(v) {
   const s = String(v || '').toLowerCase().slice(0, 2);
@@ -120,20 +124,29 @@ function errText(req, e, fallbackKey) {
   return fallbackKey ? t(req.lang, fallbackKey) : '';
 }
 
+const VER_RE = new RegExp('(?:^|;\\s*)' + VER_COOKIE + '=([0-9a-f]+)');
 function middleware(req, res, next) {
   req.lang = langFromHeaders(req.headers);
   req.t = (key, vars) => t(req.lang, key, vars);
+  // версию словарей кладём в cookie только при открытии страницы (не на .js/.css — Cloudflare не кэширует ответы с Set-Cookie)
+  if (req.method === 'GET' && /text\/html/.test(req.headers.accept || '')) {
+    const m = String(req.headers.cookie || '').match(VER_RE);
+    if (!m || m[1] !== VERSION) res.append('Set-Cookie', `${VER_COOKIE}=${VERSION}; Path=/; Max-Age=31536000; SameSite=Lax`);
+  }
   next();
 }
 
-// GET /locales/:lang.js?ns=common,index — словари для браузера одним скриптом.
-// no-store: Cloudflare заменяет no-cache у .js на max-age=14400 (4 ч) — и словарь, и даже 404 застревали
-// в браузере на 4 часа (ключи вместо текста после деплоя). no-store он не трогает; словарь — несколько КБ.
+// GET /locales/:lang.js?ns=common,index&h=<версия> — словари для браузера одним скриптом.
+// &h= совпадает с текущей версией → кэш на год (браузер и Cloudflare): смена языка и переходы не ждут сервер.
+// Иначе (нет cookie, старая версия, 404) — no-store: Cloudflare превращает no-cache у .js в max-age=14400,
+// и браузер 4 часа держал старый словарь или даже 404 со времени деплоя (ключи вместо текста); no-store он не трогает.
 // В памяти держим только существующие разделы (server браузеру не нужен), сочетаний — не больше 200
 const bundleCache = new Map();
 function bundle(req, res) {
-  res.setHeader('Cache-Control', 'no-store');
   const lang = normLang(req.params.lang);
+  const fresh = !!lang && req.query.h === VERSION;
+  res.setHeader('Cache-Control', fresh ? 'public, max-age=31536000, immutable' : 'no-store');
+  if (!lang) return res.status(404).end();
   if (!lang) return res.status(404).end();
   const asked = String(req.query.ns || '').split(',').map((s) => s.trim());
   const names = ['common', ...[...new Set(asked)].filter((s) => s !== 'common' && s !== 'server' && dicts[lang][s]).sort()];
@@ -152,4 +165,4 @@ function bundle(req, res) {
   res.send(body);
 }
 
-module.exports = { LANGS, DEFAULT_LANG, COOKIE, t, err, errText, langFromHeaders, langFromAccept, middleware, bundle, LOCALES_DIR };
+module.exports = { LANGS, DEFAULT_LANG, COOKIE, VERSION, t, err, errText, langFromHeaders, langFromAccept, middleware, bundle, LOCALES_DIR };

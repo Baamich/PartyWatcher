@@ -309,7 +309,8 @@ router.get('/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-// админ: смена статуса. «Принято» и «Пустяк» отправляют человеку письмо (если есть почта)
+// админ: смена статуса (переносить можно в любой момент, в т.ч. обратно в «непрочитанные»).
+// «Принято» и «Пустяк» отправляют человеку письмо (если есть почта) — каждое не больше одного раза на обращение
 router.patch('/:id/status', auth, adminOnly, async (req, res) => {
   try {
     if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
@@ -322,7 +323,8 @@ router.patch('/:id/status', auth, adminOnly, async (req, res) => {
 
     let emailed = false;
     const changed = ticket.status !== status;
-    if (changed && status !== 'unread' && ticket.email) {
+    const mailAlready = ticket.messages.some((m) => m.kind === status && m.emailed);
+    if (changed && status !== 'unread' && ticket.email && !mailAlready) {
       try {
         const r = await sendSupportEmail(ticket, status);
         emailed = r.emailed;
@@ -337,7 +339,7 @@ router.patch('/:id/status', auth, adminOnly, async (req, res) => {
     await ticket.save();
 
     const unreadCount = await broadcast(req, ticket);
-    res.json({ ticket: briefOf(ticket), unreadCount, emailed, hadEmail: !!ticket.email });
+    res.json({ ticket: briefOf(ticket), unreadCount, emailed, mailAlready, hadEmail: !!ticket.email });
   } catch (err) {
     console.error('[support/status]', err.message);
     res.status(500).json({ error: req.t('server.serverError') });

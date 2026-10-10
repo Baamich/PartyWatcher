@@ -48,7 +48,10 @@
     "notFound": "No request with this number",
     "mailSent": "Status changed, email sent",
     "mailNotSent": "Status changed, but the email was not sent (check SMTP)",
-    "savedNoMail": "Status changed (no email — nothing was sent)"
+    "savedNoMail": "Status changed (no email — nothing was sent)",
+    "toUnread": "Back to unread",
+    "mailAlready": "Status changed (an email about this status was already sent)",
+    "saved": "Status changed"
   },
   "thread": {
     "title": "Request #{n}",

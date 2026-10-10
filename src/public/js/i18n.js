@@ -1,5 +1,5 @@
 // Локализация в браузере. Подключается ПЕРВЫМ скриптом в <head> (без defer/async):
-//   <script src="/js/i18n.js?v=3" data-ns="index"></script>
+//   <script src="/js/i18n.js?v=4" data-ns="index"></script>
 // data-ns — разделы словаря этой страницы (common грузится всегда), файлы — src/locales/<язык>/<раздел>.json.
 // В JS:     t('room.copied'), t('room.viewers', { n: 5 }) — значение-объект { one, few, many, other } = плюрал.
 // В HTML:   data-i18n="ключ" (текст), data-i18n-html (разметка), data-i18n-placeholder, data-i18n-title,
@@ -52,9 +52,12 @@
   const me = document.currentScript;
   const ns = (me && me.getAttribute('data-ns')) || '';
   const nsList = ['common'].concat(ns.split(',').map((s) => s.trim()).filter(Boolean));
-  // &r= — только чтобы сменить адрес: браузеры держали прежний ответ (и 404 во время деплоя) по 4 ч из-за Cloudflare
+  // &h= — версия словарей из cookie pw_i18n (ставит сервер при открытии страницы): с ней словарь берётся
+  // из кэша браузера без запроса к серверу, поэтому смена языка и переходы быстрые. Без cookie — свежий запрос
   if (!window.PW_I18N_DATA) {
-    document.write('<script src="/locales/' + lang + '.js?ns=' + encodeURIComponent(nsList.join(',')) + '&r=2"><\/script>');
+    const ver = document.cookie.match(/(?:^|;\s*)pw_i18n=([0-9a-f]+)/);
+    document.write('<script src="/locales/' + lang + '.js?ns=' + encodeURIComponent(nsList.join(',')) +
+      (ver ? '&h=' + ver[1] : '') + '"><\/script>');
   }
 
   const pluralRules = typeof Intl !== 'undefined' && Intl.PluralRules ? new Intl.PluralRules(lang) : null;
@@ -143,6 +146,10 @@
     const domain = /(^|\.)partywatcher\.de$/i.test(host) ? '; domain=.partywatcher.de' : '';
     const secure = location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = COOKIE + '=' + next + '; path=/; max-age=31536000; SameSite=Lax' + domain + secure;
+    // отклик сразу, пока страница перезагружается: новый флаг, меню закрыто, курсор «ожидание»
+    document.querySelectorAll('.lang-switch-btn .lang-flag').forEach((img) => { img.src = LANGS[next].flag; });
+    document.querySelectorAll('.lang-menu').forEach((m) => m.classList.add('hidden'));
+    document.documentElement.style.cursor = 'progress';
     location.reload();
   }
 
