@@ -237,5 +237,12 @@
     "open": "👁 View on the page",
     "hint": "The full-page background and the sides show only on the profile page itself. The preview opens in a new tab and follows your edits — no need to save.",
     "blocked": "The browser blocked the new tab — allow pop-ups for this site"
+  },
+  "page": {
+    "width": "Page",
+    "widthLabel": "Width",
+    "byBlocks": "By blocks",
+    "full": "{w} — full screen",
+    "widthHint": "The profile is {w} wide now. “By blocks” — up to the right edge of the rightmost block; a number — that width right away, even if the right part is still empty. The wider the profile, the narrower the sides."
   }
 }

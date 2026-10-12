@@ -98,7 +98,7 @@
     layoutPage();
   }
 
-  function applyProfile(blocks, hasVods, bg, sides) {
+  function applyProfile(blocks, hasVods, bg, sides, width) {
     const row = document.getElementById('profileRow');
     let canvas = document.querySelector('.pw-canvas');
     if (!canvas) {
@@ -138,7 +138,7 @@
       if (b.type === 'vods') native.vods.classList.toggle('vod-v', b.o === 'v');
     });
     document.getElementById('vodSection').classList.toggle('hidden', !hasVods);
-    const cw = P.canvasWidth(blocks, 'profile'), ch = P.canvasHeight(blocks);
+    const cw = P.canvasWidth(blocks, 'profile', width), ch = P.canvasHeight(blocks);
     canvas.style.setProperty('--ch', ch);
     canvas.style.maxWidth = cw + 'px';
     watchScale(canvas, cw);
@@ -184,7 +184,7 @@
   function apply(layout, hasVods) {
     const L = P.withDefaults(layout);
     view.active = true;
-    applyProfile(L.profile.blocks, hasVods, L.profile.bg, L.profile.sides);
+    applyProfile(L.profile.blocks, hasVods, L.profile.bg, L.profile.sides, L.profile.width);
     applyLive(L.live.blocks);
   }
 })();

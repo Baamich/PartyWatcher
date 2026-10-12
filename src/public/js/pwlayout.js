@@ -97,8 +97,9 @@
   }
 
   // реальная ширина холста: до правого края самого правого блока, в пределах [MIN_W, WM]
-  function canvasWidth(blocks, mode = 'profile') {
-    const max = WM[mode] || 1100, min = MIN_W[mode] || max;
+  // minWidth — заданная вручную ширина страницы профиля (layout.profile.width): место справа есть и без блоков
+  function canvasWidth(blocks, mode = 'profile', minWidth = 0) {
+    const max = WM[mode] || 1100, min = Math.max(MIN_W[mode] || max, Number(minWidth) || 0);
     let right = 0;
     for (const b of blocks || []) right = Math.max(right, (Number(b.x) || 0) + (Number(b.w) || 0));
     return Math.round(Math.min(max, Math.max(min, right)));
@@ -145,6 +146,13 @@
   }
 
   // бока страницы профиля (слева и справа от холста, во всю высоту окна): { l, r } — заливки; пусто — null
+  // ширина страницы профиля, выбранная вручную: null — «по блокам», иначе 1100…1760
+  const PAGE_WIDTHS = [1280, 1440, 1600, 1760];
+  function cleanWidth(v) {
+    const n = Math.round(Number(v));
+    return PAGE_WIDTHS.includes(n) ? n : null;
+  }
+
   function cleanSides(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const out = {};
@@ -185,6 +193,7 @@
     // фон — только у профиля; в браузере битый фон просто не показываем (на сервере он уже очищен)
     try { out.profile.bg = cleanBg(raw?.profile?.bg); } catch { out.profile.bg = null; }
     try { out.profile.sides = cleanSides(raw?.profile?.sides); } catch { out.profile.sides = null; }
+    out.profile.width = cleanWidth(raw?.profile?.width);
     return out;
   }
 
@@ -303,12 +312,13 @@
     }
     out.profile.bg = cleanBg(raw.profile?.bg);
     out.profile.sides = cleanSides(raw.profile?.sides);
+    out.profile.width = cleanWidth(raw.profile?.width);
     if (gifCount(out) > GIF_MAX) throw layoutError('tooManyGifs', { n: GIF_MAX });
     if (allImages(out).reduce((n, s) => n + s.length, 0) > MAX_TOTAL_IMG_CHARS) throw layoutError('tooHeavy');
     return out;
   }
 
-  const api = { fixOrder, W, WM, MIN_W, MAX_H, GIF_MAX, isGif, gifCount, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, BG_FX, BG_FITS, defOf, minSize, clampBlock, syncChat, counts, canvasWidth, cleanBg, cleanSides, withDefaults, sanitize, clone };
+  const api = { fixOrder, W, WM, MIN_W, MAX_H, PAGE_WIDTHS, GIF_MAX, isGif, gifCount, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, BG_FX, BG_FITS, defOf, minSize, clampBlock, syncChat, counts, canvasWidth, cleanBg, cleanSides, withDefaults, sanitize, clone };
   if (typeof document === 'undefined') return api;
 
   // ---------- только браузер ----------

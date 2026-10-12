@@ -46,6 +46,7 @@
     out.profile.bg = bg ? { ...bg, fills: bg.fills.map((f) => ({ ...f })) } : null;
     const sd2 = l.profile.sides;
     out.profile.sides = sd2 ? { ...(sd2.l && { l: { ...sd2.l } }), ...(sd2.r && { r: { ...sd2.r } }) } : null;
+    out.profile.width = l.profile.width || null;
     return out;
   };
 
@@ -249,7 +250,8 @@
   }
 
   function curW() { return P.WM[mode]; } // место в редакторе
-  function viewW() { return P.canvasWidth(blocks(), mode); } // ширина, которую увидят зрители
+  // ширина, которую увидят зрители: по блокам или заданная вручную (только профиль)
+  function viewW() { return P.canvasWidth(blocks(), mode, mode === 'profile' ? layout.profile.width : 0); }
   // на телефоне масштаб как у зрителя: по реальной ширине профиля, а не по месту в редакторе
   function fitScale() { stage.style.setProperty('--s', Math.min(1, stage.clientWidth / (phone ? viewW() : curW())) || 1); }
 
@@ -769,6 +771,15 @@
     const add = (...n) => body.append(...n);
     const upd = () => { touch(); paintStageBg(); updateInfo(); }; // ползунки: без пересборки сцены
     const rebuild = () => { touch(); paintStageBg(); updateInfo(); buildBgMenu(); };
+
+    // ширина страницы: без неё профиль шириной до правого блока, и справа на большом экране пусто
+    add(E('div', { className: 'pm-sub', textContent: tr('editor.page.width') }));
+    const widthOpts = [[0, tr('editor.page.byBlocks')], ...P.PAGE_WIDTHS.map((w) => [w, w === 1760 ? tr('editor.page.full', { w }) : String(w)])];
+    add(row(tr('editor.page.widthLabel'), select(widthOpts, layout.profile.width || 0, (v) => {
+      layout.profile.width = Number(v) || null;
+      touch(); renderStage(); buildBgMenu();
+    })));
+    add(E('div', { className: 'pm-hint', textContent: tr('editor.page.widthHint', { w: viewW() }) }));
 
     const fillSection = (f, i) => {
       add(E('div', { className: 'pm-sub', textContent: tr(i ? 'editor.bg.second' : 'editor.bg.first') }));
