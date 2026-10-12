@@ -161,7 +161,8 @@
     "responseLong": "The response is too long (max 400 characters)",
     "maxCommands": "You can create at most {n} commands",
     "cmdExists": "This command already exists",
-    "cmdNotFound": "Command not found"
+    "cmdNotFound": "Command not found",
+    "noticeLong": "The notification can be at most 140 characters"
   },
   "support": {
     "tooMany": "Too many requests, try later",

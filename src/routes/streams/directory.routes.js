@@ -10,6 +10,9 @@ const StreamSession = require('../../models/StreamSession');
 const auth = require('../../middleware/auth');
 const chatBus = require('../../services/chatBus');
 const categories = require('../../services/categories');
+const streamKeyCache = require('../../services/streamKeyCache');
+const fs = require('fs');
+const path = require('path');
 
 const SNAP_MS = 15 * 1000;
 const MAX_STREAMERS = 2000;
@@ -19,6 +22,13 @@ let snap = null;
 let snapAt = 0;
 let snapP = null;
 
+// кадр эфира (делает rtmpServer раз в 30 с); t меняется так же — браузер не держит старый кадр
+function thumbUrl(playbackId) {
+  const key = playbackId && streamKeyCache.keyByPlaybackId(playbackId);
+  if (!key || !fs.existsSync(path.join(process.cwd(), 'media', 'live', key, 'thumb.jpg'))) return null;
+  return `/media/live/${encodeURIComponent(playbackId)}/thumb.jpg?t=${Math.floor(Date.now() / 30000)}`;
+}
+
 const avatarUrl = (nameLower, rev) => `/api/streamers/${encodeURIComponent(nameLower)}/avatar?v=${Number(rev) || 0}`;
 
 async function buildSnapshot() {
@@ -27,7 +37,7 @@ async function buildSnapshot() {
     {
       $project: {
         streamerName: 1, streamerNameLower: 1, isLive: 1, liveStartedAt: 1, profileRev: 1, profileViews: 1,
-        streamTitle: 1, streamCategoryId: 1,
+        streamTitle: 1, streamCategoryId: 1, streamPlaybackId: 1, liveNotice: 1,
         hasAvatar: { $gt: ['$streamerAvatarUrl', null] },
       },
     },
@@ -56,11 +66,14 @@ async function buildSnapshot() {
       catId: cat ? r.streamCategoryId : null,
       views: r.profileViews || 0,
       sec: (secById.get(String(r._id)) || 0) + liveSec,
+      startedAt: live ? r.liveStartedAt || null : null, // для уведомлений подписчикам
+      notice: live ? r.liveNotice || '' : '',
       card: {
         streamerName: r.streamerName,
         avatarUrl: r.hasAvatar ? avatarUrl(r.streamerNameLower, r.profileRev) : null,
         isLive: live,
-        viewers: live ? chatBus.viewerCount(r.streamerNameLower) : 0,
+        viewers: live ? chatBus.viewerCount(r.streamerNameLower, r._id) : 0,
+        thumb: live ? thumbUrl(r.streamPlaybackId) : null,
         title: live ? r.streamTitle || '' : '',
         category: cat ? { slug: cat.slug, name: cat.name, ru: cat.ru } : null,
       },
@@ -107,6 +120,25 @@ async function followingOf(user, s) {
   const list = rows.map((r) => s.byId.get(String(r.streamerId))).filter(Boolean).map((c) => c.card);
   return list.sort((a, b) => (b.isLive - a.isLive) || (b.viewers - a.viewers) || a.streamerName.localeCompare(b.streamerName));
 }
+
+// GET /streams/live-follows — кто из моих подписок сейчас в эфире (опрос раз в минуту со всех страниц сайта,
+// для уведомления «вышел в эфир»). Гостю — пусто, без 401: скрипт просто перестаёт спрашивать
+router.get('/live-follows', auth.optional, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    if (!req.user) return res.json({ guest: true, list: [] });
+    const s = await snapshot();
+    const rows = await Follow.find({ followerId: req.user.id }).select('streamerId -_id').limit(500).lean();
+    const list = rows
+      .map((r) => s.byId.get(String(r.streamerId)))
+      .filter((c) => c && c.card.isLive && c.startedAt)
+      .map((c) => ({ ...c.card, startedAt: c.startedAt, notice: c.notice }));
+    res.json({ list });
+  } catch (err) {
+    console.error('[GET /streams/live-follows]', err);
+    res.status(500).json({ error: req.t('server.error') });
+  }
+});
 
 // GET /streams/directory                — главная: подписки, активные, категории, все
 // GET /streams/directory?view=all|active — полный список

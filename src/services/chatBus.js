@@ -23,13 +23,32 @@ function emitToUser(streamerNameLower, userId, event, payload) {
   });
 }
 
-// сколько человек сейчас на странице канала (аккаунты без повторов + гости); считает сокет-файл
+// сколько человек сейчас на странице канала (аккаунты без повторов + гости); считает сокет-файл.
+// excludeUserId — не считать самого стримера
 let viewerCounter = () => 0;
 function setViewerCounter(fn) {
   viewerCounter = fn;
 }
-function viewerCount(streamerNameLower) {
-  return viewerCounter(streamerNameLower) || 0;
+function viewerCount(streamerNameLower, excludeUserId) {
+  return viewerCounter(streamerNameLower, excludeUserId) || 0;
 }
 
-module.exports = { init, emitMessage, emitToUser, setViewerCounter, viewerCount };
+// статистика чата за эфир: счётчик заводит rtmpServer при старте эфира и забирает в конце
+// (считаем на лету — после «Очистить чат» сообщений в базе уже нет)
+const liveChat = new Map(); // streamerNameLower → { n, users: Set }
+function chatStatsStart(streamerNameLower) {
+  if (!liveChat.has(streamerNameLower)) liveChat.set(streamerNameLower, { n: 0, users: new Set() });
+}
+function countChatMessage(streamerNameLower, userId) {
+  const s = liveChat.get(streamerNameLower);
+  if (!s) return; // эфира нет — не считаем
+  s.n += 1;
+  if (userId && s.users.size < 20000) s.users.add(String(userId));
+}
+function chatStatsTake(streamerNameLower) {
+  const s = liveChat.get(streamerNameLower);
+  liveChat.delete(streamerNameLower);
+  return { chatMessages: s ? s.n : 0, chatters: s ? s.users.size : 0 };
+}
+
+module.exports = { init, emitMessage, emitToUser, setViewerCounter, viewerCount, chatStatsStart, countChatMessage, chatStatsTake };

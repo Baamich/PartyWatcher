@@ -647,3 +647,67 @@
   #vodColumnList { flex-direction: row; overflow-x: auto; }
   #vodColumnList .vod-card { flex: 0 0 220px; }
 }
+
+/* ---- чат только для подписчиков ---- */
+.live-followers-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--danger);
+  white-space: nowrap;
+  cursor: default;
+}
+.live-followers-badge + .live-clear-chat-btn { margin-left: 8px; }
+
+/* ---- название и категория эфира над плеером (слева сверху, кнопки — справа) ---- */
+.live-info-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  max-width: calc(100% - 170px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.live-info-bar.hidden { display: none; }
+#livePlayerWrap:hover .live-info-bar,
+.live-info-bar.peek { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .live-info-bar { opacity: 1; pointer-events: auto; font-size: 12px; } }
+.live-info-live {
+  flex-shrink: 0;
+  background: var(--danger);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.live-info-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+.live-info-cat {
+  flex-shrink: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(124, 92, 255, 0.88);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.live-info-cat:hover { filter: brightness(1.12); }

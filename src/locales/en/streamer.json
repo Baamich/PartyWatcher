@@ -33,7 +33,15 @@
     "placeholder": "Message...",
     "clear": "Clear chat",
     "banned": "You are banned from this channel's chat",
-    "timedOut": "Your chat access is restricted for:"
+    "timedOut": "Your chat access is restricted for:",
+    "followersOnly": "Only followers can chat here",
+    "followersWait": "This chat is for followers who followed a while ago. You can chat in",
+    "followersBadge": "❤ Followers only",
+    "followersBadgeHint": "Only channel followers can chat",
+    "followersBadgeMin": {
+      "one": "Followers can chat after following for {n} minute",
+      "other": "Followers can chat after following for {n} minutes"
+    }
   },
   "auth": {
     "title": "Sign in to chat",

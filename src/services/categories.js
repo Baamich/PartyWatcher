@@ -192,4 +192,19 @@ function publicView(c) {
   return { id: c.tid, slug: c.slug, name: c.name, ru: ruName(c.name), cover: c.hasCover ? `/api/categories/${c.slug}/cover` : null };
 }
 
-module.exports = { enabled, search, ensure, publicView, ruName };
+// категория для страницы стримера (опрос раз в 5 с от каждого зрителя) — из памяти, в базу раз в 10 минут
+const viewCache = new Map(); // tid → { at, view }
+const VIEW_TTL = 10 * 60 * 1000;
+async function viewByTid(tid) {
+  if (!tid) return null;
+  const hit = viewCache.get(tid);
+  if (hit && Date.now() - hit.at < VIEW_TTL) return hit.view;
+  const c = await Category.findOne({ tid }).select('-cover').lean();
+  const v = publicView(c);
+  const view = v ? { slug: v.slug, name: v.name, ru: v.ru } : null;
+  if (viewCache.size > 1000) viewCache.clear();
+  viewCache.set(tid, { at: Date.now(), view });
+  return view;
+}
+
+module.exports = { enabled, search, ensure, publicView, ruName, viewByTid };

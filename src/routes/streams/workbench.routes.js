@@ -10,6 +10,7 @@ const ChannelActionLog = require('../../models/ChannelActionLog');
 const Follow = require('../../models/Follow');
 const Category = require('../../models/Category');
 const categories = require('../../services/categories');
+const StreamSession = require('../../models/StreamSession');
 const i18n = require('../../services/i18n');
 const auth = require('../../middleware/auth');
 const streamKeyCache = require('../../services/streamKeyCache');
@@ -67,6 +68,7 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     streamTitle: me.streamTitle || '',
     streamDescription: me.streamDescription || '',
     category: categories.publicView(cat),
+    liveNotice: me.liveNotice || '',
     streamKeyMasked: maskKey(me.streamKey),
     chatApiKeyMasked: maskChatKey(me.chatApiKey),
     streamPlaybackId: me.streamPlaybackId || null,
@@ -105,7 +107,11 @@ router.post('/stream-key/reveal', auth, requireStreamer, async (req, res) => {
 
 // PATCH /workbench/settings — название и описание трансляции
 router.patch('/settings', auth, requireStreamer, async (req, res) => {
-  const { streamTitle, streamDescription, streamCategoryId } = req.body;
+  const { streamTitle, streamDescription, streamCategoryId, liveNotice } = req.body;
+  if (liveNotice !== undefined) {
+    if (String(liveNotice).length > 140) return res.status(400).json({ error: req.t('server.wb.noticeLong') });
+    req.streamerUser.liveNotice = String(liveNotice).trim();
+  }
   if (streamTitle !== undefined) {
     if (String(streamTitle).length > 140) return res.status(400).json({ error: req.t('server.wb.titleLong') });
     req.streamerUser.streamTitle = String(streamTitle).trim();
@@ -134,6 +140,7 @@ router.patch('/settings', auth, requireStreamer, async (req, res) => {
     streamTitle: req.streamerUser.streamTitle,
     streamDescription: req.streamerUser.streamDescription,
     category: categories.publicView(cat),
+    liveNotice: req.streamerUser.liveNotice || '',
   });
 });
 
@@ -150,6 +157,90 @@ router.delete('/bans/:userId', auth, requireStreamer, async (req, res) => {
   if (!/^[a-f0-9]{24}$/i.test(req.params.userId)) return res.status(400).json({ error: req.t('server.badId') });
   await ChannelBan.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
   chatBus.emitToUser(req.streamerUser.streamerNameLower, req.params.userId, 'chat:restriction', { type: 'none' });
+  res.json({ status: 'ok' });
+});
+
+// GET /workbench/stats?days=7|30 — сводка за период и последние эфиры (эфиры хранятся 40 дней)
+router.get('/stats', auth, requireStreamer, async (req, res) => {
+  const days = Number(req.query.days) === 7 ? 7 : 30;
+  const since = new Date(Date.now() - days * 864e5);
+  const me = req.streamerUser;
+  const [sessions, newFollowers] = await Promise.all([
+    StreamSession.find({ streamerId: me._id }).sort({ endedAt: -1 }).limit(60).lean(),
+    Follow.countDocuments({ streamerId: me._id, createdAt: { $gte: since } }),
+  ]);
+  const inPeriod = sessions.filter((x) => x.endedAt >= since);
+  const sec = inPeriod.reduce((n, x) => n + (x.sec || 0), 0);
+  // средние зрители — с весом длительности: часовой эфир важнее пятиминутного
+  const avg = sec ? inPeriod.reduce((n, x) => n + (x.avgViewers || 0) * (x.sec || 0), 0) / sec : 0;
+
+  const catIds = [...new Set(sessions.map((x) => x.categoryId).filter(Boolean))];
+  const cats = catIds.length ? await Category.find({ tid: { $in: catIds } }).select('-cover').lean() : [];
+  const catById = new Map(cats.map((c) => [c.tid, categories.publicView(c)]));
+
+  const sum = (k) => inPeriod.reduce((n, x) => n + (x[k] || 0), 0);
+  res.json({
+    days,
+    followers: me.followersCount || 0,
+    newFollowers,
+    streams: inPeriod.length,
+    sec,
+    avgViewers: Math.round(avg * 10) / 10,
+    peakViewers: inPeriod.reduce((m, x) => Math.max(m, x.peakViewers || 0), 0),
+    // часы просмотра: зрители × время (как «Hours watched» у Twitch)
+    watchHours: Math.round(inPeriod.reduce((n, x) => n + (x.avgViewers || 0) * (x.sec || 0), 0) / 360) / 10,
+    avgDurationSec: inPeriod.length ? Math.round(sec / inPeriod.length) : 0,
+    chatMessages: sum('chatMessages'),
+    avgChatters: inPeriod.length ? Math.round((sum('chatters') / inPeriod.length) * 10) / 10 : 0,
+    sessions: sessions.map((x) => {
+      const c = x.categoryId ? catById.get(x.categoryId) : null;
+      return {
+        startedAt: x.startedAt,
+        sec: x.sec,
+        title: x.title || '',
+        category: c ? { name: c.name, ru: c.ru } : null,
+        peakViewers: x.peakViewers || 0,
+        avgViewers: x.avgViewers || 0,
+        newFollowers: x.newFollowers || 0,
+        chatMessages: x.chatMessages || 0,
+      };
+    }),
+  });
+});
+
+// ---- раскладка страницы статистики: какие окна показаны и где лежат ----
+const STAT_IDS = ['hours', 'streams', 'avgViewers', 'peakViewers', 'newFollowers', 'followers', 'watchHours', 'avgDuration', 'chatMessages', 'chatters', 'sessions'];
+
+function cleanStatsLayout(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const shown = Array.isArray(raw.shown) ? [...new Set(raw.shown.filter((id) => STAT_IDS.includes(id)))] : [];
+  const panels = {};
+  for (const id of STAT_IDS) {
+    const r = raw.panels?.[id];
+    if (!r || typeof r !== 'object') continue;
+    const n = (v, min, max) => Math.round(Math.min(max, Math.max(min, Number(v) || 0)));
+    panels[id] = { x: n(r.x, 0, 4000), y: n(r.y, 0, 6000), w: n(r.w, 160, 2000), h: n(r.h, 90, 2000) };
+  }
+  return { shown, panels };
+}
+
+// GET /workbench/stats-layout
+router.get('/stats-layout', auth, requireStreamer, async (req, res) => {
+  const doc = await WorkbenchLayout.findOne({ userId: req.streamerUser._id }).select('stats').lean();
+  res.json({ layout: doc?.stats || null });
+});
+
+// PUT /workbench/stats-layout — { shown: [...], panels: {...} }
+router.put('/stats-layout', auth, requireStreamer, async (req, res) => {
+  const layout = cleanStatsLayout(req.body);
+  if (!layout) return res.status(400).json({ error: req.t('server.wb.badLayout') });
+  await WorkbenchLayout.updateOne({ userId: req.streamerUser._id }, { $set: { stats: layout, updatedAt: new Date() } }, { upsert: true });
+  res.json({ status: 'ok' });
+});
+
+// DELETE /workbench/stats-layout — раскладка по умолчанию
+router.delete('/stats-layout', auth, requireStreamer, async (req, res) => {
+  await WorkbenchLayout.updateOne({ userId: req.streamerUser._id }, { $set: { stats: null } });
   res.json({ status: 'ok' });
 });
 
@@ -186,7 +277,7 @@ router.put('/layout', auth, requireStreamer, async (req, res) => {
 
 // DELETE /workbench/layout — сбросить к расположению по умолчанию
 router.delete('/layout', auth, requireStreamer, async (req, res) => {
-  await WorkbenchLayout.deleteOne({ userId: req.streamerUser._id });
+  await WorkbenchLayout.updateOne({ userId: req.streamerUser._id }, { $set: { panels: null } }); // раскладку статистики не трогаем
   res.json({ status: 'ok' });
 });
 

@@ -8,7 +8,7 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
-  <link rel="stylesheet" href="/workbench/workbench.css?v=2" />
+  <link rel="stylesheet" href="/workbench/workbench.css?v=3" />
   <title data-i18n="workbench.pageTitle">PartyWatcher — Творческая студия</title>
 </head>
 <body>
@@ -44,6 +44,7 @@
       <nav id="wbNavFixed" class="wb-nav">
         <button type="button" class="wb-nav-btn" data-href="/workbench/news.html" data-i18n="workbench.nav.news">📰 Новости</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench.html" data-i18n="workbench.nav.stream">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/stats.html" data-i18n="workbench.nav.stats">📊 Статистика</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html" data-i18n="workbench.nav.videos">🎬 Видеостудия</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html" data-i18n="workbench.nav.activity">🛡️ Актив канала</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/constructor.html" data-i18n="workbench.nav.constructor">🧩 Конструктор</button>
@@ -102,6 +103,10 @@
           <label class="auth-label" for="streamDescInput" data-i18n="workbench.settings.desc">Описание</label>
           <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее" data-i18n-placeholder="workbench.settings.descPh"></textarea>
 
+          <label class="auth-label" for="liveNoticeInput" data-i18n="workbench.settings.notice">Уведомление подписчикам</label>
+          <textarea id="liveNoticeInput" rows="2" maxlength="140" placeholder="Например: «Заходите, сегодня проходим финал!»" data-i18n-placeholder="workbench.settings.noticePh"></textarea>
+          <p class="wb-hint" data-i18n="workbench.settings.noticeHint">Подписчики увидят это справа сверху на сайте, когда ты выйдешь в эфир.</p>
+
           <button type="button" class="auth-submit" data-click="saveSettings" data-i18n="common.save">Сохранить</button>
         </div>
         <div class="wb-resize-handle"></div>
@@ -119,6 +124,7 @@
         <div class="wb-window-titlebar wb-chat-titlebar">
           <span data-i18n="workbench.chat.title">Чат</span>
           <div class="wb-chat-head-right">
+            <button type="button" id="wbChatModeBtn" class="wb-viewers-btn wb-chatmode-btn" title="Настройки чата" data-i18n-title="workbench.chatMode.title">⚙</button>
             <button type="button" id="wbViewersBtn" class="wb-viewers-btn" title="Зрители" data-i18n-title="workbench.viewers.title" data-click="toggleViewersPanel" data-event>
               👁 <span id="viewersCount">0</span>
             </button>
@@ -153,6 +159,24 @@
           <div class="wb-chat-input-row">
             <input id="chatInput" placeholder="Написать в чат…" data-i18n-placeholder="workbench.chat.placeholder" data-keydown="handleChatKey" data-event />
             <button type="button" data-click="sendChatMessage">➤</button>
+          </div>
+
+          <div id="wbChatModePopup" class="wb-chatmode-popup hidden">
+            <label class="wb-chatmode-row">
+              <input type="checkbox" id="wbFollowersOnly" />
+              <span data-i18n="workbench.chatMode.followersOnly">Чат только для подписчиков</span>
+            </label>
+            <label class="wb-chatmode-row">
+              <span data-i18n="workbench.chatMode.minAge">Подписан не меньше</span>
+              <select id="wbFollowMin">
+                <option value="0" data-i18n="workbench.chatMode.now">сразу</option>
+                <option value="10" data-i18n="workbench.chatMode.min10">10 минут</option>
+                <option value="30" data-i18n="workbench.chatMode.min30">30 минут</option>
+                <option value="60" data-i18n="workbench.chatMode.hour1">1 час</option>
+                <option value="1440" data-i18n="workbench.chatMode.day1">1 день</option>
+              </select>
+            </label>
+            <p class="wb-hint" data-i18n="workbench.chatMode.hint">Остальные видят чат, но писать не могут. На тебя ограничение не действует.</p>
           </div>
 
           <div id="wbViewersPanel" class="wb-viewers-panel">
@@ -218,6 +242,7 @@
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/minipip.js?v=2"></script>
-  <script src="/workbench/workbench.js?v=6"></script>
+  <script src="/workbench/workbench.js?v=7"></script>
+  <script src="/js/live-notify.js?v=1"></script>
 </body>
 </html>

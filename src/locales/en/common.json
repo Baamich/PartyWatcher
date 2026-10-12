@@ -67,5 +67,9 @@
     "clearText": "All messages will disappear for all viewers.",
     "clearOk": "Clear",
     "deleted": "Message deleted"
+  },
+  "liveNotify": {
+    "live": "is live",
+    "watch": "Watch"
   }
 }

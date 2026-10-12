@@ -44,6 +44,24 @@ function renderStreamerCard(streamer, opts = {}) {
   card.className = 'streamer-card';
   card.href = profileHref(streamer.streamerName);
   const meta = cardMeta(streamer, opts.withCategory);
+  if (streamer.isLive && streamer.thumb) {
+    // эфир с кадром: картинка 16:9, ниже — аватар, имя, название эфира
+    card.classList.add('has-thumb');
+    card.innerHTML = `
+      <div class="card-thumb">
+        <img src="${esc(streamer.thumb)}" loading="lazy" decoding="async" alt="" />
+        <span class="live-badge">${t('streams.liveBadge')}</span>
+        <span class="card-thumb-viewers" title="${esc(t('streams.viewers'))}">● ${streamer.viewers || 0}</span>
+      </div>
+      <div class="card-body">
+        <span class="card-mini-avatar">${avatarHtml(streamer, 'side-avatar-img', 'side-avatar-fallback')}</span>
+        <span class="card-body-text">
+          <span class="streamer-name" title="${esc(streamer.streamerName)}">${esc(streamer.streamerName)}</span>
+          <span class="streamer-meta" title="${esc(meta)}">${esc(meta)}</span>
+        </span>
+      </div>`;
+    return card;
+  }
   card.innerHTML = `
     <div class="streamer-avatar-wrap${streamer.isLive ? ' is-live' : ''}">
       ${avatarHtml(streamer, 'streamer-avatar', 'streamer-avatar-fallback')}

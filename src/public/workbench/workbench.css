@@ -890,6 +890,7 @@
 .ban-row .icon-btn { width: auto; margin: 0; white-space: nowrap; }
 /* ---- категория эфира в настройках ---- */
 .cat-picker { position: relative; margin-bottom: 12px; }
+.cat-picker input { width: 100%; box-sizing: border-box; }
 .cat-current { display: flex; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 6px; }
 .cat-none { color: var(--text-muted); font-size: 13px; }
 .cat-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -926,3 +927,25 @@
 [data-theme] .cat-row:hover { background: var(--surface-alt); }
 .cat-empty { padding: 8px 10px; color: var(--text-muted); font-size: 13px; }
 .cat-off { color: var(--text-muted); font-size: 12px; margin: 4px 0 0; }
+
+/* ---- ⚙ у чата: «только подписчики» ---- */
+.wb-chatmode-btn.on { color: var(--danger); }
+.wb-chatmode-popup {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 6;
+  width: 250px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wb-chatmode-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.wb-chatmode-row input[type="checkbox"] { width: auto; margin: 0; }
+.wb-chatmode-row select { flex: 1; margin: 0; padding: 4px 6px; font-size: 13px; }
+.wb-chatmode-popup .wb-hint { margin: 0; }

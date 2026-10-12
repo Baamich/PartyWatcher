@@ -417,3 +417,26 @@
   .follow-side.collapsed .side-head h2 { display: block; }
   .cat-cover-tile { height: 130px; }
 }
+
+/* ---- карточка эфира с кадром (rtmpServer обновляет его раз в 30 с) ---- */
+.streamer-card.has-thumb { padding: 0; overflow: hidden; }
+.active-streamers-row .streamer-card.has-thumb { flex-basis: 240px; }
+.card-thumb { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-thumb .live-badge { left: 8px; top: 8px; bottom: auto; transform: none; }
+.card-thumb-viewers {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+}
+.card-body { display: flex; align-items: center; gap: 8px; padding: 8px 10px; min-width: 0; }
+.card-mini-avatar { flex: 0 0 30px; width: 30px; height: 30px; }
+.card-body-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.card-body .streamer-name,
+.card-body .streamer-meta { text-align: left; }
+.active-streamers-row { align-items: flex-start; }

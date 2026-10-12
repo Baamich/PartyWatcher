@@ -202,6 +202,7 @@ async function loadSettings() {
     document.getElementById('streamTitleInput').value = data.streamTitle || '';
     document.getElementById('streamDescInput').value = data.streamDescription || '';
     setCategory(data.category || null);
+    document.getElementById('liveNoticeInput').value = data.liveNotice || '';
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
     setGenerateBtnState(!!data.streamKeyMasked);
     setChatApiKeyUi(data.chatApiKeyMasked);
@@ -532,6 +533,7 @@ async function saveSettings() {
     streamTitle: document.getElementById('streamTitleInput').value,
     streamDescription: document.getElementById('streamDescInput').value,
     streamCategoryId: chosenCategory ? chosenCategory.id : '',
+    liveNotice: document.getElementById('liveNoticeInput').value,
   };
   try {
     const r = await api('/workbench/settings', { method: 'PATCH', body });
@@ -758,6 +760,41 @@ function confirmTimeout() {
 
 let chatReconnectScheduler = null;
 
+// ---- «чат только для подписчиков» (⚙ у чата): режим хранит сервер, сюда он приходит событием chat:mode ----
+let chatFollowMin = null;
+
+function renderChatMode() {
+  const on = chatFollowMin !== null;
+  document.getElementById('wbChatModeBtn')?.classList.toggle('on', on);
+  const cb = document.getElementById('wbFollowersOnly');
+  const sel = document.getElementById('wbFollowMin');
+  if (cb) cb.checked = on;
+  if (sel) {
+    sel.value = String(on ? chatFollowMin : 0);
+    sel.disabled = !on;
+  }
+}
+
+function sendChatMode() {
+  const on = document.getElementById('wbFollowersOnly').checked;
+  socket?.emit('chat:set-mode', { followMin: on ? Number(document.getElementById('wbFollowMin').value) : null });
+}
+
+(function initChatModeUi() {
+  const btn = document.getElementById('wbChatModeBtn');
+  const pop = document.getElementById('wbChatModePopup');
+  if (!btn || !pop) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.classList.toggle('hidden');
+  });
+  pop.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => pop.classList.add('hidden'));
+  document.getElementById('wbFollowersOnly').addEventListener('change', sendChatMode);
+  document.getElementById('wbFollowMin').addEventListener('change', sendChatMode);
+  renderChatMode();
+})();
+
 window.addEventListener('pw:langchange', (e) => socket?.emit('lang:set', e.detail.lang)); // язык ответов бота
 function initChat(streamerNameLower) {
   // reconnection: false — отключаем встроенную схему socket.io, управляем сами по своему графику
@@ -790,6 +827,10 @@ function initChat(streamerNameLower) {
     });
 
     socket.on('action:logged', (entry) => renderActionLogEntry(entry, true));
+    socket.on('chat:mode', ({ followMin } = {}) => {
+      chatFollowMin = followMin ?? null;
+      renderChatMode();
+    });
   };
 
   socket.on('connect', () => {

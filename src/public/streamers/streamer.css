@@ -297,3 +297,29 @@
   cursor: not-allowed;
   transform: none;
 }
+
+/* ---- строка «● В ЭФИРЕ · название · 🎮 категория» под именем ---- */
+.profile-live-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  min-width: 0;
+}
+.profile-live-line.hidden { display: none; }
+.profile-live-live { color: var(--danger); font-size: 11px; font-weight: 800; letter-spacing: 0.03em; white-space: nowrap; }
+.profile-live-live::before { content: '● '; }
+.profile-live-title { color: var(--text-muted); max-width: 420px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-live-cat {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.profile-live-cat:hover { border-color: var(--text-muted); }

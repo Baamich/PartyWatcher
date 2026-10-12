@@ -6,6 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const User = require('../models/User');
 const StreamSession = require('../models/StreamSession');
+const Follow = require('../models/Follow');
+const chatBus = require('./chatBus');
 const StreamVod = require('../models/StreamVod');
 const streamKeyCache = require('./streamKeyCache');
 
@@ -90,23 +92,38 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
   }
   try {
     if (!isLive) {
-      // прежнее состояние нужно, чтобы записать длительность эфира («Активные стримеры» — часы за 30 дней)
+      // прежнее состояние нужно, чтобы записать эфир: «Активные стримеры» (часы за 30 дней) и статистика студии
       const prev = await User.findOneAndUpdate(
         { _id: entry.userId },
         { $set: { isLive: false, liveStartedAt: null } },
         { new: false }
-      ).select('liveStartedAt streamCategoryId').lean();
+      ).select('liveStartedAt streamCategoryId streamTitle').lean();
       console.log(`[rtmp] isLive=false, startedAt=clear, key=${key.slice(0, 8)}…`);
       const startedAt = prev?.liveStartedAt ? new Date(prev.liveStartedAt) : null;
       const sec = startedAt ? Math.round((Date.now() - startedAt.getTime()) / 1000) : 0;
+      const vs = viewerStats.get(key);
+      viewerStats.delete(key);
+      const chat = chatBus.chatStatsTake(entry.streamerNameLower);
       if (sec >= 30) {
-        StreamSession.create({ streamerId: entry.userId, startedAt, endedAt: new Date(), sec, categoryId: prev.streamCategoryId || null })
+        Follow.countDocuments({ streamerId: entry.userId, createdAt: { $gte: startedAt } })
+          .catch(() => 0)
+          .then((newFollowers) => StreamSession.create({
+            streamerId: entry.userId, startedAt, endedAt: new Date(), sec,
+            categoryId: prev.streamCategoryId || null,
+            title: prev.streamTitle || '',
+            peakViewers: vs?.peak || 0,
+            avgViewers: vs?.n ? Math.round((vs.sum / vs.n) * 10) / 10 : 0,
+            newFollowers,
+            chatMessages: chat.chatMessages,
+            chatters: chat.chatters,
+          }))
           .catch((e) => console.warn('[rtmp] StreamSession', e.message));
       }
       return entry;
     }
 
     if (touchStartedAt) {
+      if (entry.streamerNameLower) chatBus.chatStatsStart(entry.streamerNameLower); // переподключение счётчик не сбрасывает
       const r = await User.updateOne(
         { _id: entry.userId },
         [
@@ -224,6 +241,49 @@ function renditionsFor(src) {
   const fps = src && src.fps > 31 ? 30 : null; // 60 к/с — только в «источнике»
   return [SOURCE, ...LADDER.filter((r) => !h || r.height < h - 20).map((r) => ({ ...r, fps }))];
 }
+
+// ---------- раз в 30 с для каждого эфира: кадр для карточки и замер зрителей ----------
+// Кадр берём из последнего готового сегмента самого лёгкого качества (декодируется один кадр — почти без нагрузки)
+// и кладём рядом с плейлистами: /media/live/<playbackId>/thumb.jpg. После эфира папка удаляется вместе с ним
+const LIVE_TICK_MS = 30 * 1000;
+const viewerStats = new Map(); // key -> { peak, sum, n }
+const thumbBusy = new Set();
+
+async function grabThumb(key) {
+  if (thumbBusy.has(key)) return;
+  thumbBusy.add(key);
+  try {
+    const dir = mediaDir(key);
+    const sub = ['360', '720', 'source'].find((n) => fs.existsSync(path.join(dir, n, 'index.m3u8')));
+    if (!sub) return;
+    const list = fs.readFileSync(path.join(dir, sub, 'index.m3u8'), 'utf8').split(/\r?\n/).filter((l) => /^seg_\d+\.ts$/.test(l.trim()));
+    if (!list.length) return;
+    // предпоследний сегмент: последний может ещё дописываться
+    const seg = path.join(dir, sub, list[Math.max(0, list.length - 2)].trim());
+    const tmp = path.join(dir, 'thumb.tmp.jpg');
+    await runFfmpeg(['-hide_banner', '-loglevel', 'error', '-y', '-i', seg, '-frames:v', '1', '-vf', 'scale=320:-2', '-q:v', '7', tmp]);
+    fs.renameSync(tmp, path.join(dir, 'thumb.jpg'));
+  } catch (e) {
+    if (!/ENOENT/.test(e.message)) console.warn('[rtmp] thumb', key.slice(0, 8) + '…', e.message.slice(0, 200));
+  } finally {
+    thumbBusy.delete(key);
+  }
+}
+
+function liveTick() {
+  for (const key of activeTranscodes.keys()) {
+    grabThumb(key);
+    const entry = streamKeyCache.get(key);
+    if (!entry?.streamerNameLower) continue;
+    const v = chatBus.viewerCount(entry.streamerNameLower, entry.userId);
+    const s = viewerStats.get(key) || { peak: 0, sum: 0, n: 0 };
+    s.peak = Math.max(s.peak, v);
+    s.sum += v;
+    s.n += 1;
+    viewerStats.set(key, s);
+  }
+}
+setInterval(liveTick, LIVE_TICK_MS).unref();
 
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {

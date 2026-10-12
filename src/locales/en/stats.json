@@ -1,0 +1,59 @@
+{
+  "pageTitle": "PartyWatcher — Statistics",
+  "title": "Channel statistics",
+  "days7": "7 days",
+  "days30": "30 days",
+  "streams": "Streams",
+  "keepHint": "Streams are kept for 40 days. Viewers are counted every 30 seconds, not counting the streamer.",
+  "hours": "Time live",
+  "newFollowers": "New followers",
+  "followers": "Total followers",
+  "hm": "{h} h {m} min",
+  "m": "{m} min",
+  "noStreams": "No finished streams yet",
+  "noTitle": "Untitled",
+  "loadFailed": "Could not load statistics",
+  "col": {
+    "date": "Started",
+    "duration": "Duration",
+    "stream": "Stream",
+    "peak": "Peak",
+    "avg": "Average",
+    "newFollowers": "Follows",
+    "chat": "Chat"
+  },
+  "avgViewers": "Average viewers",
+  "peakViewers": "Peak viewers",
+  "watchHours": "Hours watched",
+  "chatMessages": "Chat messages",
+  "avgDuration": "Average stream length",
+  "chatters": "Chatters",
+  "sessions": "Streams table",
+  "pickHint": "What to show",
+  "hide": "Hide window",
+  "resetConfirm": "Put the statistics windows back in their default places?",
+  "sub": {
+    "hours": {
+      "one": "over {n} day",
+      "other": "over {n} days"
+    },
+    "streams": {
+      "one": "over {n} day",
+      "other": "over {n} days"
+    },
+    "newFollowers": {
+      "one": "over {n} day",
+      "other": "over {n} days"
+    },
+    "chatMessages": {
+      "one": "over {n} day",
+      "other": "over {n} days"
+    },
+    "avgViewers": "per stream on average",
+    "peakViewers": "most at the same time",
+    "followers": "on the channel in total",
+    "watchHours": "viewers × stream time, in hours",
+    "avgDuration": "per stream on average",
+    "chatters": "different people per stream, on average"
+  }
+}

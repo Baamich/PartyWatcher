@@ -5,6 +5,13 @@ const auth = require('../../middleware/auth');
 const i18n = require('../../services/i18n');
 const { hasProfanity } = require('../../services/profanity');
 const PWLayout = require('../../public/js/pwlayout.js');
+const categories = require('../../services/categories');
+
+// название и категория идущего эфира (для плашки над плеером и строки под именем)
+async function liveInfo(s) {
+  if (!s.isLive) return { title: '', category: null };
+  return { title: s.streamTitle || '', category: await categories.viewByTid(s.streamCategoryId).catch(() => null) };
+}
 
 const Follow = require('../../models/Follow');
 const rateLimit = require('express-rate-limit');
@@ -222,7 +229,7 @@ router.get('/:name/bundle', async (req, res) => {
       { $inc: { profileViews: 1 } },
       { new: true }
     )
-      .select('streamerName isLive streamPlaybackId profileRev')
+      .select('streamerName isLive streamPlaybackId profileRev streamTitle streamCategoryId')
       .lean();
     if (!s) return res.status(404).json({ error: req.t('server.streamers.notFound') });
 
@@ -232,6 +239,7 @@ router.get('/:name/bundle', async (req, res) => {
       streamerName: s.streamerName,
       isLive: !!s.isLive,
       streamPlaybackId: s.streamPlaybackId || null,
+      ...(await liveInfo(s)),
     };
 
     const clientRev = req.query.rev === undefined ? NaN : Number(req.query.rev);
@@ -402,11 +410,11 @@ router.get('/:name/live-status', async (req, res) => {
     if (!nameLower) return res.status(400).json({ error: req.t('server.streamers.noName') });
 
     const streamer = await User.findOne({ streamerNameLower: nameLower })
-      .select('isLive streamPlaybackId -_id')
+      .select('isLive streamPlaybackId streamTitle streamCategoryId -_id')
       .lean();
 
     if (!streamer) return res.status(404).json({ error: req.t('server.streamers.notFound') });
-    res.json(streamer);
+    res.json({ isLive: !!streamer.isLive, streamPlaybackId: streamer.streamPlaybackId || null, ...(await liveInfo(streamer)) });
   } catch (err) {
     console.error('[GET /streamers/:name/live-status]', err);
     res.status(500).json({ error: req.t('server.error') });

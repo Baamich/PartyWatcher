@@ -8,6 +8,12 @@ const streamSessionSchema = new mongoose.Schema(
     endedAt: { type: Date, required: true },
     sec: { type: Number, required: true },
     categoryId: { type: String, default: null }, // Category.tid на момент конца эфира
+    title: { type: String, default: '' },
+    peakViewers: { type: Number, default: 0 },
+    avgViewers: { type: Number, default: 0 }, // среднее по замерам раз в 30 с (без самого стримера)
+    newFollowers: { type: Number, default: 0 }, // подписались за время эфира
+    chatMessages: { type: Number, default: 0 }, // сообщений в чате за эфир (от людей, без ботов)
+    chatters: { type: Number, default: 0 }, // сколько разных людей писали
   },
   { versionKey: false }
 );

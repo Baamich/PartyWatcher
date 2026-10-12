@@ -65,6 +65,48 @@ async function checkOwnership(nameLower) {
   }
 }
 
+// ---------- название и категория идущего эфира ----------
+// над плеером (при наведении) и строкой под именем в профиле. Категория ведёт на её страницу в «Трансляциях»
+
+const liveCatName = (c) => (I18N.lang === 'ru' && c?.ru) || c?.name || '';
+
+// p — префикс классов: 'live-info' (над плеером) или 'profile-live' (под именем)
+function liveInfoHtml(s, p) {
+  const esc = liveEscapeHtml;
+  const parts = [`<span class="${p}-live">${esc(t('common.liveBadge'))}</span>`];
+  if (s.title) parts.push(`<span class="${p}-title" title="${esc(s.title)}">${esc(s.title)}</span>`);
+  if (s.category) {
+    const name = liveCatName(s.category);
+    parts.push(`<a class="${p}-cat" href="/streams.html?cat=${encodeURIComponent(s.category.slug)}" title="${esc(name)}">🎮 ${esc(name)}</a>`);
+  }
+  return parts.join('');
+}
+
+function renderLiveInfo() {
+  const s = currentStreamer || {};
+  const on = !!s.isLive && !!(s.title || s.category);
+  const bar = document.getElementById('liveInfoBar');
+  const line = document.getElementById('profileLiveLine');
+  if (bar) {
+    bar.classList.toggle('hidden', !on);
+    if (on) bar.innerHTML = liveInfoHtml(s, 'live-info');
+  }
+  if (line) {
+    line.classList.toggle('hidden', !on);
+    if (on) line.innerHTML = liveInfoHtml(s, 'profile-live');
+  }
+}
+window.addEventListener('pw:langchange', renderLiveInfo); // русское/английское название категории
+
+let liveInfoPeekTimer = null;
+function peekLiveInfo() {
+  const bar = document.getElementById('liveInfoBar');
+  if (!bar) return;
+  bar.classList.add('peek');
+  clearTimeout(liveInfoPeekTimer);
+  liveInfoPeekTimer = setTimeout(() => bar.classList.remove('peek'), 6000);
+}
+
 // ---------- подписка ----------
 // одно состояние на две кнопки: в профиле (у владельца видна, но неактивна) и под чатом эфира (не у владельца)
 
@@ -108,6 +150,7 @@ async function toggleFollow() {
   try {
     followState = await api('/streamers/' + encodeURIComponent(getNameFromUrl()) + '/follow', { method: unfollow ? 'DELETE' : 'POST' });
     if (!unfollow) PW.toast(t('streamer.follow.done', { name }), 'success');
+    liveSocket?.emit('chat:check'); // режим «только подписчики»: открыть или закрыть поле ввода
   } catch (err) {
     if (err.status === 401) openLiveAuthModal('follow');
     else PW.toast(err.message || t('streamer.follow.failed'), 'error');
@@ -303,6 +346,7 @@ function startLiveSession() {
   }
 
   connectLiveChat(getNameFromUrl());
+  peekLiveInfo();
 
   if (isOwnerFlag) {
     document.getElementById('liveOwnerBar').classList.remove('hidden');
@@ -895,6 +939,18 @@ function fmtHMS(ms) {
 }
 
 // r: { type: 'none' | 'ban' | 'timeout', until } или null
+// значок «только подписчики» в шапке чата (режим включает стример в студии)
+let liveFollowMin = null;
+function renderFollowersBadge(min) {
+  liveFollowMin = min;
+  const el = document.getElementById('liveFollowersBadge');
+  if (!el) return;
+  el.classList.toggle('hidden', min === null);
+  el.textContent = t('streamer.chat.followersBadge');
+  el.title = min ? t('streamer.chat.followersBadgeMin', { n: min }) : t('streamer.chat.followersBadgeHint');
+}
+window.addEventListener('pw:langchange', () => renderFollowersBadge(liveFollowMin));
+
 function applyLiveRestriction(r) {
   clearInterval(liveRestrictTimer);
   const form = document.getElementById('liveChatForm');
@@ -909,6 +965,25 @@ function applyLiveRestriction(r) {
 
   if (r.type === 'ban') {
     box.textContent = t('streamer.chat.banned');
+    return;
+  }
+
+  if (r.type === 'followers') {
+    box.innerHTML = '';
+    const text = document.createElement('div');
+    box.appendChild(text);
+    if (!r.until) {
+      text.textContent = t('streamer.chat.followersOnly'); // кнопка «Подписаться» — сразу под этим блоком
+      return;
+    }
+    const until = new Date(r.until).getTime();
+    const tick = () => {
+      const left = until - Date.now();
+      if (left <= 0) { clearInterval(liveRestrictTimer); liveSocket?.emit('chat:check'); return; }
+      text.textContent = t('streamer.chat.followersWait') + ' ' + fmtHMS(left);
+    };
+    tick();
+    liveRestrictTimer = setInterval(tick, 1000);
     return;
   }
 
@@ -938,6 +1013,7 @@ function connectLiveChat(nameLower) {
   });
   liveSocket.on('chat:cleared', () => { document.getElementById('liveMessages').innerHTML = ''; });
   liveSocket.on('chat:restriction', applyLiveRestriction);
+  liveSocket.on('chat:mode', ({ followMin } = {}) => renderFollowersBadge(followMin ?? null));
 
   liveSocket.on('chat:viewers', (payload) => {
     if (typeof payload === 'number') {
@@ -1076,7 +1152,7 @@ async function loadProfile() {
     return; // нет сети, но есть кэш: оставляем показанное
   }
 
-  const live = { isLive: !!b.isLive, streamPlaybackId: b.streamPlaybackId || null };
+  const live = { isLive: !!b.isLive, streamPlaybackId: b.streamPlaybackId || null, title: b.title || '', category: b.category || null };
   const same = !!(b.unchanged && cached);
   const stat = same
     ? { streamer: cached.streamer, layout: cached.layout }
@@ -1091,6 +1167,7 @@ async function loadProfile() {
       };
 
   currentStreamer = { ...stat.streamer, ...live };
+  renderLiveInfo();
 
   if (same) {
     // данные те же: перерисовывать нечего, обновляем только бейдж «В ЭФИРЕ»
@@ -1133,6 +1210,7 @@ async function pollStreamerLiveStatus() {
 
     currentStreamer = { ...currentStreamer, ...data };
     document.getElementById('liveBadge')?.classList.toggle('hidden', !data.isLive);
+    renderLiveInfo();
 
     if (nowLive && !wasLive) {
       // стрим только что начался — открыть плеер без F5

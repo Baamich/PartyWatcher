@@ -10,7 +10,8 @@
     "activity": "🛡️ Channel activity",
     "constructor": "🧩 Builder",
     "presets": "🎨 Presets",
-    "docs": "📚 Docs"
+    "docs": "📚 Docs",
+    "stats": "📊 Statistics"
   },
   "key": {
     "title": "Stream key",
@@ -47,7 +48,10 @@
     "categoryNone": "No category",
     "categoryOff": "Categories are not set up on the server yet",
     "categoryClear": "Remove category",
-    "categoryNothing": "Nothing found"
+    "categoryNothing": "Nothing found",
+    "notice": "Notification for followers",
+    "noticePh": "For example: “Come in, we are beating the final boss today!”",
+    "noticeHint": "Followers will see this in the top right corner of the site when you go live."
   },
   "log": {
     "title": "Action log",
@@ -97,5 +101,16 @@
   "chatRegen": {
     "title": "Generate a new chat key?",
     "text": "The old key will stop working: the OBS overlay, bots and bridges will need the new one."
+  },
+  "chatMode": {
+    "title": "Chat settings",
+    "followersOnly": "Followers-only chat",
+    "minAge": "Following for at least",
+    "now": "no minimum",
+    "min10": "10 minutes",
+    "min30": "30 minutes",
+    "hour1": "1 hour",
+    "day1": "1 day",
+    "hint": "Everyone else can read the chat but can't write. The limit doesn't apply to you."
   }
 }

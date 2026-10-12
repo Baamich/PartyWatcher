@@ -5,6 +5,10 @@ const ChannelTimeout = require('../models/ChannelTimeout');
 const ChannelActionLog = require('../models/ChannelActionLog');
 const User = require('../models/User');
 const chatBus = require('../services/chatBus');
+const Follow = require('../models/Follow');
+
+// «чат только для подписчиков»: допустимые значения (null — выкл, 0 — сразу после подписки, иначе минуты)
+const FOLLOW_MIN_VALUES = [null, 0, 10, 30, 60, 1440];
 const ChatCommand = require('../models/ChatCommand');
 const { parseCommandLine, buildReply } = require('../services/chatCommands');
 const i18n = require('../services/i18n');
@@ -73,6 +77,21 @@ module.exports = function registerChatSocket(io) {
 
   // streamerNameLower → Map<socketId, { username, userId }>
   const presence = new Map();
+  // streamerNameLower → chatFollowMin (обновляется при входе в чат и при смене режима)
+  const chatMode = new Map();
+
+  // бан/таймаут, а потом — режим «только подписчики» (владельца не касается)
+  async function fullRestriction(room, streamerId, userId, isOwner) {
+    const r = await getRestriction(room, userId);
+    if (r.type !== 'none' || isOwner || !streamerId) return r;
+    const min = chatMode.get(room);
+    if (min === null || min === undefined) return r;
+    const f = await Follow.findOne({ followerId: userId, streamerId }).select('createdAt').lean();
+    if (!f) return { type: 'followers', min };
+    const until = new Date(f.createdAt).getTime() + min * 60000;
+    if (until > Date.now()) return { type: 'followers', min, until: new Date(until) };
+    return r;
+  }
 
   function getRoomPresence(nameLower) {
     if (!presence.has(nameLower)) presence.set(nameLower, new Map());
@@ -108,13 +127,13 @@ module.exports = function registerChatSocket(io) {
   }
 
   // для каталога трансляций: число без списка имён
-  chatBus.setViewerCounter((nameLower) => {
+  chatBus.setViewerCounter((nameLower, excludeUserId) => {
     const room = presence.get(nameLower);
     if (!room) return 0;
     const users = new Set();
     let guests = 0;
     for (const [, info] of room) {
-      if (info.userId) users.add(info.userId);
+      if (info.userId) { if (info.userId !== String(excludeUserId || '')) users.add(info.userId); }
       else guests += 1;
     }
     return users.size + guests;
@@ -222,8 +241,9 @@ module.exports = function registerChatSocket(io) {
         const name = String(streamerName || '').toLowerCase();
         if (!name) return;
         currentStreamerNameLower = name;
-        streamer = await User.findOne({ streamerNameLower: name }).select('_id').lean();
+        streamer = await User.findOne({ streamerNameLower: name }).select('_id chatFollowMin').lean();
         socket.data.isOwner = !!(authUser && streamer && String(streamer._id) === String(authUser.id));
+        if (streamer) chatMode.set(name, streamer.chatFollowMin ?? null);
       }
 
       // отключился, пока искали стримера, — не оставляем «призрака» в комнате и в списке зрителей
@@ -241,6 +261,8 @@ module.exports = function registerChatSocket(io) {
       }
 
       const ownerId = streamer ? String(streamer._id) : null;
+      socket.data.streamerId = ownerId;
+      if (!socket.data.isOverlay) socket.emit('chat:mode', { followMin: chatMode.get(room) ?? null });
 
       const history = await StreamChatMessage.find({
         streamerNameLower: room,
@@ -259,7 +281,33 @@ module.exports = function registerChatSocket(io) {
       );
 
       if (authUser && !socket.data.isOverlay) {
-        socket.emit('chat:restriction', await getRestriction(room, authUser.id));
+        socket.emit('chat:restriction', await fullRestriction(room, ownerId, authUser.id, socket.data.isOwner));
+      }
+    });
+
+    // зритель только что подписался — проверить, можно ли уже писать
+    socket.on('chat:check', async () => {
+      if (!authUser || !currentStreamerNameLower || socket.data.isOverlay) return;
+      socket.emit('chat:restriction', await fullRestriction(currentStreamerNameLower, socket.data.streamerId, authUser.id, socket.data.isOwner));
+    });
+
+    // владелец включает/выключает «только подписчики» (кнопка ⚙ у чата в студии)
+    socket.on('chat:set-mode', async ({ followMin } = {}) => {
+      if (!socket.data.isOwner || !currentStreamerNameLower) return;
+      const v = followMin === null || followMin === undefined || followMin === '' ? null : Number(followMin);
+      if (!FOLLOW_MIN_VALUES.includes(v)) return;
+      const room = currentStreamerNameLower;
+      await User.updateOne({ _id: socket.data.streamerId }, { $set: { chatFollowMin: v } });
+      chatMode.set(room, v);
+      nsp.to(roomName(room)).emit('chat:mode', { followMin: v });
+      // каждому зрителю в чате — его новое ограничение
+      const ids = nsp.adapter.rooms.get(roomName(room)) || new Set();
+      for (const sid of ids) {
+        const s2 = nsp.sockets.get(sid);
+        if (!s2 || !s2.data.userId || s2.data.isOverlay || s2.data.isOwner) continue;
+        fullRestriction(room, socket.data.streamerId, s2.data.userId, false)
+          .then((r) => s2.emit('chat:restriction', r))
+          .catch(() => {});
       }
     });
 
@@ -271,7 +319,7 @@ module.exports = function registerChatSocket(io) {
         const trimmed = String(text || '').trim().slice(0, 500);
       if (!trimmed) return;
 
-      const restriction = await getRestriction(currentStreamerNameLower, authUser.id);
+      const restriction = await fullRestriction(currentStreamerNameLower, socket.data.streamerId, authUser.id, socket.data.isOwner);
       if (restriction.type !== 'none') return socket.emit('chat:restriction', restriction);
 
       const msg = await StreamChatMessage.create({
@@ -291,6 +339,7 @@ module.exports = function registerChatSocket(io) {
         isOwner: !!socket.data.isOwner,
       });
 
+      chatBus.countChatMessage(currentStreamerNameLower, authUser.id); // статистика эфира
       runChatCommand(currentStreamerNameLower, trimmed, authUser.username, socket.data.lang).catch((e) =>
         console.warn('[chat command]', e.message)
       );
@@ -358,6 +407,7 @@ module.exports = function registerChatSocket(io) {
       emitViewers(currentStreamerNameLower);
       if (getRoomPresence(currentStreamerNameLower).size === 0) {
         presence.delete(currentStreamerNameLower);
+        chatMode.delete(currentStreamerNameLower); // режим перечитается из базы при следующем входе
       }
     });
   });

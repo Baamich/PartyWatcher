@@ -8,8 +8,8 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
-  <link rel="stylesheet" href="/streamers/streamer.css?v=5" />
-  <link rel="stylesheet" href="/streamers/live.css?v=4" />
+  <link rel="stylesheet" href="/streamers/streamer.css?v=6" />
+  <link rel="stylesheet" href="/streamers/live.css?v=6" />
   <link rel="stylesheet" href="/streamers/blocks.css?v=7" />
   <title data-i18n="streamer.pageTitle">PartyWatcher — Стример</title>
 </head>
@@ -56,6 +56,8 @@
           <div id="liveOffline" class="live-offline hidden" data-i18n="streamer.live.offline">Эфира нет</div>
 
           <div id="liveActivityCatcher"></div>
+          <!-- название и категория эфира: видны при наведении на плеер и первые секунды после открытия -->
+          <div id="liveInfoBar" class="live-info-bar hidden" data-no-i18n></div>
 
           <div id="liveOverlay" class="hidden">
             <span id="liveOverlayText" data-i18n="streamer.live.loading">Загрузка эфира...</span>
@@ -81,6 +83,7 @@
             <button type="button" id="liveViewersBtn" class="live-viewers-btn" title="Зрители" data-i18n-title="streamer.viewers.title">
               👁 <span id="liveViewersCount">0</span>
             </button>
+            <span id="liveFollowersBadge" class="live-followers-badge hidden"></span>
             <button type="button" id="liveClearChatBtn" class="live-clear-chat-btn hidden" title="Очистить чат" data-i18n-title="streamer.chat.clear">🧹</button>
           </div>
           <div id="liveMessages" data-no-i18n></div>
@@ -135,6 +138,7 @@
               </button>
               <span id="profileFollowers" class="profile-followers"></span>
             </div>
+            <div id="profileLiveLine" class="profile-live-line hidden" data-no-i18n></div>
             <p id="profileBioShort" class="profile-bio-short"></p>
             <button type="button" id="bioExpandBtn" class="bio-expand-btn hidden" data-click="openBioModal" data-i18n="streamer.more">…ещё</button>
           </div>
@@ -191,6 +195,7 @@
   <script src="/js/pwlayout.js?v=14"></script>
   <script src="/js/pwcache.js"></script>
   <script src="/streamers/pro-view.js?v=14"></script>
-  <script src="/streamers/streamer.js?v=9"></script>
+  <script src="/streamers/streamer.js?v=11"></script>
+  <script src="/js/live-notify.js?v=1"></script>
 </body>
 </html>

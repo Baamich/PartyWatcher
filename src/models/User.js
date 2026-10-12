@@ -37,6 +37,8 @@ const userSchema = new mongoose.Schema(
     streamTitle: { type: String, default: '' },
     streamDescription: { type: String, default: '' },
     streamCategoryId: { type: String, default: null }, // Category.tid, выбирается в студии
+    liveNotice: { type: String, default: '' }, // текст в уведомлении подписчикам «вышел в эфир»
+    chatFollowMin: { type: Number, default: null }, // чат только для подписчиков: null — выкл, 0 — сразу, N — подписан не меньше N минут
     streamKey: { type: String, default: undefined, unique: true, sparse: true },
     streamPlaybackId: { type: String, default: undefined, unique: true, sparse: true },
 
