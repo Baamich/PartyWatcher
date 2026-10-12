@@ -99,6 +99,24 @@ function groupResults(results) {
   return items;
 }
 
+// Kodik ищет нечётко и отдаёт в своём порядке («Брат» → сначала аниме «Мой старший брат…»).
+// Поднимаем точное совпадение названия, потом «начинается с», потом «содержит слово»; внутри — как прислал API
+function rankByTitle(items, q) {
+  const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const nq = norm(q);
+  const score = (it) => {
+    let best = 0;
+    for (const t of [norm(it.title), norm(it.titleOrig)]) {
+      if (!t) continue;
+      if (t === nq) best = Math.max(best, 3);
+      else if (t.startsWith(nq)) best = Math.max(best, 2);
+      else if ((' ' + t + ' ').includes(' ' + nq + ' ')) best = Math.max(best, 1);
+    }
+    return best;
+  };
+  return items.map((it, i) => ({ it, i, s: score(it) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.it);
+}
+
 function hasToken() {
   return !!config.kodik.token;
 }
@@ -138,7 +156,7 @@ async function search(query) {
     throw i18n.err('server.kodik.apiFailed');
   }
 
-  const items = groupResults(data?.results);
+  const items = rankByTitle(groupResults(data?.results), q);
   remember(searchCache, key, { at: Date.now(), items }, SEARCH_CACHE_MAX);
   return items;
 }

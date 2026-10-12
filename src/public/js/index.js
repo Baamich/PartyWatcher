@@ -375,10 +375,28 @@ function setUrlPlaceholder(key) {
   input.placeholder = t(key);
 }
 
+// Kodik с поиском: поле — поиск по названию (значок 🔍, без подсказок прошлых ссылок), а не «ссылка»
+function setKodikSearchLook(on) {
+  const input = document.getElementById('videoUrl');
+  input.classList.toggle('kodik-search', on);
+  if (on) input.removeAttribute('list');
+  else input.setAttribute('list', 'recentVideoUrls');
+}
+
+// название комнаты по выбранному фильму — пока человек не написал своё
+function autoRoomName(pick) {
+  const el = document.getElementById('roomName');
+  if (el.value.trim() && el.dataset.auto !== '1') return;
+  el.value = pick ? String(pick.item.title || '').slice(0, 100) : '';
+  el.dataset.auto = el.value ? '1' : '';
+}
+document.getElementById('roomName')?.addEventListener('input', (e) => { e.target.dataset.auto = ''; });
+
 async function updateKodikMode() {
   const box = document.getElementById('kodikResults');
   if (!isKodikType()) {
     setUrlPlaceholder('index.create.url');
+    setKodikSearchLook(false);
     box.classList.add('hidden');
     return;
   }
@@ -393,7 +411,7 @@ async function updateKodikMode() {
       if (kodikSearchEnabled) {
         const mod = await import('/js/kodik/search.js?v=1');
         kodikResults = mod.createKodikResults(document.getElementById('kodikResults'), {
-          onPickChange: (pick) => { kodikPick = pick; },
+          onPickChange: (pick) => { kodikPick = pick; autoRoomName(pick); },
         });
       }
     })();
@@ -401,6 +419,7 @@ async function updateKodikMode() {
   await kodikInit;
   if (!isKodikType()) return; // пока ждали ответ, тип уже сменили
   setUrlPlaceholder(kodikSearchEnabled ? 'index.kodik.placeholder' : 'index.kodik.placeholderLink');
+  setKodikSearchLook(!!kodikSearchEnabled);
   refreshKodikBox();
 }
 
@@ -414,7 +433,7 @@ function onVideoUrlInput() {
     refreshKodikBox();
     return;
   }
-  kodikTimer = setTimeout(() => kodikSearch(q), 600);
+  kodikTimer = setTimeout(() => kodikSearch(q), 400);
 }
 
 function onVideoUrlKeydown(arg, el, e) {
@@ -471,10 +490,12 @@ async function createRoom() {
   creatingRoom = true;
   let leaving = false;
   try {
-    const name = document.getElementById('roomName').value.trim();
+    const selection = document.getElementById('videoType').value;
+    // для фильма из поиска Kodik название комнаты можно не писать — возьмём название фильма
+    const name = document.getElementById('roomName').value.trim()
+      || (selection === 'kodik' && kodikPick ? String(kodikPick.item.title || '').slice(0, 100) : '');
     if (!name) return PW.toast(t('index.create.noName'), 'info');
 
-    const selection = document.getElementById('videoType').value;
     const rawUrl = document.getElementById('videoUrl').value.trim();
     if (!rawUrl) return PW.toast(t('index.create.noUrl'), 'info');
 

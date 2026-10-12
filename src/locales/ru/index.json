@@ -146,7 +146,7 @@
     "shortDesc": "Опишите проблему (минимум 5 символов)"
   },
   "kodik": {
-    "placeholder": "Название фильма / сериала или ссылка Kodik",
+    "placeholder": "Найди фильм, сериал или аниме по названию",
     "placeholderLink": "Ссылка на плеер Kodik (kodik.info/… или kodikplayer.com/…)",
     "searching": "Ищу…",
     "nothing": "Ничего не нашлось",

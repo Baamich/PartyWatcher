@@ -146,7 +146,7 @@
     "shortDesc": "Describe the problem (at least 5 characters)"
   },
   "kodik": {
-    "placeholder": "Movie / series title or Kodik link",
+    "placeholder": "Search a movie, series or anime by title",
     "placeholderLink": "Kodik player link (kodik.info/… or kodikplayer.com/…)",
     "searching": "Searching…",
     "nothing": "Nothing found",
