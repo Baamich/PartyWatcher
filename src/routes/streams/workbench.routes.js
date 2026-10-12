@@ -17,7 +17,7 @@ const chatBus = require('../../services/chatBus');
 function isCurrentlyLive(streamKey) {
   if (!streamKey) return false;
   const base = path.join(process.cwd(), 'media', 'live', streamKey);
-  for (const rel of ['source/index.m3u8', '720/index.m3u8', '480/index.m3u8']) {
+  for (const rel of ['source/index.m3u8', '720/index.m3u8', '360/index.m3u8']) {
     try {
       if (Date.now() - fs.statSync(path.join(base, rel)).mtimeMs < 15000) return true;
     } catch (_) {}
@@ -26,7 +26,9 @@ function isCurrentlyLive(streamKey) {
 }
 
 async function requireStreamer(req, res, next) {
-  const me = await User.findById(req.user.id);
+  // без тяжёлых полей: аватар/баннер в base64 и макет профиля (с фото фона — до нескольких МБ) роутам студии не нужны,
+  // а /me студия спрашивает раз в 3 с. save() пишет только изменённые поля, исключённые не трогает
+  const me = await User.findById(req.user.id).select('-streamerAvatarUrl -streamerBannerUrl -profileLayout');
   if (!me || !me.streamerName) return res.status(403).json({ error: req.t('server.presets.noStreamer') });
   req.streamerUser = me;
   next();

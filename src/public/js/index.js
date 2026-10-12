@@ -19,8 +19,11 @@ async function checkAuth() {
     }
 
     window.__pwAuthed = true;
+    try { localStorage.setItem('pw_authed', '1'); } catch {}
     if (authBox) authBox.classList.add('hidden');
     if (appBox) appBox.classList.remove('hidden');
+    document.documentElement.classList.remove('pw-authed');
+    setupAdultFilter(me);
 
     const meName = document.getElementById('meName');
     if (meName) meName.textContent = me.username || '';
@@ -30,6 +33,8 @@ async function checkAuth() {
       adminLink.classList.toggle('hidden', me.role !== 'admin');
     }
 
+    // Kodik выбран по умолчанию: после входа спрашиваем, есть ли поиск (до входа /kodik/config недоступен)
+    if (isKodikType()) updateKodikMode();
     await loadMyRooms();
     await loadPublicRooms();
     initLobbySocket();
@@ -37,6 +42,8 @@ async function checkAuth() {
   } catch (err) {
     console.warn('[checkAuth] не авторизован:', err?.message || err);
     window.__pwAuthed = false;
+    try { localStorage.removeItem('pw_authed'); } catch {}
+    document.documentElement.classList.remove('pw-authed'); // подсказка ошиблась (вышел на другой вкладке и т.п.)
     if (authBox) authBox.classList.remove('hidden');
     if (appBox) appBox.classList.add('hidden');
     stopAutoRefresh();
@@ -291,6 +298,7 @@ document.getElementById('regUsername')?.addEventListener('input', validateRegist
 
 async function logout() {
   await api('/auth/logout', { method: 'POST' });
+  try { localStorage.removeItem('pw_authed'); } catch {}
   stopAutoRefresh();
   checkAuth();
 }
@@ -320,6 +328,7 @@ function toggleInfoPopup() {
 function onVideoTypeChange() {
   const popup = document.getElementById('infoPopup');
   if (!popup.classList.contains('hidden')) renderInfoPopup();
+  updateKodikMode();
 }
 
 function updatePrivacyButton() {
@@ -343,6 +352,119 @@ function extractDriveFileId(url) {
   return match ? match[1] : null;
 }
 
+// ---- Kodik: поиск фильма/сериала (если на сервере есть ключ API) или ссылка на их плеер ----
+
+let kodikSearchEnabled = null; // null — ещё не спрашивали сервер
+let kodikResults = null; // виджет выдачи (js/kodik/search.js), общий с комнатой
+let kodikPick = null; // { item, tr } — выбранный фильм и озвучка (ведётся виджетом)
+let kodikTimer = null;
+let kodikSeq = 0;
+let kodikInit = null; // один запрос /kodik/config и одна загрузка виджета, даже если режим включили дважды подряд
+
+function isKodikType() {
+  return document.getElementById('videoType').value === 'kodik';
+}
+
+function isKodikLink(s) {
+  return /(kodik|aniqit)[^\/\s]*\/(serial|video|season|seria)\/\d+\//i.test(s);
+}
+
+function setUrlPlaceholder(key) {
+  const input = document.getElementById('videoUrl');
+  input.setAttribute('data-i18n-placeholder', key);
+  input.placeholder = t(key);
+}
+
+async function updateKodikMode() {
+  const box = document.getElementById('kodikResults');
+  if (!isKodikType()) {
+    setUrlPlaceholder('index.create.url');
+    box.classList.add('hidden');
+    return;
+  }
+  if (!kodikInit) {
+    kodikInit = (async () => {
+      try {
+        kodikSearchEnabled = !!(await api('/kodik/config')).search;
+      } catch {
+        kodikInit = null; // не вошёл или сеть — пока только ссылка, спросим в следующий раз
+        return;
+      }
+      if (kodikSearchEnabled) {
+        const mod = await import('/js/kodik/search.js?v=1');
+        kodikResults = mod.createKodikResults(document.getElementById('kodikResults'), {
+          onPickChange: (pick) => { kodikPick = pick; },
+        });
+      }
+    })();
+  }
+  await kodikInit;
+  if (!isKodikType()) return; // пока ждали ответ, тип уже сменили
+  setUrlPlaceholder(kodikSearchEnabled ? 'index.kodik.placeholder' : 'index.kodik.placeholderLink');
+  refreshKodikBox();
+}
+
+function onVideoUrlInput() {
+  if (!isKodikType()) return;
+  clearTimeout(kodikTimer);
+  const q = document.getElementById('videoUrl').value.trim();
+  if (!kodikSearchEnabled || q.length < 2 || isKodikLink(q)) {
+    kodikSeq++; // ответ уже отправленного поиска больше не нужен
+    kodikResults?.setItems([]);
+    refreshKodikBox();
+    return;
+  }
+  kodikTimer = setTimeout(() => kodikSearch(q), 600);
+}
+
+function onVideoUrlKeydown(arg, el, e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const q = el.value.trim();
+  if (isKodikType() && kodikSearchEnabled && q.length >= 2 && !isKodikLink(q) && !kodikPick) {
+    clearTimeout(kodikTimer);
+    kodikSearch(q);
+  } else {
+    createRoom();
+  }
+}
+
+async function kodikSearch(q) {
+  const seq = ++kodikSeq;
+  const box = document.getElementById('kodikResults');
+  box.classList.remove('hidden');
+  kodikResults?.searching();
+  try {
+    const data = await api('/kodik/search?q=' + encodeURIComponent(q));
+    if (seq !== kodikSeq) return;
+    kodikResults?.setItems(data.items || []);
+  } catch (err) {
+    if (seq !== kodikSeq) return;
+    kodikResults?.error(err.message);
+  }
+}
+
+// показываем/прячем блок выдачи; саму отрисовку карточек делает виджет
+function refreshKodikBox() {
+  const box = document.getElementById('kodikResults');
+  const q = document.getElementById('videoUrl').value.trim();
+  if (!isKodikType() || !kodikSearchEnabled || q.length < 2 || isKodikLink(q)) {
+    box.classList.add('hidden');
+    return;
+  }
+  box.classList.remove('hidden');
+  kodikResults?.render();
+}
+
+// подписи карточек (год · сериал · озвучки) собраны из t() — при смене языка перерисовываем
+window.addEventListener('pw:langchange', () => {
+  if (isKodikType() && kodikResults?.hasItems()) kodikResults.render();
+});
+// браузер мог восстановить выбранный тип при возврате на страницу
+document.addEventListener('DOMContentLoaded', () => {
+  if (isKodikType()) updateKodikMode();
+});
+
 let creatingRoom = false; // двойной клик не должен создать две комнаты (и обойти лимит)
 async function createRoom() {
   if (creatingRoom) return;
@@ -357,10 +479,13 @@ async function createRoom() {
     if (!rawUrl) return PW.toast(t('index.create.noUrl'), 'info');
 
     let type, url;
+    const extra = {};
 
     if (selection === 'youtube_twitch') {
+      // один пункт на три сервиса: тип определяем по ссылке
       if (/youtube\.com|youtu\.be/.test(rawUrl)) type = 'youtube';
       else if (/twitch\.tv/.test(rawUrl)) type = 'twitch';
+      else if (/(^|[/.])(vk\.com|vk\.ru|vkvideo\.ru)\//i.test(rawUrl) || /^(vk\.com|vk\.ru|vkvideo\.ru)/i.test(rawUrl)) type = 'vk';
       else return PW.toast(t('index.create.unknownYtTwitch'), 'error');
       url = rawUrl;
     } else if (selection === 'drive') {
@@ -376,6 +501,20 @@ async function createRoom() {
       if (!rawUrl.startsWith('http')) return PW.toast(t('index.create.needHttp'), 'error');
       type = 'direct';
       url = rawUrl;
+    } else if (selection === 'kodik') {
+      type = 'kodik';
+      if (kodikPick) {
+        url = kodikPick.tr.link;
+        extra.title = kodikPick.item.title;
+        if (kodikPick.item.poster) extra.poster = kodikPick.item.poster;
+      } else if (isKodikLink(rawUrl)) {
+        url = rawUrl;
+      } else if (kodikSearchEnabled) {
+        if (!kodikResults?.hasItems()) kodikSearch(rawUrl);
+        return PW.toast(t('index.kodik.pickFirst'), 'info');
+      } else {
+        return PW.toast(t('index.kodik.needLink'), 'info');
+      }
     } else {
       return PW.toast(t('index.create.chooseType'), 'info');
     }
@@ -389,7 +528,7 @@ async function createRoom() {
         method: 'POST',
         body: {
           name,
-          video: { type, url },
+          video: { type, url, ...extra },
           isPublic: privacyPublic,
         },
         signal: controller.signal,
@@ -402,6 +541,7 @@ async function createRoom() {
       throw new Error(room?.error || t('index.create.noCode'));
     }
     leaving = true; // уходим в комнату — повторный клик не нужен
+    window.PWRecent?.add(rawUrl); // в подсказки поля — только ссылки (не названия для поиска)
     location.href = `/room.html?code=${room.code}`;
   } catch (err) {
     console.error('[createRoom]', err);
@@ -489,7 +629,7 @@ function renderRoomCard(room, { showDelete }) {
     ${showDelete ? `<button type="button" class="delete-btn" title="${t('index.delete.btn')}" aria-label="${t('index.delete.btn')}">${TRASH_SVG}</button>` : ''}
     ${thumb ? `<img class="room-thumb" src="${escapeHtml(thumb)}" loading="lazy" />` : `<div class="room-thumb-placeholder">🎬</div>`}
     <div class="room-info">
-      <span class="room-name" title="${escapeHtml(room.name)}">${escapeHtml(room.name)}</span>
+      <span class="room-name" title="${escapeHtml(room.name)}">${room.video?.adult ? '<span class="adult-badge">18+</span> ' : ''}${escapeHtml(room.name)}</span>
       <span class="room-occupancy">👤 ${occupancyLabel(room)}</span>
     </div>
     <div class="room-actions">
@@ -546,9 +686,32 @@ let publicState = {
   page: 1,
   sort: 'newest',
   onlyWithPeople: false,
+  adult: false, // комнаты 18+ (галочка видна только после подтверждения возраста)
   query: '',
   totalPages: 1,
 };
+
+// ---- 18+ ----
+function setupAdultFilter(me) {
+  const wrap = document.getElementById('adultFilterWrap');
+  const box = document.getElementById('adultFilter');
+  if (!wrap || !box) return;
+  wrap.classList.toggle('hidden', !me.adultConfirmed);
+  box.checked = !!me.showAdult;
+  publicState.adult = !!me.adultConfirmed && !!me.showAdult;
+}
+
+async function onAdultFilterChange() {
+  const box = document.getElementById('adultFilter');
+  publicState.adult = box.checked;
+  publicState.page = 1;
+  loadPublicRooms();
+  try {
+    await api('/auth/adult', { method: 'PATCH', body: { showAdult: box.checked } });
+  } catch (err) {
+    PW.toast(err.message || t('index.public.adultFailed'), 'error');
+  }
+}
 
 function onPublicFilterChange() {
   publicState.page = 1;
@@ -576,6 +739,7 @@ async function loadPublicRooms() {
     onlyWithPeople: publicState.onlyWithPeople ? '1' : '0',
   });
   if (publicState.query) params.set('q', publicState.query);
+  if (publicState.adult) params.set('adult', '1');
 
   try {
     const data = await api('/rooms/public?' + params.toString());

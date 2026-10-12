@@ -4,7 +4,7 @@
   else root.PWLayout = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   const W = 1100;
-  const MAX_H = 4000;
+  const MAX_H = 10000; // холст растёт вниз до 10 000 (вверх, влево и вправо за края нельзя)
   const DEFAULTS = {
     profile: [
       { id: 'banner', type: 'banner', x: 0, y: 0, w: 1100, h: 220 },
@@ -17,7 +17,11 @@
       { id: 'chat', type: 'chat', x: 780, y: 0, w: 320, h: 430 },
     ],
   };
-  const WM = { profile: 1100, live: 1600 }; // ширина холста по режимам
+  // место в редакторе по режимам (1760 — влезает в окно браузера на экране 1920 с полями). Страница занимает ширину
+  // до самого правого блока, но не меньше MIN_W — старые макеты (профиль 1100, эфир 1600) выглядят как раньше,
+  // а шире становятся только те, кто растянул
+  const WM = { profile: 1760, live: 1760 };
+  const MIN_W = { profile: 1100, live: 1600 };
 
   // ошибка с ключом словаря: в браузере текст сразу переведён, на сервере роут переводит по e.i18nKey
   function layoutError(key, vars) {
@@ -28,9 +32,12 @@
     return e;
   }
   const LIMITS = {
-    profile: { custom: 12, photos: 4, links: 12 },
-    live: { custom: 8, photos: 2, links: 6 },
+    profile: { custom: 12, photos: 4, links: 12, bgs: 2 },
+    live: { custom: 8, photos: 2, links: 6, bgs: 0 },
   };
+  // фон страницы профиля: до 2 заливок (цвет или фото) и переход между ними
+  const BG_FX = ['fade', 'sharp', 'diagonal', 'wave', 'zigzag', 'steps', 'arc', 'stripes', 'dots', 'radial'];
+  const BG_FITS = ['cover', 'contain', 'tile'];
   const CUSTOM_TYPES = { profile: ['shape', 'text', 'image', 'link'], live: ['text', 'image', 'link'] };
   const FONTS = {
     system: 'inherit',
@@ -40,8 +47,22 @@
     display: 'Impact, "Arial Black", sans-serif',
   };
   const COLOR_RE = /^#[0-9a-f]{6}$/i;
-  const IMG_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+  const IMG_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
   const MAX_IMG_CHARS = 900000;
+  // анимированные GIF хранятся как есть (пережатие через canvas убило бы анимацию): до ~1,2 МБ и не больше 2 на макет
+  const MAX_GIF_CHARS = 1700000;
+  const GIF_MAX = 2;
+  const MAX_TOTAL_IMG_CHARS = 5000000;
+  const isGif = (s) => typeof s === 'string' && s.startsWith('data:image/gif');
+  const imgOk = (s) => typeof s === 'string' && s.length <= (isGif(s) ? MAX_GIF_CHARS : MAX_IMG_CHARS) && IMG_RE.test(s);
+  // все картинки макета: блоки обоих режимов и фоны профиля
+  function allImages(L) {
+    const out = [];
+    for (const m of ['profile', 'live']) for (const b of L?.[m]?.blocks || []) if (b.img) out.push(b.img);
+    for (const f of L?.profile?.bg?.fills || []) if (f.img) out.push(f.img);
+    return out;
+  }
+  const gifCount = (L) => allImages(L).filter(isGif).length;
   const SIMPLE_SHAPES = ['rect', 'circle', 'triangle'];
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -70,8 +91,16 @@
     if (b.type === 'avatar') b.h = b.w;
     if (b.type === 'player') b.h = Math.round((b.w * 9) / 16);
     b.x = Math.round(num(b.x, 0, W - b.w, 0));
-    b.y = Math.round(num(b.y, 0, MAX_H, 0));
+    b.y = Math.round(num(b.y, 0, MAX_H - b.h, 0)); // низ блока тоже не ниже MAX_H
     return b;
+  }
+
+  // реальная ширина холста: до правого края самого правого блока, в пределах [MIN_W, WM]
+  function canvasWidth(blocks, mode = 'profile') {
+    const max = WM[mode] || 1100, min = MIN_W[mode] || max;
+    let right = 0;
+    for (const b of blocks || []) right = Math.max(right, (Number(b.x) || 0) + (Number(b.w) || 0));
+    return Math.round(Math.min(max, Math.max(min, right)));
   }
 
   // аватар всегда выше баннера: если он в списке раньше, ставим сразу за баннером
@@ -90,14 +119,38 @@
     if (p && c) c.h = p.h;
   }
 
-  function counts(blocks) {
+  function counts(blocks, bg) {
     let custom = 0, photos = 0, links = 0;
     for (const b of blocks) {
       if (b.type === 'shape' || b.type === 'text') custom++;
       if (b.type === 'image' || (b.type === 'shape' && b.img)) photos++;
       if (b.type === 'link') links++;
     }
-    return { custom, photos, links };
+    return { custom, photos, links, bgs: bg && Array.isArray(bg.fills) ? bg.fills.length : 0 };
+  }
+
+  // фон: { fills: [{ c } | { img, fit }] (1–2), pos 0–100 — где переход, dir 'v' (сверху вниз) | 'h' (слева направо),
+  // fx — эффект перехода, soft 0–50 — ширина перехода }. Пустой или битый — null (фона нет)
+  function cleanBg(raw) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.fills)) return null;
+    const fills = [];
+    for (const f of raw.fills.slice(0, LIMITS.profile.bgs)) {
+      if (!f || typeof f !== 'object') continue;
+      if (f.img) {
+        if (!imgOk(f.img)) throw layoutError('badImage');
+        fills.push({ img: f.img, fit: BG_FITS.includes(f.fit) ? f.fit : 'cover', c: COLOR_RE.test(f.c) ? f.c : '#000000' });
+      } else if (COLOR_RE.test(f.c)) {
+        fills.push({ c: f.c });
+      }
+    }
+    if (!fills.length) return null;
+    return {
+      fills,
+      pos: Math.round(num(raw.pos, 0, 100, 50) * 10) / 10,
+      dir: raw.dir === 'h' ? 'h' : 'v',
+      fx: BG_FX.includes(raw.fx) ? raw.fx : 'fade',
+      soft: Math.round(num(raw.soft, 0, 50, 20) * 10) / 10,
+    };
   }
 
   function withDefaults(raw) {
@@ -111,6 +164,8 @@
       syncChat(blocks);
       out[mode] = { blocks };
     }
+    // фон — только у профиля; в браузере битый фон просто не показываем (на сервере он уже очищен)
+    try { out.profile.bg = cleanBg(raw?.profile?.bg); } catch { out.profile.bg = null; }
     return out;
   }
 
@@ -174,9 +229,7 @@
 
     if (type === 'shape' || type === 'image' || type === 'link') {
       if (b.img) {
-        if (typeof b.img !== 'string' || b.img.length > MAX_IMG_CHARS || !IMG_RE.test(b.img)) {
-          throw layoutError('badImage');
-        }
+        if (!imgOk(b.img)) throw layoutError('badImage');
         o.img = b.img;
       }
     }
@@ -229,13 +282,13 @@
       if (c.links > L.links) throw layoutError('tooManyLinks', { n: L.links });
       out[mode] = { blocks };
     }
-    let imgChars = 0;
-    for (const m of ['profile', 'live']) for (const b of out[m].blocks) imgChars += b.img ? b.img.length : 0;
-    if (imgChars > 4000000) throw layoutError('tooHeavy');
+    out.profile.bg = cleanBg(raw.profile?.bg);
+    if (gifCount(out) > GIF_MAX) throw layoutError('tooManyGifs', { n: GIF_MAX });
+    if (allImages(out).reduce((n, s) => n + s.length, 0) > MAX_TOTAL_IMG_CHARS) throw layoutError('tooHeavy');
     return out;
   }
 
-  const api = { fixOrder, W, WM, MAX_H, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, defOf, minSize, clampBlock, syncChat, counts, withDefaults, sanitize, clone };
+  const api = { fixOrder, W, WM, MIN_W, MAX_H, GIF_MAX, isGif, gifCount, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, BG_FX, BG_FITS, defOf, minSize, clampBlock, syncChat, counts, canvasWidth, cleanBg, withDefaults, sanitize, clone };
   if (typeof document === 'undefined') return api;
 
   // ---------- только браузер ----------
@@ -248,6 +301,125 @@
   };
 
   api.canvasHeight = (blocks) => Math.max(480, ...blocks.map((b) => b.y + b.h)) + 40;
+
+  // ---------- фон профиля: две заливки и переход между ними ----------
+  // Второй фон кладём поверх первого и показываем через маску: маска и задаёт форму перехода.
+  // Маска строится в единицах холста (W×H), поэтому волны и точки не сплющиваются при масштабе.
+  const svgUrl = (w, h, body, blur) => {
+    const f = blur > 0.5 ? `<filter id="b" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="${blur.toFixed(1)}"/></filter>` : '';
+    const g = blur > 0.5 ? ' filter="url(#b)"' : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${f}<g fill="#000"${g}>${body}</g></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  };
+
+  function bgMask(bg, W, H) {
+    const v = bg.dir !== 'h';
+    const p = bg.pos, sft = bg.soft;
+    const lo = Math.max(0, p - sft / 2), hi = Math.min(100, p + sft / 2);
+    const to = v ? 'to bottom' : 'to right';
+    const L = v ? H : W, C = v ? W : H; // длина вдоль перехода и поперёк
+    const at = (p / 100) * L;
+    // точка (поперёк w, вдоль u) → координаты svg
+    const xy = (w, u) => (v ? `${w.toFixed(1)},${u.toFixed(1)}` : `${u.toFixed(1)},${w.toFixed(1)}`);
+    const area = (edge) => `<path d="M${edge.map(([w, u]) => xy(w, u)).join(' L')} L${xy(C, L)} L${xy(0, L)} Z"/>`;
+    const blur = (sft / 100) * L * 0.12;
+    const amp = Math.max(12, C * 0.03);
+
+    switch (bg.fx) {
+      case 'sharp':
+        return `linear-gradient(${to}, transparent ${p}%, #000 ${p}%)`;
+      case 'diagonal':
+        return `linear-gradient(${v ? 'to bottom right' : 'to top right'}, transparent ${lo}%, #000 ${hi}%)`;
+      case 'radial': // первый фон в центре, второй вокруг
+        return `radial-gradient(circle at 50% 50%, transparent ${lo}%, #000 ${hi}%)`;
+      case 'wave': {
+        const edge = [];
+        for (let i = 0; i <= 64; i++) { const w = (C * i) / 64; edge.push([w, at + amp * Math.sin((w / C) * Math.PI * 8)]); }
+        return svgUrl(W, H, area(edge), blur);
+      }
+      case 'zigzag': {
+        const edge = [], n = 16;
+        for (let i = 0; i <= n; i++) edge.push([(C * i) / n, at + (i % 2 ? amp : -amp)]);
+        return svgUrl(W, H, area(edge), blur);
+      }
+      case 'steps': {
+        const edge = [], n = 6, step = amp * 1.5;
+        for (let i = 0; i < n; i++) {
+          const u = at + (i - (n - 1) / 2) * step;
+          edge.push([(C * i) / n, u], [(C * (i + 1)) / n, u]);
+        }
+        return svgUrl(W, H, area(edge), blur);
+      }
+      case 'arc': {
+        const edge = [];
+        for (let i = 0; i <= 64; i++) { const w = (C * i) / 64; edge.push([w, at - C * 0.08 * Math.sin((w / C) * Math.PI)]); }
+        return svgUrl(W, H, area(edge), blur);
+      }
+      case 'stripes': { // жалюзи: полосы второго фона толстеют по ходу перехода
+        const zone = Math.max(15, sft * 1.5) / 100 * L, u0 = at - zone / 2, n = 8, band = zone / n;
+        let body = '';
+        for (let i = 0; i < n; i++) {
+          const t = band * ((i + 0.5) / n);
+          body += v ? `<rect x="0" y="${(u0 + i * band).toFixed(1)}" width="${C}" height="${t.toFixed(1)}"/>`
+            : `<rect x="${(u0 + i * band).toFixed(1)}" y="0" width="${t.toFixed(1)}" height="${C}"/>`;
+        }
+        body += v ? `<rect x="0" y="${(u0 + zone).toFixed(1)}" width="${C}" height="${Math.max(0, L - u0 - zone).toFixed(1)}"/>`
+          : `<rect x="${(u0 + zone).toFixed(1)}" y="0" width="${Math.max(0, L - u0 - zone).toFixed(1)}" height="${C}"/>`;
+        return svgUrl(W, H, body, 0);
+      }
+      case 'dots': { // точки растут по ходу перехода и сливаются во второй фон
+        const zone = Math.max(15, sft * 1.5) / 100 * L, u0 = at - zone / 2;
+        let g = C / 18;
+        while ((C / g) * (zone / g) > 1500) g *= 1.25; // не больше ~1500 кружков
+        let body = '';
+        for (let u = u0 + g / 2; u < u0 + zone; u += g) {
+          const r = (g * 0.72 * (u - u0)) / zone;
+          if (r < 0.5) continue;
+          for (let w = g / 2; w < C; w += g) {
+            const [x, y] = v ? [w, u] : [u, w];
+            body += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}"/>`;
+          }
+        }
+        body += v ? `<rect x="0" y="${(u0 + zone).toFixed(1)}" width="${C}" height="${Math.max(0, L - u0 - zone).toFixed(1)}"/>`
+          : `<rect x="${(u0 + zone).toFixed(1)}" y="0" width="${Math.max(0, L - u0 - zone).toFixed(1)}" height="${C}"/>`;
+        return svgUrl(W, H, body, 0);
+      }
+      default: // fade
+        return `linear-gradient(${to}, transparent ${lo}%, #000 ${Math.max(hi, lo + 0.5)}%)`;
+    }
+  }
+
+  function paintFill(el, f) {
+    el.style.cssText = '';
+    el.style.backgroundColor = f.c || 'transparent';
+    if (f.img) {
+      el.style.backgroundImage = `url("${f.img}")`;
+      el.style.backgroundPosition = 'center';
+      el.style.backgroundRepeat = f.fit === 'tile' ? 'repeat' : 'no-repeat';
+      el.style.backgroundSize = f.fit === 'tile' ? `calc(var(--s, 1) * 400px)` : f.fit;
+    }
+  }
+
+  // слой фона внутри холста: el — контейнер .pw-bg; W, H — размер холста в единицах
+  api.paintBg = (el, bg, W, H) => {
+    el.style.setProperty('--bgw', W);
+    el.style.setProperty('--bgh', H);
+    el.hidden = !bg;
+    if (!bg) { el.replaceChildren(); return; }
+    let a = el.children[0], b = el.children[1];
+    if (!a) { a = document.createElement('div'); a.className = 'pw-bg-a'; el.appendChild(a); }
+    paintFill(a, bg.fills[0]);
+    if (bg.fills[1]) {
+      if (!b) { b = document.createElement('div'); b.className = 'pw-bg-b'; el.appendChild(b); }
+      paintFill(b, bg.fills[1]);
+      const m = bgMask(bg, W, H);
+      for (const k of ['maskImage', 'webkitMaskImage']) b.style[k] = m;
+      for (const k of ['maskSize', 'webkitMaskSize']) b.style[k] = '100% 100%';
+      for (const k of ['maskRepeat', 'webkitMaskRepeat']) b.style[k] = 'no-repeat';
+    } else if (b) {
+      b.remove();
+    }
+  };
 
   api.paintShape = (el, b) => {
     el.style.borderRadius = '';
@@ -349,10 +521,21 @@
     return el;
   };
 
-  // уменьшаем до maxSide и пережимаем в webp/jpeg, пока не влезет в лимит
-  api.imageToDataUrl = async (file, maxSide = 900) => {
-    if (!file || !/^image\//.test(file.type)) throw new Error('Нужна картинка');
+  // уменьшаем до maxSide и пережимаем в webp/jpeg, пока не влезет в лимит.
+  // opts.gif — GIF берём как есть, чтобы не пропала анимация (только там, где GIF разрешён: свои блоки и фон)
+  api.imageToDataUrl = async (file, maxSide = 900, opts = {}) => {
+    if (!file || !/^image\//.test(file.type)) throw layoutError('notImage');
     const bmp = await createImageBitmap(file);
+    if (opts.gif && file.type === 'image/gif') {
+      const url = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result));
+        fr.onerror = () => rej(layoutError('notImage'));
+        fr.readAsDataURL(file);
+      });
+      if (url.length > MAX_GIF_CHARS) throw layoutError('gifTooHeavy', { mb: 1.2 });
+      return { url, w: bmp.width, h: bmp.height, gif: true };
+    }
     let side = maxSide;
     for (let i = 0; i < 5; i++) {
       const k = Math.min(1, side / Math.max(bmp.width, bmp.height));

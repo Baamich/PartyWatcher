@@ -8,12 +8,13 @@ const roomSchema = new mongoose.Schema(
     video: {
       type: { 
         type: String, 
-        enum: ['youtube', 'twitch', 'vk', 'drive', 'player_capture', 'direct'], 
+        enum: ['youtube', 'twitch', 'vk', 'drive', 'player_capture', 'direct', 'kodik'], 
         required: true 
       },
       url: { type: String, required: true },
       title: { type: String },
       ageRestricted: { type: Boolean, default: false },
+      adult: { type: Boolean, default: false }, // 18+ (порно-сайт или материал Kodik с рейтингом RX): ставит сервер по ссылке
       directUrl: { type: String, default: null }, // скачанная копия для видео 18+ (/media/yt-cache/...)
       meta: {
         seasons: { type: [Number], default: [] },

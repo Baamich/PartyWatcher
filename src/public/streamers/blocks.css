@@ -42,6 +42,20 @@ a.pw-link:hover .pw-fill { filter: brightness(1.12); }
   height: calc(var(--h) * var(--s) * 1px);
 }
 
+/* фон профиля: под всеми блоками, размер — холст (--bgw × --bgh в единицах холста) */
+.pw-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--bgw, 1100) * var(--s, 1) * 1px);
+  height: calc(var(--bgh, 600) * var(--s, 1) * 1px);
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.pw-bg[hidden] { display: none; }
+.pw-bg > div { position: absolute; inset: 0; }
+
 /* ---- профиль: родные элементы страницы внутри холста ---- */
 .pw-canvas > .profile-banner { margin: 0; }
 .pw-canvas .profile-avatar { width: 100%; height: 100%; font-size: calc(var(--w) * var(--s) * 0.33px); }
@@ -55,9 +69,11 @@ a.pw-link:hover .pw-fill { filter: brightness(1.12); }
   position: relative;
   display: block;
   width: 100%;
-  max-width: 1600px;
+  max-width: calc(var(--cw, 1600) * 1px);
   margin: 0 auto;
 }
+/* полоса эфира шире на поля, чтобы холст до 1760 помещался без уменьшения */
+.live-strip:has(> .live-strip-inner.pw-on:not(.fs-active)) { max-width: min(1792px, 100%); }
 /* распорка задаёт высоту, поэтому аккордеон (0fr) схлопывается как раньше */
 .live-strip-inner.pw-on:not(.fs-active)::before {
   content: '';

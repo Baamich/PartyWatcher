@@ -6,6 +6,8 @@ const Room = require('../models/Room');
 const ChatMessage = require('../models/ChatMessage');
 const SupportTicket = require('../models/SupportTicket');
 const i18n = require('../services/i18n');
+const kodik = require('../services/kodik');
+const safeHandlers = require('./safeHandlers');
 
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
 if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
@@ -88,6 +90,7 @@ function registerRoomSocket(io) {
   });
 
     io.on('connection', (socket) => {
+    safeHandlers(socket, 'roomSocket'); // ошибка в обработчике (событие без данных и т.п.) не роняет процесс
     // смена языка без перезагрузки страницы: дальше сообщения этому сокету — на новом языке
     socket.on('lang:set', (l) => { socket.data.lang = i18n.normLang(l) || socket.data.lang; });
 
@@ -144,6 +147,16 @@ function registerRoomSocket(io) {
 
       const isBanned = room.bannedUsers.some((id) => String(id) === String(socket.user.id));
       if (isBanned) return socket.emit('room:banned');
+
+      // тот же сокет зашёл в другую комнату — выходим из прежней (иначе висел в её звонке и списке до отключения)
+      const prev = socket.data.roomCode;
+      if (prev && prev !== code) {
+        removeFromVoice(io, socket, prev);
+        await socket.leave(prev);
+        socket.to(prev).emit('room:user-left', { username: socket.user?.username });
+        updateRoomActivity(io, prev).catch(() => {});
+        broadcastParticipants(io, prev);
+      }
 
       // обязательно ждём join, иначе размер комнаты ещё 0
       await socket.join(code);
@@ -328,6 +341,55 @@ function registerRoomSocket(io) {
       const url = room?.video?.directUrl;
       if (!url) return;
       socket.to(code).emit('youtube:age-restricted-stream', { url });
+    });
+
+    // Kodik: хост переключил серию или озвучку в своём плеере — переводим туда же зрителей.
+    // Смена озвучки меняет ссылку плеера: новую сервер находит сам (клиент ссылку не присылает).
+    socket.on('kodik:episode', async (payload, ack) => {
+      const reply = typeof ack === 'function' ? ack : () => {};
+      const code = payload?.code;
+      if (!socket.data.isOwner || socket.data.roomCode !== code) return reply({});
+      const season = kodik.posInt(payload.season);
+      const episode = kodik.posInt(payload.episode);
+      const voice = typeof payload.voice === 'string' ? payload.voice.slice(0, 100) : null;
+
+      const room = await Room.findOne({ code }).select('video playback').lean();
+      if (room?.video?.type !== 'kodik') return reply({});
+
+      let url = room.video.url;
+      // смена озвучки = запрос к Kodik с сервера: не чаще раза в 2 с на сокет (хост не раскачает сервер перебором id)
+      if (payload.translationId && Date.now() - (socket.data.kodikTrAt || 0) > 2000) {
+        socket.data.kodikTrAt = Date.now();
+        url = (await kodik.linkForTranslation(url, payload.translationId)) || url;
+      }
+      const meta = room.video.meta || {};
+      const prevSeason = meta.currentSeason ?? null;
+      const prevEpisode = meta.currentEpisode ?? null;
+      if (url === room.video.url && prevSeason === season && prevEpisode === episode) {
+        if (voice && voice !== meta.currentVoice) await Room.updateOne({ code }, { 'video.meta.currentVoice': voice });
+        return reply({ url });
+      }
+
+      // серия ещё не была известна (первая загрузка плеера хоста) — позицию не трогаем
+      const firstReport = url === room.video.url && prevSeason === null && prevEpisode === null;
+      const playback = firstReport && room.playback
+        ? { isPlaying: !!room.playback.isPlaying, positionSeconds: Number(room.playback.positionSeconds) || 0 }
+        : { isPlaying: false, positionSeconds: 0 };
+
+      await Room.updateOne({ code }, {
+        'video.url': url,
+        'video.meta.currentSeason': season,
+        'video.meta.currentEpisode': episode,
+        'video.meta.currentVoice': voice,
+        playback: { ...playback, updatedAt: new Date() },
+      });
+
+      socket.to(code).emit('kodik:episode', {
+        url, season, episode, voice, playback,
+        voiceChanged: url !== room.video.url,
+        quiet: firstReport,
+      });
+      reply({ url });
     });
 
     socket.on('playback:update', async ({ code, isPlaying, positionSeconds }) => {

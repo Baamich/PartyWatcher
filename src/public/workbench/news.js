@@ -9,6 +9,13 @@ let bodySpell = null;
 
 const $ = (id) => document.getElementById(id);
 
+// одна страница на два адреса: /news — раздел сайта (меню как на главной), /workbench/news.html — в студии
+if (/^\/news\/?$/.test(location.pathname)) {
+  $('siteNav').classList.remove('hidden');
+  $('studioNav').classList.add('hidden');
+  document.querySelector('.brand')?.setAttribute('href', '/');
+}
+
 function fmtDate(d) {
   return new Date(d).toLocaleDateString(I18N.locale, { day: 'numeric', month: 'long', year: 'numeric' });
 }

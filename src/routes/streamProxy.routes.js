@@ -128,7 +128,15 @@ setInterval(() => {
   for (const [hostname, entry] of workingRefererByHost) {
     if (now > entry.expiresAt) workingRefererByHost.delete(hostname);
   }
-}, 5 * 60_000).unref();
+  // просроченные сегменты (до 150 МБ) и плейлисты удалялись только при чтении — после конца фильма
+  // буферы висели в памяти процесса до следующего просмотра
+  for (const [key, hit] of segmentCache) {
+    if (now > hit.expires) segmentCacheDelete(key);
+  }
+  for (const [key, hit] of playlistRawCache) {
+    if (now > hit.expires) playlistRawCache.delete(key);
+  }
+}, 60_000).unref();
 
 function segmentCacheSet(key, buf, contentType) {
   segmentCacheDelete(key);
@@ -271,7 +279,7 @@ function hostPrefersProxyFirst(hostname) {
 
 // Пробуем один конкретный referer-кандидат (без прокси / с прокси, порядок
 // зависит от preferProxyFirst). Бросает при полном отказе — err.status/err.body/err.referer
-async function tryCandidate(targetUrl, { referer, origin }, isLast, preferProxyFirst) {
+async function tryCandidate(targetUrl, { referer, origin }, isLast, preferProxyFirst, extra = {}) {
   const headers = {
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -282,6 +290,7 @@ async function tryCandidate(targetUrl, { referer, origin }, isLast, preferProxyF
     'Sec-Fetch-Mode': 'cors',
     'Sec-Fetch-Site': 'cross-site',
     Connection: 'keep-alive',
+    ...(extra.headers || {}),
   };
   if (!isLast) headers['Origin'] = origin;
 
@@ -297,6 +306,7 @@ async function tryCandidate(targetUrl, { referer, origin }, isLast, preferProxyF
     if (step.proxy && !dispatcher) continue;
     try {
       const fetchOpts = { headers };
+      if (extra.signal) fetchOpts.signal = extra.signal;
       if (step.proxy) fetchOpts.dispatcher = dispatcher;
       const res = await safeFetch(targetUrl, fetchOpts, { guarded: !step.proxy });
       if (res && res.ok) {
@@ -455,6 +465,69 @@ async function warmStream(targetUrl) {
   }
 }
 
+// Запросы с Range (тег <video> грузит mp4 кусками, перематывает): отдаём потоком с тем же 206/Content-Range,
+// без буфера и кэша — иначе файл в сотни МБ целиком ложился бы в память на каждого зрителя и не было бы перемотки.
+// Referer'ы пробуем по очереди (не гонкой: каждый вариант начал бы качать большой файл параллельно).
+async function relayRanged(req, res, targetUrl) {
+  let host = '';
+  try { host = new URL(targetUrl).hostname; } catch (_) {}
+  const remembered = getRememberedReferer(host);
+  const candidates = [remembered];
+  const fromQuery = String(req.query.referer || '');
+  if (fromQuery.startsWith('http')) {
+    try {
+      const u = new URL(fromQuery);
+      candidates.push({ referer: `${u.protocol}//${u.hostname}/`, origin: `${u.protocol}//${u.hostname}` });
+    } catch (_) {}
+  }
+  candidates.push(guessReferer(targetUrl));
+  const seen = new Set();
+  const list = candidates.filter((c) => c && !seen.has(c.referer) && seen.add(c.referer));
+
+  // зритель закрыл видео или перемотал — обрываем и запрос к CDN
+  const controller = new AbortController();
+  res.on('close', () => { if (!res.writableEnded) controller.abort(); });
+
+  let result = null;
+  let lastStatus = 0;
+  for (const c of list) {
+    try {
+      result = await tryCandidate(targetUrl, c, true, remembered?.usedProxy ?? hostPrefersProxyFirst(host), {
+        headers: { Range: String(req.headers.range) },
+        signal: controller.signal,
+      });
+      break;
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      lastStatus = e.status || lastStatus;
+      if (lastStatus === 410) break; // токен протух — другой referer не поможет
+    }
+  }
+  if (!result) {
+    console.warn('[stream-relay] Range: CDN отказал', lastStatus || 'net', targetUrl.slice(0, 80));
+    return res.status(lastStatus || 502).json({ error: req.t('server.relay.cdnStatus', { status: lastStatus || 502 }) });
+  }
+  if (host) rememberWorkingReferer(host, { referer: result.referer, origin: result.origin }, result.usedProxy);
+
+  const up = result.response;
+  res.status(up.status);
+  for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag']) {
+    const v = up.headers.get(h);
+    if (v) res.setHeader(h, v);
+  }
+  if (!up.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  if (!up.body) return res.end();
+  const { Readable } = require('stream');
+  Readable.fromWeb(up.body)
+    .on('error', (e) => {
+      if (!controller.signal.aborted) console.warn('[stream-relay] Range: обрыв потока:', e.message);
+      res.destroy();
+    })
+    .pipe(res);
+}
+
 router.get('/relay', auth, async (req, res) => {
   const targetUrl = req.query.url;
   if (typeof targetUrl !== 'string' || targetUrl.length > 4000 || !targetUrl.startsWith('http')) {
@@ -464,6 +537,17 @@ router.get('/relay', auth, async (req, res) => {
     await assertPublicHttpUrl(targetUrl);
   } catch (e) {
     return res.status(400).json({ error: i18n.errText(req, e) });
+  }
+
+  // mp4 и прочее с Range — потоком (см. relayRanged); HLS-плейлисты и сегменты — как раньше
+  if (req.headers.range && !/\.m3u8(\?|$)/i.test(targetUrl)) {
+    try {
+      return await relayRanged(req, res, targetUrl);
+    } catch (err) {
+      console.error('[stream-relay] Range EXCEPTION:', err && err.message);
+      if (!res.headersSent) return res.status(502).json({ error: req.t('server.relay.cdnStatus', { status: 502 }) });
+      return res.destroy();
+    }
   }
 
   try {

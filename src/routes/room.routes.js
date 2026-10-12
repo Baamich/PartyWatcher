@@ -7,6 +7,14 @@ const auth = require('../middleware/auth');
 const i18n = require('../services/i18n');
 const ChatMessage = require('../models/ChatMessage');
 const { extractYoutubeId } = require('../services/ytdlpAgeGate');
+const kodik = require('../services/kodik');
+const { normalizeVkLink } = require('../services/vkVideo');
+const { isAdultUrl } = require('../services/adultContent');
+const { hasProfanity } = require('../services/profanity');
+const User = require('../models/User');
+
+// 18+: порно-сайт по адресу или материал Kodik с рейтингом RX из нашей выдачи (решает только сервер)
+const isAdultVideo = (type, url) => (type === 'kodik' ? kodik.isAdultLink(url) : isAdultUrl(url));
 
 const fs = require('fs');
 const path = require('path');
@@ -24,7 +32,7 @@ function withLiveStatus(room, io) {
   return { ...room.toObject(), viewerCount };
 }
 
-const VIDEO_TYPES = ['youtube', 'twitch', 'drive', 'player_capture', 'direct'];
+const VIDEO_TYPES = ['youtube', 'twitch', 'drive', 'player_capture', 'direct', 'kodik', 'vk'];
 const MAX_ROOMS_PER_USER = 6; // больше — ошибка «удалите ненужную»
 
 function validateVideo(video) {
@@ -45,6 +53,12 @@ function validateVideo(video) {
   if (t === 'youtube' && !extractYoutubeId(u)) {
     return 'server.room.badYoutube';
   }
+  if (t === 'kodik' && !kodik.normalizeLink(u)) {
+    return 'server.room.badKodik';
+  }
+  if (t === 'vk' && !normalizeVkLink(u)) {
+    return 'server.room.badVk';
+  }
   return null;
 }
 
@@ -54,6 +68,7 @@ router.post('/', auth, async (req, res) => {
     if (!name || !video?.type || !video?.url) {
       return res.status(400).json({ error: req.t('server.room.needNameAndVideo') });
     }
+    if (hasProfanity(String(name).slice(0, 100))) return res.status(400).json({ error: req.t('server.room.badName') });
     const videoError = validateVideo(video);
     if (videoError) return res.status(400).json({ error: req.t(videoError) });
 
@@ -67,12 +82,23 @@ router.post('/', auth, async (req, res) => {
     } while (await Room.findOne({ code }));
 
     // из запроса берём только тип и ссылку: остальное (ageRestricted, directUrl, meta) выставляет сервер
+    const roomVideo = { type: video.type, url: String(video.url).trim() };
+    let thumbnailUrl = null;
+    if (video.type === 'kodik') {
+      roomVideo.url = kodik.normalizeLink(roomVideo.url);
+      if (typeof video.title === 'string' && video.title.trim()) roomVideo.title = video.title.trim().slice(0, 200);
+      // постер — только тот, что сервер сам отдал в поиске Kodik
+      if (kodik.isKnownPoster(video.poster)) thumbnailUrl = video.poster;
+    }
+    if (video.type === 'vk') roomVideo.url = normalizeVkLink(roomVideo.url);
+    roomVideo.adult = isAdultVideo(roomVideo.type, roomVideo.url);
     const room = await Room.create({
       name: String(name).trim().slice(0, 100),
       code,
       owner: req.user.id,
-      video: { type: video.type, url: String(video.url).trim() },
+      video: roomVideo,
       isPublic: !!isPublic,
+      thumbnailUrl,
     });
 
     // мгновенно обновляем списки у всех, кто на главной
@@ -110,6 +136,14 @@ router.get('/public', auth, async (req, res) => {
   if (onlyWithPeople) {
     filter.viewerCount = { $gt: 0 };
   }
+
+  // комнаты 18+ — только тем, кто подтвердил возраст и включил галочку «18+» (adult=1 проверяем по аккаунту)
+  let showAdult = false;
+  if (req.query.adult === '1') {
+    const me = await User.findById(req.user.id).select('adultConfirmed').lean();
+    showAdult = !!me?.adultConfirmed;
+  }
+  if (!showAdult) filter['video.adult'] = { $ne: true };
 
   if (q) {
     filter.name = { $regex: escapeRegex(q), $options: 'i' };
@@ -221,11 +255,18 @@ router.post('/:code/change-video', auth, async (req, res) => {
       if (!rawUrl.startsWith('http')) {
         return res.status(400).json({ error: req.t('server.room.needFullUrl') });
       }
+    } else if (type === 'kodik') {
+      url = kodik.normalizeLink(rawUrl);
+      if (!url) return res.status(400).json({ error: req.t('server.room.badKodik') });
+    } else if (type === 'vk') {
+      url = normalizeVkLink(rawUrl);
+      if (!url) return res.status(400).json({ error: req.t('server.room.badVk') });
     } else {
       return res.status(400).json({ error: req.t('server.room.changeUnsupported') });
     }
 
     room.video.url = url;
+    room.video.adult = isAdultVideo(type, url);
     room.video.title = undefined;
     room.video.ageRestricted = false;
     room.video.directUrl = null;
@@ -239,6 +280,12 @@ router.post('/:code/change-video', auth, async (req, res) => {
     }
     room.playback = { isPlaying: false, positionSeconds: 0, updatedAt: new Date() };
     room.thumbnailUrl = null;
+    // Kodik: название и постер приходят из выбранного в поиске результата (постер — только из нашей выдачи)
+    if (type === 'kodik') {
+      const title = req.body?.title;
+      if (typeof title === 'string' && title.trim()) room.video.title = title.trim().slice(0, 200);
+      if (kodik.isKnownPoster(req.body?.poster)) room.thumbnailUrl = req.body.poster;
+    }
     room.markModified('video');
     room.markModified('playback');
     await room.save();

@@ -126,3 +126,11 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* /news: меню сайта слева от ленты (у .nav-sidebar свои отступы для главной — тут они не нужны) */
+.wb-subpage > .news-site-nav {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+}

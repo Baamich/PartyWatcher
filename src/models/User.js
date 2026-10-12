@@ -16,6 +16,10 @@ const userSchema = new mongoose.Schema(
     // растёт при смене пароля — все старые JWT с меньшей версией перестают действовать
     tokenVersion: { type: Number, default: 0 },
 
+    // ---- 18+ ----
+    adultConfirmed: { type: Boolean, default: false }, // хоть раз подтвердил, что ему есть 18 (в комнате с контентом 18+)
+    showAdult: { type: Boolean, default: false }, // показывать комнаты 18+ в публичном списке (галочка «18+» на главной)
+
     // ---- стример ----
     streamerName: { type: String, default: undefined, trim: true },
     streamerNameLower: { type: String, default: undefined, unique: true, sparse: true },

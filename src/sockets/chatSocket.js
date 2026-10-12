@@ -8,6 +8,7 @@ const chatBus = require('../services/chatBus');
 const ChatCommand = require('../models/ChatCommand');
 const { parseCommandLine, buildReply } = require('../services/chatCommands');
 const i18n = require('../services/i18n');
+const safeHandlers = require('./safeHandlers');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
@@ -172,6 +173,7 @@ module.exports = function registerChatSocket(io) {
   }
 
   nsp.on('connection', (socket) => {
+    safeHandlers(socket, 'chatSocket'); // ошибка в обработчике (событие без данных и т.п.) не роняет процесс
     const authUser = socket.data.authUser;
     socket.data.userId = authUser?.id ? String(authUser.id) : null;
     // язык ответов этому сокету: с cookie при подключении, дальше — по lang:set (смена языка без перезагрузки)

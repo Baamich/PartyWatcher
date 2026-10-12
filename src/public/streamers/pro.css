@@ -12,6 +12,56 @@
 .pro-tool.active { border-color: var(--accent-text); box-shadow: 0 0 0 2px rgba(184, 155, 255, 0.35); }
 .pro-tool:disabled { opacity: 0.35; cursor: not-allowed; }
 .pro-info { font-size: 12px; color: var(--text-muted); }
+/* счётчики лимитов: наведи — белая подсветка блоков этой категории, нажми — закрепить (синяя) */
+.pro-cnt { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.pw-ed.hl::after, .pw-ed.hl-pin::after, .pw-bg.hl::after, .pw-bg.hl-pin::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.pw-ed.hl::after, .pw-bg.hl::after { background: rgba(255, 255, 255, 0.4); outline: 2px solid #fff; }
+.pw-ed.hl-pin::after, .pw-bg.hl-pin::after { background: rgba(77, 141, 255, 0.4); outline: 2px solid #4d8dff; }
+
+/* граница профиля: правее неё страница станет шире, если дотянуть блок */
+.pw-wguide {
+  position: absolute;
+  top: 0;
+  left: calc(var(--gw, 1100) * var(--s, 1) * 1px);
+  height: 100%;
+  border-left: 1px dashed rgba(184, 155, 255, 0.55);
+  pointer-events: none;
+  z-index: 3;
+}
+.pw-wguide > span {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+/* линия перехода фона (пока открыто меню фона) */
+.pw-bg-guide {
+  position: absolute;
+  pointer-events: none;
+  z-index: 4;
+  border: 0 dashed #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.pw-bg-guide.gv {
+  left: 0;
+  width: calc(var(--bgw) * var(--s, 1) * 1px);
+  top: calc(var(--bgh) * var(--gp) / 100 * var(--s, 1) * 1px);
+  border-top-width: 2px;
+}
+.pw-bg-guide.gh {
+  top: 0;
+  height: calc(var(--bgh) * var(--s, 1) * 1px);
+  left: calc(var(--bgw) * var(--gp) / 100 * var(--s, 1) * 1px);
+  border-left-width: 2px;
+}
+.pm-sub { font-size: 12px; font-weight: 700; margin-top: 4px; color: var(--text); }
 .pro-actions { margin-left: auto; display: flex; gap: 8px; }
 
 .pro-body { flex: 1; display: flex; min-height: 0; }
@@ -139,3 +189,6 @@
 .ph-m-live .ph-chat { height: 320px; }
 
 .ph-grid.ph-grid-v { grid-template-columns: 1fr; }
+
+/* меню фона открыто: блоки полупрозрачные, чтобы видеть фон под ними, но и раскладку не терять */
+.pw-stage.bg-editing > .pw-ed { opacity: 0.45; transition: opacity 0.15s ease; }

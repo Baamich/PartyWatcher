@@ -132,6 +132,80 @@ button {
   background: #eceff6;
 }
 
+/* Kodik: результаты поиска под полем ссылки */
+.kodik-results {
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  margin: -2px 0 6px 0;
+}
+
+.kodik-note {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.kodik-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+
+.kodik-item:last-child {
+  border-bottom: none;
+}
+
+.kodik-item:hover,
+.kodik-item.selected {
+  background: var(--surface);
+}
+
+.kodik-item.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.kodik-poster {
+  width: 46px;
+  height: 66px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.kodik-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.kodik-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kodik-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.kodik-info select.kodik-voice {
+  margin: 6px 0 0 0;
+  font-size: 13px;
+}
+
 /* круглая кнопка в углу картинки: тёмный фон + белая иконка видны на любой теме и любом кадре */
 .room-card button.delete-btn {
   position: absolute;
@@ -709,4 +783,21 @@ button {
 }
 .reset-title-row .auth-title {
   margin: 0;
+}
+
+/* вошёл в прошлый раз (auth-hint.js) — сразу приложение, без мигания экрана входа */
+html.pw-authed #authBox { display: none !important; }
+html.pw-authed #appBox.hidden { display: block !important; }
+
+/* комната 18+ в списке */
+.adult-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--danger);
+  color: #fff;
+  vertical-align: 1px;
 }

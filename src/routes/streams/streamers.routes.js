@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../../models/User');
 const auth = require('../../middleware/auth');
 const i18n = require('../../services/i18n');
+const { hasProfanity } = require('../../services/profanity');
 const PWLayout = require('../../public/js/pwlayout.js');
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
@@ -54,6 +55,7 @@ router.post('/', auth, async (req, res) => {
     const name = String(req.body.streamerName || '').trim();
     const err = validateStreamerName(name);
     if (err) return res.status(400).json({ error: req.t(err) });
+    if (hasProfanity(name)) return res.status(400).json({ error: req.t('server.streamers.nameBad') });
 
     const nameLower = name.toLowerCase();
     const taken = await User.findOne({ streamerNameLower: nameLower });

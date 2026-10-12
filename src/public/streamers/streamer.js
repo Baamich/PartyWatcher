@@ -71,39 +71,73 @@ function vodEscapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// записей до 50, и каждая в двух списках: <video preload="metadata"> у всех сразу — до 100 запросов к видео
+// и столько же видеоэлементов при открытии профиля. Видео подключаем, только когда карточка подъезжает к экрану
+const vodLazy = 'IntersectionObserver' in window
+  ? new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) loadVodVideo(e.target);
+  }, { rootMargin: '300px' })
+  : null;
+
+function loadVodVideo(v) {
+  vodLazy?.unobserve(v);
+  if (v.dataset.src && !v.getAttribute('src')) v.src = v.dataset.src;
+}
+
+function makeVodVideo(url, attrs) {
+  const v = document.createElement('video');
+  v.dataset.src = url;
+  v.preload = 'metadata';
+  v.playsInline = true;
+  Object.assign(v, attrs);
+  if (vodLazy) vodLazy.observe(v);
+  else v.src = url;
+  return v;
+}
+
+function clearVodList(el) {
+  el.querySelectorAll('video').forEach((v) => {
+    vodLazy?.unobserve(v);
+    try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {}
+  });
+  el.innerHTML = '';
+}
+
+const vodDate = (d) => new Date(d).toLocaleString(I18N.locale);
+
 function renderVodGrid(vods) {
   const grid = document.getElementById('vodGrid');
-  grid.innerHTML = '';
+  clearVodList(grid);
   vods.forEach((v) => {
     const card = document.createElement('div');
     card.className = 'vod-card';
     card.dataset.url = v.url;
     card.innerHTML = `
-      <video src="${v.url}" controls preload="metadata"></video>
       <div class="vod-card-body">
         <div class="vod-card-title"></div>
         <div class="vod-card-meta"></div>
       </div>`;
+    card.prepend(makeVodVideo(v.url, { controls: true }));
     card.querySelector('.vod-card-title').textContent = v.title || t('streamer.vod');
-    card.querySelector('.vod-card-meta').textContent = new Date(v.createdAt).toLocaleString('ru-RU');
+    card.querySelector('.vod-card-meta').textContent = vodDate(v.createdAt);
     grid.appendChild(card);
   });
 }
 
 function renderVodColumn(vods) {
   const list = document.getElementById('vodColumnList');
-  list.innerHTML = '';
+  clearVodList(list);
   vods.forEach((v) => {
     const card = document.createElement('div');
     card.className = 'vod-card';
     card.innerHTML = `
-      <video src="${v.url}" preload="metadata" muted></video>
       <div class="vod-card-body">
         <div class="vod-card-title"></div>
         <div class="vod-card-meta"></div>
       </div>`;
     card.querySelector('.vod-card-title').textContent = v.title || t('streamer.vod');
-    card.querySelector('.vod-card-meta').textContent = new Date(v.createdAt).toLocaleString('ru-RU');
+    card.prepend(makeVodVideo(v.url, { muted: true }));
+    card.querySelector('.vod-card-meta').textContent = vodDate(v.createdAt);
     card.onclick = () => switchToVodPlayback(v);
     list.appendChild(card);
   });
@@ -115,11 +149,17 @@ function switchToVodPlayback(v) {
     const grid = document.getElementById('vodGrid');
     const target = grid.querySelector(`.vod-card[data-url="${CSS.escape(v.url)}"] video`);
     if (target) {
+      loadVodVideo(target);
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
       target.play().catch(() => {});
     }
   });
 }
+
+// запустили одну запись — остальные на паузу (иначе звук нескольких сразу)
+document.getElementById('vodGrid')?.addEventListener('play', (e) => {
+  document.querySelectorAll('#vodGrid video').forEach((v) => { if (v !== e.target && !v.paused) v.pause(); });
+}, true);
 
 let vodSig = null;
 
@@ -262,7 +302,7 @@ document.getElementById('liveToggleChevronBtn')?.addEventListener('click', toggl
   });
 }
 
-const QUALITY_STORAGE_KEY = 'pw_quality'; // 'auto' | 'source' | '720' | '480'
+const QUALITY_STORAGE_KEY = 'pw_quality'; // 'auto' | 'source' | '720' | '360' (уровни ниже источника; 480 был раньше)
 
 function getSavedQuality() {
   try { return localStorage.getItem(QUALITY_STORAGE_KEY) || 'auto'; } catch (_) { return 'auto'; }
@@ -272,7 +312,7 @@ function saveQuality(v) {
   try { localStorage.setItem(QUALITY_STORAGE_KEY, v); } catch (_) {}
 }
 
-// имя уровня из master-плейлиста: source / 720 / 480
+// имя уровня из master-плейлиста: source / 720 / 360
 function levelKey(lvl) {
   if (lvl.name) return String(lvl.name);
   const uri = lvl.uri || (Array.isArray(lvl.url) ? lvl.url[0] : lvl.url) || '';
@@ -304,6 +344,7 @@ function populateQualityMenu(levels) {
       popup.querySelectorAll('.live-quality-option').forEach((el) => el.classList.remove('active'));
       btn.classList.add('active');
       popup.classList.add('hidden');
+      updateAutoLabel();
     };
     return btn;
   };
@@ -314,11 +355,26 @@ function populateQualityMenu(levels) {
   items.sort((a, b) => (b.key === 'source') - (a.key === 'source') || b.height - a.height);
 
   items.forEach(({ idx, key, height }) => {
-    const label = key === 'source'
-      ? (height ? t('streamer.quality.sourceP', { h: height }) : t('streamer.quality.source'))
-      : (height ? `${height}p` : t('streamer.quality.level', { n: idx }));
-    popup.appendChild(makeOption(label, key || `lvl${idx}`, idx));
+    popup.appendChild(makeOption(qualityLabel(key, height, idx), key || `lvl${idx}`, idx));
   });
+  popup.firstElementChild.dataset.auto = '1';
+  updateAutoLabel();
+}
+
+function qualityLabel(key, height, idx) {
+  return key === 'source'
+    ? (height ? t('streamer.quality.sourceP', { h: height }) : t('streamer.quality.source'))
+    : (height ? `${height}p` : t('streamer.quality.level', { n: idx }));
+}
+
+// в «Авто» показываем, какое качество сейчас реально играет: «Авто · 720p»
+function updateAutoLabel() {
+  const btn = document.querySelector('#liveQualityPopup [data-auto]');
+  if (!btn || !liveHls) return;
+  const lvl = liveHls.autoLevelEnabled ? liveHls.levels?.[liveHls.currentLevel] : null;
+  btn.textContent = lvl
+    ? t('streamer.quality.autoP', { q: qualityLabel(levelKey(lvl), lvl.height || 0, liveHls.currentLevel) })
+    : t('streamer.quality.auto');
 }
 
 function attachLiveHls(playbackId) {
@@ -330,6 +386,7 @@ function attachLiveHls(playbackId) {
 
   liveHls = new Hls({
     enableWorker: true,
+    capLevelToPlayerSize: true, // «Авто» не берёт качество крупнее плеера (телефон, маленькое окно) — меньше трафика и нагрузки
     lowLatencyMode: false,
     liveSyncDurationCount: 2,
     liveMaxLatencyDurationCount: 4,
@@ -351,6 +408,7 @@ function attachLiveHls(playbackId) {
     video.play().catch(() => {});
     populateQualityMenu(data.levels || []);
   });
+  liveHls.on(Hls.Events.LEVEL_SWITCHED, updateAutoLabel);
 
   livePlayerReconnect = createReconnectScheduler(
     () => new Promise((resolve) => {
@@ -688,6 +746,8 @@ function renderLiveMessage(msg) {
   row.dataset.id = msg._id;
   row.innerHTML = buildLiveMessageHtml(msg);
   box.appendChild(row);
+  // в живом чате за эфир набегают тысячи сообщений — держим последние
+  while (box.childElementCount > 250) box.firstElementChild.remove();
   box.scrollTop = box.scrollHeight;
 }
 
@@ -1006,10 +1066,16 @@ async function pollStreamerLiveStatus() {
   }
 }
 
+// в свёрнутой вкладке не опрашиваем (запрос раз в 5 с от каждого зрителя), при возврате — сразу свежий статус
 function startStreamerLivePolling() {
   clearInterval(liveStatusPollTimer);
-  liveStatusPollTimer = setInterval(pollStreamerLiveStatus, 5000);
+  liveStatusPollTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') pollStreamerLiveStatus();
+  }, 5000);
 }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && liveStatusPollTimer) pollStreamerLiveStatus();
+});
 
 function makeLiveDraggable(el, storageKey) {
   if (!el) return;
@@ -1040,41 +1106,41 @@ function makeLiveDraggable(el, storageKey) {
     el.style.bottom = '';
   }
 
-  function applySavedPosition() {
-    let saved = null;
-    try {
-      saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null');
-    } catch (_) {}
-
-    if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') {
-      resetPosition();
-      return;
-    }
-
+  // позиция хранится долей свободного места (0..1), а не пикселями: плеер меняет размер (окно, панель чата,
+  // раскрытие эфира, догрузка страницы), и сохранённые пиксели «не влезали» — кнопка уходила на место по умолчанию
+  function freeSpace() {
     const p = container.getBoundingClientRect();
-    if (!p.width || !p.height) return;
+    return { fw: p.width - (el.offsetWidth || 40), fh: p.height - (el.offsetHeight || 40) };
+  }
 
-    const w = el.offsetWidth || 40;
-    const h = el.offsetHeight || 40;
+  function applySavedPosition() {
+    if (dragging) return;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null'); } catch (_) {}
+    if (!saved) { resetPosition(); return; }
 
-    if (
-      saved.left < 0 ||
-      saved.top < 0 ||
-      saved.left > p.width - w ||
-      saved.top > p.height - h
-    ) {
-      resetPosition();
-      return;
+    const { fw, fh } = freeSpace();
+    if (fw <= 0 || fh <= 0) return; // плеер скрыт или ещё раскрывается — применим, когда вырастет (ResizeObserver)
+
+    let { fx, fy } = saved;
+    if (typeof fx !== 'number' || typeof fy !== 'number') {
+      if (typeof saved.left !== 'number' || typeof saved.top !== 'number') { resetPosition(); return; }
+      fx = saved.left / fw; // старый формат — пиксели
+      fy = saved.top / fh;
     }
-
-    el.style.left = saved.left + 'px';
-    el.style.top = saved.top + 'px';
+    // не влезает — прижимаем к краю, а не сбрасываем
+    el.style.left = Math.round(Math.min(1, Math.max(0, fx)) * fw) + 'px';
+    el.style.top = Math.round(Math.min(1, Math.max(0, fy)) * fh) + 'px';
     el.style.right = 'auto';
     el.style.bottom = 'auto';
   }
 
   function savePosition(left, top) {
-    localStorage.setItem(storageFullKey(), JSON.stringify({ left, top }));
+    const { fw, fh } = freeSpace();
+    if (fw <= 0 || fh <= 0) return;
+    const fx = Math.round((left / fw) * 10000) / 10000;
+    const fy = Math.round((top / fh) * 10000) / 10000;
+    try { localStorage.setItem(storageFullKey(), JSON.stringify({ fx, fy })); } catch (_) {}
   }
 
   el.addEventListener('pointerdown', (e) => {
@@ -1161,6 +1227,7 @@ function makeLiveDraggable(el, storageKey) {
   document.addEventListener('fullscreenchange', onFsForPos);
   document.addEventListener('webkitfullscreenchange', onFsForPos);
   window.addEventListener('resize', applySavedPosition);
+  if (window.ResizeObserver) new ResizeObserver(() => applySavedPosition()).observe(container);
   applySavedPosition();
 }
 

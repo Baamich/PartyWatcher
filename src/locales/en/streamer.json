@@ -23,7 +23,8 @@
     "auto": "Auto",
     "source": "Source",
     "sourceP": "Source ({h}p)",
-    "level": "Level {n}"
+    "level": "Level {n}",
+    "autoP": "Auto · {q}"
   },
   "viewers": {
     "title": "Viewers"

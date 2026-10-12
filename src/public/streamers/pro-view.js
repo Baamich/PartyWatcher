@@ -6,15 +6,17 @@
   window.PWProView = view;
 
   const watched = new WeakSet();
+  // ширина холста может меняться между apply (профиль шире 1100, если блоки тянутся правее) — берём её из data-cw
   function watchScale(el, w) {
+    el.dataset.cw = String(w);
+    const set = () => el.style.setProperty('--s', Math.min(1, el.clientWidth / Number(el.dataset.cw)) || 1);
+    set();
     if (watched.has(el)) return; // повторный apply не плодит наблюдателей
     watched.add(el);
-    const set = () => el.style.setProperty('--s', Math.min(1, el.clientWidth / w) || 1);
-    set();
     new ResizeObserver(set).observe(el);
   }
 
-  function applyProfile(blocks, hasVods) {
+  function applyProfile(blocks, hasVods, bg) {
     const row = document.getElementById('profileRow');
     let canvas = document.querySelector('.pw-canvas');
     if (!canvas) {
@@ -24,6 +26,12 @@
       row.classList.add('hidden'); // старая раскладка остаётся в DOM, но не показывается
     }
     canvas.querySelectorAll('.pw-custom').forEach((n) => n.remove()); // свои блоки пересоздаём
+    let bgEl = canvas.querySelector(':scope > .pw-bg');
+    if (!bgEl) {
+      bgEl = document.createElement('div');
+      bgEl.className = 'pw-bg';
+      canvas.prepend(bgEl); // фон — первым, под всеми блоками
+    }
 
     const native = {
       banner: document.getElementById('banner'),
@@ -48,8 +56,11 @@
       if (b.type === 'vods') native.vods.classList.toggle('vod-v', b.o === 'v');
     });
     document.getElementById('vodSection').classList.toggle('hidden', !hasVods);
-    canvas.style.setProperty('--ch', P.canvasHeight(blocks));
-    watchScale(canvas, P.WM.profile);
+    const cw = P.canvasWidth(blocks, 'profile'), ch = P.canvasHeight(blocks);
+    canvas.style.setProperty('--ch', ch);
+    canvas.style.maxWidth = cw + 'px';
+    P.paintBg(bgEl, bg, cw, ch);
+    watchScale(canvas, cw);
   }
 
   let liveMq = null;
@@ -72,7 +83,10 @@
       // порядок в списке = слои (фото-фон остаётся позади)
       el.style.zIndex = el.classList.contains('pw-back') ? '' : String(blocks.indexOf(b) + 1);
     }
+    // эфир, как и профиль, шириной до правого края блоков (старые макеты — 1600)
+    const cw = P.canvasWidth(blocks, 'live');
     inner.style.setProperty('--ch', P.canvasHeight(blocks));
+    inner.style.setProperty('--cw', cw);
 
     if (!liveMq) {
       liveMq = window.matchMedia('(min-width: 901px)');
@@ -80,13 +94,13 @@
       sync();
       liveMq.addEventListener('change', sync);
     }
-    watchScale(inner, P.WM.live);
+    watchScale(inner, cw);
   }
 
   function apply(layout, hasVods) {
     const L = P.withDefaults(layout);
     view.active = true;
-    applyProfile(L.profile.blocks, hasVods);
+    applyProfile(L.profile.blocks, hasVods, L.profile.bg);
     applyLive(L.live.blocks);
   }
 })();

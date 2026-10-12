@@ -33,7 +33,8 @@ function buildDirectives() {
     ],
     scriptSrcAttr: ["'none'"],     // onclick="..." и подобное запрещено полностью
     styleSrc: ["'self'", "'unsafe-inline'"], // style="..." в разметке и в JS
-    imgSrc: ["'self'", 'data:', 'blob:', 'https://img.youtube.com', 'https://i.ytimg.com'],
+    // https: — постеры из поиска Kodik лежат на разных доменах (кинопоиск, шикимори, их CDN)
+    imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
     mediaSrc: ["'self'", 'blob:', 'https:'], // «прямая ссылка» на видео может вести на любой https-хост
     connectSrc: ["'self'", 'blob:', ...(ws ? [ws] : [])], // Socket.IO и playlist из blob: для hls.js
     fontSrc: ["'self'", 'data:'],

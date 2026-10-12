@@ -8,7 +8,7 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
-  <link rel="stylesheet" href="/css/room.css?v=2" />
+  <link rel="stylesheet" href="/css/room.css?v=6" />
   <title data-i18n="room.pageTitle">Комната — PartyWatcher</title>
   <meta name="robots" content="noindex, nofollow" />
 </head>
@@ -134,7 +134,9 @@
       <div class="video-change-block">
         <div class="video-change-title" data-i18n="room.change.title">Смена ссылки</div>
         <div class="video-change-mode"><span data-i18n="room.change.mode">Режим:</span> <b id="videoChangeModeLabel">—</b></div>
-        <input id="videoChangeUrl" type="url" placeholder="Новая ссылка на видео" data-i18n-placeholder="room.change.placeholder" autocomplete="off" />
+        <input id="videoChangeUrl" type="text" placeholder="Новая ссылка на видео" data-i18n-placeholder="room.change.placeholder" data-input="onVideoChangeInput" data-keydown="onVideoChangeKeydown" autocomplete="off" list="recentVideoUrls" />
+        <datalist id="recentVideoUrls"></datalist>
+        <div id="kodikChangeResults" class="kodik-results hidden"></div>
         <button type="button" id="videoChangeBtn" data-click="changeVideoUrl" data-i18n="room.change.submit">Сменить</button>
       </div>
     </div>
@@ -144,7 +146,7 @@
     <div id="messages" data-no-i18n></div>
     <form id="chatForm" data-submit="sendMessage" data-event>
       <button type="button" id="lockButtonsBtn" title="Заблокировать/разблокировать кнопки плеера" data-i18n-title="room.lock.title">🔓</button>
-      <input id="chatInput" placeholder="Сообщение..." data-i18n-placeholder="room.chat.placeholder" />
+      <input id="chatInput" placeholder="Сообщение..." data-i18n-placeholder="room.chat.placeholder" autocomplete="off" />
       <button type="submit">➤</button>
     </form>
   </div>
@@ -240,6 +242,7 @@
   <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/wakelock.js"></script>
-  <script src="/js/room.js?v=10"></script>
+  <script src="/js/recent-urls.js?v=1"></script>
+  <script src="/js/room.js?v=17"></script>
 </body>
 </html>

@@ -26,6 +26,7 @@ try {
 const playerCaptureCache = require('../services/playerCaptureCache');
 const Room = require('../models/Room');
 const { assertPublicHttpUrl } = require('../services/ssrfGuard');
+const { isAdultUrl } = require('../services/adultContent');
 const siteAdapters = require('../services/site-adapters');
 const {
   findPlayerContext,
@@ -73,6 +74,8 @@ function detectSite(url) {
   if (/lord-?film[^.]*\.fi$/.test(host) || host.includes('top.lordfilm')) return 'lordfilm_fi';
   // mg.lordfilm.md, lordfilm5.pro, lord-film.*, lordserial и прочие зеркала со старой вёрсткой tabs-sel
   if (/lord-?film|lordserial|lord-?serial/.test(host)) return 'lordfilm';
+  // тюб-сайты 18+ (тот же список, что помечает комнату «18+»): потоки берём из данных плеера на странице
+  if (isAdultUrl(url)) return 'tube';
   if (lower.includes('yandex.ru/video')) return 'yandex';
   if (host.endsWith('my.mail.ru')) return 'mailru';
   return 'unknown';
@@ -105,15 +108,27 @@ const LIGHT_BLOCKED_URLS = [
   '*top-fwz1.mail.ru*', '*counter.yadro.ru*', '*liveinternet.ru*',
 ];
 
-async function enableLightMode(page) {
-  if (process.env.PLAYER_CAPTURE_LIGHT === '0') return;
+// Чужая страница в Chromium не должна стучаться во внутреннюю сеть сервера (админка на :3001, метаданные облака,
+// локальная сеть VPS). Проверка ссылки (assertPublicHttpUrl) не спасает от JS страницы, редиректов и iframe —
+// режем такие адреса на уровне сети всегда, даже без лёгкого режима.
+const PRIVATE_BLOCKED_URLS = [
+  '*://localhost*', '*://127.*', '*://0.0.0.0*', '*://10.*', '*://192.168.*', '*://169.254.*', '*://100.64.*',
+  ...Array.from({ length: 16 }, (_, i) => `*://172.${16 + i}.*`),
+  '*://[::1]*', '*://[fc*', '*://[fd*', '*://[fe80*',
+];
+
+async function blockNetwork(page, light) {
   try {
     const cdp = await page.target().createCDPSession();
     await cdp.send('Network.enable');
-    await cdp.send('Network.setBlockedURLs', { urls: LIGHT_BLOCKED_URLS });
+    await cdp.send('Network.setBlockedURLs', { urls: light ? PRIVATE_BLOCKED_URLS.concat(LIGHT_BLOCKED_URLS) : PRIVATE_BLOCKED_URLS });
   } catch (e) {
-    console.warn('[player-capture] light mode не включился:', e.message);
+    console.warn('[player-capture] блок-лист сети не включился:', e.message);
   }
+}
+
+async function enableLightMode(page) {
+  await blockNetwork(page, process.env.PLAYER_CAPTURE_LIGHT !== '0');
 }
 
 // Настоящий клик мышью по центру самого большого iframe на странице — как сделал бы человек.
@@ -268,6 +283,124 @@ async function loadViaCdp(page, frame, url) {
   }
 }
 
+// Тюб-сайты 18+ (pornhub и сеть Aylo, xvideos/xnxx, xhamster, spankbang и похожие): адреса потоков лежат
+// прямо в данных плеера на странице. Берём их оттуда — без кликов по плееру, где на этих сайтах реклама.
+// Возвращает [{ type: 'hls'|'mp4', url, quality, referer, src: 'tube' }], лучшие первыми.
+async function extractTubeStreams(page) {
+  // окна «мне есть 18» и cookie: часть сайтов без подтверждения не подставляет плеер
+  await page
+    .evaluate(() => {
+      const sels = [
+        '#modalWrapMTubes button', '.age-verification-container button', '#ageDisclaimerMainBG button',
+        '.disclaimer-enter-btn', '#disclaimer_message button', '#disclaimer-block button', '[data-role="age-check-confirm"]',
+        '.age-check button', '.age-gate button', '#age-verification button',
+      ];
+      for (const s of sels) document.querySelectorAll(s).forEach((b) => { try { b.click(); } catch (_) {} });
+      // по тексту — только явные «мне есть 18» (обычные «Войти»/«OK» могут увести со страницы)
+      const re = /^(i am 18|i'?m 18|i am over 18|i'?m over 18|мне есть 18|мне больше 18|я старше 18)/i;
+      document.querySelectorAll('button, a[role="button"], .btn').forEach((b) => {
+        const t = (b.textContent || '').trim();
+        if (t.length < 60 && re.test(t)) { try { b.click(); } catch (_) {} }
+      });
+    })
+    .catch(() => {});
+  await new Promise((r) => setTimeout(r, 600));
+
+  const found = await page
+    .evaluate(async () => {
+      const out = [];
+      const add = (raw, type, quality) => {
+        if (typeof raw !== 'string') return;
+        let url = raw.replace(/\\\//g, '/').replace(/\\u0026/gi, '&').replace(/&amp;/g, '&').trim();
+        if (url.startsWith('//')) url = location.protocol + url;
+        if (!/^https?:\/\//i.test(url)) return;
+        // превью при наведении, раскадровка, обложки — не фильм
+        if (/preview|thumb|sprite|trailer|teaser|\.vtt(\?|$)|\.(jpe?g|png|gif|webp)(\?|$)/i.test(url)) return;
+        const t = type || (/\.m3u8/i.test(url) ? 'hls' : /\.mp4/i.test(url) ? 'mp4' : null);
+        if (!t) return;
+        out.push({ url, type: t, quality: quality != null ? String(quality) : null });
+      };
+
+      // 1) сеть Aylo (pornhub, youporn, redtube, tube8): mediaDefinitions в flashvars_* и page_params
+      const defs = [];
+      const seen = new WeakSet();
+      const scan = (o, depth) => {
+        if (!o || typeof o !== 'object' || depth > 4 || seen.has(o)) return;
+        seen.add(o);
+        for (const [k, v] of Object.entries(o)) {
+          if (/^mediaDefinitions?$/i.test(k) && Array.isArray(v)) defs.push(...v);
+          else if (v && typeof v === 'object') scan(v, depth + 1);
+        }
+      };
+      for (const k of Object.keys(window)) {
+        if (/^(flashvars_|page_params$|playervars|playerVars|VIDEO_SHOW$|MHP1138)/i.test(k)) {
+          try { scan(window[k], 0); } catch (_) {}
+        }
+      }
+      for (const d of defs) {
+        if (!d || typeof d.videoUrl !== 'string' || !d.videoUrl) continue;
+        if (d.format === 'hls' || /\.m3u8/i.test(d.videoUrl)) add(d.videoUrl, 'hls', Array.isArray(d.quality) ? null : d.quality);
+        else if (d.format === 'mp4' && Array.isArray(d.quality)) {
+          // mp4 отдаются списком качеств по запросу к API самого сайта
+          try {
+            const list = await fetch(d.videoUrl, { credentials: 'include' }).then((r) => r.json());
+            for (const m of Array.isArray(list) ? list : []) add(m.videoUrl, 'mp4', m.quality);
+          } catch (_) {}
+        } else add(d.videoUrl, null, d.quality);
+      }
+
+      // 2) xhamster: window.initials.xplayerSettings.sources
+      try {
+        const xs = window.initials?.xplayerSettings?.sources;
+        if (xs) {
+          add(xs.hls?.url, 'hls');
+          for (const v of [].concat(xs.standard?.h264 || [], xs.standard?.mp4 || [])) add(v?.url || v?.fallback, 'mp4', v?.quality || v?.label);
+        }
+      } catch (_) {}
+
+      // 3) spankbang: stream_data = { '720p': [mp4], m3u8: [...] }
+      try {
+        const sd = window.stream_data;
+        if (sd && typeof sd === 'object') {
+          for (const [q, arr] of Object.entries(sd)) {
+            for (const u of [].concat(arr || [])) add(u, /m3u8/i.test(q) ? 'hls' : null, /^\d+p$/i.test(q) ? q : null);
+          }
+        }
+      } catch (_) {}
+
+      // 4) xvideos/xnxx и прочие: адреса в inline-скриптах
+      const code = Array.from(document.scripts).filter((s) => !s.src).map((s) => s.textContent || '').join('\n').slice(0, 3000000);
+      for (const m of code.matchAll(/setVideoHLS\(\s*['"]([^'"]+)['"]/g)) add(m[1], 'hls');
+      for (const m of code.matchAll(/setVideoUrl(High|Low)\(\s*['"]([^'"]+)['"]/g)) add(m[2], 'mp4', m[1] === 'High' ? 'high' : 'low');
+      if (!out.length) {
+        // крайний случай: любой .m3u8 в скриптах страницы
+        for (const m of code.matchAll(/https?:\\?\/\\?\/[^"'\s<>]+?\.m3u8[^"'\s<>]*/g)) add(m[0], 'hls');
+      }
+
+      // 5) готовые теги плеера
+      document.querySelectorAll('video[src], video source[src], link[rel="preload"][href*=".m3u8"]').forEach((e) => {
+        add(e.getAttribute('src') || e.getAttribute('href'));
+      });
+      return out;
+    })
+    .catch((e) => {
+      console.warn('[player-capture] тюб 18+: не удалось прочитать данные плеера:', e.message);
+      return [];
+    });
+
+  let referer = null;
+  try { referer = new URL(page.url()).origin + '/'; } catch (_) {}
+  const rank = (s) => {
+    // мастер-плейлист — все качества сразу; AV1 играет не во всех браузерах — после H.264
+    if (s.type === 'hls') return (/master/i.test(s.url) ? 10000 : 9000) - (/av1/i.test(s.url) ? 500 : 0);
+    const n = parseInt(s.quality, 10);
+    if (Number.isFinite(n)) return n;
+    return s.quality === 'high' ? 700 : s.quality === 'low' ? 300 : 100;
+  };
+  const uniq = [...new Map(found.map((s) => [s.url, s])).values()].sort((a, b) => rank(b) - rank(a));
+  return uniq.map((s) => ({ ...s, referer, src: 'tube' }));
+}
+
 function pickPlayerOrigin(page) {
   const frames = page.frames().map((f) => f.url()).filter(Boolean);
   // lordfilm «Плеер 2» = cdn.lordfilm*.com — приоритетнее ortified,
@@ -308,6 +441,16 @@ function acquireBrowserSlot() {
     return Promise.resolve();
   }
   return new Promise((resolve) => browserWaitQueue.push(resolve));
+}
+
+// browser.close() у зависшего Chromium (--single-process) может не вернуться или бросить — тогда слот
+// не освобождался, а процесс браузера оставался жить и держать сотни МБ. Ждём 5 с, потом убиваем.
+async function closeBrowser(browser) {
+  const proc = browser.process();
+  await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+  if (proc && proc.exitCode === null && !proc.killed) {
+    try { proc.kill('SIGKILL'); } catch (_) {}
+  }
 }
 
 function releaseBrowserSlot() {
@@ -929,6 +1072,14 @@ router.post('/extract', auth, async (req, res) => {
         await page.screenshot({ path: path.join(debugScreenshotsDir, 'before-click.png') });
         console.log('[player-capture] скриншот сохранён: debug-screenshots/before-click.png');
       } catch (e) {}
+    }
+
+    // тюб 18+: потоки из данных плеера кладём первыми — универсальный режим ниже увидит поток
+    // и не станет кликать по плееру (на этих сайтах там реклама)
+    if (siteName === 'tube') {
+      const tube = await extractTubeStreams(page);
+      console.log('[player-capture] тюб 18+: из данных плеера', tube.length, 'потоков', tube.slice(0, 3).map((t) => `${t.type}:${t.quality || '-'}`));
+      if (tube.length) foundStreams.unshift(...tube);
     }
 
     // kinogo/lordfilm: плеер вставляется скриптом уже после DOMContentLoaded — ждём его iframe
@@ -2480,6 +2631,7 @@ router.post('/extract', auth, async (req, res) => {
           try {
             await assertPublicHttpUrl(masterUrl);
             checkPage = await browser.newPage();
+            await blockNetwork(checkPage, false); // только приватные адреса: сегменты бывают замаскированы под .jpg
             if (useProxy && PROXY_USER && PROXY_PASS) {
               await checkPage.authenticate({ username: PROXY_USER, password: PROXY_PASS });
             }
@@ -2641,6 +2793,8 @@ router.post('/extract', auth, async (req, res) => {
         }
       }
     } else {
+      // тюб 18+: только потоки из данных плеера — перехваченное из сети на этих сайтах часто реклама
+      if (uniqueStreams.some((s) => s.src === 'tube')) uniqueStreams = uniqueStreams.filter((s) => s.src === 'tube');
       // приоритет master.m3u8 — это основной манифест, а не отдельный сегмент/заглушка
       const master = uniqueStreams.find((s) => s.url.includes('master.m3u8'));
       if (master) {
@@ -2722,7 +2876,7 @@ router.post('/extract', auth, async (req, res) => {
 
       return responseData;
     } finally {
-      if (browser) await browser.close();
+      if (browser) await closeBrowser(browser);
       releaseBrowserSlot();
     }
   }

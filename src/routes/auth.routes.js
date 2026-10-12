@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { hasProfanity } = require('../services/profanity');
 const router = express.Router();
 const User = require('../models/User');
 const config = require('../config');
@@ -123,6 +124,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return res.status(400).json({ error: req.t('server.auth.usernameChars') });
     }
+    if (hasProfanity(username)) return res.status(400).json({ error: req.t('server.auth.usernameBad') });
 
     const emailErr = validateEmail(email);
     if (emailErr) return res.status(400).json({ error: req.t(emailErr) });
@@ -251,9 +253,30 @@ router.post('/reset', resetLimiter, async (req, res) => {
 });
 
 router.get('/me', auth, async (req, res) => {
-  const user = await User.findById(req.user.id).select('username role streamerName');
+  const user = await User.findById(req.user.id).select('username role streamerName adultConfirmed showAdult');
   if (!user) return res.status(401).json({ error: req.t('server.userNotFound') });
-  res.json({ id: user._id, username: user.username, role: user.role, streamerName: user.streamerName || null });
+  res.json({
+    id: user._id,
+    username: user.username,
+    role: user.role,
+    streamerName: user.streamerName || null,
+    adultConfirmed: !!user.adultConfirmed,
+    showAdult: !!user.adultConfirmed && !!user.showAdult,
+  });
+});
+
+// 18+: { confirmed: true } — подтвердил возраст (отменить нельзя); { showAdult } — галочка «18+» в публичных комнатах.
+// Показывать 18+ можно только после подтверждения возраста
+router.patch('/adult', auth, async (req, res) => {
+  const set = {};
+  if (req.body?.confirmed === true) set.adultConfirmed = true;
+  if (typeof req.body?.showAdult === 'boolean') set.showAdult = req.body.showAdult;
+  if (!Object.keys(set).length) return res.status(400).json({ error: req.t('server.error') });
+  const filter = { _id: req.user.id };
+  if (set.showAdult === true && !set.adultConfirmed) filter.adultConfirmed = true;
+  const r = await User.updateOne(filter, { $set: set });
+  if (!r.matchedCount) return res.status(403).json({ error: req.t('server.adult.notConfirmed') });
+  res.json({ ok: true });
 });
 
 module.exports = router;

@@ -33,7 +33,8 @@
     "scissors": "Scissors: cut your own shape",
     "text": "Text (hold and drag an area)",
     "image": "Insert a photo",
-    "link": "Link button (a photo can be added later)"
+    "link": "Link button (a photo can be added later)",
+    "bg": "Page background: up to 2 backgrounds and a transition between them"
   },
   "undo": "Undo (Ctrl+Z)",
   "redo": "Redo (Ctrl+Y)",
@@ -86,14 +87,14 @@
     "live": "This is how the stream looks on a phone: player on top, chat below (custom layout works from 900 px)",
     "profile": "This is how the profile looks on a phone (view only)"
   },
-  "info": "Blocks {c}/{cm} · Photos {p}/{pm} · Buttons {l}/{lm}",
   "infoLive": " · No scissors on the live page, photos are background only",
   "linkLabel": "Button",
   "max": {
     "links": "Max buttons: {n}",
     "photos": "Max photos: {n}",
     "custom": "Max custom blocks: {n}",
-    "photoLinks": "Max photo buttons: {n}"
+    "photoLinks": "Max photo buttons: {n}",
+    "gifs": "Max GIFs: {n}"
   },
   "polyNoLink": "A freehand shape can't be turned into a button",
   "liveNoShape": "On the live page a block without a photo can only be text or a button",
@@ -173,5 +174,53 @@
     "hint": "Drag the photo to choose what to show. The mouse wheel changes the zoom. The dimmed part won't be in the block.",
     "reset": "Reset",
     "done": "Done"
+  },
+  "cnt": {
+    "custom": "Blocks {n}/{m}",
+    "photos": "Photos {n}/{m}",
+    "links": "Buttons {n}/{m}",
+    "bgs": "Backgrounds {n}/{m}",
+    "gifs": "GIF {n}/{m}"
+  },
+  "cntHint": "Hover to highlight where they are on the page; click to pin the highlight",
+  "widthGuide": "Profile width is {w} now. Drag a block further right and the page gets wider (up to 1760)",
+  "bg": {
+    "title": "Page background",
+    "hint": "The background lies under all profile blocks. Pick a color or a photo, then add a second background and a smooth transition between them.",
+    "add": "＋ Add background",
+    "addSecond": "＋ Second background (transition)",
+    "first": "Background 1",
+    "second": "Background 2",
+    "color": "Color",
+    "photo": "📷 Photo as background",
+    "fit": "Photo",
+    "fits": {
+      "cover": "Fill",
+      "contain": "Whole",
+      "tile": "Tiled"
+    },
+    "removeSecond": "Remove the second background",
+    "remove": "Remove background",
+    "transition": "Transition",
+    "dir": "Direction",
+    "dirV": "↕ Top to bottom",
+    "dirH": "↔ Left to right",
+    "fx": "Effect",
+    "fxs": {
+      "fade": "Smooth",
+      "sharp": "Sharp",
+      "diagonal": "Diagonal",
+      "wave": "Wave",
+      "zigzag": "Zigzag",
+      "steps": "Steps",
+      "arc": "Arc",
+      "stripes": "Blinds",
+      "dots": "Dots",
+      "radial": "Circle from center"
+    },
+    "pos": "Where",
+    "soft": "Softness",
+    "posHint": "While this menu is open, a dashed line on the stage shows where the transition is.",
+    "profileOnly": "Only the profile has a background"
   }
 }

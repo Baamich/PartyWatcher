@@ -26,6 +26,8 @@
   const HIST_MAX = 60;
   let hist = [], hi = -1, savedHi = -1, lastT = 0, lastInputT = 0, lastSel = null;
   let fitOpen = false, menuId = null, phone = false;
+  const BG_MENU = '__bg'; // menuId, когда открыто меню фона
+  let hlPin = null; // закреплённая (по клику) подсветка категории лимитов: custom | photos | links | bgs
 
   // копия макета: строки с картинками остаются общими по ссылке, память не растёт
   const cloneLayout = (l) => {
@@ -40,6 +42,8 @@
         })),
       };
     }
+    const bg = l.profile.bg;
+    out.profile.bg = bg ? { ...bg, fills: bg.fills.map((f) => ({ ...f })) } : null;
     return out;
   };
 
@@ -130,6 +134,15 @@
   };
   const button = (text, fn, cls = '') => E('button', { type: 'button', className: 'pm-btn ' + cls, textContent: text, onclick: fn });
 
+  // GIF разрешены в своих фото, кнопках и фоне — не больше P.GIF_MAX на весь макет (оба режима и фоны).
+  // replacing — картинка, которую заменяем (её GIF не считается)
+  function gifAllowed(file, replacing) {
+    if (!file || file.type !== 'image/gif') return true;
+    if (P.gifCount(layout) - (P.isGif(replacing) ? 1 : 0) < P.GIF_MAX) return true;
+    toast(tr('editor.max.gifs', { n: P.GIF_MAX }));
+    return false;
+  }
+
   function pickFile() {
     return new Promise((res) => {
       const i = E('input', { type: 'file', accept: 'image/*' });
@@ -194,14 +207,42 @@
       return;
     }
     stage.style.setProperty('--ch', P.canvasHeight(blocks()));
-    stage.replaceChildren(...blocks().map(makeEl));
+    const extra = [];
+    if (mode === 'profile') extra.push(E('div', { className: 'pw-bg' }));
+    // граница страницы (профиль и эфир): дальше неё страница станет шире (до 1760), если дотянуть туда блок
+    if (!phone && viewW() < curW()) {
+      const g = E('div', { className: 'pw-wguide', title: tr('editor.widthGuide', { w: viewW() }) }, E('span', { textContent: viewW() }));
+      g.style.setProperty('--gw', viewW());
+      extra.push(g);
+    }
+    stage.replaceChildren(...extra, ...blocks().map(makeEl));
     fitScale();
+    paintStageBg();
     updateInfo();
+    applyHighlight();
     refreshMenu(); // три точки всегда показывают актуальные пункты
   }
 
-  function curW() { return P.WM[mode]; }
-  function fitScale() { stage.style.setProperty('--s', Math.min(1, stage.clientWidth / curW()) || 1); }
+  function curW() { return P.WM[mode]; } // место в редакторе
+  function viewW() { return P.canvasWidth(blocks(), mode); } // ширина, которую увидят зрители
+  // на телефоне масштаб как у зрителя: по реальной ширине профиля, а не по месту в редакторе
+  function fitScale() { stage.style.setProperty('--s', Math.min(1, stage.clientWidth / (phone ? viewW() : curW())) || 1); }
+
+  // фон и линия перехода (видна, пока открыто меню фона)
+  function paintStageBg() {
+    const bgEl = stage.querySelector(':scope > .pw-bg');
+    if (!bgEl) return;
+    const bg = layout.profile.bg, W = viewW(), H = P.canvasHeight(blocks());
+    P.paintBg(bgEl, bg, W, H);
+    stage.querySelector(':scope > .pw-bg-guide')?.remove();
+    if (menuId === BG_MENU && bg && bg.fills.length > 1 && !['radial'].includes(bg.fx)) {
+      const g = E('div', { className: 'pw-bg-guide ' + (bg.dir === 'h' ? 'gh' : 'gv') });
+      g.style.setProperty('--gp', bg.pos);
+      g.style.setProperty('--bgw', W);
+      g.style.setProperty('--bgh', H);
+      stage.appendChild(g);
+    }
+  }
   function applyStageSize() {
     stage.classList.toggle('pw-phone', phone);
     stage.style.maxWidth = (phone ? 390 : curW()) + 'px';
@@ -215,6 +256,14 @@
   }
   function refreshMenu() {
     if (!menuId || menu.classList.contains('hidden')) return;
+    if (menuId === BG_MENU) {
+      const a = document.activeElement;
+      if (menu.contains(a) && /^(INPUT|TEXTAREA)$/.test(a.tagName)) return;
+      const top = menu.scrollTop;
+      buildBgMenu();
+      menu.scrollTop = top;
+      return;
+    }
     const b = find(menuId);
     if (!b) return closeMenu();
     const a = document.activeElement;
@@ -231,10 +280,59 @@
         : tr('editor.phone.profile');
       return;
     }
-    const c = P.counts(blocks()), L = P.LIMITS[mode];
-    $('proInfo').textContent = tr('editor.info', { c: c.custom, cm: L.custom, p: c.photos, pm: L.photos, l: c.links, lm: L.links }) +
-      (mode === 'live' ? tr('editor.infoLive') : '');
+    const c = P.counts(blocks(), mode === 'profile' ? layout.profile.bg : null), L = P.LIMITS[mode];
+    const kinds = ['custom', 'photos', 'links'].concat(mode === 'profile' ? ['bgs'] : []);
+    const parts = [];
+    kinds.forEach((k, i) => {
+      if (i) parts.push(' · ');
+      parts.push(E('span', {
+        className: 'pro-cnt' + (hlPin === k ? ' pin' : ''),
+        textContent: tr('editor.cnt.' + k, { n: c[k], m: L[k] }),
+        title: tr('editor.cntHint'),
+      }));
+      parts[parts.length - 1].dataset.k = k;
+    });
+    const gifs = P.gifCount(layout);
+    if (gifs) {
+      parts.push(' · ', E('span', { className: 'pro-cnt' + (hlPin === 'gifs' ? ' pin' : ''), textContent: tr('editor.cnt.gifs', { n: gifs, m: P.GIF_MAX }), title: tr('editor.cntHint') }));
+      parts[parts.length - 1].dataset.k = 'gifs';
+    }
+    if (mode === 'live') parts.push(tr('editor.infoLive'));
+    $('proInfo').replaceChildren(...parts);
   }
+
+  // какие блоки входят в категорию лимита (как в P.counts)
+  const inKind = (b, k) => (k === 'custom' ? b.type === 'shape' || b.type === 'text'
+    : k === 'photos' ? b.type === 'image' || (b.type === 'shape' && !!b.img)
+      : k === 'links' ? b.type === 'link'
+        : k === 'gifs' ? P.isGif(b.img) : false);
+
+  function applyHighlight(hover = null) {
+    stage.querySelectorAll('.hl, .hl-pin').forEach((n) => n.classList.remove('hl', 'hl-pin'));
+    const mark = (k, cls) => {
+      if (!k) return;
+      if (k === 'bgs' || (k === 'gifs' && (layout.profile.bg?.fills || []).some((f) => P.isGif(f.img)) && mode === 'profile')) {
+        stage.querySelector(':scope > .pw-bg')?.classList.add(cls);
+        if (k === 'bgs') return;
+      }
+      for (const b of blocks()) {
+        if (inKind(b, k)) stage.querySelector(`[data-id="${b.id}"]`)?.classList.add(cls);
+      }
+    };
+    mark(hlPin, 'hl-pin');
+    if (hover && hover !== hlPin) mark(hover, 'hl');
+  }
+
+  const infoEl = $('proInfo');
+  infoEl.addEventListener('mouseover', (e) => { const k = e.target.closest('.pro-cnt')?.dataset.k; if (k) applyHighlight(k); });
+  infoEl.addEventListener('mouseout', (e) => { if (e.target.closest('.pro-cnt')) applyHighlight(); });
+  infoEl.addEventListener('click', (e) => {
+    const k = e.target.closest('.pro-cnt')?.dataset.k;
+    if (!k) return;
+    hlPin = hlPin === k ? null : k;
+    updateInfo();
+    applyHighlight();
+  });
 
   new ResizeObserver(() => fitScale()).observe(stage);
 
@@ -256,7 +354,7 @@
     };
     const up = () => {
       window.removeEventListener('pointermove', mv);
-      if (moved) { touch(); stage.style.setProperty('--ch', P.canvasHeight(blocks())); }
+      if (moved) { touch(); renderStage(); } // холст мог вырасти: фон и граница профиля пересчитываются
     };
     window.addEventListener('pointermove', mv);
     window.addEventListener('pointerup', up, { once: true });
@@ -375,9 +473,9 @@
   async function addImage(kind) {
     if (!canAdd(kind)) return;
     const f = await pickFile();
-    if (!f) return;
+    if (!f || !gifAllowed(f)) return;
     try {
-      const { url, w, h } = await P.imageToDataUrl(f, kind === 'link' ? 600 : 900);
+      const { url, w, h } = await P.imageToDataUrl(f, kind === 'link' ? 600 : 900, { gif: true });
       const bw = kind === 'link' ? 200 : Math.min(320, w);
       const bh = kind === 'link' ? 80 : Math.round((bw * h) / w);
       const b = { id: uid(), type: kind, x: (curW() - bw) / 2, y: 80, w: bw, h: bh, img: url, ia: +(w / h).toFixed(3), shape: 'rect' };
@@ -462,7 +560,16 @@
   }
 
   // ---------- меню «три точки» ----------
-  function closeMenu() { menuId = null; menu.classList.add('hidden'); menu.replaceChildren(); }
+  function closeMenu() {
+    const wasBg = menuId === BG_MENU;
+    menuId = null;
+    menu.classList.add('hidden');
+    menu.replaceChildren();
+    if (wasBg) {
+      stage.querySelector(':scope > .pw-bg-guide')?.remove();
+      stage.classList.remove('bg-editing');
+    }
+  }
 
   async function changeBuiltinPhoto(b) {
     const f = await pickFile();
@@ -482,9 +589,9 @@
   async function setPhoto(b) {
     if (b.type === 'shape' && !b.img && P.counts(blocks()).photos >= P.LIMITS[mode].photos) return toast(tr('editor.max.photos', { n: P.LIMITS[mode].photos }));
     const f = await pickFile();
-    if (!f) return;
+    if (!f || !gifAllowed(f, b.img)) return;
     try {
-      const r = await P.imageToDataUrl(f, b.type === 'link' ? 600 : 900);
+      const r = await P.imageToDataUrl(f, b.type === 'link' ? 600 : 900, { gif: true });
       b.img = r.url;
       b.ia = +(r.w / r.h).toFixed(3);
       delete b.fit;
@@ -596,6 +703,81 @@
     }
 
     menu.replaceChildren(E('div', { className: 'pm-title', textContent: TITLES[t] || tr('editor.block.default') }), body);
+    menu.classList.remove('hidden');
+  }
+
+  // ---------- фон профиля (до 2 фонов и переход между ними) ----------
+  const BG_DIR_OPTS = () => [['v', tr('editor.bg.dirV')], ['h', tr('editor.bg.dirH')]];
+  const BG_FX_OPTS = () => P.BG_FX.map((k) => [k, tr('editor.bg.fxs.' + k)]);
+  const BG_FIT_OPTS = () => P.BG_FITS.map((k) => [k, tr('editor.bg.fits.' + k)]);
+
+  function openBgMenu(btn) {
+    if (menuId === BG_MENU) return closeMenu();
+    closeMenu();
+    menuId = BG_MENU;
+    stage.classList.add('bg-editing'); // блоки полупрозрачные — видно, что меняется в фоне
+    buildBgMenu();
+    const r = btn.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.left)) + 'px';
+    menu.style.top = r.bottom + 6 + 'px';
+    paintStageBg();
+  }
+
+  async function setBgPhoto(f) {
+    const file = await pickFile();
+    if (!file || !gifAllowed(file, f.img)) return;
+    try {
+      const r = await P.imageToDataUrl(file, 1600, { gif: true });
+      f.img = r.url;
+      f.fit = f.fit || 'cover';
+      touch();
+      paintStageBg();
+      buildBgMenu();
+    } catch (err) { toast(err.message); }
+  }
+
+  function buildBgMenu() {
+    const bg = layout.profile.bg;
+    const fills = bg ? bg.fills : [];
+    const body = E('div', { className: 'pm-body' });
+    const add = (...n) => body.append(...n);
+    const upd = () => { touch(); paintStageBg(); updateInfo(); }; // ползунки: без пересборки сцены
+    const rebuild = () => { touch(); paintStageBg(); updateInfo(); buildBgMenu(); };
+
+    const fillSection = (f, i) => {
+      add(E('div', { className: 'pm-sub', textContent: tr(i ? 'editor.bg.second' : 'editor.bg.first') }));
+      add(row(tr('editor.bg.color'), color(f.c || '#000000', (v) => { f.c = v; upd(); })));
+      add(button(f.img ? tr('editor.m.replacePhoto') : tr('editor.bg.photo'), () => setBgPhoto(f)));
+      if (f.img) {
+        add(row(tr('editor.bg.fit'), select(BG_FIT_OPTS(), f.fit || 'cover', (v) => { f.fit = v; upd(); })));
+        add(button(tr('editor.m.removePhoto'), () => { delete f.img; delete f.fit; rebuild(); }, 'pm-flat'));
+      }
+    };
+
+    if (!fills.length) {
+      add(E('div', { className: 'pm-hint', textContent: tr('editor.bg.hint') }));
+      add(button(tr('editor.bg.add'), () => {
+        layout.profile.bg = { fills: [{ c: '#1b1530' }], pos: 50, dir: 'v', fx: 'fade', soft: 20 };
+        rebuild();
+      }));
+    } else {
+      fillSection(fills[0], 0);
+      if (fills.length < P.LIMITS.profile.bgs) {
+        add(button(tr('editor.bg.addSecond'), () => { fills.push({ c: '#3a1f5c' }); rebuild(); }, 'pm-flat'));
+      } else {
+        fillSection(fills[1], 1);
+        add(button(tr('editor.bg.removeSecond'), () => { fills.splice(1, 1); rebuild(); }, 'pm-flat'));
+        add(E('div', { className: 'pm-sub', textContent: tr('editor.bg.transition') }));
+        add(row(tr('editor.bg.dir'), select(BG_DIR_OPTS(), bg.dir, (v) => { bg.dir = v; upd(); })));
+        add(row(tr('editor.bg.fx'), select(BG_FX_OPTS(), bg.fx, (v) => { bg.fx = v; upd(); })));
+        add(row(tr('editor.bg.pos'), range(bg.pos, 0, 100, 1, (v) => { bg.pos = v; upd(); })));
+        add(row(tr('editor.bg.soft'), range(bg.soft, 0, 50, 1, (v) => { bg.soft = v; upd(); })));
+        add(E('div', { className: 'pm-hint', textContent: tr('editor.bg.posHint') }));
+      }
+      add(button(tr('editor.bg.remove'), () => { layout.profile.bg = null; rebuild(); }, 'pm-danger'));
+    }
+
+    menu.replaceChildren(E('div', { className: 'pm-title', textContent: tr('editor.bg.title') }), body);
     menu.classList.remove('hidden');
   }
 
@@ -716,7 +898,7 @@
     const t = btn.dataset.tool;
     if (phone) return toast(tr('editor.phoneReadOnly'));
     shapeMenu.classList.add('hidden');
-    closeMenu();
+    if (t !== 'bg') closeMenu();
     if (t === 'scissors') {
       if (mode === 'live') return;
       const r = btn.getBoundingClientRect();
@@ -727,6 +909,11 @@
     }
     if (t === 'image') return addImage('image');
     if (t === 'link') return addLink();
+    if (t === 'bg') {
+      if (mode !== 'profile') return toast(tr('editor.bg.profileOnly'), 'info');
+      setTool('select');
+      return openBgMenu(btn);
+    }
     setTool(t);
   }));
 
@@ -738,11 +925,13 @@
   function syncModeButtons() {
     root.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode && (b.dataset.phone === '1') === phone));
     $('proScissors').disabled = mode === 'live' || phone;
+    $('proBgBtn').disabled = mode !== 'profile' || phone;
   }
   root.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
     mode = b.dataset.mode;
     phone = b.dataset.phone === '1';
     selId = null;
+    hlPin = null;
     closeMenu();
     setTool('select');
     syncModeButtons();
@@ -750,7 +939,7 @@
   }));
 
   root.addEventListener('pointerdown', (e) => {
-    if (!menu.contains(e.target) && !e.target.closest('.pw-dots')) closeMenu();
+    if (!menu.contains(e.target) && !e.target.closest('.pw-dots, #proBgBtn')) closeMenu();
     if (!shapeMenu.contains(e.target) && !e.target.closest('#proScissors')) shapeMenu.classList.add('hidden');
   });
 
@@ -776,6 +965,7 @@
     hist = [snap()]; hi = 0; savedHi = 0; dirty = false; lastT = 0; lastInputT = 0;
     updateHistBtns();
     selId = null;
+    hlPin = null;
     syncModeButtons();
     setTool('select');
     root.classList.remove('hidden');

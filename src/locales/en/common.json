@@ -11,7 +11,8 @@
   },
   "nav": {
     "rooms": "🏠 Rooms",
-    "streams": "📡 Live streams"
+    "streams": "📡 Live streams",
+    "news": "📰 News"
   },
   "search": "Search",
   "close": "Close",

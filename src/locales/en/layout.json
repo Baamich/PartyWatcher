@@ -6,6 +6,9 @@
     "tooManyPhotos": "Too many photos (max {n})",
     "tooManyLinks": "Too many photo buttons (max {n})",
     "tooHeavy": "The layout is too heavy: shrink or remove some photos",
-    "imageTooHeavy": "The image is too heavy"
+    "imageTooHeavy": "The image is too heavy",
+    "tooManyGifs": "Too many GIFs (max {n})",
+    "gifTooHeavy": "The GIF is too heavy (max {mb} MB)",
+    "notImage": "Please choose an image"
   }
 }

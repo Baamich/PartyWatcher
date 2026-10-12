@@ -18,11 +18,16 @@ const GRACE_AT_MS = [5_000, 7_000, 12_000, 20_000];
 const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const MERGE_WINDOW_MS = 60_000; // вернулся за минуту → та же запись
 
-const RENDITIONS = [
-  { name: 'source', copy: true },
+// качества эфира: «источник» без перекодирования + 720p и 360p — только те, что ниже источника
+// (перекодировать 720 из 720 или растягивать 480 до 720 — зря жечь процессор)
+const SOURCE = { name: 'source', copy: true };
+const LADDER = [
   { name: '720', height: 720, vBitrate: '2500k', vMaxrate: '2800k', vBufsize: '5000k', aBitrate: '128k' },
-  { name: '480', height: 480, vBitrate: '1400k', vMaxrate: '1500k', vBufsize: '2800k', aBitrate: '96k' },
+  { name: '360', height: 360, vBitrate: '800k', vMaxrate: '900k', vBufsize: '1600k', aBitrate: '96k' },
 ];
+// каждый эфир с лесенкой — это два кодирования x264. Больше стольких эфиров одновременно — дальше только «источник»,
+// чтобы несколько стримеров разом не положили сервер
+const MAX_LADDER_STREAMS = Math.max(0, parseInt(process.env.LIVE_MAX_TRANSCODES, 10) || 2);
 
 fs.mkdirSync(path.join(MEDIA_ROOT, 'live'), { recursive: true });
 fs.mkdirSync(VOD_ROOT, { recursive: true });
@@ -35,11 +40,8 @@ const nmsConfig = {
     ping: 30,
     ping_timeout: 60,
   },
-  http: {
-    port: 8888,
-    mediaroot: MEDIA_ROOT,
-    allow_origin: '*',
-  },
+  // http у node-media-server не нужен (HLS раздаёт сайт): он открывал порт 8888 с веб-админкой /admin
+  // и раздачей эфира FLV по ключу в обход сайта
 };
 
 const nms = new NodeMediaServer(nmsConfig);
@@ -168,6 +170,50 @@ function probeDurationSec(absPath) {
       resolve(Number.isFinite(n) ? Math.round(n) : 0);
     });
   });
+}
+
+// высота и частота кадров входящего эфира — чтобы не кодировать качества выше источника и не гнать 60 к/с в 720/360.
+// null — не узнали (тогда полная лесенка, масштаб всё равно не выше источника)
+function probeSource(key) {
+  return new Promise((resolve) => {
+    const proc = spawn(
+      FFPROBE_PATH,
+      [
+        '-v', 'error',
+        '-probesize', '2000000', '-analyzeduration', '2000000',
+        '-select_streams', 'v:0',
+        '-show_entries', 'stream=height,avg_frame_rate,r_frame_rate',
+        '-of', 'json',
+        `rtmp://127.0.0.1:1935/live/${key}`,
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    let out = '';
+    const timer = setTimeout(() => killProc(proc, 'SIGKILL'), 6000);
+    proc.stdout.on('data', (c) => { if (out.length < 20000) out += c; });
+    proc.on('error', () => { clearTimeout(timer); resolve(null); });
+    proc.on('exit', () => {
+      clearTimeout(timer);
+      try {
+        const st = JSON.parse(out).streams?.[0];
+        const rate = (v) => { const [a, b] = String(v || '').split('/').map(Number); return a > 0 && b > 0 ? a / b : 0; };
+        resolve(st && st.height ? { height: Number(st.height), fps: rate(st.avg_frame_rate) || rate(st.r_frame_rate) } : null);
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  });
+}
+
+function renditionsFor(src) {
+  const busy = [...activeTranscodes.values()].filter((t) => t.ladder).length;
+  if (busy >= MAX_LADDER_STREAMS) {
+    console.log(`[rtmp] уже перекодируется ${busy} эфир(а) (лимит LIVE_MAX_TRANSCODES=${MAX_LADDER_STREAMS}) → только «источник»`);
+    return [SOURCE];
+  }
+  const h = src?.height || 0;
+  const fps = src && src.fps > 31 ? 30 : null; // 60 к/с — только в «источнике»
+  return [SOURCE, ...LADDER.filter((r) => !h || r.height < h - 20).map((r) => ({ ...r, fps }))];
 }
 
 function runFfmpeg(args) {
@@ -409,9 +455,9 @@ async function createVodDoc(key) {
 }
 
 /** Собирает аргументы ffmpeg под всю ABR-лестницу + master-плейлист + (опционально) VOD-запись. */
-function buildFfmpegArgs(key, hlsRootDir, vodAbs) {
+function buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions) {
   const inputUrl = `rtmp://127.0.0.1:1935/live/${key}`;
-  const transcodeRenditions = RENDITIONS.filter((r) => !r.copy);
+  const transcodeRenditions = renditions.filter((r) => !r.copy);
 
   const args = [
     '-hide_banner',
@@ -427,7 +473,9 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs) {
     const splitOutputs = transcodeRenditions.map((_, i) => `[t${i}]`).join('');
     const filterParts = [`[0:v]split=${transcodeRenditions.length}${splitOutputs}`];
     transcodeRenditions.forEach((r, i) => {
-      filterParts.push(`[t${i}]scale=-2:${r.height}[s${i}]`);
+      // не выше источника; bilinear заметно быстрее bicubic, на 720/360 разницы не видно
+      const fps = r.fps ? `fps=${r.fps},` : '';
+      filterParts.push(`[t${i}]${fps}scale=w=-2:h='min(${r.height},ih)':flags=bilinear[s${i}]`);
     });
     args.push('-filter_complex', filterParts.join('; '));
   }
@@ -436,7 +484,7 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs) {
   let vIdx = 0;
   let aIdx = 0;
 
-  RENDITIONS.forEach((r) => {
+  renditions.forEach((r) => {
     if (r.copy) {
       args.push('-map', '0:v', `-c:v:${vIdx}`, 'copy');
       args.push('-map', '0:a', `-c:a:${aIdx}`, 'copy');
@@ -464,6 +512,8 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs) {
     '-hls_time', '1',
     '-hls_list_size', '4',
     '-hls_flags', 'delete_segments+omit_endlist+independent_segments',
+    // номера сегментов от времени: после перезапуска ffmpeg имена не повторяются, поэтому сегменты можно кэшировать
+    '-hls_start_number_source', 'epoch',
     '-hls_allow_cache', '0',
     '-master_pl_name', 'master.m3u8',
     '-var_stream_map', varStreamMapParts.join(' '),
@@ -486,17 +536,17 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs) {
   return args;
 }
 
-function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId) {
+function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditions) {
   // папки под каждый уровень качества — ffmpeg их сам не создаёт
-  RENDITIONS.forEach((r) => {
+  renditions.forEach((r) => {
     fs.mkdirSync(path.join(hlsRootDir, r.name), { recursive: true });
   });
 
-  const args = buildFfmpegArgs(key, hlsRootDir, vodAbs);
+  const args = buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions);
 
-  console.log('[rtmp] ffmpeg start', key.slice(0, 8) + '…', 'gen=', gen, 'vod=', vodId || '—');
+  console.log('[rtmp] ffmpeg start', key.slice(0, 8) + '…', 'gen=', gen, 'vod=', vodId || '—', 'качества:', renditions.map((r) => r.name + (r.fps ? '@' + r.fps : '')).join(','));
   const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-  activeTranscodes.set(key, { proc, gen, vodId: vodId || null });
+  activeTranscodes.set(key, { proc, gen, vodId: vodId || null, ladder: renditions.length > 1 });
 
   proc.stderr.on('data', (c) => {
     const line = c.toString().trim();
@@ -584,7 +634,13 @@ async function startTranscode(key) {
     if (pendingStopTimers.has(key)) return;
     if (activeTranscodes.has(key)) return;
 
-    spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId);
+    const src = await probeSource(key);
+    // пока смотрели источник, эфир мог переподключиться или закончиться
+    if (currentGen(key) !== gen || pendingStopTimers.has(key) || activeTranscodes.has(key)) return;
+    if (src) console.log(`[rtmp] источник ${key.slice(0, 8)}…: ${src.height}p, ${Math.round(src.fps)} к/с`);
+    else console.warn('[rtmp] не удалось узнать параметры источника — полная лесенка', key.slice(0, 8) + '…');
+
+    spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditionsFor(src));
 
     await setLiveState(key, {
       isLive: true,

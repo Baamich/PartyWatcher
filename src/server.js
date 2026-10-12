@@ -22,6 +22,7 @@ const playerCaptureRoutes = require('./routes/playerCapture.routes');
 const streamProxyRoutes = require('./routes/streamProxy.routes');
 const youtubeCaptureRoutes = require('./routes/youtubeCapture.routes');
 const voiceRoutes = require('./routes/voice.routes');
+const kodikRoutes = require('./routes/kodik.routes');
 
 const supportRoutes = require('./routes/support.routes');
 const streamersRoutes = require('./routes/streams/streamers.routes');
@@ -30,6 +31,7 @@ const presetsRoutes = require('./routes/streams/presets.routes');
 const registerChatSocket = require('./sockets/chatSocket');
 const rtmpServer = require('./services/rtmpServer');
 const streamKeyCache = require('./services/streamKeyCache');
+const { sendLiveMaster } = require('./services/liveMaster');
 const debugScreenshotsDir = path.join(process.cwd(), 'debug-screenshots');
 const YT_CACHE_DIR = process.env.YT_CACHE_DIR || '/home/ubuntu/PartyWatcher/yt-cache';
 const THUMB_DIR = process.env.THUMB_DIR || '/home/ubuntu/PartyWatcher/thumbnails';
@@ -131,6 +133,9 @@ async function start() {
     // защита от path traversal — итоговый путь обязан остаться внутри папки этого ключа
     if (filePath !== liveDir && !filePath.startsWith(liveDir + path.sep)) return res.status(400).end();
 
+    if (rel === 'master.m3u8') return sendLiveMaster(liveDir, res);
+    // плейлисты меняются каждую секунду; сегменты неизменны (номера от времени, не повторяются после перезапуска)
+    res.setHeader('Cache-Control', /\.m3u8$/i.test(rel) ? 'no-store' : 'public, max-age=60');
     res.sendFile(filePath, (err) => {
       if (err && !res.headersSent) res.status(404).end();
     });
@@ -144,6 +149,7 @@ async function start() {
   app.use('/api/stream', streamProxyRoutes);
   app.use('/api/youtube-capture', youtubeCaptureRoutes);
   app.use('/api/voice',  voiceRoutes);
+  app.use('/api/kodik', kodikRoutes);
 
   if (process.env.PLAYER_CAPTURE_DEBUG === '1') {
     app.use('/debug-screenshots', express.static(debugScreenshotsDir));
@@ -158,6 +164,11 @@ async function start() {
   app.use('/api/csp-report', cspRoutes);
 
 process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
+
+  // новости как раздел сайта: та же страница, что в студии, но короткий адрес и меню сайта (переключает news.js)
+  app.get(['/news', '/news/'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'workbench', 'news.html'));
+  });
 
   // страница профиля стримера — единый шаблон на любое имя
   app.get('/streamers/:name', (req, res) => {

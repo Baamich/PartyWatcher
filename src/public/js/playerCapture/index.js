@@ -6,6 +6,10 @@ const HLS_CONFIG = {
   enableWorker: true,
   maxBufferLength: 30,
   maxMaxBufferLength: 60,
+  // по умолчанию hls.js хранит всё уже просмотренное (Infinity): за фильм — сотни МБ во вкладке.
+  // Минуты позади хватает для перемотки назад «на чуть-чуть», дальше — догрузка
+  backBufferLength: 60,
+  maxBufferSize: 40 * 1000 * 1000,
   maxBufferHole: 0.5, // небольшие «дырки» в буфере (разрывы таймкодов у CDN) перепрыгиваем, а не зависаем
   nudgeMaxRetry: 6,   // сколько раз подтолкнуть воспроизведение, прежде чем считать это ошибкой
   nudgeOffset: 0.1,

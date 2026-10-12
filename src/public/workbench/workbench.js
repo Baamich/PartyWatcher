@@ -352,6 +352,8 @@ function attachHls(playbackId) {
 
   hlsPlayer = new Hls({
     enableWorker: true,
+    // превью в студии маленькое: не декодируем «источник» во время собственного эфира (меньше нагрузки на ПК стримера)
+    capLevelToPlayerSize: true,
     lowLatencyMode: false,
     liveSyncDurationCount: 2,        // ближе к живому краю (было 3)
     liveMaxLatencyDurationCount: 4,  // было 8 — раньше давали отставать почти на весь плейлист
@@ -580,6 +582,8 @@ function renderMessage(msg) {
   row.dataset.id = msg._id;
   row.innerHTML = buildMessageHtml(msg);
   box.appendChild(row);
+  // студия открыта весь эфир — держим последние сообщения, а не тысячи узлов
+  while (box.childElementCount > 250) box.firstElementChild.remove();
   box.scrollTop = box.scrollHeight;
 }
 

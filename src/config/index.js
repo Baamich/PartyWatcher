@@ -49,4 +49,10 @@ module.exports = {
    drive: {
     apiKey: process.env.GOOGLE_DRIVE_API_KEY,
   },
+
+  kodik: {
+    token: process.env.KODIK_TOKEN || null, // без него поиск по названию выключен, работает только ссылка на плеер
+    apiUrl: (process.env.KODIK_API_URL || 'https://kodik-api.com').replace(/\/+$/, ''),
+    playerHost: process.env.KODIK_PLAYER_HOST || 'kodikplayer.com', // все ссылки на плеер приводятся к этому домену
+  },
 };

@@ -39,7 +39,8 @@
     "loginEmpty": "Enter your username and password",
     "badLogin": "Wrong username or password",
     "forgotSent": "If this email is registered, we have sent a password reset link to it",
-    "badLink": "The link is invalid or expired"
+    "badLink": "The link is invalid or expired",
+    "usernameBad": "This username isn’t allowed — it contains profanity. Pick another one"
   },
   "chatApi": {
     "needKey": "An API key is required (Authorization: Bearer <key>)",
@@ -81,7 +82,10 @@
     "needTwitchVod2": "A Twitch VOD link is required (twitch.tv/videos/...)",
     "badDrive": "Could not recognize the Google Drive link",
     "changeUnsupported": "Changing the link is not supported for this mode",
-    "changeFailed": "Could not change the video"
+    "changeFailed": "Could not change the video",
+    "badKodik": "A Kodik player link is required (kodik.info/… or kodikplayer.com/…)",
+    "badVk": "A VK Video link is required (vk.com/video-123_456, vkvideo.ru/… or the embed code)",
+    "badName": "This name won’t do — it contains profanity. Come up with something nicer 🙂"
   },
   "relay": {
     "badUrl": "A valid url is required",
@@ -145,7 +149,8 @@
     "noName": "No streamer name given",
     "notFound": "Streamer not found",
     "profileFailed": "Could not load the streamer profile",
-    "vodsFailed": "Could not load recordings"
+    "vodsFailed": "Could not load recordings",
+    "nameBad": "This channel name isn’t allowed — it contains profanity. Come up with another one"
   },
   "wb": {
     "noKey": "The key has not been created yet",
@@ -242,5 +247,14 @@
       "historyYou": "You",
       "historySupport": "Support"
     }
+  },
+  "kodik": {
+    "noToken": "Kodik search is not configured on the server — paste a Kodik player link",
+    "badQuery": "Enter a title (at least 2 characters)",
+    "apiFailed": "Kodik did not respond, try again later",
+    "tooMany": "Too many searches, wait a minute"
+  },
+  "adult": {
+    "notConfirmed": "Confirm that you are 18 or older first"
   }
 }

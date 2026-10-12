@@ -72,7 +72,11 @@
     "submit": "Change",
     "changing": "Changing...",
     "noUrl": "Paste a new link",
-    "failed": "Could not change the video"
+    "failed": "Could not change the video",
+    "kodikSearch": "Movie / series title or Kodik link",
+    "kodikLink": "Kodik player link (kodik.info/… or kodikplayer.com/…)",
+    "kodikPick": "Pick a movie or series from the list (or paste a Kodik player link)",
+    "kodikNeedLink": "Paste a Kodik player link (kodik.info/… or kodikplayer.com/…)"
   },
   "videoType": {
     "youtube": "YouTube",
@@ -80,7 +84,8 @@
     "drive": "Google Drive",
     "player_capture": "Player capture",
     "direct": "Direct link",
-    "vk": "VK"
+    "vk": "VK Video",
+    "kodik": "Kodik"
   },
   "lock": {
     "title": "Lock/unlock player buttons",
@@ -169,5 +174,32 @@
     "noPeers": "Not connected to anyone yet.",
     "row": "{name}: {route}, ping {rtt} ms, loss {loss}, jitter {jitter} ms",
     "connecting": "{name}: connecting…"
+  },
+  "kodik": {
+    "episodeChanged": "The host switched to season {season}, episode {episode}",
+    "voiceChanged": "The host switched the voice-over: {voice}",
+    "clickToPlay": "Press ▶ — the browser needs one click on the player so it can start together with the host",
+    "searching": "Searching…",
+    "nothing": "Nothing found",
+    "failed": "Search failed",
+    "serial": "Series",
+    "movie": "Movie",
+    "subs": "subtitles",
+    "voice": "Voice-over",
+    "voices": {
+      "one": "{n} voice-over",
+      "other": "{n} voice-overs"
+    },
+    "episodes": "{n} ep."
+  },
+  "adult": {
+    "title": "18+ content",
+    "text": "The video in this room is for adults only (18+). Confirm that you are 18 or older. If not, you will go back to the main page.",
+    "yes": "I am 18 or older",
+    "no": "I am under 18",
+    "showTitle": "18+ rooms in the list",
+    "showText": "Show 18+ rooms among the public rooms on the main page? You can change it any time with the “18+” checkbox in the filters.",
+    "showYes": "Show",
+    "showNo": "Don't show"
   }
 }

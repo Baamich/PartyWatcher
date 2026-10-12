@@ -47,6 +47,27 @@ body {
   font-size: 18px;
 }
 
+/* Kodik: клик проходит сквозь оверлей в плеер — наша ▶ стоит ровно над их ▶ по центру */
+#overlay.passthrough {
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+#overlay.passthrough #startBtn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+#overlay.passthrough #overlayText {
+  position: absolute;
+  top: calc(50% - 72px);
+  left: 20px;
+  right: 20px;
+  transform: translateY(-100%);
+}
+
 .fs-draggable {
   position: absolute;
   z-index: 20;
@@ -142,9 +163,8 @@ body {
   min-height: 200px;
   display: flex;
   flex-direction: column;
-  background: rgba(28, 28, 32, 0.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* без backdrop-filter: размытие поверх идущего видео пересчитывается на каждом кадре фильма */
+  background: rgba(28, 28, 32, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
@@ -734,9 +754,7 @@ video::-webkit-media-controls-fullscreen-button {
   max-width: min(92%, 520px);
   width: max-content;
   padding: 10px 18px;
-  background: rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.82);
   color: #fff;
   font-size: 14px;
   line-height: 1.4;
@@ -795,9 +813,7 @@ video::-webkit-media-controls-fullscreen-button {
   z-index: 6;
   display: flex;
   flex-direction: column;
-  background: rgba(20, 20, 24, 0.92);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(20, 20, 24, 0.94);
 }
 
 #fsParticipantsPanel.hidden {
@@ -932,15 +948,34 @@ video::-webkit-media-controls-fullscreen-button {
   font-weight: 700;
   font-size: 13px;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* переливание двигаем transform'ом слоя в 3 раза шире кнопки: его делает видеокарта без перерисовки.
+   Анимация background-position перерисовывала кнопку каждый кадр, пока панель звонка видна */
+.voice-call-gradient::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -100%;
+  left: 0;
+  width: 300%;
+  height: 300%;
   background: linear-gradient(120deg, var(--btn-grad-start), var(--btn-grad-end), var(--btn-grad-start-hover), var(--btn-grad-end-hover));
-  background-size: 300% 300%;
-  animation: voiceGradientShift 6s ease infinite;
+  animation: voiceGradientShift 3s ease-in-out infinite alternate;
+  will-change: transform;
+  pointer-events: none;
 }
 
 @keyframes voiceGradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  from { transform: translateX(0); }
+  to { transform: translateX(-66.667%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-call-gradient::before { animation: none; }
 }
 
 .voice-call-panel.joined .voice-call-gradient {
@@ -1233,4 +1268,57 @@ video::-webkit-media-controls-fullscreen-button {
   background: var(--surface-alt);
   border-radius: 4px;
   color: var(--text);
+}
+
+/* Выдача поиска Kodik в блоке смены видео (копия стилей из index.css) */
+.kodik-results {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  margin: 6px 0;
+}
+.kodik-note { padding: 10px; font-size: 13px; color: var(--text-muted); }
+.kodik-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.kodik-item:last-child { border-bottom: none; }
+.kodik-item:hover,
+.kodik-item.selected { background: var(--surface); }
+.kodik-item.selected { box-shadow: inset 3px 0 0 var(--accent); }
+.kodik-poster {
+  width: 42px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.kodik-info { min-width: 0; flex: 1; }
+.kodik-title {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kodik-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.kodik-info select.kodik-voice { margin: 6px 0 0 0; font-size: 13px; width: 100%; }
+
+/* телефон боком: места хватает на плеер и чат рядом, поэтому мини-превью плеера (вкладка «Чат» у хоста)
+   не включаем — иначе плеер растягивался на всю ширину, а чат получал 0 px и пропадал */
+@media (max-height: 480px) and (orientation: landscape) {
+  body.view-chat-only #playerWrap:not(.in-fullscreen):not(.css-fullscreen) {
+    width: 60%;
+    height: 100%;
+  }
 }

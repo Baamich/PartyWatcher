@@ -14,6 +14,15 @@ let lastState = { isPlaying: false, positionSeconds: 0 };
 let started = false;
 let heartbeatTimer = null;
 let capturePlayer = null;
+// плеер-адаптер с iframe и postMessage (Kodik или VK Видео): один интерфейс — play/pause/seek/getCurrentTime…
+let apiPlayer = null;
+let kodikState = null; // { url, season, episode } — что сейчас стоит в комнате
+let kodikTranslationId = null; // озвучка в плеере хоста: смена — повод переключить зрителей
+let kodikChangeResults = null; // виджет выдачи поиска в блоке смены видео (js/kodik/search.js)
+let kodikChangeEnabled = null; // есть ли на сервере ключ поиска (null — не спрашивали)
+let kodikChangeTimer = null;
+let kodikChangeSeq = 0;
+let kodikChangeInit = null; // один запрос /kodik/config и одна загрузка виджета на страницу
 // номер последней отрисовки плеера: если, пока грузился плеер, началась новая (повторный room:state после
 // переподключения сокета), старый результат гасим — иначе он играл в фоне и звук шёл дважды со сдвигом
 let renderGen = 0;
@@ -36,9 +45,14 @@ let roomStateKey = null;
 let myUsername = null;
 const SPEAK_THRESHOLD = 0.02; // порог «человек говорит»
 
-// цепочка микрофона: mic → gain → limiter → destination (этот поток уходит собеседникам)
+// цепочка микрофона (этот поток уходит собеседникам):
+// с обработкой — mic → срез гула → шумовой гейт → усиление → компрессор → лимитер → destination;
+// без обработки (тумблер «шумоподавление» выкл.) — mic → усиление → лимитер → destination
 let micSourceNode = null;
+let micHpfNode = null;
+let micGateNode = null;
 let micGainNode = null;
+let micCompNode = null;
 let micLimiterNode = null;
 let micDestNode = null;
 
@@ -103,6 +117,9 @@ let duckAmount = (() => {
   return Number.isFinite(v) && v >= 0 && v <= 90 ? v : 65;
 })();
 
+const API_PLAYER_TYPES = ['kodik', 'vk'];
+const isApiPlayerType = (type = currentVideoType) => API_PLAYER_TYPES.includes(type);
+
 function makeRoomStateKey(video) {
   return `${video?.type}|${video?.url}|${video?.meta?.currentSeason}|${video?.meta?.currentEpisode}`;
 }
@@ -140,6 +157,7 @@ function getPlaybackCtx() {
     playbackCtx = new Ctx({ latencyHint: 'balanced' }); // чуть больший буфер: меньше щелчков, пока грузится HLS/декодер видео
     // через этот контекст теперь идёт и микрофон: если браузер его усыпил, будим обратно
     playbackCtx.onstatechange = () => {
+      if (!inVoiceCall) return; // вне звонка контекст усыплён нами же (suspendIdleAudio)
       if (playbackCtx.state === 'suspended' || playbackCtx.state === 'interrupted') {
         playbackCtx.resume().catch(() => {});
       }
@@ -158,12 +176,19 @@ function getPlaybackCtx() {
 }
 
 function resumePlaybackCtx() {
-  if (playbackCtx && playbackCtx.state !== 'running' && playbackCtx.state !== 'closed') {
+  if (inVoiceCall && playbackCtx && playbackCtx.state !== 'running' && playbackCtx.state !== 'closed') {
     playbackCtx.resume().catch(() => {});
   }
 }
 document.addEventListener('pointerdown', resumePlaybackCtx);
 document.addEventListener('visibilitychange', resumePlaybackCtx);
+
+// вне звонка AudioContext не нужен: работающий контекст держит звуковой поток (лимитер, измерители) и всё время ест CPU.
+// Усыпляем с задержкой, чтобы успел прозвучать сигнал выхода; при входе в звонок getPlaybackCtx будит его снова
+function suspendIdleAudio() {
+  if (inVoiceCall || !playbackCtx || playbackCtx.state !== 'running') return;
+  playbackCtx.suspend().catch(() => {});
+}
 
 // Не даём экрану и компьютеру уснуть: пока идёт просмотр и пока человек в голосовом звонке.
 // Сама логика лежит в /js/wakelock.js, тут две «причины»: voice и video.
@@ -328,7 +353,39 @@ function watchMicTrack(raw) {
   };
 }
 
-// собирает цепочку mic → gain → limiter → destination и возвращает поток, который уходит собеседникам
+// гейт живёт в AudioWorklet; модуль грузим один раз на контекст (нет поддержки — работаем без гейта)
+function loadGateWorklet(ctx) {
+  if (!ctx.audioWorklet) return Promise.resolve(false);
+  if (!ctx.__pwGateReady) {
+    ctx.__pwGateReady = ctx.audioWorklet.addModule('/js/voice-gate-worklet.js?v=1').then(() => true, (e) => {
+      console.warn('[voice] шумовой гейт недоступен:', e?.message || e);
+      return false;
+    });
+  }
+  return ctx.__pwGateReady;
+}
+
+// перекоммутация цепочки под текущий тумблер обработки; выход (лимитер → destination) не трогаем,
+// поэтому поток к собеседникам не меняется и пересогласовывать WebRTC не нужно
+function wireMicChain() {
+  [micSourceNode, micHpfNode, micGateNode, micGainNode, micCompNode].forEach((n) => {
+    try { if (n) n.disconnect(); } catch (_) {}
+  });
+  if (!micSourceNode || !micGainNode || !micLimiterNode) return;
+  if (micProcessingEnabled() && micHpfNode) {
+    micSourceNode.connect(micHpfNode);
+    const afterHpf = micGateNode || micGainNode;
+    micHpfNode.connect(afterHpf);
+    if (micGateNode) micGateNode.connect(micGainNode);
+    micGainNode.connect(micCompNode);
+    micCompNode.connect(micLimiterNode);
+  } else {
+    micSourceNode.connect(micGainNode);
+    micGainNode.connect(micLimiterNode);
+  }
+}
+
+// собирает цепочку микрофона и возвращает поток, который уходит собеседникам
 async function buildLocalStream() {
   const raw = await getMicStream(localStorage.getItem(MIC_DEVICE_KEY));
   rawLocalStream = raw;
@@ -337,8 +394,25 @@ async function buildLocalStream() {
   const ctx = getPlaybackCtx();
   micSourceNode = ctx.createMediaStreamSource(raw);
 
+  // срез гула и «бубнения» ниже 85 Гц: голосу там нечего делать, а шум (вентилятор, сеть, стол) есть
+  micHpfNode = ctx.createBiquadFilter();
+  micHpfNode.type = 'highpass';
+  micHpfNode.frequency.value = 85;
+  micHpfNode.Q.value = 0.7;
+
+  micGateNode = (await loadGateWorklet(ctx)) ? new AudioWorkletNode(ctx, 'pw-voice-gate') : null;
+
   micGainNode = ctx.createGain();
   micGainNode.gain.value = getMicGainPct() / 100;
+
+  // компрессор: тихие слова подтягиваются к громким, голос ровный (шум между фразами уже срезал гейт).
+  // Громкость он поднимает сам: компрессор Web Audio добавляет компенсирующее усиление (~+13 дБ)
+  micCompNode = ctx.createDynamicsCompressor();
+  micCompNode.threshold.value = -30;
+  micCompNode.knee.value = 10;
+  micCompNode.ratio.value = 4;
+  micCompNode.attack.value = 0.003;
+  micCompNode.release.value = 0.25;
 
   // лимитер, чтобы при усилении 200–400% не было клиппинга
   micLimiterNode = ctx.createDynamicsCompressor();
@@ -349,35 +423,36 @@ async function buildLocalStream() {
   micLimiterNode.release.value = 0.1;
 
   micDestNode = ctx.createMediaStreamDestination();
-
-  micSourceNode.connect(micGainNode);
-  micGainNode.connect(micLimiterNode);
   micLimiterNode.connect(micDestNode);
+  wireMicChain();
 
   return micDestNode.stream;
 }
 
-// смена микрофона прямо во время звонка: поток к собеседникам не прерывается
+// смена микрофона (или настроек обработки) прямо во время звонка: поток к собеседникам не прерывается
 async function switchMic(deviceId) {
   const raw = await getMicStream(deviceId);
   try { micSourceNode.disconnect(); } catch (_) {}
   if (rawLocalStream) rawLocalStream.getTracks().forEach((t) => t.stop());
   rawLocalStream = raw;
   micSourceNode = getPlaybackCtx().createMediaStreamSource(raw);
-  micSourceNode.connect(micGainNode);
+  wireMicChain();
   watchMicTrack(raw);
 }
 
 function teardownMicGraph() {
-  [micSourceNode, micGainNode, micLimiterNode, micDestNode].forEach((n) => {
+  [micSourceNode, micHpfNode, micGateNode, micGainNode, micCompNode, micLimiterNode, micDestNode].forEach((n) => {
     try { if (n) n.disconnect(); } catch (_) {}
   });
-  micSourceNode = micGainNode = micLimiterNode = micDestNode = null;
+  micSourceNode = micHpfNode = micGateNode = micGainNode = micCompNode = micLimiterNode = micDestNode = null;
 }
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 // один и тот же URL везде: разные ?t=... создавали бы новый экземпляр модуля при каждой смене серии
-const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=5';
+const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=6';
+const KODIK_MODULE_URL = '/js/kodik/player.js?v=2';
+const KODIK_SEARCH_URL = '/js/kodik/search.js?v=1';
+const VK_MODULE_URL = '/js/vk/player.js?v=1';
 // после перемотки зрителя даём буферу догнать, прежде чем снова мерить отставание —
 // иначе на медленном потоке получается петля «перемотал → буферизуется → снова отстал → перемотал», кадр стоит
 const CAPTURE_SEEK_COOLDOWN_MS = 8000;
@@ -479,7 +554,24 @@ function stopThumbnailCapture() {
 function setOverlay(text, showStartBtn) {
   document.getElementById('overlayText').textContent = text;
   document.getElementById('startBtn').classList.toggle('hidden', !showStartBtn);
-  document.getElementById('overlay').classList.remove('hidden');
+  const overlay = document.getElementById('overlay');
+  // Kodik: нажать кнопку в чужом iframe из кода нельзя, поэтому клик проходит сквозь оверлей —
+  // наша ▶ стоит ровно над их ▶, и браузер засчитывает клик внутри плеера (без него Kodik не запустится после паузы)
+  overlay.classList.toggle('passthrough', isApiPlayerType());
+  overlay.classList.remove('hidden');
+}
+
+// плеер Kodik пошёл: если это клик сквозь наш оверлей — начинаем просмотр (или возвращаемся к хосту)
+function onKodikPlay() {
+  const overlay = document.getElementById('overlay');
+  if (overlay.classList.contains('passthrough') && !overlay.classList.contains('hidden')) {
+    if (!started) startWatching();
+    else {
+      hideOverlay();
+      if (!isOwner) applyPlaybackState(lastState);
+    }
+  }
+  emitPlayback(true);
 }
 
 function hideOverlay() {
@@ -513,7 +605,7 @@ function loadTwitchAPI() {
 
 
 function isAgeConfirmedLocally() {
-    return localStorage.getItem('pw_age18') === '1';
+    return myAdult || localStorage.getItem('pw_age18') === '1';
   }
 
   function askAgeGate() {
@@ -533,6 +625,7 @@ function isAgeConfirmedLocally() {
       };
       const onConfirm = () => {
         localStorage.setItem('pw_age18', '1');
+        rememberAdult(); // возраст подтверждён — запоминаем на аккаунте (галочка «18+» на главной)
         cleanup();
         resolve(true);
       };
@@ -659,6 +752,55 @@ function isAgeConfirmedLocally() {
         playerReady = true;
         return player;
       });
+    });
+  }
+
+  if (video.type === 'kodik') {
+    const slot = document.createElement('div');
+    slot.style.display = 'contents';
+    container.replaceChildren(slot);
+    return import(KODIK_MODULE_URL).then((mod) => {
+      if (stale()) return null;
+      kodikState = {
+        url: video.url,
+        season: video.meta?.currentSeason ?? null,
+        episode: video.meta?.currentEpisode ?? null,
+      };
+      kodikTranslationId = null;
+      apiPlayer = mod.createKodikPlayer(slot, {
+        ...kodikState,
+        volume: getSavedVolume() / 100,
+        on: {
+          play: onKodikPlay,
+          pause: () => emitPlayback(false),
+          seek: () => emitPlayback(getIsPlayingNow()),
+          episode: onKodikEpisode,
+          // браузер не дал плееру Kodik запуститься — нужен один клик внутри самого плеера (сквозь наш оверлей)
+          blocked: () => setOverlay(t('room.kodik.clickToPlay'), true),
+        },
+      });
+      playerReady = true;
+      return apiPlayer;
+    });
+  }
+
+  if (video.type === 'vk') {
+    const slot = document.createElement('div');
+    slot.style.display = 'contents';
+    container.replaceChildren(slot);
+    return import(VK_MODULE_URL).then((mod) => {
+      if (stale()) return null;
+      apiPlayer = mod.createVkPlayer(slot, {
+        url: video.url,
+        volume: getSavedVolume() / 100,
+        on: {
+          play: onKodikPlay, // клик сквозь оверлей / старт — общий для плееров в iframe
+          pause: () => emitPlayback(false),
+          seek: () => emitPlayback(getIsPlayingNow()),
+        },
+      });
+      playerReady = true;
+      return apiPlayer;
     });
   }
 
@@ -826,6 +968,7 @@ function isAgeConfirmedLocally() {
 function getCurrentPosition() {
   if (currentVideoType === 'youtube') return ytPlayer?.getCurrentTime() ?? 0;
   if (currentVideoType === 'twitch') return twitchPlayer?.getCurrentTime() ?? 0;
+  if (isApiPlayerType()) return apiPlayer?.getCurrentTime() ?? 0;
   if (currentVideoType === 'player_capture' && capturePlayer?.getCurrentPosition) {
     return capturePlayer.getCurrentPosition();
   }
@@ -836,6 +979,7 @@ function getCurrentPosition() {
 function getIsPlayingNow() {
   if (currentVideoType === 'youtube') return ytPlayer?.getPlayerState() === YT.PlayerState.PLAYING;
   if (currentVideoType === 'twitch') return !twitchPlayer?.isPaused();
+  if (isApiPlayerType()) return !!apiPlayer?.isPlaying();
   if (currentVideoType === 'player_capture' && capturePlayer?.getIsPlayingNow) {
     return capturePlayer.getIsPlayingNow();
   }
@@ -848,6 +992,8 @@ function doPlayPause(isPlaying) {
     isPlaying ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
   } else if (currentVideoType === 'twitch') {
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (isApiPlayerType()) {
+    isPlaying ? apiPlayer?.play() : apiPlayer?.pause();
   } else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
     capturePlayer.doPlayPause(isPlaying);
   } else if (videoEl) {
@@ -871,6 +1017,10 @@ function applyPlaybackState({ isPlaying, positionSeconds }) {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
     setTimeout(() => (suppressEvents = false), 800);
+  } else if (isApiPlayerType() && apiPlayer) {
+    apiPlayer.seek(positionSeconds);
+    isPlaying ? apiPlayer.play() : apiPlayer.pause();
+    setTimeout(() => (suppressEvents = false), 1000);
   } else if (currentVideoType === 'player_capture' && capturePlayer) {
     const v = capturePlayer.videoEl;
     const run = () => {
@@ -929,6 +1079,7 @@ function attemptResume(isPlaying, positionSeconds) {
   if (needsSeek) {
     if (currentVideoType === 'youtube') ytPlayer.seekTo(positionSeconds, true);
     else if (currentVideoType === 'twitch') twitchPlayer.seek(positionSeconds);
+    else if (isApiPlayerType()) apiPlayer?.seek(positionSeconds);
     else if (currentVideoType === 'player_capture' && capturePlayer?.seekTo) {
       capturePlayer.seekTo(positionSeconds);
     }
@@ -954,6 +1105,9 @@ function manualResyncViewer() {
   } else if (currentVideoType === 'twitch') {
     twitchPlayer.seek(positionSeconds);
     isPlaying ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (isApiPlayerType() && apiPlayer) {
+    apiPlayer.seek(positionSeconds);
+    isPlaying ? apiPlayer.play() : apiPlayer.pause();
     } else if (currentVideoType === 'player_capture' && capturePlayer) {
     const v = capturePlayer.videoEl;
     const run = () => {
@@ -998,6 +1152,8 @@ function enforceHostState() {
 
 function emitPlayback(isPlaying) {
   if (suppressEvents || !isOwner) return;
+  // плеер в iframe до старта видео (реклама, перемотка на сохранённое место) знает только 0:00 — не затираем позицию комнаты
+  if (isApiPlayerType() && !apiPlayer?.isReady()) return;
   const positionSeconds = getCurrentPosition();
   lastState = { isPlaying, positionSeconds };
   savePlaybackCache(lastState);
@@ -1092,7 +1248,11 @@ function startWatching() {
   if (isOwner) {
     if (currentVideoType === 'youtube') ytPlayer.playVideo();
     else if (currentVideoType === 'twitch') twitchPlayer.play();
-    else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
+    else if (isApiPlayerType() && apiPlayer) {
+      // хост перезагрузил страницу — продолжаем с сохранённого места (перемотка — когда пойдёт видео)
+      apiPlayer.seek(lastState.positionSeconds);
+      apiPlayer.play();
+    } else if (currentVideoType === 'player_capture' && capturePlayer?.doPlayPause) {
       const v = capturePlayer.videoEl;
       // хост перезагрузил страницу — продолжаем с сохранённого места, а не с начала
       resumeVideoAt(v, lastState.positionSeconds);
@@ -1415,9 +1575,122 @@ function initChatInputPlaceholder() {
 
 function updateVideoChangeModeLabel(type) {
   const el = document.getElementById('videoChangeModeLabel');
-  if (!el) return;
-  const key = 'room.videoType.' + type;
-  el.textContent = (type && I18N.has(key) ? t(key) : type) || '—';
+  if (el) {
+    const key = 'room.videoType.' + type;
+    el.textContent = (type && I18N.has(key) ? t(key) : type) || '—';
+  }
+  updateKodikChangeMode(type);
+}
+
+function kodikChangeLink(v) {
+  return /(kodik|aniqit)[^\/\s]*\/(serial|video|season|seria)\/\d+\//i.test(v);
+}
+
+// блок смены видео в режиме Kodik: плейсхолдер + ленивая загрузка виджета поиска
+async function updateKodikChangeMode(type) {
+  const input = document.getElementById('videoChangeUrl');
+  const box = document.getElementById('kodikChangeResults');
+  if (!input || !box) return;
+  if (type !== 'kodik') {
+    input.setAttribute('data-i18n-placeholder', 'room.change.placeholder');
+    input.placeholder = t('room.change.placeholder');
+    box.classList.add('hidden');
+    return;
+  }
+  if (!kodikChangeInit) {
+    kodikChangeInit = (async () => {
+      try { kodikChangeEnabled = !!(await api('/kodik/config')).search; } catch { kodikChangeInit = null; return; }
+      if (kodikChangeEnabled) {
+        const mod = await import(KODIK_SEARCH_URL);
+        kodikChangeResults = mod.createKodikResults(box, { keyPrefix: 'room.kodik', onPickChange: () => {} });
+      }
+    })();
+  }
+  await kodikChangeInit;
+  if (currentVideoType !== 'kodik') return;
+  const phKey = kodikChangeEnabled ? 'room.change.kodikSearch' : 'room.change.kodikLink';
+  input.setAttribute('data-i18n-placeholder', phKey);
+  input.placeholder = t(phKey);
+}
+
+function onVideoChangeInput() {
+  if (currentVideoType !== 'kodik') return;
+  clearTimeout(kodikChangeTimer);
+  const box = document.getElementById('kodikChangeResults');
+  const q = document.getElementById('videoChangeUrl').value.trim();
+  if (!kodikChangeEnabled || q.length < 2 || kodikChangeLink(q)) {
+    kodikChangeSeq++;
+    kodikChangeResults?.setItems([]);
+    box.classList.add('hidden');
+    return;
+  }
+  box.classList.remove('hidden');
+  kodikChangeTimer = setTimeout(() => kodikChangeSearch(q), 600);
+}
+
+function onVideoChangeKeydown(arg, el, e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const q = el.value.trim();
+  if (currentVideoType === 'kodik' && kodikChangeEnabled && q.length >= 2 && !kodikChangeLink(q) && !kodikChangeResults?.getPick()) {
+    clearTimeout(kodikChangeTimer);
+    kodikChangeSearch(q);
+  } else {
+    changeVideoUrl();
+  }
+}
+
+async function kodikChangeSearch(q) {
+  const seq = ++kodikChangeSeq;
+  const box = document.getElementById('kodikChangeResults');
+  box.classList.remove('hidden');
+  kodikChangeResults?.searching();
+  try {
+    const data = await api('/kodik/search?q=' + encodeURIComponent(q));
+    if (seq !== kodikChangeSeq) return;
+    kodikChangeResults?.setItems(data.items || []);
+  } catch (err) {
+    if (seq !== kodikChangeSeq) return;
+    kodikChangeResults?.error(err.message);
+  }
+}
+window.onVideoChangeInput = onVideoChangeInput;
+window.onVideoChangeKeydown = onVideoChangeKeydown;
+
+function setKodikState(next) {
+  kodikState = next;
+  window.__lastVideoUrl = next.url;
+  // тот же ключ, что у room:state после переподключения — иначе плеер пересоздастся на старую серию
+  roomStateKey = makeRoomStateKey({ type: 'kodik', url: next.url, meta: { currentSeason: next.season, currentEpisode: next.episode } });
+}
+
+// плеер Kodik сообщил серию и озвучку (после загрузки и при каждой смене)
+function onKodikEpisode({ season, episode, translationId, translationTitle }) {
+  if (!kodikState || !apiPlayer) return;
+  const prevTranslation = kodikTranslationId;
+  if (translationId) kodikTranslationId = translationId;
+
+  if (!isOwner) {
+    // зритель сам ушёл на другую серию — возвращаем серию комнаты (озвучку можно слушать свою)
+    if (kodikState.episode && episode && (episode !== kodikState.episode || (season && season !== kodikState.season))) {
+      apiPlayer.load(kodikState.url, kodikState.season, kodikState.episode);
+    }
+    return;
+  }
+
+  const voiceChanged = !!(prevTranslation && translationId && translationId !== prevTranslation);
+  if (!voiceChanged && season === kodikState.season && episode === kodikState.episode) return;
+
+  setKodikState({ ...kodikState, season, episode });
+  socket.emit('kodik:episode', {
+    code,
+    season,
+    episode,
+    translationId: voiceChanged ? translationId : undefined,
+    voice: translationTitle,
+  }, (res) => {
+    if (res?.url && kodikState) setKodikState({ ...kodikState, url: res.url });
+  });
 }
 
 function destroyCurrentPlayer() {
@@ -1441,6 +1714,10 @@ function destroyCurrentPlayer() {
     if (capturePlayer?.destroy) capturePlayer.destroy();
   } catch (_) {}
   capturePlayer = null;
+
+  try { apiPlayer?.destroy(); } catch (_) {}
+  apiPlayer = null;
+  kodikState = null;
 
   videoEl = null;
   playerReady = false;
@@ -1469,6 +1746,7 @@ async function applyNewVideo(video, playback) {
   lastState = playback || { isPlaying: false, positionSeconds: 0 };
   updateVideoChangeModeLabel(video?.type);
 
+  if (video?.adult && !(await ensureAdult())) return; // хост сменил видео на 18+
   await renderPlayer(video);
   setTimeout(refreshCcButton, 800);
 
@@ -1483,10 +1761,24 @@ async function changeVideoUrl() {
   if (!isOwner) return;
   const input = document.getElementById('videoChangeUrl');
   const btn = document.getElementById('videoChangeBtn');
-  const url = (input?.value || '').trim();
-  if (!url) {
-    PW.toast(t('room.change.noUrl'), 'info');
-    return;
+  const raw = (input?.value || '').trim();
+
+  let body;
+  if (currentVideoType === 'kodik') {
+    const pick = kodikChangeResults?.getPick();
+    if (pick) {
+      body = { url: pick.tr.link, title: pick.item.title };
+      if (pick.item.poster) body.poster = pick.item.poster;
+    } else if (kodikChangeLink(raw)) {
+      body = { url: raw };
+    } else if (kodikChangeEnabled) {
+      return PW.toast(t('room.change.kodikPick'), 'info');
+    } else {
+      return PW.toast(t('room.change.kodikNeedLink'), 'info');
+    }
+  } else {
+    if (!raw) return PW.toast(t('room.change.noUrl'), 'info');
+    body = { url: raw };
   }
 
   if (btn) {
@@ -1497,9 +1789,12 @@ async function changeVideoUrl() {
   try {
     const data = await api(`/rooms/${code}/change-video`, {
       method: 'POST',
-      body: { url },
+      body,
     });
     if (input) input.value = '';
+    if (!body.title) window.PWRecent?.add(raw); // выбор из поиска Kodik — не ссылка, в историю не кладём
+    kodikChangeResults?.setItems([]);
+    document.getElementById('kodikChangeResults')?.classList.add('hidden');
     await applyNewVideo(data.video, data.playback);
   } catch (err) {
     PW.toast(err.message || t('room.change.failed'), 'error');
@@ -1512,10 +1807,48 @@ async function changeVideoUrl() {
 }
 window.changeVideoUrl = changeVideoUrl;
 
+// ---- 18+: видео с порно-сайта или материал Kodik с рейтингом RX (сервер ставит video.adult) ----
+let myAdult = false; // аккаунт хоть раз подтвердил, что ему есть 18
+let adultAsking = null;
+
+function rememberAdult() {
+  if (myAdult) return;
+  myAdult = true;
+  api('/auth/adult', { method: 'PATCH', body: { confirmed: true } }).catch(() => {});
+}
+
+// Спрашиваем один раз на аккаунт. «Нет»: хоста — на главную и комната удаляется, зрителя — на главную.
+// «Да»: заодно спрашиваем, показывать ли комнаты 18+ в публичном списке (потом меняется галочкой на главной)
+function ensureAdult() {
+  if (myAdult) return Promise.resolve(true);
+  if (!adultAsking) {
+    adultAsking = (async () => {
+      const ok = await PW.confirm(t('room.adult.text'), {
+        title: t('room.adult.title'), okText: t('room.adult.yes'), cancelText: t('room.adult.no'), danger: true,
+      });
+      if (!ok) {
+        if (isOwner) await api('/rooms/' + encodeURIComponent(code), { method: 'DELETE' }).catch(() => {});
+        location.href = '/';
+        return false;
+      }
+      localStorage.setItem('pw_age18', '1');
+      await api('/auth/adult', { method: 'PATCH', body: { confirmed: true } }).catch(() => {});
+      myAdult = true;
+      const show = await PW.confirm(t('room.adult.showText'), {
+        title: t('room.adult.showTitle'), okText: t('room.adult.showYes'), cancelText: t('room.adult.showNo'),
+      });
+      await api('/auth/adult', { method: 'PATCH', body: { showAdult: !!show } }).catch(() => {});
+      return true;
+    })().finally(() => { adultAsking = null; });
+  }
+  return adultAsking;
+}
+
 async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/');
   myUsername = me.username || me.user?.username || null;
+  myAdult = !!me.adultConfirmed;
 
   document.getElementById('roomCodeValue').textContent = code;
   document.getElementById('roomCodeValue').onclick = () => copyText(code, 'code');
@@ -1529,12 +1862,20 @@ async function init() {
   socket = io({ transports: ['websocket', 'polling'] }); // через туннель длинные polling-запросы чаще рвутся, WebSocket стабильнее
   // язык сменили без перезагрузки — сервер дальше пишет этому сокету на новом языке
   window.addEventListener('pw:langchange', (e) => socket.emit('lang:set', e.detail.lang));
+  window.addEventListener('pw:langchange', () => {
+    if (currentVideoType === 'kodik' && kodikChangeResults?.hasItems()) kodikChangeResults.render();
+  });
   socket.on('connect', () => socket.emit('room:join', { code }));
 
   window.socket = socket;
   window.code = code;
 
   socket.on('chat:history', (list) => {
+    // история приходит при каждом входе, в том числе после переподключения сокета — иначе чат дублировался
+    for (const id of ['messages', 'fsMessages']) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '';
+    }
     list.forEach(({ username, text }) => addHistoryMessage({ username, text }));
   });
 
@@ -1550,6 +1891,20 @@ async function init() {
     renderDirectVideoUrl(url);
     started = false;
     updateWaitingOverlayText(); // убираем «жду хоста» и показываем кнопку «Начать просмотр»
+  });
+
+  // Kodik: хост переключил серию/озвучку — переключаем свой плеер туда же
+  socket.on('kodik:episode', ({ url, season, episode, voice, playback, voiceChanged, quiet }) => {
+    if (isOwner || currentVideoType !== 'kodik' || !apiPlayer) return;
+    setKodikState({ url, season, episode });
+    if (playback) {
+      lastState = playback;
+      savePlaybackCache(playback);
+    }
+    if (quiet) return; // хост только сообщил серию после загрузки — у зрителя она и так та же
+    apiPlayer.load(url, season, episode);
+    if (voiceChanged && voice) showLocalSystemMessage(t('room.kodik.voiceChanged', { voice }));
+    else if (episode) showLocalSystemMessage(t('room.kodik.episodeChanged', { season: season || 1, episode }));
   });
 
   socket.on('room:state', async ({ video, playback, isOwner: ownerFlag, name, username }) => {
@@ -1599,6 +1954,7 @@ async function init() {
     destroyCurrentPlayer(); // прежний плеер (другое видео или не догрузившийся) — гасим, а не бросаем играть в фоне
     renderingKey = stateKey;
     try {
+      if (video?.adult && !(await ensureAdult())) return; // плеер 18+ — только после подтверждения возраста
       await renderPlayer(video);
     } finally {
       if (renderingKey === stateKey) renderingKey = null;
@@ -1859,6 +2215,8 @@ document.addEventListener('keydown', (e) => {
     state === YT.PlayerState.PLAYING ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
   } else if (currentVideoType === 'twitch') {
     twitchPlayer.isPaused() ? twitchPlayer.play() : twitchPlayer.pause();
+  } else if (isApiPlayerType() && apiPlayer) {
+    apiPlayer.isPlaying() ? apiPlayer.pause() : apiPlayer.play();
   } else if (currentVideoType === 'player_capture' && capturePlayer?.videoEl) {
     const v = capturePlayer.videoEl;
     v.paused ? v.play().catch(() => {}) : v.pause();
@@ -1903,12 +2261,16 @@ function formatMessageHTML(username, text) {
   return `${nameHTML}: ${escapeHTML(text)}`;
 }
 
+const CHAT_MAX_NODES = 300;
+
 function appendMessageTo(containerId, username, text) {
   const container = document.getElementById(containerId);
   if (!container) return;
   const div = document.createElement('div');
   div.innerHTML = formatMessageHTML(username, text);
   container.appendChild(div);
+  // за долгий вечер в чате набегали тысячи узлов (и в обычном, и в полноэкранном) — держим последние
+  while (container.childElementCount > CHAT_MAX_NODES) container.firstElementChild.remove();
   container.scrollTop = 1e9;
 }
 
@@ -2036,33 +2398,41 @@ function makeDraggable(el, storageKey) {
     el.style.bottom = '';
   }
 
+  // позиция хранится долей свободного места (0..1), а не пикселями: плеер меняет размер (окно, панель чата,
+  // раскрытие эфира, догрузка страницы), и сохранённые пиксели «не влезали» — кнопка уходила на место по умолчанию
+  function freeSpace() {
+    const p = container.getBoundingClientRect();
+    return { fw: p.width - (el.offsetWidth || 40), fh: p.height - (el.offsetHeight || 40) };
+  }
+
   function applySavedPosition() {
+    if (dragging) return;
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(storageFullKey()) || 'null'); } catch (_) {}
+    if (!saved) { resetPosition(); return; }
 
-    if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') {
-      resetPosition();
-      return;
+    const { fw, fh } = freeSpace();
+    if (fw <= 0 || fh <= 0) return; // плеер скрыт или ещё раскрывается — применим, когда вырастет (ResizeObserver)
+
+    let { fx, fy } = saved;
+    if (typeof fx !== 'number' || typeof fy !== 'number') {
+      if (typeof saved.left !== 'number' || typeof saved.top !== 'number') { resetPosition(); return; }
+      fx = saved.left / fw; // старый формат — пиксели
+      fy = saved.top / fh;
     }
-
-    const p = container.getBoundingClientRect();
-    if (!p.width || !p.height) return; // плеер скрыт (мобилка) — не трогаем
-
-    const w = el.offsetWidth || 40;
-    const h = el.offsetHeight || 40;
-    if (saved.left < 0 || saved.top < 0 || saved.left > p.width - w || saved.top > p.height - h) {
-      resetPosition(); // не влезает — дефолт, сохранённое не стираем
-      return;
-    }
-
-    el.style.left = saved.left + 'px';
-    el.style.top = saved.top + 'px';
+    // не влезает — прижимаем к краю, а не сбрасываем
+    el.style.left = Math.round(Math.min(1, Math.max(0, fx)) * fw) + 'px';
+    el.style.top = Math.round(Math.min(1, Math.max(0, fy)) * fh) + 'px';
     el.style.right = 'auto';
     el.style.bottom = 'auto';
   }
 
   function savePosition(left, top) {
-    localStorage.setItem(storageFullKey(), JSON.stringify({ left, top }));
+    const { fw, fh } = freeSpace();
+    if (fw <= 0 || fh <= 0) return;
+    const fx = Math.round((left / fw) * 10000) / 10000;
+    const fy = Math.round((top / fh) * 10000) / 10000;
+    try { localStorage.setItem(storageFullKey(), JSON.stringify({ fx, fy })); } catch (_) {}
   }
 
 
@@ -2157,6 +2527,7 @@ function makeDraggable(el, storageKey) {
   document.addEventListener('fullscreenchange', onFsForPos);
   document.addEventListener('webkitfullscreenchange', onFsForPos);
   window.addEventListener('resize', applySavedPosition);
+  if (window.ResizeObserver) new ResizeObserver(() => applySavedPosition()).observe(container);
   applySavedPosition();
 }
 
@@ -2255,6 +2626,8 @@ function applyVolumeToActivePlayer(v) {
     try { ytPlayer.setVolume(Math.round(eff)); } catch (_) {}
   } else if (currentVideoType === 'twitch' && twitchPlayer) {
     try { twitchPlayer.setVolume(frac); } catch (_) {}
+  } else if (isApiPlayerType() && apiPlayer) {
+    apiPlayer.setVolume(frac);
   } else {
     const v_el = getActiveVideoEl();
     if (v_el) v_el.volume = frac;
@@ -2540,6 +2913,7 @@ function leaveVoiceCall() {
   if (bar) bar.style.width = '0%';
   stopAllPeerConnections();
   renderVoicePanel();
+  setTimeout(suspendIdleAudio, 1500);
 }
 
 function toggleMute() {
@@ -2553,6 +2927,7 @@ function toggleMute() {
 // цикл раз в 100 мс: подсветка говорящих + приглушение видео.
 // setInterval, а не requestAnimationFrame, чтобы работало и в неактивной вкладке
 let lastSpeakingIds = new Set(); // чтобы подсветка не мигала при перерисовке панели
+let speakingDirty = false; // состав говорящих поменялся, пока вкладка была в фоне
 
 function startVoiceLoop() {
   if (voiceLoopTimer) return;
@@ -2580,13 +2955,20 @@ function startVoiceLoop() {
       }
     }
 
+    // подсветку трогаем, только когда состав говорящих поменялся (раньше — поиск и перекраска 10 раз в секунду),
+    // и не в фоновой вкладке: её никто не видит, а renderVoicePanel при возврате возьмёт lastSpeakingIds
+    const changed = speakingIds.size !== lastSpeakingIds.size || [...speakingIds].some((id) => !lastSpeakingIds.has(id));
     lastSpeakingIds = speakingIds;
-    document.querySelectorAll('.voice-avatar[data-sid]').forEach((el) => {
-      el.classList.toggle('speaking', speakingIds.has(el.dataset.sid));
-    });
+    const visible = document.visibilityState === 'visible';
+    if (visible && (changed || speakingDirty)) {
+      speakingDirty = false;
+      document.querySelectorAll('.voice-avatar[data-sid]').forEach((el) => {
+        el.classList.toggle('speaking', speakingIds.has(el.dataset.sid));
+      });
+    } else if (!visible && changed) speakingDirty = true;
 
     // полоска уровня микрофона в окне «Настройки звука»
-    const modal = document.getElementById('voiceSettingsModal');
+    const modal = visible && document.getElementById('voiceSettingsModal');
     if (modal && !modal.classList.contains('hidden')) {
       const bar = document.getElementById('micLevelBar');
       if (bar) bar.style.width = Math.min(100, localLevel * 500) + '%';
@@ -2609,6 +2991,7 @@ function startVoiceLoop() {
 function stopVoiceLoop() {
   clearInterval(voiceLoopTimer);
   voiceLoopTimer = null;
+  lastSpeakingIds = new Set();
   voiceDuck = 1;
   applyVolumeToActivePlayer(getSavedVolume());
   document.querySelectorAll('.voice-avatar.speaking').forEach((el) => el.classList.remove('speaking'));
