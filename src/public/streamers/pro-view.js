@@ -20,7 +20,14 @@
   // Фон рисуется слоем под всей страницей, но переход считается в единицах холста: на странице он стоит
   // там же относительно блоков, что и в редакторе. Бока — слева и справа от холста, во всю высоту окна
   // (закреплены при прокрутке), поверх фона страницы. Оба слоя под содержимым (z-index: -1).
-  const page = { bg: null, sides: null, cw: 0, ch: 0, canvas: null, raf: 0, sig: '' };
+  // Верхняя панель сайта (логотип, кнопки) остаётся нашей: слои начинаются под ней (topY).
+  const page = { bg: null, sides: null, cw: 0, ch: 0, canvas: null, raf: 0, sig: '', topY: 0 };
+
+  // бока закреплены в окне, но не заходят на верхнюю панель, пока она видна
+  function placeSides() {
+    const side = document.getElementById('pwSides');
+    if (side) side.style.top = Math.max(0, page.topY - window.scrollY) + 'px';
+  }
 
   function layer(id, cls) {
     let el = document.getElementById(id);
@@ -42,21 +49,31 @@
     if (!canvas || !canvas.isConnected) return;
     const s = Number(getComputedStyle(canvas).getPropertyValue('--s')) || 1;
     const r = canvas.getBoundingClientRect();
+    const head = document.querySelector('.page-header');
+    const topY = head ? Math.round(head.getBoundingClientRect().bottom + window.scrollY) : 0;
+    page.topY = topY;
+    placeSides();
     const docW = document.documentElement.clientWidth;
     const docH = Math.max(document.documentElement.scrollHeight, r.bottom + window.scrollY);
-    const sig = [s, r.left, r.top + window.scrollY, docW, docH].map((n) => Math.round(n)).join(',');
+    const sig = [s, r.left, r.top + window.scrollY, docW, docH, topY].map((n) => Math.round(n)).join(',');
     if (sig === page.sig) return; // размеры те же — маску не пересобираем
     page.sig = sig;
 
     if (pageBg && bg) {
-      const Wu = docW / s, Hu = docH / s, Xu = (r.left + window.scrollX) / s, Yu = (r.top + window.scrollY) / s;
+      const ph = Math.max(1, docH - topY); // слой фона — от низа верхней панели до конца страницы
+      const Wu = docW / s, Hu = ph / s, Xu = (r.left + window.scrollX) / s, Yu = (r.top + window.scrollY - topY) / s;
       const v = bg.dir !== 'h';
       // позиция и ширина перехода из долей холста — в доли всей страницы
       const pos = v ? ((Yu + (bg.pos / 100) * ch) / Hu) * 100 : ((Xu + (bg.pos / 100) * cw) / Wu) * 100;
       const soft = v ? (bg.soft * ch) / Hu : (bg.soft * cw) / Wu;
-      Object.assign(pageBg.style, { width: docW + 'px', height: docH + 'px' });
+      Object.assign(pageBg.style, { top: topY + 'px', width: docW + 'px', height: ph + 'px' });
       pageBg.style.setProperty('--s', s);
       P.paintBg(pageBg, { ...bg, pos, soft }, Wu, Hu);
+      // фото фона закреплено в окне, как бока: иначе «Заполнить» растягивало его на всю высоту страницы
+      // (длинный профиль — фото огромное и размытое). Переход (маска) по-прежнему едет вместе с блоками
+      [...pageBg.children].forEach((el, i) => {
+        el.style.backgroundAttachment = bg.fills[i]?.img ? 'fixed' : '';
+      });
     }
     if (side && sides) {
       const lw = Math.max(0, Math.floor(r.left)), rw = Math.max(0, Math.ceil(docW - r.right));
@@ -93,6 +110,7 @@
       // высота документа меняется вместе с содержимым (эфир раскрылся, записи догрузились); body сам — 100% окна
       pageWatch.observe(document.getElementById('pageContent') || document.body);
       window.addEventListener('resize', schedule);
+      window.addEventListener('scroll', () => { if (page.on) placeSides(); }, { passive: true });
     }
     pageWatch.observe(canvas);
     layoutPage();
@@ -142,9 +160,11 @@
     canvas.style.setProperty('--ch', ch);
     canvas.style.maxWidth = cw + 'px';
     watchScale(canvas, cw);
-    // фон — на всю страницу (слой под страницей), в холсте его не рисуем, иначе был бы виден шов
-    P.paintBg(bgEl, null, cw, ch);
-    applyPage(canvas, bg, sides, cw, ch);
+    // «Растянуть на всю страницу» — фон слоем под всей страницей (в холсте не рисуем, иначе шов);
+    // без галочки — как раньше, только под профилем. Бока от галочки не зависят
+    const full = !!(bg && bg.full);
+    P.paintBg(bgEl, full ? null : bg, cw, ch);
+    applyPage(canvas, full ? bg : null, sides, cw, ch);
   }
 
   let liveMq = null;

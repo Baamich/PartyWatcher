@@ -160,6 +160,18 @@
 .vod-card-title { font-weight: 700; font-size: 14px; margin: 0 0 4px; }
 .vod-card-meta { font-size: 12px; color: var(--text-muted); }
 
+/* тёмная тема даёт всем кнопкам тень ([data-theme="dark"] button) и перебивает сброс ниже — на светлом
+   фоне профиля за прозрачным аватаром и именем была видна «полочка». Здесь специфичнее */
+[data-theme] .profile-avatar-wrap,
+[data-theme] .profile-name-btn,
+[data-theme] .profile-avatar-wrap:hover,
+[data-theme] .profile-name-btn:hover,
+[data-theme] .profile-avatar-wrap:active,
+[data-theme] .profile-name-btn:active {
+  box-shadow: none;
+  background: none;
+}
+
 /* Сброс стилей кнопок профиля — только курсор, без цвета/фона */
 .profile-avatar-wrap,
 .profile-name-btn {

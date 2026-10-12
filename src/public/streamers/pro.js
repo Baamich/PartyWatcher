@@ -811,6 +811,12 @@
         add(row(tr('editor.bg.soft'), range(bg.soft, 0, 50, 1, (v) => { bg.soft = v; upd(); })));
         add(E('div', { className: 'pm-hint', textContent: tr('editor.bg.posHint') }));
       }
+      add(row(tr('editor.bg.full'), E('input', { type: 'checkbox', checked: !!bg.full, onchange: (e) => {
+        if (e.target.checked) bg.full = true; else delete bg.full;
+        touch();
+        buildBgMenu();
+      } })));
+      add(E('div', { className: 'pm-hint', textContent: tr(bg.full ? 'editor.bg.fullOn' : 'editor.bg.fullOff') }));
       add(button(tr('editor.bg.remove'), () => { layout.profile.bg = null; rebuild(); }, 'pm-danger'));
     }
 

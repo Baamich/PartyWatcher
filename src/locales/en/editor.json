@@ -231,7 +231,10 @@
     "addSideL": "＋ Left side",
     "addSideR": "＋ Right side",
     "sidePhoto": "📷 Photo on the side",
-    "removeSide": "Remove side"
+    "removeSide": "Remove side",
+    "full": "Stretch over the whole page",
+    "fullOn": "The background covers the whole page below the site header; a photo is pinned to the window and doesn’t stretch as you scroll. The stage shows only the part under the profile — use “👁 View on the page”.",
+    "fullOff": "The background is only under the profile, as on the stage. Around it — the site color or the page sides."
   },
   "preview": {
     "open": "👁 View on the page",

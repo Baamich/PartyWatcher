@@ -176,6 +176,8 @@
       dir: raw.dir === 'h' ? 'h' : 'v',
       fx: BG_FX.includes(raw.fx) ? raw.fx : 'fade',
       soft: Math.round(num(raw.soft, 0, 50, 20) * 10) / 10,
+      // true — фон у зрителей на всю страницу (фото закреплено в окне); иначе только под профилем, как раньше
+      ...(raw.full === true && { full: true }),
     };
   }
 
@@ -351,8 +353,14 @@
     const at = (p / 100) * L;
     // точка (поперёк w, вдоль u) → координаты svg
     const xy = (w, u) => (v ? `${w.toFixed(1)},${u.toFixed(1)}` : `${u.toFixed(1)},${w.toFixed(1)}`);
-    const area = (edge) => `<path d="M${edge.map(([w, u]) => xy(w, u)).join(' L')} L${xy(C, L)} L${xy(0, L)} Z"/>`;
     const blur = (sft / 100) * L * 0.12;
+    // фигура выходит за края на запас размытия: иначе размытие смешивает её край с пустотой,
+    // и у боковых краёв (на всю страницу — заметно) проступает первый фон
+    const pad = blur * 3 + 2;
+    const area = (edge) => {
+      const e = [[-pad, edge[0][1]], ...edge, [C + pad, edge[edge.length - 1][1]]];
+      return `<path d="M${e.map(([w, u]) => xy(w, u)).join(' L')} L${xy(C + pad, L + pad)} L${xy(-pad, L + pad)} Z"/>`;
+    };
     const amp = Math.max(12, C * 0.03);
 
     switch (bg.fx) {
