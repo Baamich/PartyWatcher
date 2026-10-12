@@ -561,6 +561,23 @@ function setOverlay(text, showStartBtn) {
   overlay.classList.remove('hidden');
 }
 
+// У части зрителей провайдер режет домен плеера Kodik (kodikplayer.com) — в iframe тогда ошибка браузера
+// «соединение сброшено», а других доменов у плеера нет. Проверяем доступность запросом no-cors: ответ любой —
+// сайт открывается, сетевая ошибка — режут. Тогда честно говорим зрителю, что нужен VPN
+function warnIfKodikBlocked(url, stale) {
+  let origin;
+  try { origin = new URL(url).origin; } catch (_) { return; }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  fetch(origin + '/favicon.ico', { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal })
+    .then(() => {}, (e) => {
+      if (e?.name === 'AbortError' || stale()) return; // долго — не значит заблокирован, молчим
+      setOverlay(t('room.kodik.unreachable', { host: new URL(origin).host }), false);
+      PW.toast(t('room.kodik.unreachable', { host: new URL(origin).host }), 'error');
+    })
+    .finally(() => clearTimeout(timer));
+}
+
 // плеер Kodik пошёл: если это клик сквозь наш оверлей — начинаем просмотр (или возвращаемся к хосту)
 function onKodikPlay() {
   const overlay = document.getElementById('overlay');
@@ -780,6 +797,7 @@ function isAgeConfirmedLocally() {
         },
       });
       playerReady = true;
+      warnIfKodikBlocked(video.url, stale);
       return apiPlayer;
     });
   }

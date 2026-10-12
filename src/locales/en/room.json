@@ -190,7 +190,8 @@
       "one": "{n} voice-over",
       "other": "{n} voice-overs"
     },
-    "episodes": "{n} ep."
+    "episodes": "{n} ep.",
+    "unreachable": "The Kodik player can’t load: your internet provider seems to block {host}. Turn on a VPN and reload the page."
   },
   "adult": {
     "title": "18+ content",

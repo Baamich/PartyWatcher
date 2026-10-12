@@ -36,7 +36,8 @@ function buildDirectives() {
     // https: — постеры из поиска Kodik лежат на разных доменах (кинопоиск, шикимори, их CDN)
     imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
     mediaSrc: ["'self'", 'blob:', 'https:'], // «прямая ссылка» на видео может вести на любой https-хост
-    connectSrc: ["'self'", 'blob:', ...(ws ? [ws] : [])], // Socket.IO и playlist из blob: для hls.js
+    // Socket.IO и playlist из blob: для hls.js; домен плеера Kodik — проверка, не режет ли его провайдер зрителя
+    connectSrc: ["'self'", 'blob:', ...(ws ? [ws] : []), `https://${config.kodik.playerHost}`],
     fontSrc: ["'self'", 'data:'],
     frameSrc: ['https:'],                    // YouTube, Twitch и сторонние плееры; список заранее неизвестен
     workerSrc: ["'self'", 'blob:'],          // воркер hls.js
