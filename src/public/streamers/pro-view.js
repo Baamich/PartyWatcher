@@ -169,7 +169,7 @@
 
   let liveMq = null;
 
-  function applyLive(blocks) {
+  function applyLive(blocks, bg) {
     const inner = document.querySelector('.live-strip-inner');
     if (!inner) return;
     inner.querySelectorAll(':scope > .pw-custom').forEach((n) => n.remove());
@@ -191,6 +191,14 @@
     const cw = P.canvasWidth(blocks, 'live');
     inner.style.setProperty('--ch', P.canvasHeight(blocks));
     inner.style.setProperty('--cw', cw);
+    // фон эфира (🖼️ в режиме «Эфир») — слой под плеером, чатом и блоками
+    let bgEl = inner.querySelector(':scope > .pw-bg');
+    if (bg && !bgEl) {
+      bgEl = document.createElement('div');
+      bgEl.className = 'pw-bg';
+      inner.prepend(bgEl);
+    }
+    if (bgEl) P.paintBg(bgEl, bg, cw, P.canvasHeight(blocks));
 
     if (!liveMq) {
       liveMq = window.matchMedia('(min-width: 901px)');
@@ -205,6 +213,6 @@
     const L = P.withDefaults(layout);
     view.active = true;
     applyProfile(L.profile.blocks, hasVods, L.profile.bg, L.profile.sides, L.profile.width);
-    applyLive(L.live.blocks);
+    applyLive(L.live.blocks, L.live.bg);
   }
 })();

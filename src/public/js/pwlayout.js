@@ -33,7 +33,7 @@
   }
   const LIMITS = {
     profile: { custom: 12, photos: 4, links: 12, bgs: 2, sides: 2 },
-    live: { custom: 8, photos: 2, links: 6, bgs: 0 },
+    live: { custom: 8, photos: 2, links: 6, bgs: 2 }, // фото-блоки в эфире больше не добавляются (фон — через 🖼️), старые показываются
   };
   // фон страницы профиля: до 2 заливок (цвет или фото) и переход между ними
   const BG_FX = ['fade', 'sharp', 'diagonal', 'wave', 'zigzag', 'steps', 'arc', 'stripes', 'dots', 'radial'];
@@ -59,7 +59,7 @@
   function allImages(L) {
     const out = [];
     for (const m of ['profile', 'live']) for (const b of L?.[m]?.blocks || []) if (b.img) out.push(b.img);
-    for (const f of L?.profile?.bg?.fills || []) if (f.img) out.push(f.img);
+    for (const m of ['profile', 'live']) for (const f of L?.[m]?.bg?.fills || []) if (f.img) out.push(f.img);
     for (const k of ['l', 'r']) if (L?.profile?.sides?.[k]?.img) out.push(L.profile.sides[k].img);
     return out;
   }
@@ -196,6 +196,7 @@
     try { out.profile.bg = cleanBg(raw?.profile?.bg); } catch { out.profile.bg = null; }
     try { out.profile.sides = cleanSides(raw?.profile?.sides); } catch { out.profile.sides = null; }
     out.profile.width = cleanWidth(raw?.profile?.width);
+    try { out.live.bg = cleanBg(raw?.live?.bg); } catch { out.live.bg = null; }
     return out;
   }
 
@@ -315,6 +316,7 @@
     out.profile.bg = cleanBg(raw.profile?.bg);
     out.profile.sides = cleanSides(raw.profile?.sides);
     out.profile.width = cleanWidth(raw.profile?.width);
+    out.live.bg = cleanBg(raw.live?.bg);
     if (gifCount(out) > GIF_MAX) throw layoutError('tooManyGifs', { n: GIF_MAX });
     if (allImages(out).reduce((n, s) => n + s.length, 0) > MAX_TOTAL_IMG_CHARS) throw layoutError('tooHeavy');
     return out;

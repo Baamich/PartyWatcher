@@ -87,7 +87,7 @@
     "live": "This is how the stream looks on a phone: player on top, chat below (custom layout works from 900 px)",
     "profile": "This is how the profile looks on a phone (view only)"
   },
-  "infoLive": " · No scissors on the live page, photos are background only",
+  "infoLive": " · Live has no scissors or photos — background via 🖼️",
   "linkLabel": "Button",
   "max": {
     "links": "Max buttons: {n}",
@@ -222,7 +222,6 @@
     "pos": "Where",
     "soft": "Softness",
     "posHint": "While this menu is open, a dashed line on the stage shows where the transition is.",
-    "profileOnly": "Only the profile has a background",
     "sides": "Page sides",
     "sidesHint": "Left and right of the profile, the full window height (they don’t scroll). For a 1920×1080 screen a photo of about {w}×{h} px per side fits now. On other screens the photo adjusts itself: “Fill” crops the extra, “Whole” shows all of it.",
     "sidesNarrow": "The profile is almost as wide as a 1920 screen — the sides will barely show. Make the profile narrower (move blocks left) to make room for them.",
@@ -234,7 +233,9 @@
     "removeSide": "Remove side",
     "full": "Stretch over the whole page",
     "fullOn": "The background covers the whole page below the site header; a photo is pinned to the window and doesn’t stretch as you scroll. The stage shows only the part under the profile — use “👁 View on the page”.",
-    "fullOff": "The background is only under the profile, as on the stage. Around it — the site color or the page sides."
+    "fullOff": "The background is only under the profile, as on the stage. Around it — the site color or the page sides.",
+    "liveTitle": "Live background",
+    "liveHint": "The background lies under the player, chat and your blocks on the live page. A color or a photo, plus a second background with a transition. Shown on screens from 900 pixels (on phones the live page is standard)."
   },
   "preview": {
     "open": "👁 View on the page",

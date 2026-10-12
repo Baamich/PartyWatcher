@@ -112,3 +112,7 @@ a.pw-link:hover .pw-fill { filter: brightness(1.12); }
 .pw-side-l { left: 0; }
 .pw-side-r { right: 0; }
 
+/* фон эфира: только в раскладке PRO на широком экране; на телефоне и в полноэкранном — стандартный эфир */
+.live-strip-inner > .pw-bg { display: none; }
+.live-strip-inner.pw-on:not(.fs-active) > .pw-bg:not([hidden]) { display: block; z-index: 0; }
+

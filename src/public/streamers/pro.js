@@ -47,6 +47,8 @@
     const sd2 = l.profile.sides;
     out.profile.sides = sd2 ? { ...(sd2.l && { l: { ...sd2.l } }), ...(sd2.r && { r: { ...sd2.r } }) } : null;
     out.profile.width = l.profile.width || null;
+    const lb = l.live.bg;
+    out.live.bg = lb ? { ...lb, fills: lb.fills.map((f) => ({ ...f })) } : null;
     return out;
   };
 
@@ -234,7 +236,7 @@
     }
     stage.style.setProperty('--ch', P.canvasHeight(blocks()));
     const extra = [];
-    if (mode === 'profile') extra.push(E('div', { className: 'pw-bg' }));
+    extra.push(E('div', { className: 'pw-bg' })); // фон есть и у профиля, и у эфира
     // граница страницы (профиль и эфир): дальше неё страница станет шире (до 1760), если дотянуть туда блок
     if (!phone && viewW() < curW()) {
       const g = E('div', { className: 'pw-wguide', title: tr('editor.widthGuide', { w: viewW() }) }, E('span', { textContent: viewW() }));
@@ -259,7 +261,7 @@
   function paintStageBg() {
     const bgEl = stage.querySelector(':scope > .pw-bg');
     if (!bgEl) return;
-    const bg = layout.profile.bg, W = viewW(), H = P.canvasHeight(blocks());
+    const bg = layout[mode].bg, W = viewW(), H = P.canvasHeight(blocks());
     P.paintBg(bgEl, bg, W, H);
     stage.querySelector(':scope > .pw-bg-guide')?.remove();
     if (menuId === BG_MENU && bg && bg.fills.length > 1 && !['radial'].includes(bg.fx)) {
@@ -307,9 +309,10 @@
         : tr('editor.phone.profile');
       return;
     }
-    const c = P.counts(blocks(), mode === 'profile' ? layout.profile.bg : null, mode === 'profile' ? layout.profile.sides : null);
+    const c = P.counts(blocks(), layout[mode].bg, mode === 'profile' ? layout.profile.sides : null);
     const L = P.LIMITS[mode];
-    const kinds = ['custom', 'photos', 'links'].concat(mode === 'profile' ? ['bgs', 'sides'] : []);
+    // в эфире фото-блоков нет (фон — через 🖼️), поэтому и счётчика фото там нет
+    const kinds = mode === 'profile' ? ['custom', 'photos', 'links', 'bgs', 'sides'] : ['custom', 'links', 'bgs'];
     const parts = [];
     kinds.forEach((k, i) => {
       if (i) parts.push(' · ');
@@ -339,7 +342,7 @@
     stage.querySelectorAll('.hl, .hl-pin').forEach((n) => n.classList.remove('hl', 'hl-pin'));
     const mark = (k, cls) => {
       if (!k) return;
-      if (k === 'bgs' || (k === 'gifs' && (layout.profile.bg?.fills || []).some((f) => P.isGif(f.img)) && mode === 'profile')) {
+      if (k === 'bgs' || (k === 'gifs' && (layout[mode].bg?.fills || []).some((f) => P.isGif(f.img)))) {
         stage.querySelector(':scope > .pw-bg')?.classList.add(cls);
         if (k === 'bgs') return;
       }
@@ -765,7 +768,8 @@
   }
 
   function buildBgMenu() {
-    const bg = layout.profile.bg;
+    const bg = layout[mode].bg;
+    const isProfile = mode === 'profile'; // ширина, бока, «на всю страницу» и предпросмотр — только у профиля
     const fills = bg ? bg.fills : [];
     const body = E('div', { className: 'pm-body' });
     const add = (...n) => body.append(...n);
@@ -773,13 +777,17 @@
     const rebuild = () => { touch(); paintStageBg(); updateInfo(); buildBgMenu(); };
 
     // ширина страницы: без неё профиль шириной до правого блока, и справа на большом экране пусто
-    add(E('div', { className: 'pm-sub', textContent: tr('editor.page.width') }));
-    const widthOpts = [[0, tr('editor.page.byBlocks')], ...P.PAGE_WIDTHS.map((w) => [w, w === 1760 ? tr('editor.page.full', { w }) : String(w)])];
-    add(row(tr('editor.page.widthLabel'), select(widthOpts, layout.profile.width || 0, (v) => {
-      layout.profile.width = Number(v) || null;
-      touch(); renderStage(); buildBgMenu();
-    })));
-    add(E('div', { className: 'pm-hint', textContent: tr('editor.page.widthHint', { w: viewW() }) }));
+    if (isProfile) {
+      add(E('div', { className: 'pm-sub', textContent: tr('editor.page.width') }));
+      const widthOpts = [[0, tr('editor.page.byBlocks')], ...P.PAGE_WIDTHS.map((w) => [w, w === 1760 ? tr('editor.page.full', { w }) : String(w)])];
+      add(row(tr('editor.page.widthLabel'), select(widthOpts, layout.profile.width || 0, (v) => {
+        layout.profile.width = Number(v) || null;
+        touch(); renderStage(); buildBgMenu();
+      })));
+      add(E('div', { className: 'pm-hint', textContent: tr('editor.page.widthHint', { w: viewW() }) }));
+    } else {
+      add(E('div', { className: 'pm-hint', textContent: tr('editor.bg.liveHint') }));
+    }
 
     const fillSection = (f, i) => {
       add(E('div', { className: 'pm-sub', textContent: tr(i ? 'editor.bg.second' : 'editor.bg.first') }));
@@ -794,7 +802,7 @@
     if (!fills.length) {
       add(E('div', { className: 'pm-hint', textContent: tr('editor.bg.hint') }));
       add(button(tr('editor.bg.add'), () => {
-        layout.profile.bg = { fills: [{ c: '#1b1530' }], pos: 50, dir: 'v', fx: 'fade', soft: 20 };
+        layout[mode].bg = { fills: [{ c: '#1b1530' }], pos: 50, dir: 'v', fx: 'fade', soft: 20 };
         rebuild();
       }));
     } else {
@@ -811,13 +819,19 @@
         add(row(tr('editor.bg.soft'), range(bg.soft, 0, 50, 1, (v) => { bg.soft = v; upd(); })));
         add(E('div', { className: 'pm-hint', textContent: tr('editor.bg.posHint') }));
       }
-      add(row(tr('editor.bg.full'), E('input', { type: 'checkbox', checked: !!bg.full, onchange: (e) => {
+      if (isProfile) add(row(tr('editor.bg.full'), E('input', { type: 'checkbox', checked: !!bg.full, onchange: (e) => {
         if (e.target.checked) bg.full = true; else delete bg.full;
         touch();
         buildBgMenu();
       } })));
-      add(E('div', { className: 'pm-hint', textContent: tr(bg.full ? 'editor.bg.fullOn' : 'editor.bg.fullOff') }));
-      add(button(tr('editor.bg.remove'), () => { layout.profile.bg = null; rebuild(); }, 'pm-danger'));
+      if (isProfile) add(E('div', { className: 'pm-hint', textContent: tr(bg.full ? 'editor.bg.fullOn' : 'editor.bg.fullOff') }));
+      add(button(tr('editor.bg.remove'), () => { layout[mode].bg = null; rebuild(); }, 'pm-danger'));
+    }
+
+    if (!isProfile) {
+      menu.replaceChildren(E('div', { className: 'pm-title', textContent: tr('editor.bg.liveTitle') }), body);
+      menu.classList.remove('hidden');
+      return;
     }
 
     // бока страницы: слева и справа от профиля, во всю высоту окна; цвет, потом можно фото поверх
@@ -985,10 +999,9 @@
       shapeMenu.classList.toggle('hidden');
       return;
     }
-    if (t === 'image') return addImage('image');
+    if (t === 'image') return mode === 'live' ? undefined : addImage('image'); // в эфире фото нет — фон через 🖼️
     if (t === 'link') return addLink();
     if (t === 'bg') {
-      if (mode !== 'profile') return toast(tr('editor.bg.profileOnly'), 'info');
       setTool('select');
       return openBgMenu(btn);
     }
@@ -1003,7 +1016,11 @@
   function syncModeButtons() {
     root.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode && (b.dataset.phone === '1') === phone));
     $('proScissors').disabled = mode === 'live' || phone;
-    $('proBgBtn').disabled = mode !== 'profile' || phone;
+    $('proBgBtn').disabled = phone; // фон есть и у профиля, и у эфира
+    // в эфире фото-блоков нет: фон задаётся через 🖼️
+    const imgTool = root.querySelector('[data-tool="image"]');
+    if (imgTool) imgTool.disabled = mode === 'live' || phone;
+    if (mode === 'live' && tool === 'image') setTool('select');
   }
   root.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
     mode = b.dataset.mode;
