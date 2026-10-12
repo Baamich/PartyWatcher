@@ -229,3 +229,23 @@
   margin: 0;
   border: none;
 }
+
+/* предпросмотр из PRO-редактора: несохранённые правки */
+.pw-preview-badge {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: calc(100% - 32px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(77, 141, 255, 0.92);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  text-align: center;
+}
+

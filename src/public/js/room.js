@@ -450,7 +450,7 @@ function teardownMicGraph() {
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 // один и тот же URL везде: разные ?t=... создавали бы новый экземпляр модуля при каждой смене серии
 const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=6';
-const KODIK_MODULE_URL = '/js/kodik/player.js?v=2';
+const KODIK_MODULE_URL = '/js/kodik/player.js?v=3';
 const KODIK_SEARCH_URL = '/js/kodik/search.js?v=1';
 const VK_MODULE_URL = '/js/vk/player.js?v=1';
 // после перемотки зрителя даём буферу догнать, прежде чем снова мерить отставание —
@@ -794,6 +794,12 @@ function isAgeConfirmedLocally() {
           episode: onKodikEpisode,
           // браузер не дал плееру Kodik запуститься — нужен один клик внутри самого плеера (сквозь наш оверлей)
           blocked: () => setOverlay(t('room.kodik.clickToPlay'), true),
+          volume: onApiPlayerVolume,
+          speedLocked: () => {
+            if (Date.now() - speedToastAt < 10000) return;
+            speedToastAt = Date.now();
+            PW.toast(t('room.kodik.speedLocked'), 'info');
+          },
         },
       });
       playerReady = true;
@@ -2635,6 +2641,15 @@ function getSavedVolume() {
 
 function saveVolume(v) {
   localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+}
+
+// громкость поменяли внутри плеера Kodik: сохраняем как обычную (без учёта приглушения под голос) и двигаем ползунок
+let speedToastAt = 0;
+function onApiPlayerVolume(frac) {
+  const v = Math.max(0, Math.min(100, Math.round((frac * 100) / (voiceDuck || 1))));
+  saveVolume(v);
+  const slider = document.getElementById('volumeSlider');
+  if (slider) slider.value = v;
 }
 
 function applyVolumeToActivePlayer(v) {

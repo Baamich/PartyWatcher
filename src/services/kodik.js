@@ -8,7 +8,7 @@ const i18n = require('./i18n');
 const PLAYER_HOST = config.kodik.playerHost;
 // //kodik.info/serial/6647/<hash>/720p, https://kodikplayer.com/video/…, а также код <iframe src="…">.
 // Из ссылки берём только тип, id и hash — хост всегда наш (PLAYER_HOST), чужой адрес не подсунуть.
-const LINK_RE = /(?:[a-z0-9-]+\.)*(?:kodik\.(?:info|cc|biz)|kodikplayer\.com|aniqit\.com)\/(serial|video|season|seria)\/(\d{1,12})\/([a-f0-9]{16,64})/i;
+const LINK_RE = /(?:[a-z0-9-]+\.)*(?:kodik\.(?:info|cc|biz|org)|kodikplayer\.com|aniqit\.com)\/(serial|video|season|seria)\/(\d{1,12})\/([a-f0-9]{16,64})/i;
 
 function normalizeLink(raw) {
   const m = String(raw || '').slice(0, 2000).match(LINK_RE);

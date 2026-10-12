@@ -80,14 +80,14 @@
     "drive": "Google Drive",
     "player_capture": "Player capture (movie / series)",
     "direct": "Direct video link",
-    "kodik": "Kodik (movies, series, anime)"
+    "kodik": "Kodik (anime, dramas, Asian & Turkish series)"
   },
   "info": {
     "youtube_twitch": "Paste a YouTube video link (youtube.com/watch?v=... or youtu.be/...), a Twitch recording (VOD) link (twitch.tv/videos/1234567890 — a recording, not a live stream) or a VK Video link (vk.com/video-123_456, vkvideo.ru/video-123_456 or the embed code). <br>The service is detected automatically from the link. <br>A private VK video can only be embedded with its embed code (\"Share\" → \"Export\").",
     "drive": "(not tested)<br>In Google Drive: right-click the video → \"Share\" → \"Anyone with the link\" → copy the link and paste it here. Otherwise the server cannot read the file.",
     "player_capture": "Paste a link to a movie/series page. Optimized for:<br>• Kinogo(<a href=\"https://kinogo2026.com\" target=\"_blank\" rel=\"noopener\">https://kinogo2026.com</a>), (<a href=\"https://kinogomy.net\" target=\"_blank\" rel=\"noopener\">https://kinogomy.net</a>),<br>• Rezka (<a href=\"https://rezka-ua.tv\" target=\"_blank\" rel=\"noopener\">https://rezka-ua.tv</a>), () <a href=\"https://rezka.ag\" target=\"_blank\" rel=\"noopener\">https://rezka.ag</a><br>• (<a href=\"https://ga.lordfilm5.pro\" target=\"_blank\" rel=\"noopener\">https://ga.lordfilm5.pro</a>), (<a href=\"https://lordfilm.fi\" target=\"_blank\" rel=\"noopener\">https://lordfilm.fi</a>) and their possible mirror domains (there may be quirks, but movies/series should work). <br>Other sites may work too, but this is not guaranteed. <br>⚠️ my.mail.ru is not supported (it cannot be captured). <br>Some sites let you choose the season/episode/voice-over/player.",
     "direct": "Paste a READY direct video link — a regular site page address will NOT work here (e.g. a my.mail.ru watch page), only:<br>• a link to the video file itself: .mp4, .m3u8<br>• a link to an embed player that the site ITSELF allows to embed (not all sites allow it, e.g. my.mail.ru).<br>Such a link usually has to be found in the page source — the server does not look for it, unlike \"Player capture\".",
-    "kodik": "Find a movie, series or anime by title and pick a voice-over — the video plays in the Kodik player right in every viewer's browser (no capture, fast).<br>You can also paste a ready Kodik player link (kodik.info/serial/… or kodikplayer.com/video/…).<br>The host switches season, episode and voice-over right in the player — viewers follow along."
+    "kodik": "Search an anime, drama or series by title and pick a voice-over — the video plays in the Kodik player right at each viewer (no capture, fast). The Kodik catalog has anime, dramas, Turkish, Indian and other Eastern movies and series; there are no Hollywood, European or Russian movies — use “Player capture” for those.<br>You can also paste a ready Kodik player link (kodikplayer.com/video/…).<br>The host switches season, episode and voice-over right in the player — viewers switch along."
   },
   "privacy": {
     "public": "🔓 Public — the room will appear in \"Public rooms\" for all users.",
@@ -146,12 +146,12 @@
     "shortDesc": "Describe the problem (at least 5 characters)"
   },
   "kodik": {
-    "placeholder": "Search a movie, series or anime by title",
+    "placeholder": "Search an anime, drama or series by title",
     "placeholderLink": "Kodik player link (kodik.info/… or kodikplayer.com/…)",
     "searching": "Searching…",
     "nothing": "Nothing found",
     "failed": "Search failed",
-    "pickFirst": "Pick a movie or series from the list (or paste a Kodik player link)",
+    "pickFirst": "Pick an anime, drama or series in the list (or paste a Kodik player link)",
     "needLink": "Paste a Kodik player link (kodik.info/… or kodikplayer.com/…)",
     "serial": "Series",
     "movie": "Movie",

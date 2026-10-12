@@ -73,9 +73,9 @@
     "changing": "Changing...",
     "noUrl": "Paste a new link",
     "failed": "Could not change the video",
-    "kodikSearch": "Movie / series title or Kodik link",
+    "kodikSearch": "Anime, drama or series title, or a Kodik link",
     "kodikLink": "Kodik player link (kodik.info/… or kodikplayer.com/…)",
-    "kodikPick": "Pick a movie or series from the list (or paste a Kodik player link)",
+    "kodikPick": "Pick an anime, drama or series in the list (or paste a Kodik player link)",
     "kodikNeedLink": "Paste a Kodik player link (kodik.info/… or kodikplayer.com/…)"
   },
   "videoType": {
@@ -191,7 +191,8 @@
       "other": "{n} voice-overs"
     },
     "episodes": "{n} ep.",
-    "unreachable": "The Kodik player can’t load: your internet provider seems to block {host}. Turn on a VPN and reload the page."
+    "unreachable": "The Kodik player can’t load: your internet provider seems to block {host}. Turn on a VPN and reload the page.",
+    "speedLocked": "Watch-together playback is always 1× — otherwise you’d drift ahead of everyone else"
   },
   "adult": {
     "title": "18+ content",

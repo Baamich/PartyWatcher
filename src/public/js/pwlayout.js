@@ -32,7 +32,7 @@
     return e;
   }
   const LIMITS = {
-    profile: { custom: 12, photos: 4, links: 12, bgs: 2 },
+    profile: { custom: 12, photos: 4, links: 12, bgs: 2, sides: 2 },
     live: { custom: 8, photos: 2, links: 6, bgs: 0 },
   };
   // фон страницы профиля: до 2 заливок (цвет или фото) и переход между ними
@@ -60,6 +60,7 @@
     const out = [];
     for (const m of ['profile', 'live']) for (const b of L?.[m]?.blocks || []) if (b.img) out.push(b.img);
     for (const f of L?.profile?.bg?.fills || []) if (f.img) out.push(f.img);
+    for (const k of ['l', 'r']) if (L?.profile?.sides?.[k]?.img) out.push(L.profile.sides[k].img);
     return out;
   }
   const gifCount = (L) => allImages(L).filter(isGif).length;
@@ -119,14 +120,36 @@
     if (p && c) c.h = p.h;
   }
 
-  function counts(blocks, bg) {
+  function counts(blocks, bg, sides) {
     let custom = 0, photos = 0, links = 0;
     for (const b of blocks) {
       if (b.type === 'shape' || b.type === 'text') custom++;
       if (b.type === 'image' || (b.type === 'shape' && b.img)) photos++;
       if (b.type === 'link') links++;
     }
-    return { custom, photos, links, bgs: bg && Array.isArray(bg.fills) ? bg.fills.length : 0 };
+    return {
+      custom, photos, links,
+      bgs: bg && Array.isArray(bg.fills) ? bg.fills.length : 0,
+      sides: sides ? ['l', 'r'].filter((k) => sides[k]).length : 0,
+    };
+  }
+
+  // одна заливка: цвет или фото (с цветом под ним); битое фото — ошибка, пустая заливка — null
+  function cleanFill(f) {
+    if (!f || typeof f !== 'object') return null;
+    if (f.img) {
+      if (!imgOk(f.img)) throw layoutError('badImage');
+      return { img: f.img, fit: BG_FITS.includes(f.fit) ? f.fit : 'cover', c: COLOR_RE.test(f.c) ? f.c : '#000000' };
+    }
+    return COLOR_RE.test(f.c) ? { c: f.c } : null;
+  }
+
+  // бока страницы профиля (слева и справа от холста, во всю высоту окна): { l, r } — заливки; пусто — null
+  function cleanSides(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const out = {};
+    for (const k of ['l', 'r']) { const f = cleanFill(raw[k]); if (f) out[k] = f; }
+    return out.l || out.r ? out : null;
   }
 
   // фон: { fills: [{ c } | { img, fit }] (1–2), pos 0–100 — где переход, dir 'v' (сверху вниз) | 'h' (слева направо),
@@ -135,13 +158,8 @@
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw.fills)) return null;
     const fills = [];
     for (const f of raw.fills.slice(0, LIMITS.profile.bgs)) {
-      if (!f || typeof f !== 'object') continue;
-      if (f.img) {
-        if (!imgOk(f.img)) throw layoutError('badImage');
-        fills.push({ img: f.img, fit: BG_FITS.includes(f.fit) ? f.fit : 'cover', c: COLOR_RE.test(f.c) ? f.c : '#000000' });
-      } else if (COLOR_RE.test(f.c)) {
-        fills.push({ c: f.c });
-      }
+      const cf = cleanFill(f);
+      if (cf) fills.push(cf);
     }
     if (!fills.length) return null;
     return {
@@ -166,6 +184,7 @@
     }
     // фон — только у профиля; в браузере битый фон просто не показываем (на сервере он уже очищен)
     try { out.profile.bg = cleanBg(raw?.profile?.bg); } catch { out.profile.bg = null; }
+    try { out.profile.sides = cleanSides(raw?.profile?.sides); } catch { out.profile.sides = null; }
     return out;
   }
 
@@ -283,12 +302,13 @@
       out[mode] = { blocks };
     }
     out.profile.bg = cleanBg(raw.profile?.bg);
+    out.profile.sides = cleanSides(raw.profile?.sides);
     if (gifCount(out) > GIF_MAX) throw layoutError('tooManyGifs', { n: GIF_MAX });
     if (allImages(out).reduce((n, s) => n + s.length, 0) > MAX_TOTAL_IMG_CHARS) throw layoutError('tooHeavy');
     return out;
   }
 
-  const api = { fixOrder, W, WM, MIN_W, MAX_H, GIF_MAX, isGif, gifCount, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, BG_FX, BG_FITS, defOf, minSize, clampBlock, syncChat, counts, canvasWidth, cleanBg, withDefaults, sanitize, clone };
+  const api = { fixOrder, W, WM, MIN_W, MAX_H, GIF_MAX, isGif, gifCount, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, BG_FX, BG_FITS, defOf, minSize, clampBlock, syncChat, counts, canvasWidth, cleanBg, cleanSides, withDefaults, sanitize, clone };
   if (typeof document === 'undefined') return api;
 
   // ---------- только браузер ----------
@@ -399,6 +419,11 @@
       el.style.backgroundSize = f.fit === 'tile' ? `calc(var(--s, 1) * 400px)` : f.fit;
     }
   }
+
+  api.paintFill = paintFill;
+
+  // какого размера фото на бок, чтобы на экране 1920×1080 заняло его целиком (окно без полосы прокрутки ~1903)
+  api.sideSize = (viewW) => ({ w: Math.max(0, Math.round((1903 - viewW) / 2)), h: 1080 });
 
   // слой фона внутри холста: el — контейнер .pw-bg; W, H — размер холста в единицах
   api.paintBg = (el, bg, W, H) => {

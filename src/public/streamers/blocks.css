@@ -93,3 +93,22 @@ a.pw-link:hover .pw-fill { filter: brightness(1.12); }
 .live-strip-inner.pw-on:not(.fs-active) > .live-chat-side {
   overflow: hidden;
 }
+
+/* фон профиля на всю страницу и бока (рисует pro-view.js): под содержимым, клики не ловят.
+   Фон body переносится на холст документа, поэтому слои с z-index: -1 видны поверх него */
+.pw-page-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.pw-page-bg[hidden] { display: none; }
+.pw-page-bg > div { position: absolute; inset: 0; }
+.pw-sides { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+.pw-side { position: absolute; top: 0; bottom: 0; }
+.pw-side[hidden] { display: none; }
+.pw-side-l { left: 0; }
+.pw-side-r { right: 0; }
+

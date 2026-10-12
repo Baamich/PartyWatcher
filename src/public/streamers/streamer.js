@@ -945,6 +945,32 @@ function showNotFound() {
   document.getElementById('notFound').classList.remove('hidden');
 }
 
+// ---- предпросмотр из PRO-редактора: /streamers/<имя>?preview=1, открытый вкладкой редактора ----
+// Макет приходит сообщением только от окна, которое нас открыло, и только с нашего сайта.
+// На сервер и в кэш он не попадает; пока он есть, сохранённый макет его не перебивает
+const PREVIEW = new URLSearchParams(location.search).get('preview') === '1' && !!window.opener;
+let previewLayout = null;
+
+function applyLayout(layout) {
+  window.PWProView?.apply(previewLayout || layout, cachedVods.length > 0);
+}
+
+if (PREVIEW) {
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin || e.source !== window.opener || e.data?.type !== 'pw-preview-layout') return;
+    if (!e.data.layout || typeof e.data.layout !== 'object') return;
+    previewLayout = e.data.layout;
+    applyLayout(null);
+    if (!document.getElementById('pwPreviewBadge')) {
+      const badge = document.createElement('div');
+      badge.id = 'pwPreviewBadge';
+      badge.className = 'pw-preview-badge';
+      badge.textContent = t('streamer.previewBadge');
+      document.body.appendChild(badge);
+    }
+  });
+}
+
 async function loadProfile() {
   const nameLower = getNameFromUrl();
   if (!nameLower) return showNotFound();
@@ -958,7 +984,7 @@ async function loadProfile() {
     currentStreamer = { ...cached.streamer };
     renderProfile(currentStreamer);
     applyVods(cached.vods);
-    if (cached.layout) window.PWProView?.apply(cached.layout, cachedVods.length > 0);
+    if (cached.layout) applyLayout(cached.layout);
     showPage();
   }
 
@@ -1001,14 +1027,14 @@ async function loadProfile() {
     // данные те же: перерисовывать нечего, обновляем только бейдж «В ЭФИРЕ»
     document.getElementById('liveBadge')?.classList.toggle('hidden', !live.isLive);
   } else {
-    if (window.PWProView?.active && !stat.layout) {
+    if (window.PWProView?.active && !stat.layout && !previewLayout) {
       // макет сбросили: проще перезагрузить, кэш к этому моменту уже обновлён
       await PWCache.set(nameLower, { rev: b.rev, ...stat, vods: cachedVods });
       location.reload();
       return;
     }
     renderProfile(currentStreamer);
-    if (stat.layout) window.PWProView?.apply(stat.layout, cachedVods.length > 0);
+    if (stat.layout) applyLayout(stat.layout);
     showPage();
   }
 
@@ -1020,6 +1046,7 @@ async function loadProfile() {
   const vods = await vodsP;
   if (vods) applyVods(vods);
   PWCache.set(nameLower, { rev: b.rev, streamer: stat.streamer, layout: stat.layout, vods: cachedVods });
+  if (PREVIEW) window.opener.postMessage({ type: 'pw-preview-ready' }, location.origin);
 }
 
 let liveStatusPollTimer = null;

@@ -44,6 +44,8 @@
     }
     const bg = l.profile.bg;
     out.profile.bg = bg ? { ...bg, fills: bg.fills.map((f) => ({ ...f })) } : null;
+    const sd2 = l.profile.sides;
+    out.profile.sides = sd2 ? { ...(sd2.l && { l: { ...sd2.l } }), ...(sd2.r && { r: { ...sd2.r } }) } : null;
     return out;
   };
 
@@ -75,7 +77,29 @@
     lastSel = selId;
     dirty = hi !== savedHi;
     updateHistBtns();
+    pushPreview();
   }
+
+  // ---- предпросмотр на настоящей странице профиля (новая вкладка), с несохранёнными правками ----
+  // Вкладка /streamers/<имя>?preview=1 сообщает «готова», мы шлём ей макет; дальше — после каждой правки.
+  // Только тот же сайт (origin) и только наше окно — чужая страница макет не получит и не подсунет
+  let previewWin = null, previewTimer = 0;
+  function openPreview() {
+    const name = (sd && sd.streamerName) || $('currentStreamerName').textContent.trim();
+    previewWin = window.open('/streamers/' + encodeURIComponent(name.toLowerCase()) + '?preview=1', 'pw-preview');
+    if (!previewWin) toast(tr('editor.preview.blocked'));
+  }
+  function pushPreview() {
+    if (!previewWin || previewWin.closed) return;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      if (previewWin && !previewWin.closed) previewWin.postMessage({ type: 'pw-preview-layout', layout: cloneLayout(layout) }, location.origin);
+    }, 400);
+  }
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin || !previewWin || e.source !== previewWin || e.data?.type !== 'pw-preview-ready') return;
+    previewWin.postMessage({ type: 'pw-preview-layout', layout: cloneLayout(layout) }, location.origin);
+  });
 
   function goHist(i) {
     if (i < 0 || i >= hist.length || i === hi) return;
@@ -93,6 +117,7 @@
     dirty = hi !== savedHi;
     renderStage();
     updateHistBtns();
+    pushPreview();
   }
   const undo = () => goHist(hi - 1);
   const redo = () => goHist(hi + 1);
@@ -280,8 +305,9 @@
         : tr('editor.phone.profile');
       return;
     }
-    const c = P.counts(blocks(), mode === 'profile' ? layout.profile.bg : null), L = P.LIMITS[mode];
-    const kinds = ['custom', 'photos', 'links'].concat(mode === 'profile' ? ['bgs'] : []);
+    const c = P.counts(blocks(), mode === 'profile' ? layout.profile.bg : null, mode === 'profile' ? layout.profile.sides : null);
+    const L = P.LIMITS[mode];
+    const kinds = ['custom', 'photos', 'links'].concat(mode === 'profile' ? ['bgs', 'sides'] : []);
     const parts = [];
     kinds.forEach((k, i) => {
       if (i) parts.push(' · ');
@@ -776,6 +802,41 @@
       }
       add(button(tr('editor.bg.remove'), () => { layout.profile.bg = null; rebuild(); }, 'pm-danger'));
     }
+
+    // бока страницы: слева и справа от профиля, во всю высоту окна; цвет, потом можно фото поверх
+    add(E('div', { className: 'pm-sub', textContent: tr('editor.bg.sides') }));
+    const size = P.sideSize(viewW());
+    add(E('div', {
+      className: 'pm-hint',
+      textContent: size.w >= 120 ? tr('editor.bg.sidesHint', { w: size.w, h: size.h }) : tr('editor.bg.sidesNarrow'),
+    }));
+    const sides = layout.profile.sides || null;
+    for (const k of ['l', 'r']) {
+      const f = sides && sides[k];
+      if (!f) {
+        add(button(tr(k === 'l' ? 'editor.bg.addSideL' : 'editor.bg.addSideR'), () => {
+          const other = sides && sides[k === 'l' ? 'r' : 'l'];
+          layout.profile.sides = { ...(layout.profile.sides || {}), [k]: other ? { ...other } : { c: '#1b1530' } };
+          rebuild();
+        }, 'pm-flat'));
+        continue;
+      }
+      add(E('div', { className: 'pm-sub', textContent: tr(k === 'l' ? 'editor.bg.sideL' : 'editor.bg.sideR') }));
+      add(row(tr('editor.bg.color'), color(f.c || '#000000', (v) => { f.c = v; upd(); })));
+      add(button(f.img ? tr('editor.m.replacePhoto') : tr('editor.bg.sidePhoto'), () => setBgPhoto(f)));
+      if (f.img) {
+        add(row(tr('editor.bg.fit'), select(BG_FIT_OPTS(), f.fit || 'cover', (v) => { f.fit = v; upd(); })));
+        add(button(tr('editor.m.removePhoto'), () => { delete f.img; delete f.fit; rebuild(); }, 'pm-flat'));
+      }
+      add(button(tr('editor.bg.removeSide'), () => {
+        delete layout.profile.sides[k];
+        if (!layout.profile.sides.l && !layout.profile.sides.r) layout.profile.sides = null;
+        rebuild();
+      }, 'pm-flat'));
+    }
+
+    add(E('div', { className: 'pm-hint', textContent: tr('editor.preview.hint') }));
+    add(button(tr('editor.preview.open'), openPreview));
 
     menu.replaceChildren(E('div', { className: 'pm-title', textContent: tr('editor.bg.title') }), body);
     menu.classList.remove('hidden');

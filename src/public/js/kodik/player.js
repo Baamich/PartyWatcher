@@ -10,6 +10,9 @@ const PLAY_AFTER_SEEK_MS = 300;
 const PLAY_RETRY_MS = 1500;
 const PLAY_ATTEMPTS = 4;
 const OWN_COMMAND_MS = 8000; // play/pause позже этого после нашей команды — сделал сам человек в плеере
+// наши команды громкости (и плавное приглушение под голос раз в 100 мс) отзываются событием volume_change —
+// изменения в этом окне после нашей команды не считаем действием человека
+const OWN_VOLUME_MS = 1000;
 
 function withEpisode(url, season, episode) {
   if (!season && !episode) return url;
@@ -41,6 +44,7 @@ export function createKodikPlayer(container, { url, season, episode, volume, on 
   let playAttempts = 0;
   let lastSeekAt = 0;
   let lastCommandAt = 0;
+  let lastVolumeCmdAt = 0;
   let activated = false; // в этой странице плеера уже кликали — браузер разрешает ей запуск
   let blockedReported = false;
 
@@ -56,7 +60,7 @@ export function createKodikPlayer(container, { url, season, episode, volume, on 
     if (contentStarted) return;
     contentStarted = true;
     startedAt = Date.now();
-    if (lastVolume !== null) send({ method: 'volume', volume: lastVolume });
+    if (lastVolume !== null) { lastVolumeCmdAt = Date.now(); send({ method: 'volume', volume: lastVolume }); }
     if (pendingSeek !== null) {
       const s = pendingSeek;
       pendingSeek = null;
@@ -99,6 +103,24 @@ export function createKodikPlayer(container, { url, season, episode, volume, on 
         const s = typeof v === 'number' ? v : Number(v?.time);
         if (Number.isFinite(s)) setTime(s);
         on.seek?.();
+        break;
+      }
+      // громкость поменяли в самом плеере Kodik — запоминаем как свою (ползунок комнаты, приглушение под голос)
+      case 'kodik_player_volume_change': {
+        const vol = v?.muted ? 0 : Number(v?.volume);
+        if (!Number.isFinite(vol) || Date.now() - lastVolumeCmdAt < OWN_VOLUME_MS) break;
+        if (lastVolume !== null && Math.abs(vol - lastVolume) < 0.01) break;
+        lastVolume = vol;
+        on.volume?.(vol);
+        break;
+      }
+      // скорость в совместном просмотре только 1×: иначе зритель уезжает вперёд, а синхронизация дёргает его назад
+      case 'kodik_player_speed_change': {
+        const sp = Number(v?.speed);
+        if (Number.isFinite(sp) && Math.abs(sp - 1) > 0.01) {
+          send({ method: 'speed', speed: 1 });
+          on.speedLocked?.();
+        }
         break;
       }
       case 'kodik_player_current_episode':
@@ -183,7 +205,7 @@ export function createKodikPlayer(container, { url, season, episode, volume, on 
       const vol = Math.round(Math.min(1, Math.max(0, frac)) * 100) / 100;
       if (vol === lastVolume) return; // приглушение под голос зовёт это каждые 100 мс
       lastVolume = vol;
-      if (contentStarted) send({ method: 'volume', volume: vol });
+      if (contentStarted) { lastVolumeCmdAt = Date.now(); send({ method: 'volume', volume: vol }); }
     },
     // та же озвучка — переключаем серию без перезагрузки; другая ссылка — грузим её
     load(nextUrl, s, ep) {

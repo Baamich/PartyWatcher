@@ -180,7 +180,8 @@
     "photos": "Photos {n}/{m}",
     "links": "Buttons {n}/{m}",
     "bgs": "Backgrounds {n}/{m}",
-    "gifs": "GIF {n}/{m}"
+    "gifs": "GIF {n}/{m}",
+    "sides": "Sides {n}/{m}"
   },
   "cntHint": "Hover to highlight where they are on the page; click to pin the highlight",
   "widthGuide": "Profile width is {w} now. Drag a block further right and the page gets wider (up to 1760)",
@@ -221,6 +222,20 @@
     "pos": "Where",
     "soft": "Softness",
     "posHint": "While this menu is open, a dashed line on the stage shows where the transition is.",
-    "profileOnly": "Only the profile has a background"
+    "profileOnly": "Only the profile has a background",
+    "sides": "Page sides",
+    "sidesHint": "Left and right of the profile, the full window height (they don’t scroll). For a 1920×1080 screen a photo of about {w}×{h} px per side fits now. On other screens the photo adjusts itself: “Fill” crops the extra, “Whole” shows all of it.",
+    "sidesNarrow": "The profile is almost as wide as a 1920 screen — the sides will barely show. Make the profile narrower (move blocks left) to make room for them.",
+    "sideL": "Left side",
+    "sideR": "Right side",
+    "addSideL": "＋ Left side",
+    "addSideR": "＋ Right side",
+    "sidePhoto": "📷 Photo on the side",
+    "removeSide": "Remove side"
+  },
+  "preview": {
+    "open": "👁 View on the page",
+    "hint": "The full-page background and the sides show only on the profile page itself. The preview opens in a new tab and follows your edits — no need to save.",
+    "blocked": "The browser blocked the new tab — allow pop-ups for this site"
   }
 }

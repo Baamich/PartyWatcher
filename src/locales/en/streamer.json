@@ -40,5 +40,6 @@
     "text": "You can watch without an account, but to send messages you need to sign in or sign up.",
     "login": "Sign in",
     "register": "Sign up"
-  }
+  },
+  "previewBadge": "Preview: changes are not saved yet"
 }
