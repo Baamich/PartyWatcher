@@ -42,7 +42,7 @@
 <p>Click <b>T</b>, hold the mouse and drag out an area, like in Word. The three dots have many settings: font, size, text and background colors, opacity, bold, italic, underline, alignment, corner radius, border, shadow.</p>
 
 <h3>📎 Photo</h3>
-<p>Choose an image, it becomes a separate block (profile only; on the live page 📎 is off — use 🖼️ for the background there). Photos are compressed automatically. GIFs stay animated: up to 1.2 MB and no more than 2 for the whole design (including background and live).</p>
+<p>Choose an image, it becomes a separate block (profile only; on the live page 📎 is off — it has sides via 🖼️ instead). Photos are compressed automatically. GIFs stay animated: up to 1.2 MB and no more than 2 for the whole design (including background and live).</p>
 
 <h3>🔗 Link button</h3>
 <ol>
@@ -53,7 +53,7 @@
 <p><b>Any block can become a button:</b> shapes, photos and text have <b>🔗 Make a button</b> in their three dots, and a button has <b>▢ Make a regular block</b>. Only a freehand shape can't become a button.</p>
 
 <h2>🖼️ Page background</h2>
-<p>The background lies under all profile blocks. The <b>Stretch over the whole page</b> checkbox in the background menu stretches it for viewers over the whole page below the site header, not just the profile area: the transition stays at the same spot relative to the blocks as on the stage, and a photo is pinned to the window like the sides — on a long profile it doesn’t stretch or run out. Without the checkbox the background is only under the profile. Press <b>🖼️</b> at the top. The <b>live page</b> has its own background: switch to “Live” and press 🖼️ there — a color or a photo, plus a second background with a transition, goes under the player, chat and your blocks (width, sides, “whole page” and preview are profile-only). While the background menu is open, blocks become semi-transparent so you can see what changes. A GIF works as a background too.</p>
+<p>The background lies under all profile blocks. The <b>Stretch over the whole page</b> checkbox in the background menu stretches it for viewers over the whole page below the site header, not just the profile area: the transition stays at the same spot relative to the blocks as on the stage, and a photo is pinned to the window like the sides — on a long profile it doesn’t stretch or run out. Without the checkbox the background is only under the profile. Press <b>🖼️</b> at the top (in the “Profile” mode; in the “Live” mode this button opens the live sides — see below). While the background menu is open, blocks become semi-transparent so you can see what changes. A GIF works as a background too.</p>
 <ol>
   <li><b>＋ Add background</b> — pick a color or press <b>📷 Photo as background</b>. A photo can be shown as <b>Fill</b> (the whole page, extra is cropped), <b>Whole</b> or <b>Tiled</b>.</li>
   <li><b>＋ Second background (transition)</b> — add a second color or photo. 2 backgrounds at most.</li>
@@ -71,6 +71,8 @@
 <ul>
   <li><b>＋ Left side</b> / <b>＋ Right side</b> — a color first, then <b>📷 Photo on the side</b> if you like (a GIF works too). The second side starts with the first side’s color and photo; change it if needed.</li>
   <li><b>Photo size</b>: the menu suggests a photo size for a 1920×1080 screen at the current profile width (for example, about 400×1080 for an 1100-wide profile). On other screens the photo adjusts: <b>Fill</b> crops the extra, <b>Whole</b> shows all of it, <b>Tiled</b> repeats it.</li>
+  <li><b>Position</b> of a side photo: <b>centered</b>, <b>to the window edge</b> or <b>to the profile</b> (on live — <b>to the stream</b>) — which part stays visible if the photo is cropped. Under the settings there’s a small preview: this is how the side looks on a 1920×1080 screen.</li>
+  <li><b>Live sides</b>: in the “Live” mode the 🖼️ button opens the same kind of sides, but separate ones. While a viewer has the stream open, they show instead of the profile sides; close the stream — the profile sides are back. Live sides go from the window edge to the middle of the screen: the player and chat cover the middle (that’s fine), and the photo shows at the sides and in the gaps between them. Use a photo of about 960×1080 per side; the preview hatches the part hidden under the player and chat.</li>
   <li>The wider the profile, the narrower the sides. With a profile almost full width (1760) the sides barely show. There are no sides on phones.</li>
 </ul>
 <h3>👁 View on the page</h3>
@@ -115,7 +117,7 @@
 <table>
   <tr><th>Mode</th><th>What it is</th></tr>
   <tr><td>Profile</td><td>The profile page: banner, avatar, description, recordings, background and all your stuff. Room on the stage up to 1760 wide and up to 10,000 high (see “Page size”).</td></tr>
-  <tr><td>Live</td><td>The player and chat visible while the stream is open. The stage is up to 1760 wide (by the right edge of the blocks, at least 1600). You can move the player and chat, add text, buttons and a background (🖼️): a color or a photo, up to two with a transition.</td></tr>
+  <tr><td>Live</td><td>The player and chat visible while the stream is open. The stage is up to 1760 wide (by the right edge of the blocks, at least 1600). You can move the player and chat, add text, buttons and live sides (🖼️).</td></tr>
   <tr><td>Profile 📱</td><td>View only: how the profile looks on a phone (scaled down). The wider the profile, the smaller it is on a phone — if phone viewers matter to you, don't stretch blocks to 1760 without a reason.</td></tr>
   <tr><td>Live 📱</td><td>View only: on a phone the live page is always standard — player on top, chat below filling the rest of the screen; turn the phone sideways and the video takes the full height with the chat on the right. A custom live layout works on screens from 900 pixels.</td></tr>
 </table>
@@ -135,10 +137,10 @@
 <table>
   <tr><th></th><th>Profile</th><th>Live</th></tr>
   <tr><td>Custom blocks (text and shapes)</td><td>12</td><td>8</td></tr>
-  <tr><td>Photos</td><td>4</td><td>— (background via 🖼️)</td></tr>
+  <tr><td>Photos</td><td>4</td><td>—</td></tr>
   <tr><td>Link buttons</td><td>12</td><td>6</td></tr>
-  <tr><td>Backgrounds</td><td>2</td><td>2</td></tr>
-  <tr><td>Page sides</td><td>2 (left and right)</td><td>—</td></tr>
+  <tr><td>Page backgrounds</td><td>2</td><td>—</td></tr>
+  <tr><td>Sides</td><td>2 (left and right)</td><td>2 (separate for live)</td></tr>
   <tr><td>GIF (animated)</td><td colspan="2">2 for the whole design: profile, live and background together; up to 1.2 MB each</td></tr>
 </table>
 </div>

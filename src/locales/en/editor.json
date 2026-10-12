@@ -87,7 +87,7 @@
     "live": "This is how the stream looks on a phone: player on top, chat below (custom layout works from 900 px)",
     "profile": "This is how the profile looks on a phone (view only)"
   },
-  "infoLive": " · Live has no scissors or photos — background via 🖼️",
+  "infoLive": " · Live has no scissors or photos — sides via 🖼️",
   "linkLabel": "Button",
   "max": {
     "links": "Max buttons: {n}",
@@ -234,8 +234,16 @@
     "full": "Stretch over the whole page",
     "fullOn": "The background covers the whole page below the site header; a photo is pinned to the window and doesn’t stretch as you scroll. The stage shows only the part under the profile — use “👁 View on the page”.",
     "fullOff": "The background is only under the profile, as on the stage. Around it — the site color or the page sides.",
-    "liveTitle": "Live background",
-    "liveHint": "The background lies under the player, chat and your blocks on the live page. A color or a photo, plus a second background with a transition. Shown on screens from 900 pixels (on phones the live page is standard)."
+    "liveTitle": "Live sides",
+    "liveHint": "While your stream is open, these sides show left and right of the player and chat instead of the profile sides. Close the stream — the profile sides are back. No sides on phones or in full screen.",
+    "liveSidesHint": "Live sides go from the window edge to the middle of the screen, the full window height; the player and chat cover the middle — that’s fine: the photo shows at the sides (about {v} px on a 1920 screen) and in the gaps between the player and chat. A photo of about {w}×{h} px per side fits.",
+    "sidePos": "Position",
+    "sidePosC": "Centered",
+    "sidePosOut": "To the window edge",
+    "sidePosIn": "To the profile",
+    "sidePosInLive": "To the stream",
+    "sidePrev": "This is how the side looks on a 1920×1080 screen.",
+    "sidePrevLive": "This is how the side looks on a 1920×1080 screen. Hatched — the part hidden under the player and chat."
   },
   "preview": {
     "open": "👁 View on the page",

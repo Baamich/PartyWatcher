@@ -33,7 +33,7 @@
   }
   const LIMITS = {
     profile: { custom: 12, photos: 4, links: 12, bgs: 2, sides: 2 },
-    live: { custom: 8, photos: 2, links: 6, bgs: 2 }, // фото-блоки в эфире больше не добавляются (фон — через 🖼️), старые показываются
+    live: { custom: 8, photos: 2, links: 6, bgs: 0, sides: 2 }, // фото-блоки в эфире больше не добавляются (бока — через 🖼️), старые показываются
   };
   // фон страницы профиля: до 2 заливок (цвет или фото) и переход между ними
   const BG_FX = ['fade', 'sharp', 'diagonal', 'wave', 'zigzag', 'steps', 'arc', 'stripes', 'dots', 'radial'];
@@ -59,8 +59,8 @@
   function allImages(L) {
     const out = [];
     for (const m of ['profile', 'live']) for (const b of L?.[m]?.blocks || []) if (b.img) out.push(b.img);
-    for (const m of ['profile', 'live']) for (const f of L?.[m]?.bg?.fills || []) if (f.img) out.push(f.img);
-    for (const k of ['l', 'r']) if (L?.profile?.sides?.[k]?.img) out.push(L.profile.sides[k].img);
+    for (const f of L?.profile?.bg?.fills || []) if (f.img) out.push(f.img);
+    for (const m of ['profile', 'live']) for (const k of ['l', 'r']) if (L?.[m]?.sides?.[k]?.img) out.push(L[m].sides[k].img);
     return out;
   }
   const gifCount = (L) => allImages(L).filter(isGif).length;
@@ -140,7 +140,10 @@
     if (!f || typeof f !== 'object') return null;
     if (f.img) {
       if (!imgOk(f.img)) throw layoutError('badImage');
-      return { img: f.img, fit: BG_FITS.includes(f.fit) ? f.fit : 'cover', c: COLOR_RE.test(f.c) ? f.c : '#000000' };
+      const out = { img: f.img, fit: BG_FITS.includes(f.fit) ? f.fit : 'cover', c: COLOR_RE.test(f.c) ? f.c : '#000000' };
+      // положение фото на боку: 'out' — к краю окна, 'in' — к профилю/эфиру, нет — по центру
+      if (f.ax === 'out' || f.ax === 'in') out.ax = f.ax;
+      return out;
     }
     return COLOR_RE.test(f.c) ? { c: f.c } : null;
   }
@@ -196,7 +199,7 @@
     try { out.profile.bg = cleanBg(raw?.profile?.bg); } catch { out.profile.bg = null; }
     try { out.profile.sides = cleanSides(raw?.profile?.sides); } catch { out.profile.sides = null; }
     out.profile.width = cleanWidth(raw?.profile?.width);
-    try { out.live.bg = cleanBg(raw?.live?.bg); } catch { out.live.bg = null; }
+    try { out.live.sides = cleanSides(raw?.live?.sides); } catch { out.live.sides = null; }
     return out;
   }
 
@@ -316,7 +319,7 @@
     out.profile.bg = cleanBg(raw.profile?.bg);
     out.profile.sides = cleanSides(raw.profile?.sides);
     out.profile.width = cleanWidth(raw.profile?.width);
-    out.live.bg = cleanBg(raw.live?.bg);
+    out.live.sides = cleanSides(raw.live?.sides);
     if (gifCount(out) > GIF_MAX) throw layoutError('tooManyGifs', { n: GIF_MAX });
     if (allImages(out).reduce((n, s) => n + s.length, 0) > MAX_TOTAL_IMG_CHARS) throw layoutError('tooHeavy');
     return out;
@@ -441,6 +444,9 @@
   }
 
   api.paintFill = paintFill;
+  // background-position фото бока: k — 'l' | 'r', ax — 'out' (к краю окна) | 'in' (к профилю/эфиру) | по центру
+  api.sidePos = (k, ax) => (ax === 'out' ? (k === 'l' ? 'left center' : 'right center')
+    : ax === 'in' ? (k === 'l' ? 'right center' : 'left center') : 'center');
 
   // какого размера фото на бок, чтобы на экране 1920×1080 заняло его целиком (окно без полосы прокрутки ~1903)
   api.sideSize = (viewW) => ({ w: Math.max(0, Math.round((1903 - viewW) / 2)), h: 1080 });

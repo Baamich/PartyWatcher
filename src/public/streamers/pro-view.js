@@ -21,7 +21,20 @@
   // там же относительно блоков, что и в редакторе. Бока — слева и справа от холста, во всю высоту окна
   // (закреплены при прокрутке), поверх фона страницы. Оба слоя под содержимым (z-index: -1).
   // Верхняя панель сайта (логотип, кнопки) остаётся нашей: слои начинаются под ней (topY).
-  const page = { bg: null, sides: null, cw: 0, ch: 0, canvas: null, raf: 0, sig: '', topY: 0 };
+  // Пока открыт эфир (раскладка PRO), по бокам — бока эфира (layout.live.sides) от краёв полосы эфира вместо боков профиля
+  const page = { bg: null, sides: null, liveSides: null, cw: 0, ch: 0, canvas: null, raf: 0, sig: '', topY: 0, sideKey: '' };
+
+  function paintSides(side, fills) {
+    ['l', 'r'].forEach((k, i) => {
+      const el = side.children[i];
+      el.className = 'pw-side pw-side-' + k;
+      if (fills && fills[k]) {
+        P.paintFill(el, fills[k]);
+        if (fills[k].img) el.style.backgroundPosition = P.sidePos(k, fills[k].ax);
+        el.hidden = false;
+      } else el.hidden = true;
+    });
+  }
 
   // бока закреплены в окне, но не заходят на верхнюю панель, пока она видна
   function placeSides() {
@@ -43,7 +56,7 @@
 
   function layoutPage() {
     page.raf = 0;
-    const { canvas, bg, sides, cw, ch } = page;
+    const { canvas, bg, sides, liveSides, cw, ch } = page;
     const pageBg = document.getElementById('pwPageBg');
     const side = document.getElementById('pwSides');
     if (!canvas || !canvas.isConnected) return;
@@ -55,7 +68,13 @@
     placeSides();
     const docW = document.documentElement.clientWidth;
     const docH = Math.max(document.documentElement.scrollHeight, r.bottom + window.scrollY);
-    const sig = [s, r.left, r.top + window.scrollY, docW, docH, topY].map((n) => Math.round(n)).join(',');
+    // бока эфира — только пока полоса эфира открыта и в раскладке PRO (на телефоне и в полноэкранном — нет)
+    const strip = document.getElementById('liveStrip');
+    const inner = strip && strip.querySelector('.live-strip-inner');
+    const liveOn = !!(liveSides && strip && strip.classList.contains('open') && inner &&
+      inner.classList.contains('pw-on') && !inner.classList.contains('fs-active'));
+    const edge = liveOn ? inner.getBoundingClientRect() : r;
+    const sig = [s, r.left, r.top + window.scrollY, docW, docH, topY, liveOn, edge.left, edge.right].map((n) => Math.round(n)).join(',');
     if (sig === page.sig) return; // размеры те же — маску не пересобираем
     page.sig = sig;
 
@@ -75,8 +94,13 @@
         el.style.backgroundAttachment = bg.fills[i]?.img ? 'fixed' : '';
       });
     }
-    if (side && sides) {
-      const lw = Math.max(0, Math.floor(r.left)), rw = Math.max(0, Math.ceil(docW - r.right));
+    if (side) {
+      const key = liveOn ? 'live' : 'profile';
+      if (key !== page.sideKey) { page.sideKey = key; paintSides(side, liveOn ? liveSides : sides); }
+      // бока профиля — до краёв холста; бока эфира — до середины окна: под плеером и чатом их не видно,
+      // зато фото не ужимается до узкой полоски и просвечивает в промежутках между плеером и чатом
+      const lw = liveOn ? Math.floor(docW / 2) : Math.max(0, Math.floor(edge.left));
+      const rw = liveOn ? docW - lw : Math.max(0, Math.ceil(docW - edge.right));
       side.children[0].style.width = lw + 'px';
       side.children[1].style.width = rw + 'px';
       side.style.setProperty('--s', s);
@@ -87,23 +111,19 @@
   let pageWatch = null;
 
   function applyPage(canvas, bg, sides, cw, ch) {
-    Object.assign(page, { canvas, bg, sides, cw, ch, sig: '', on: !!(bg || sides) });
+    const anySides = !!(sides || page.liveSides);
+    Object.assign(page, { canvas, bg, sides, cw, ch, sig: '', sideKey: '', on: !!(bg || anySides) });
     document.body.classList.toggle('pw-has-page-bg', page.on);
     if (!bg) document.getElementById('pwPageBg')?.remove();
-    if (!sides) document.getElementById('pwSides')?.remove();
+    if (!anySides) document.getElementById('pwSides')?.remove();
     if (!page.on) return;
 
     if (bg) layer('pwPageBg', 'pw-page-bg');
-    if (sides) {
+    if (anySides) {
       const side = layer('pwSides', 'pw-sides');
-      // бока — над фоном страницы (после него в DOM), но под содержимым
+      // бока — над фоном страницы (после него в DOM), но под содержимым; заливки рисует layoutPage
       document.getElementById('pwPageBg')?.after(side);
       if (side.children.length !== 2) side.replaceChildren(document.createElement('div'), document.createElement('div'));
-      ['l', 'r'].forEach((k, i) => {
-        const el = side.children[i];
-        el.className = 'pw-side pw-side-' + k;
-        if (sides[k]) { P.paintFill(el, sides[k]); el.hidden = false; } else el.hidden = true;
-      });
     }
     if (!pageWatch) {
       pageWatch = new ResizeObserver(schedule);
@@ -169,7 +189,7 @@
 
   let liveMq = null;
 
-  function applyLive(blocks, bg) {
+  function applyLive(blocks) {
     const inner = document.querySelector('.live-strip-inner');
     if (!inner) return;
     inner.querySelectorAll(':scope > .pw-custom').forEach((n) => n.remove());
@@ -191,14 +211,6 @@
     const cw = P.canvasWidth(blocks, 'live');
     inner.style.setProperty('--ch', P.canvasHeight(blocks));
     inner.style.setProperty('--cw', cw);
-    // фон эфира (🖼️ в режиме «Эфир») — слой под плеером, чатом и блоками
-    let bgEl = inner.querySelector(':scope > .pw-bg');
-    if (bg && !bgEl) {
-      bgEl = document.createElement('div');
-      bgEl.className = 'pw-bg';
-      inner.prepend(bgEl);
-    }
-    if (bgEl) P.paintBg(bgEl, bg, cw, P.canvasHeight(blocks));
 
     if (!liveMq) {
       liveMq = window.matchMedia('(min-width: 901px)');
@@ -212,7 +224,8 @@
   function apply(layout, hasVods) {
     const L = P.withDefaults(layout);
     view.active = true;
+    page.liveSides = L.live.sides || null; // до applyProfile: applyPage решает, нужен ли слой боков
     applyProfile(L.profile.blocks, hasVods, L.profile.bg, L.profile.sides, L.profile.width);
-    applyLive(L.live.blocks, L.live.bg);
+    applyLive(L.live.blocks);
   }
 })();
