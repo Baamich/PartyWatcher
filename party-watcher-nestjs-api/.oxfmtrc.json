@@ -1,0 +1,6 @@
+{
+  "sortImports": {
+    "newlinesBetween": true,
+    "internalPattern": ["^@/"]
+  }
+}
