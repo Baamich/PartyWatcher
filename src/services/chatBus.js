@@ -23,4 +23,13 @@ function emitToUser(streamerNameLower, userId, event, payload) {
   });
 }
 
-module.exports = { init, emitMessage, emitToUser };
+// сколько человек сейчас на странице канала (аккаунты без повторов + гости); считает сокет-файл
+let viewerCounter = () => 0;
+function setViewerCounter(fn) {
+  viewerCounter = fn;
+}
+function viewerCount(streamerNameLower) {
+  return viewerCounter(streamerNameLower) || 0;
+}
+
+module.exports = { init, emitMessage, emitToUser, setViewerCounter, viewerCount };

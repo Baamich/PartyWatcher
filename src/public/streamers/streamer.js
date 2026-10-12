@@ -65,6 +65,62 @@ async function checkOwnership(nameLower) {
   }
 }
 
+// ---------- подписка ----------
+// одно состояние на две кнопки: в профиле (у владельца видна, но неактивна) и под чатом эфира (не у владельца)
+
+let followState = { followers: 0, following: false, self: false };
+let followBusy = false;
+
+function renderFollow() {
+  const s = followState;
+  for (const id of ['followBtn', 'liveFollowBtn']) {
+    const b = document.getElementById(id);
+    if (!b) continue;
+    b.textContent = s.following ? t('streamer.follow.following') : t('streamer.follow.follow');
+    b.classList.toggle('on', s.following);
+    b.disabled = s.self || followBusy;
+    b.title = s.self ? t('streamer.follow.selfHint') : s.following ? t('streamer.follow.unfollowHint') : '';
+  }
+  const c = document.getElementById('profileFollowers');
+  if (c) c.textContent = t('streamer.follow.count', { n: s.followers });
+}
+
+async function loadFollowState() {
+  try {
+    followState = await api('/streamers/' + encodeURIComponent(getNameFromUrl()) + '/follow');
+  } catch (err) {
+    console.warn('[follow]', err.message);
+  }
+  renderFollow();
+}
+
+async function toggleFollow() {
+  if (followBusy || followState.self) return;
+  if (!liveIsAuthed) return openLiveAuthModal('follow');
+  const name = currentStreamer?.streamerName || getNameFromUrl();
+  const unfollow = followState.following;
+  if (unfollow) {
+    const ok = await PW.confirm(t('streamer.follow.unfollowConfirm', { name }), { okText: t('streamer.follow.unfollowOk'), danger: true });
+    if (!ok) return;
+  }
+  followBusy = true;
+  renderFollow();
+  try {
+    followState = await api('/streamers/' + encodeURIComponent(getNameFromUrl()) + '/follow', { method: unfollow ? 'DELETE' : 'POST' });
+    if (!unfollow) PW.toast(t('streamer.follow.done', { name }), 'success');
+  } catch (err) {
+    if (err.status === 401) openLiveAuthModal('follow');
+    else PW.toast(err.message || t('streamer.follow.failed'), 'error');
+  } finally {
+    followBusy = false;
+    renderFollow();
+  }
+}
+
+document.getElementById('followBtn')?.addEventListener('click', toggleFollow);
+document.getElementById('liveFollowBtn')?.addEventListener('click', toggleFollow);
+renderFollow(); // подпись кнопки сразу, число — когда ответит сервер
+
 // ---------- записи ----------
 
 function vodEscapeHtml(s) {
@@ -251,6 +307,8 @@ function startLiveSession() {
   if (isOwnerFlag) {
     document.getElementById('liveOwnerBar').classList.remove('hidden');
     document.getElementById('liveClearChatBtn').classList.remove('hidden');
+  } else {
+    document.getElementById('liveFollowBar').classList.remove('hidden'); // владельцу подписка не нужна
   }
 }
 
@@ -906,7 +964,17 @@ function connectLiveChat(nameLower) {
   );
 }
 
-function openLiveAuthModal() { document.getElementById('liveAuthModal')?.classList.remove('hidden'); }
+// kind: 'chat' (по умолчанию) или 'follow' — меняется только заголовок и текст окна
+function openLiveAuthModal(kind) {
+  const follow = kind === 'follow';
+  for (const [id, key] of [['liveAuthTitle', follow ? 'streamer.auth.followTitle' : 'streamer.auth.title'], ['liveAuthText', follow ? 'streamer.auth.followText' : 'streamer.auth.text']]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.setAttribute('data-i18n', key); // при смене языка перевод возьмёт этот ключ
+    el.textContent = t(key);
+  }
+  document.getElementById('liveAuthModal')?.classList.remove('hidden');
+}
 function closeLiveAuthModal() { document.getElementById('liveAuthModal')?.classList.add('hidden'); }
 document.getElementById('liveAuthModal')?.addEventListener('click', (e) => {
   if (e.target.id === 'liveAuthModal') closeLiveAuthModal();
@@ -977,6 +1045,7 @@ async function loadProfile() {
   const enc = encodeURIComponent(nameLower);
 
   const ownerP = checkOwnership(nameLower);      // идёт параллельно со всем остальным
+  loadFollowState();                             // тоже параллельно: число подписчиков и «подписан ли я»
   const cached = await PWCache.get(nameLower);
 
   // 1) мгновенно рисуем из кэша (isLive там нет: он всегда свежий)

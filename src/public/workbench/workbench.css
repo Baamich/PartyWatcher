@@ -888,3 +888,41 @@
   font-weight: 600;
 }
 .ban-row .icon-btn { width: auto; margin: 0; white-space: nowrap; }
+/* ---- категория эфира в настройках ---- */
+.cat-picker { position: relative; margin-bottom: 12px; }
+.cat-current { display: flex; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 6px; }
+.cat-none { color: var(--text-muted); font-size: 13px; }
+.cat-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-thumb { width: 27px; height: 36px; border-radius: 4px; object-fit: cover; background: var(--surface-alt); flex-shrink: 0; display: block; }
+[data-theme] .cat-clear,
+[data-theme] .cat-clear:hover { background: none; box-shadow: none; color: var(--text-muted); padding: 2px 8px; font-size: 18px; }
+[data-theme] .cat-clear:hover { color: var(--text); }
+.cat-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+[data-theme] .cat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+}
+[data-theme] .cat-row:hover { background: var(--surface-alt); }
+.cat-empty { padding: 8px 10px; color: var(--text-muted); font-size: 13px; }
+.cat-off { color: var(--text-muted); font-size: 12px; margin: 4px 0 0; }

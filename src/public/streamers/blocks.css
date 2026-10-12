@@ -112,3 +112,14 @@ a.pw-link:hover .pw-fill { filter: brightness(1.12); }
 .pw-side-l { left: 0; }
 .pw-side-r { right: 0; }
 
+
+/* родной блок «Подписаться»: кнопка на весь блок, текст растёт вместе с ним */
+.pw-canvas > .follow-box { margin: 0; display: flex; }
+.pw-canvas > .follow-box .follow-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: calc(min(var(--h) * 0.4, 22) * var(--s) * 1px);
+}

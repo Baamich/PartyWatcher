@@ -136,7 +136,7 @@
     else if (e.code === 'KeyY') { e.preventDefault(); redo(); }
   });
 
-  const TITLES = Object.fromEntries(['banner', 'avatar', 'info', 'vods', 'player', 'chat', 'shape', 'text', 'image', 'link'].map((k) => [k, tr('editor.block.' + k)]));
+  const TITLES = Object.fromEntries(['banner', 'avatar', 'info', 'vods', 'follow', 'player', 'chat', 'shape', 'text', 'image', 'link'].map((k) => [k, tr('editor.block.' + k)]));
   const SHAPE_OPTS = ['rect', 'circle', 'triangle'].map((k) => [k, tr('editor.shape.' + k)]);
   const FONT_OPTS = ['system', 'serif', 'mono', 'rounded', 'display'].map((k) => [k, tr('editor.font.' + k)]);
 
@@ -196,6 +196,8 @@
       f.append(E('b', { textContent: sd.streamerName || '' }), E('span', { textContent: ($('bioInput').value || tr('editor.bioStub')).slice(0, 120) }));
     } else if (b.type === 'vods') {
       f.append(E('div', { textContent: tr('editor.block.vods') }), E('div', { className: 'ph-grid' + (b.o === 'v' ? ' ph-grid-v' : '') }, ...Array.from({ length: b.o === 'v' ? 4 : 6 }, () => E('i'))));
+    } else if (b.type === 'follow') {
+      f.append(E('span', { textContent: tr('editor.stub.follow') }));
     } else if (b.type === 'player') {
       f.append(E('span', { textContent: tr('editor.stub.player') }));
     } else if (b.type === 'chat') {

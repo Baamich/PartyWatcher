@@ -2,8 +2,13 @@
   "pageTitle": "PartyWatcher — Channel activity",
   "bans": "Banned users",
   "subs": "Subscribers",
-  "subsSoon": "Subscriptions are not implemented yet — coming as a separate step.",
   "noBans": "No banned users",
   "unban": "Unban",
-  "unbanFailed": "Could not unban"
+  "unbanFailed": "Could not unban",
+  "subsCount": {
+    "one": "Total: {n} follower",
+    "other": "Total: {n} followers"
+  },
+  "noSubs": "No followers yet",
+  "subsFailed": "Could not load followers"
 }

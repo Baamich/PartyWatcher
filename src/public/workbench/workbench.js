@@ -198,9 +198,10 @@ function showToast(type, message) {
 
 async function loadSettings() {
   try {
-    const data = await api('/workbench/me?_=' + Date.now());
+    const data = await api('/workbench/me?full=1&_=' + Date.now());
     document.getElementById('streamTitleInput').value = data.streamTitle || '';
     document.getElementById('streamDescInput').value = data.streamDescription || '';
+    setCategory(data.category || null);
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
     setGenerateBtnState(!!data.streamKeyMasked);
     setChatApiKeyUi(data.chatApiKeyMasked);
@@ -530,14 +531,117 @@ async function saveSettings() {
   const body = {
     streamTitle: document.getElementById('streamTitleInput').value,
     streamDescription: document.getElementById('streamDescInput').value,
+    streamCategoryId: chosenCategory ? chosenCategory.id : '',
   };
   try {
-    await api('/workbench/settings', { method: 'PATCH', body });
+    const r = await api('/workbench/settings', { method: 'PATCH', body });
+    setCategory(r.category || null);
     showToast('success', t('common.saved'));
   } catch (err) {
     showToast('error', err.message || t('common.saveFailed'));
   }
 }
+
+// ---- категория эфира (поиск через сервер → Twitch; сохраняется кнопкой «Сохранить» вместе с названием) ----
+
+let chosenCategory = null; // { id, name, ru, cover|box }
+let catTimer = null;
+let catSeq = 0;
+
+const catTitle = (c) => (I18N.lang === 'ru' && c.ru) || c.name;
+
+function catThumb(url) {
+  const img = document.createElement(url ? 'img' : 'span');
+  img.className = 'cat-thumb';
+  if (url) { img.src = url; img.alt = ''; img.loading = 'lazy'; }
+  return img;
+}
+
+function setCategory(c) {
+  chosenCategory = c;
+  const box = document.getElementById('catCurrent');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!c) {
+    const none = document.createElement('span');
+    none.className = 'cat-none';
+    none.textContent = t('workbench.settings.categoryNone');
+    box.appendChild(none);
+    return;
+  }
+  const name = document.createElement('span');
+  name.className = 'cat-name';
+  name.textContent = catTitle(c);
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'cat-clear';
+  clear.textContent = '×';
+  clear.title = t('workbench.settings.categoryClear');
+  clear.addEventListener('click', () => setCategory(null));
+  box.append(catThumb(c.cover || c.box), name, clear);
+}
+
+function hideCatResults() {
+  document.getElementById('catResults')?.classList.add('hidden');
+}
+
+function renderCatResults(list) {
+  const box = document.getElementById('catResults');
+  box.innerHTML = '';
+  if (!list.length) {
+    const p = document.createElement('div');
+    p.className = 'cat-empty';
+    p.textContent = t('workbench.settings.categoryNothing');
+    box.appendChild(p);
+  }
+  for (const c of list) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'cat-row';
+    const name = document.createElement('span');
+    name.textContent = catTitle(c);
+    row.append(catThumb(c.box), name);
+    // mousedown раньше blur поля — иначе список исчез бы до клика
+    row.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      setCategory(c);
+      document.getElementById('catSearchInput').value = '';
+      hideCatResults();
+    });
+    box.appendChild(row);
+  }
+  box.classList.remove('hidden');
+}
+
+async function initCategoryPicker() {
+  const input = document.getElementById('catSearchInput');
+  if (!input) return;
+  try {
+    const cfg = await api('/categories/config');
+    if (!cfg.enabled) {
+      input.disabled = true;
+      document.getElementById('catOff').classList.remove('hidden');
+    }
+  } catch (_) {}
+  input.addEventListener('input', () => {
+    clearTimeout(catTimer);
+    const q = input.value.trim();
+    if (q.length < 2) return hideCatResults();
+    catTimer = setTimeout(async () => {
+      const my = ++catSeq;
+      try {
+        const list = await api('/categories/search?q=' + encodeURIComponent(q));
+        if (my === catSeq) renderCatResults(list);
+      } catch (err) {
+        if (my === catSeq) showToast('error', err.message);
+      }
+    }, 350);
+  });
+  input.addEventListener('blur', () => setTimeout(hideCatResults, 150));
+  window.addEventListener('pw:langchange', () => setCategory(chosenCategory));
+}
+
+initCategoryPicker();
 
 // ---- чат ----
 

@@ -6,7 +6,40 @@ const i18n = require('../../services/i18n');
 const { hasProfanity } = require('../../services/profanity');
 const PWLayout = require('../../public/js/pwlayout.js');
 
+const Follow = require('../../models/Follow');
+const rateLimit = require('express-rate-limit');
+
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
+
+// адрес аватара для списков; v = profileRev — новая картинка получает новый адрес, старую браузер держит в кэше
+const avatarUrl = (nameLower, rev) => `/api/streamers/${encodeURIComponent(nameLower)}/avatar?v=${Number(rev) || 0}`;
+
+// раскодированные аватары в памяти: повторный запрос не тянет из базы строку base64 (до ~30 МБ на всё)
+const AVATAR_CACHE_MAX = 30 * 1024 * 1024;
+const avatarCache = new Map(); // nameLower → { rev, type, buf }
+let avatarCacheBytes = 0;
+function avatarCachePut(key, entry) {
+  const old = avatarCache.get(key);
+  if (old) { avatarCacheBytes -= old.buf.length; avatarCache.delete(key); }
+  if (entry.buf.length > AVATAR_CACHE_MAX / 4) return; // огромные не кэшируем
+  avatarCache.set(key, entry);
+  avatarCacheBytes += entry.buf.length;
+  for (const [k, v] of avatarCache) {
+    if (avatarCacheBytes <= AVATAR_CACHE_MAX) break;
+    avatarCache.delete(k);
+    avatarCacheBytes -= v.buf.length;
+  }
+}
+
+// подписка/отписка: по аккаунту, 30 в минуту
+const followLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => String(req.user.id),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: (req) => ({ error: req.t('server.follow.tooMany') }),
+});
 
 function validateStreamerName(name) {
   // возвращает ключ словаря ошибки (перевод — req.t) или null
@@ -30,15 +63,26 @@ router.get('/', async (req, res) => {
       match.$options = 'i';
     }
 
-    let query = User.find({ streamerNameLower: match })
-      .select('streamerName isLive profileViews streamerAvatarUrl -_id')
+    // аватары (base64, до нескольких МБ) в список не кладём: только адрес картинки, браузер грузит её отдельно и кэширует
+    const pipeline = [
+      { $match: { streamerNameLower: match } },
+      {
+        $project: {
+          _id: 0, streamerName: 1, streamerNameLower: 1, isLive: 1, profileViews: 1, profileRev: 1,
+          hasAvatar: { $gt: ['$streamerAvatarUrl', null] },
+        },
+      },
       // при поиске сначала эфир, потом чаще открываемые профили, потом по алфавиту
-      .sort({ isLive: -1, profileViews: -1, streamerName: 1 });
+      { $sort: { isLive: -1, profileViews: -1, streamerName: 1 } },
+    ];
+    if (limit) pipeline.push({ $limit: limit });
 
-    if (limit) query = query.limit(limit);
-
-    const streamers = await query.lean();
-    res.json(streamers);
+    const rows = await User.aggregate(pipeline);
+    res.json(rows.map((s) => ({
+      streamerName: s.streamerName,
+      isLive: !!s.isLive,
+      avatarUrl: s.hasAvatar ? avatarUrl(s.streamerNameLower, s.profileRev) : null,
+    })));
   } catch (err) {
     console.error('[GET /streamers]', err);
     res.status(500).json({ error: req.t('server.streamers.listFailed') });
@@ -242,6 +286,112 @@ router.get('/:name/vods', async (req, res) => {
   } catch (err) {
     console.error('[GET /streamers/:name/vods]', err);
     res.status(500).json({ error: req.t('server.streamers.vodsFailed') });
+  }
+});
+
+// GET /streamers/:name/avatar?v=rev — аватар картинкой (для списков). С актуальным v кэшируется в браузере на год
+router.get('/:name/avatar', async (req, res) => {
+  try {
+    const nameLower = String(req.params.name || '').trim().toLowerCase();
+    const s = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('profileRev -_id').lean());
+    if (!s) return res.status(404).set('Cache-Control', 'no-store').end();
+    const rev = Number(s.profileRev) || 0;
+
+    let entry = avatarCache.get(nameLower);
+    if (!entry || entry.rev !== rev) {
+      const a = await User.findOne({ streamerNameLower: nameLower }).select('streamerAvatarUrl -_id').lean();
+      const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(a?.streamerAvatarUrl || '');
+      if (!m) return res.status(404).set('Cache-Control', 'no-store').end();
+      entry = { rev, type: m[1], buf: Buffer.from(m[2], 'base64') };
+    }
+    avatarCachePut(nameLower, entry); // и для свежего, и чтобы поднять в конец очереди
+
+    res.set('Content-Type', entry.type);
+    res.set('Cache-Control', String(req.query.v) === String(rev) ? 'public, max-age=31536000, immutable' : 'no-store');
+    res.send(entry.buf);
+  } catch (err) {
+    console.error('[GET /streamers/:name/avatar]', err);
+    res.status(500).set('Cache-Control', 'no-store').end();
+  }
+});
+
+// ---------- подписки ----------
+
+async function followTarget(req, res) {
+  const nameLower = String(req.params.name || '').trim().toLowerCase();
+  const s = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('_id followersCount').lean());
+  if (!s) {
+    res.status(404).json({ error: req.t('server.streamers.notFound') });
+    return null;
+  }
+  return s;
+}
+
+// GET /streamers/:name/follow — число подписчиков и подписан ли я (гостю — только число)
+router.get('/:name/follow', auth.optional, async (req, res) => {
+  try {
+    const s = await followTarget(req, res);
+    if (!s) return;
+    const self = !!req.user && String(s._id) === String(req.user.id);
+    const following = !!req.user && !self && !!(await Follow.exists({ followerId: req.user.id, streamerId: s._id }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ followers: s.followersCount || 0, following, self });
+  } catch (err) {
+    console.error('[GET /streamers/:name/follow]', err);
+    res.status(500).json({ error: req.t('server.error') });
+  }
+});
+
+// POST /streamers/:name/follow — подписаться (на себя нельзя; повтор — без изменений)
+router.post('/:name/follow', auth, followLimiter, async (req, res) => {
+  try {
+    const s = await followTarget(req, res);
+    if (!s) return;
+    if (String(s._id) === String(req.user.id)) return res.status(400).json({ error: req.t('server.follow.self') });
+
+    let added = false;
+    try {
+      const r = await Follow.updateOne(
+        { followerId: req.user.id, streamerId: s._id },
+        { $setOnInsert: { createdAt: new Date() } },
+        { upsert: true }
+      );
+      added = r.upsertedCount > 0;
+    } catch (e) {
+      if (e.code !== 11000) throw e; // два клика одновременно: второй упёрся в уникальный индекс — уже подписан
+    }
+    let followers = s.followersCount || 0;
+    if (added) {
+      const u = await User.findOneAndUpdate({ _id: s._id }, { $inc: { followersCount: 1 } }, { new: true })
+        .select('followersCount').lean();
+      followers = u?.followersCount ?? followers + 1;
+    }
+    res.json({ followers, following: true, self: false });
+  } catch (err) {
+    console.error('[POST /streamers/:name/follow]', err);
+    res.status(500).json({ error: req.t('server.follow.failed') });
+  }
+});
+
+// DELETE /streamers/:name/follow — отписаться
+router.delete('/:name/follow', auth, followLimiter, async (req, res) => {
+  try {
+    const s = await followTarget(req, res);
+    if (!s) return;
+    const r = await Follow.deleteOne({ followerId: req.user.id, streamerId: s._id });
+    let followers = s.followersCount || 0;
+    if (r.deletedCount) {
+      const u = await User.findOneAndUpdate(
+        { _id: s._id, followersCount: { $gt: 0 } },
+        { $inc: { followersCount: -1 } },
+        { new: true }
+      ).select('followersCount').lean();
+      followers = u ? u.followersCount : 0;
+    }
+    res.json({ followers, following: false, self: String(s._id) === String(req.user.id) });
+  } catch (err) {
+    console.error('[DELETE /streamers/:name/follow]', err);
+    res.status(500).json({ error: req.t('server.follow.failed') });
   }
 });
 

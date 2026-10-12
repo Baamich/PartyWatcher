@@ -8,7 +8,7 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
-  <link rel="stylesheet" href="/workbench/workbench.css" />
+  <link rel="stylesheet" href="/workbench/workbench.css?v=2" />
   <title data-i18n="workbench.pageTitle">PartyWatcher — Творческая студия</title>
 </head>
 <body>
@@ -90,6 +90,14 @@
         <div class="wb-window-content">
           <label class="auth-label" for="streamTitleInput" data-i18n="workbench.settings.name">Название стрима</label>
           <input id="streamTitleInput" maxlength="140" placeholder="О чём стрим?" data-i18n-placeholder="workbench.settings.namePh" />
+
+          <label class="auth-label" for="catSearchInput" data-i18n="workbench.settings.category">Категория</label>
+          <div class="cat-picker">
+            <div id="catCurrent" class="cat-current" data-no-i18n></div>
+            <input id="catSearchInput" autocomplete="off" placeholder="Найдите игру или категорию" data-i18n-placeholder="workbench.settings.categoryPh" />
+            <div id="catResults" class="cat-results hidden" data-no-i18n></div>
+            <p id="catOff" class="cat-off hidden" data-i18n="workbench.settings.categoryOff">Категории пока не настроены на сервере</p>
+          </div>
 
           <label class="auth-label" for="streamDescInput" data-i18n="workbench.settings.desc">Описание</label>
           <textarea id="streamDescInput" rows="4" maxlength="2000" placeholder="Расскажи подробнее" data-i18n-placeholder="workbench.settings.descPh"></textarea>
@@ -210,6 +218,6 @@
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/minipip.js?v=2"></script>
-  <script src="/workbench/workbench.js?v=5"></script>
+  <script src="/workbench/workbench.js?v=6"></script>
 </body>
 </html>

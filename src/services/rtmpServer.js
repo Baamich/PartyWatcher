@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const User = require('../models/User');
+const StreamSession = require('../models/StreamSession');
 const StreamVod = require('../models/StreamVod');
 const streamKeyCache = require('./streamKeyCache');
 
@@ -89,11 +90,19 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
   }
   try {
     if (!isLive) {
-      const r = await User.updateOne(
+      // прежнее состояние нужно, чтобы записать длительность эфира («Активные стримеры» — часы за 30 дней)
+      const prev = await User.findOneAndUpdate(
         { _id: entry.userId },
-        { $set: { isLive: false, liveStartedAt: null } }
-      );
-      console.log(`[rtmp] isLive=false, startedAt=clear, key=${key.slice(0, 8)}… mod=${r.modifiedCount}`);
+        { $set: { isLive: false, liveStartedAt: null } },
+        { new: false }
+      ).select('liveStartedAt streamCategoryId').lean();
+      console.log(`[rtmp] isLive=false, startedAt=clear, key=${key.slice(0, 8)}…`);
+      const startedAt = prev?.liveStartedAt ? new Date(prev.liveStartedAt) : null;
+      const sec = startedAt ? Math.round((Date.now() - startedAt.getTime()) / 1000) : 0;
+      if (sec >= 30) {
+        StreamSession.create({ streamerId: entry.userId, startedAt, endedAt: new Date(), sec, categoryId: prev.streamCategoryId || null })
+          .catch((e) => console.warn('[rtmp] StreamSession', e.message));
+      }
       return entry;
     }
 

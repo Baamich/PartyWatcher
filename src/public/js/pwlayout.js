@@ -11,6 +11,7 @@
       { id: 'avatar', type: 'avatar', x: 20, y: 172, w: 120, h: 120, shape: 'circle' },
       { id: 'info', type: 'info', x: 160, y: 232, w: 600, h: 90 },
       { id: 'vods', type: 'vods', x: 0, y: 340, w: 1100, h: 320 },
+      { id: 'follow', type: 'follow', x: 900, y: 240, w: 180, h: 44 }, // кнопка «Подписаться»
     ],
     live: [
       { id: 'player', type: 'player', x: 0, y: 0, w: 764, h: 430 },
@@ -105,6 +106,13 @@
     return Math.round(Math.min(max, Math.max(min, right)));
   }
 
+  // недостающий родной блок (макет сохранён до его появления): вниз слоёв, а кнопку «Подписаться» — наверх,
+  // чтобы её не закрыли свои фигуры
+  function addDefault(blocks, d) {
+    if (d.type === 'follow') blocks.push(clone(d));
+    else blocks.unshift(clone(d));
+  }
+
   // аватар всегда выше баннера: если он в списке раньше, ставим сразу за баннером
   function fixOrder(blocks) {
     const bi = blocks.findIndex((b) => b.type === 'banner');
@@ -189,7 +197,7 @@
     for (const mode of ['profile', 'live']) {
       const src = Array.isArray(raw?.[mode]?.blocks) ? raw[mode].blocks : [];
       const blocks = clone(src);
-      for (const d of DEFAULTS[mode]) if (!blocks.some((b) => b.id === d.id)) blocks.unshift(clone(d));
+      for (const d of DEFAULTS[mode]) if (!blocks.some((b) => b.id === d.id)) addDefault(blocks, d);
       blocks.forEach((b) => clampBlock(b, mode));
       fixOrder(blocks);
       syncChat(blocks);
@@ -307,7 +315,7 @@
         seen.add(nb.id);
         blocks.push(nb);
       }
-      for (const d of DEFAULTS[mode]) if (!seen.has(d.id)) blocks.unshift(clone(d));
+      for (const d of DEFAULTS[mode]) if (!seen.has(d.id)) addDefault(blocks, d);
       fixOrder(blocks);
       syncChat(blocks);
       const c = counts(blocks), L = LIMITS[mode];

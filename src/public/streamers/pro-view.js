@@ -158,6 +158,7 @@
       avatar: document.getElementById('profileAvatarBtn'),
       info: document.querySelector('.profile-info'),
       vods: document.getElementById('vodSection'),
+      follow: document.getElementById('followBox'),
     };
 
     blocks.forEach((b, i) => {

@@ -8,7 +8,7 @@
     <script src="/js/favicon.js"></script>
     <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
     <link rel="stylesheet" href="/css/common.css?v=2" />
-    <link rel="stylesheet" href="/streams/streams.css" />
+    <link rel="stylesheet" href="/streams/streams.css?v=2" />
     <title data-i18n="streams.pageTitle">PartyWatcher — Трансляции</title>
   </head>
   <body>
@@ -37,41 +37,77 @@
       </div>
     </div>
 
-    <nav class="nav-sidebar">
-      <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/news" data-i18n="common.nav.news">📰 Новости</button>
-      <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/" data-i18n="common.nav.rooms">🏠 Комнаты</button>
-      <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/streams.html" data-i18n="common.nav.streams">📡 Прямые трансляции</button>
-    </nav>
+    <div class="streams-page">
+      <!-- слева: меню сайта и подписки -->
+      <aside class="streams-left">
+        <nav class="nav-sidebar">
+          <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/news" data-i18n="common.nav.news">📰 Новости</button>
+          <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/" data-i18n="common.nav.rooms">🏠 Комнаты</button>
+          <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/streams.html" data-i18n="common.nav.streams">📡 Прямые трансляции</button>
+        </nav>
 
-    <div class="streams-layout">
-      <div class="streams-search-wrap">
-        <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера" data-i18n-placeholder="streams.searchPh"
-              autocomplete="off"
-              data-keydown="handleStreamerSearchKey" data-event
-              data-input="handleStreamerSearchInput"
-              data-blur="hideSuggestionsSoon" />
-        <button type="button" class="search-icon-btn" data-click="onStreamerSearch" aria-label="Искать" data-i18n-aria-label="common.search">🔍</button>
-        <div id="searchSuggestions" class="search-suggestions hidden"></div>
-      </div>
+        <section id="followSide" class="follow-side">
+          <div class="side-head">
+            <h2 data-i18n="streams.following">Подписки</h2>
+            <button type="button" id="followSideToggle" class="side-toggle" title="Свернуть" data-i18n-title="streams.collapse">«</button>
+          </div>
+          <div id="followList" class="follow-list" data-no-i18n></div>
+        </section>
+      </aside>
 
-      <section class="streams-section">
-        <div class="streams-section-head">
-          <h2 data-i18n="streams.active">Активные стримеры</h2>
-          <span class="streams-section-hint" data-i18n="streams.activeHint">часто стримящие за последнее время</span>
+      <main id="streamsMain" class="streams-main">
+        <div class="streams-search-wrap">
+          <input id="streamerSearchInput" type="text" placeholder="Поиск по имени стримера" data-i18n-placeholder="streams.searchPh"
+                autocomplete="off"
+                data-keydown="handleStreamerSearchKey" data-event
+                data-input="handleStreamerSearchInput"
+                data-blur="hideSuggestionsSoon" />
+          <button type="button" class="search-icon-btn" data-click="onStreamerSearch" aria-label="Искать" data-i18n-aria-label="common.search">🔍</button>
+          <div id="searchSuggestions" class="search-suggestions hidden"></div>
         </div>
-        <!-- будет потом считываться по итогу окончания стрима (накопленные часы эфира) -->
-        <div id="activeStreamersRow" class="active-streamers-row"></div>
-      </section>
 
-      <section class="streams-section">
-        <h2 data-i18n="streams.all">Все стримеры</h2>
-        <div id="streamersGrid" class="streamers-grid"></div>
-      </section>
+        <!-- главная: активные и категории -->
+        <div id="homeView">
+          <section class="streams-section">
+            <div class="streams-section-head">
+              <h2 class="section-title">
+                <button type="button" class="section-link" data-view="active"><span data-i18n="streams.active">Активные стримеры</span><span class="chev">›</span></button>
+              </h2>
+              <span class="streams-section-hint" data-i18n="streams.activeHint">часто стримят последние 30 дней</span>
+            </div>
+            <div class="row-scroller"><div id="activeStreamersRow" class="active-streamers-row" data-no-i18n></div></div>
+          </section>
+          <div id="categoryRows" data-no-i18n></div>
+        </div>
+
+        <!-- полный список: все, активные или одна категория -->
+        <div id="listView" class="hidden">
+          <div class="list-head">
+            <button type="button" id="listBackBtn" class="icon-btn" data-i18n="streams.back">← Назад</button>
+            <div id="listCover" class="list-cover hidden"></div>
+            <div class="list-head-text" data-no-i18n>
+              <h2 id="listTitle"></h2>
+              <span id="listCount" class="streams-section-hint"></span>
+            </div>
+          </div>
+          <div id="listGrid" class="streamers-grid" data-no-i18n></div>
+        </div>
+      </main>
+
+      <!-- справа: все стримеры столбиком -->
+      <aside class="streams-right">
+        <div class="side-head">
+          <h2 class="section-title">
+            <button type="button" class="section-link" data-view="all"><span data-i18n="streams.all">Все стримеры</span><span class="chev">›</span></button>
+          </h2>
+        </div>
+        <div id="allList" class="side-list" data-no-i18n></div>
+      </aside>
     </div>
 
     <script src="/js/api.js?v=2"></script>
     <script src="/js/actions.js?v=3"></script>
     <script src="/js/page-transition.js"></script>
-    <script src="/streams/streams.js?v=3"></script>
+    <script src="/streams/streams.js?v=4"></script>
   </body>
   </html>

@@ -29,12 +29,14 @@ const userSchema = new mongoose.Schema(
     streamerAvatarUrl: { type: String, default: null },
     streamerBannerUrl: { type: String, default: null },
     profileViews: { type: Number, default: 0 },
+    followersCount: { type: Number, default: 0 }, // меняется $inc вместе с коллекцией Follow
     profileLayout: { type: mongoose.Schema.Types.Mixed, default: null },
     profileRev: { type: Number, default: 0 },
 
     // ---- творческая студия ----
     streamTitle: { type: String, default: '' },
     streamDescription: { type: String, default: '' },
+    streamCategoryId: { type: String, default: null }, // Category.tid, выбирается в студии
     streamKey: { type: String, default: undefined, unique: true, sparse: true },
     streamPlaybackId: { type: String, default: undefined, unique: true, sparse: true },
 

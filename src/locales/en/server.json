@@ -256,5 +256,16 @@
   },
   "adult": {
     "notConfirmed": "Confirm that you are 18 or older first"
+  },
+  "follow": {
+    "self": "You can't follow your own channel",
+    "tooMany": "Too many requests, wait a minute",
+    "failed": "Could not change the follow"
+  },
+  "cat": {
+    "tooMany": "Too many searches, wait a minute",
+    "searchFailed": "Category search is not working right now, try again later",
+    "notFound": "Category not found",
+    "notConfigured": "Categories are not set up on the server yet"
   }
 }

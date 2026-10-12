@@ -261,3 +261,39 @@
   text-align: center;
 }
 
+
+/* ---- подписка: число под именем и кнопка справа от имени ---- */
+.profile-name-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 10px;
+}
+
+.profile-followers {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.follow-box {
+  flex-shrink: 0;
+  margin: 56px 0 0 auto;
+}
+
+.follow-btn {
+  white-space: nowrap;
+}
+
+/* уже подписан — спокойная кнопка (нажать — отписаться) */
+[data-theme] .follow-btn.on {
+  background: var(--surface-alt);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+[data-theme] .follow-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

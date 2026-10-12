@@ -1,10 +1,31 @@
-/* ==== Layout страницы трансляций ==== */
+/* ==== Страница трансляций: подписки слева, лента в центре, все стримеры справа ==== */
 
-.streams-layout {
-  max-width: 1100px;
+.page-header:has(~ .streams-page) { max-width: 1560px; }
+
+.streams-page {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 260px;
+  grid-template-areas: 'left main right';
+  gap: 28px;
+  max-width: 1560px;
   margin: 0 auto;
-  padding: 20px 16px 60px;
+  padding: 16px 16px 60px;
+  align-items: start;
 }
+.streams-left { grid-area: left; }
+.streams-main { grid-area: main; min-width: 0; }
+.streams-right { grid-area: right; }
+
+.streams-left,
+.streams-right {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.streams-left .nav-sidebar { margin: 6px 0 18px; padding: 0; max-width: none; }
 
 .streams-search-wrap {
   position: relative;
@@ -37,6 +58,10 @@
 /* ---- карточка стримера ---- */
 
 .streamer-card {
+  position: relative;
+  display: block;
+  color: inherit;
+  text-decoration: none;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -204,8 +229,191 @@
   font-weight: 700;
 }
 
-@media (min-width: 1050px), (orientation: landscape) {
-  .streams-layout {
-    padding-left: 190px;
+/* ---- заголовки-кнопки разделов («Активные стримеры ›», «Все стримеры ›», категории) ---- */
+.section-title { margin: 0; }
+[data-theme] .section-link,
+[data-theme] .section-link:hover,
+[data-theme] .section-link:active {
+  background: none;
+  box-shadow: none;
+  transform: none;
+}
+.section-link {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.section-link:hover { color: var(--text); }
+.section-link .chev { font-size: 15px; line-height: 1; }
+
+.streams-section-head { margin: 0 0 8px; }
+.streams-empty { color: var(--text-muted); font-size: 14px; margin: 4px 0; }
+
+/* ---- ряд с прокруткой вбок и стрелками ---- */
+.row-scroller { position: relative; }
+.row-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-60%);
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.row-arrow-l { left: -10px; }
+.row-arrow-r { right: -10px; }
+.row-scroller:hover .row-arrow { opacity: 0.95; }
+.row-arrow:active { transform: translateY(-60%) scale(0.95); }
+@media (hover: none) { .row-arrow { display: none; } }
+
+.active-streamers-row { scrollbar-width: thin; scroll-snap-type: x proximity; }
+.active-streamers-row > * { scroll-snap-align: start; }
+
+/* ---- карточка: зрители и красное кольцо у эфира ---- */
+.streamer-avatar-wrap.is-live .streamer-avatar,
+.streamer-avatar-wrap.is-live .streamer-avatar-fallback { box-shadow: 0 0 0 3px var(--danger); }
+.card-viewers {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ---- категория: вертикальная обложка первой в ряду ---- */
+.cat-section .streams-section-head { align-items: center; }
+.cat-count { font-size: 12px; color: var(--text-muted); }
+.cat-count.is-live { color: var(--danger); font-weight: 700; }
+.cat-count.is-live::before { content: '● '; }
+
+.cat-cover-tile,
+.cat-cover-big {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  text-align: center;
+}
+.cat-cover-tile { flex: 0 0 auto; height: 150px; transition: transform 0.15s ease; }
+.cat-cover-tile:hover { transform: translateY(-2px); }
+.cat-cover-tile img,
+.cat-cover-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cat-cover-tile span,
+.cat-cover-big span { padding: 8px; font-size: 13px; }
+
+/* ---- полный список (все / активные / категория) ---- */
+.list-head { display: flex; align-items: center; gap: 14px; margin: 0 0 18px; flex-wrap: wrap; }
+.list-head h2 { margin: 0; font-size: 18px; color: var(--text); text-transform: none; letter-spacing: 0; }
+.list-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.list-cover,
+.cat-cover-big { width: 90px; }
+
+/* ---- боковые списки: подписки и все стримеры ---- */
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.side-head h2 { margin: 0; }
+[data-theme] .side-toggle,
+[data-theme] .side-toggle:hover {
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  font-size: 15px;
+}
+[data-theme] .side-toggle:hover { color: var(--text); }
+
+.side-list,
+.follow-list { display: flex; flex-direction: column; gap: 2px; }
+.side-hint { color: var(--text-muted); font-size: 13px; margin: 2px 0; line-height: 1.4; }
+.side-hint a { color: var(--text); }
+
+.side-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.side-row:hover { background: var(--surface-alt); }
+.side-avatar { position: relative; flex: 0 0 34px; width: 34px; height: 34px; }
+.side-avatar-img,
+.side-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.side-row.is-live .side-avatar-img,
+.side-row.is-live .side-avatar-fallback { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--danger); }
+.side-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.side-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-meta { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-live { color: var(--danger); font-weight: 700; font-size: 10px; letter-spacing: 0.03em; }
+.side-viewers { font-size: 12px; color: var(--danger); white-space: nowrap; }
+
+/* свёрнутые подписки — только аватары */
+.follow-side.collapsed .side-text,
+.follow-side.collapsed .side-viewers,
+.follow-side.collapsed .side-hint,
+.follow-side.collapsed .side-head h2 { display: none; }
+.follow-side.collapsed .side-head { justify-content: flex-start; }
+.follow-side.collapsed .side-row { padding: 6px 4px; }
+
+/* ---- уже экран: «все стримеры» уходят под ленту ---- */
+@media (max-width: 1279px) {
+  .streams-page {
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-areas: 'left main' 'left right';
   }
+  .streams-right { position: static; max-height: none; overflow: visible; }
+  .streams-right .side-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+
+/* ---- телефон: одна колонка, подписки — полоской аватаров ---- */
+@media (max-width: 1049px) and (orientation: portrait) {
+  .streams-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'left' 'main' 'right';
+    gap: 18px;
+    padding-top: 0;
+  }
+  .streams-left { position: static; max-height: none; overflow: visible; }
+  .streams-left .nav-sidebar { margin: 0 0 12px; }
+  .follow-side .side-toggle { display: none; }
+  .follow-side .follow-list { flex-direction: row; overflow-x: auto; gap: 4px; scrollbar-width: none; }
+  .follow-side .side-row { flex-direction: column; gap: 4px; padding: 4px; width: 64px; flex: 0 0 64px; }
+  .follow-side .side-avatar { flex-basis: auto; width: 48px; height: 48px; }
+  .follow-side .side-text { align-items: center; width: 100%; }
+  .follow-side .side-name { font-size: 11px; max-width: 100%; }
+  .follow-side .side-meta,
+  .follow-side .side-viewers { display: none; }
+  .follow-side.collapsed .side-text { display: flex; }
+  .follow-side.collapsed .side-head h2 { display: block; }
+  .cat-cover-tile { height: 130px; }
 }

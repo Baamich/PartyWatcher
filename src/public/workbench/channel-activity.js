@@ -44,6 +44,53 @@ async function loadBans() {
   }
 }
 
+// подписчики: общее число и последние 100 (дата — на языке страницы, поэтому перерисовка при смене языка)
+let followersData = null;
+
+function renderFollowers() {
+  const box = document.getElementById('followersBox');
+  if (!box || !followersData) return;
+  box.innerHTML = '';
+  const head = document.createElement('p');
+  head.style.cssText = 'color:var(--text-muted); font-size:14px;';
+  head.textContent = followersData.count ? t('activity.subsCount', { n: followersData.count }) : t('activity.noSubs');
+  box.appendChild(head);
+  if (!followersData.list.length) return;
+
+  const list = document.createElement('div');
+  list.className = 'ban-list';
+  list.setAttribute('data-no-i18n', '');
+  for (const f of followersData.list) {
+    const row = document.createElement('div');
+    row.className = 'ban-row';
+    const name = document.createElement('span');
+    name.className = 'ban-name';
+    name.textContent = f.username;
+    name.title = f.username;
+    const at = document.createElement('span');
+    at.style.cssText = 'color:var(--text-muted); font-size:12px; white-space:nowrap;';
+    at.textContent = new Date(f.at).toLocaleString(I18N.locale, { dateStyle: 'medium', timeStyle: 'short' });
+    row.append(name, at);
+    list.appendChild(row);
+  }
+  box.appendChild(list);
+}
+
+async function loadFollowers() {
+  const box = document.getElementById('followersBox');
+  try {
+    followersData = await api('/workbench/followers');
+    renderFollowers();
+  } catch (err) {
+    box.innerHTML = '';
+    const p = document.createElement('p');
+    p.style.cssText = 'color:var(--danger); font-size:14px;';
+    p.textContent = err.message || t('activity.subsFailed');
+    box.appendChild(p);
+  }
+}
+
+window.addEventListener('pw:langchange', renderFollowers);
 
 async function goProfile() {
   try {
@@ -59,3 +106,4 @@ async function goProfile() {
 }
 
 loadBans();
+loadFollowers();

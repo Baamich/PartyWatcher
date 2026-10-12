@@ -55,4 +55,10 @@ module.exports = {
     apiUrl: (process.env.KODIK_API_URL || 'https://kodik-api.com').replace(/\/+$/, ''),
     playerHost: process.env.KODIK_PLAYER_HOST || 'kodikplayer.com', // все ссылки на плеер приводятся к этому домену
   },
+
+  // категории эфиров: поиск через Twitch API (игры из IGDB + неигровые категории). Без ключей выбор категории выключен
+  twitch: {
+    clientId: process.env.TWITCH_CLIENT_ID || null,
+    clientSecret: process.env.TWITCH_CLIENT_SECRET || null,
+  },
 };

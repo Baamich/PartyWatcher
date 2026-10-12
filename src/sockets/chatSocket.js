@@ -107,6 +107,19 @@ module.exports = function registerChatSocket(io) {
     return { count: list.length, viewers: list };
   }
 
+  // для каталога трансляций: число без списка имён
+  chatBus.setViewerCounter((nameLower) => {
+    const room = presence.get(nameLower);
+    if (!room) return 0;
+    const users = new Set();
+    let guests = 0;
+    for (const [, info] of room) {
+      if (info.userId) users.add(info.userId);
+      else guests += 1;
+    }
+    return users.size + guests;
+  });
+
   function emitViewers(nameLower) {
     const payload = buildViewersPayload(nameLower);
     nsp.to(roomName(nameLower)).emit('chat:viewers', payload);

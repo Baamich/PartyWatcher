@@ -241,6 +241,15 @@
 #liveOwnerBar.hidden { display: none; }
 #liveOwnerBar button { width: 100%; }
 
+/* зрителям вместо настроек трансляции — «Подписаться» */
+#liveFollowBar {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+#liveFollowBar.hidden { display: none; }
+#liveFollowBar button { width: 100%; }
+
 /* ===== fullscreen: докнутый чат прячем, вместо него — плавающая стеклянная панель ===== */
 
 .live-strip-inner:fullscreen,
@@ -450,6 +459,9 @@
   .streamer-profile .profile-avatar { width: 84px; height: 84px; border-width: 3px; }
   .streamer-profile .profile-info { margin-top: 40px; }
   .streamer-profile .profile-name { font-size: 20px; overflow-wrap: anywhere; }
+  .streamer-profile .profile-header { flex-wrap: wrap; }
+  .streamer-profile .follow-box { flex-basis: 100%; margin: 4px 0 0; }
+  .streamer-profile .follow-box .follow-btn { width: 100%; }
   .vod-section { padding: 0 10px 32px; }
 }
 

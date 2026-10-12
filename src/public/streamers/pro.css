@@ -127,6 +127,7 @@
 .ph-vods { border: 2px dashed var(--border); border-radius: var(--radius); padding: 10px; overflow: hidden; color: var(--text-muted); font-weight: 700; }
 .ph-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
 .ph-grid i { aspect-ratio: 16 / 9; background: var(--surface-alt); border-radius: 8px; }
+.ph-follow { display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); background: linear-gradient(135deg, var(--btn-grad-start), var(--btn-grad-end)); color: #fff; font-weight: 700; font-size: calc(min(var(--h) * 0.4, 22) * var(--s, 1) * 1px); white-space: nowrap; overflow: hidden; }
 .ph-player { background: #000; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: #aaa; }
 .ph-chat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; overflow: hidden; }
 .ph-chat-h { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }

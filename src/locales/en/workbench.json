@@ -41,7 +41,13 @@
     "name": "Stream title",
     "namePh": "What is the stream about?",
     "desc": "Description",
-    "descPh": "Tell more"
+    "descPh": "Tell more",
+    "category": "Category",
+    "categoryPh": "Find a game or category",
+    "categoryNone": "No category",
+    "categoryOff": "Categories are not set up on the server yet",
+    "categoryClear": "Remove category",
+    "categoryNothing": "Nothing found"
   },
   "log": {
     "title": "Action log",

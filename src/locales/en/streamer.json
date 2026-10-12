@@ -39,7 +39,23 @@
     "title": "Sign in to chat",
     "text": "You can watch without an account, but to send messages you need to sign in or sign up.",
     "login": "Sign in",
-    "register": "Sign up"
+    "register": "Sign up",
+    "followTitle": "Sign in to follow",
+    "followText": "Follows are tied to an account: sign in or register."
   },
-  "previewBadge": "Preview: changes are not saved yet"
+  "previewBadge": "Preview: changes are not saved yet",
+  "follow": {
+    "follow": "❤ Follow",
+    "following": "💜 Following",
+    "selfHint": "You can't follow your own channel",
+    "unfollowHint": "Click to unfollow",
+    "unfollowConfirm": "Unfollow {name}?",
+    "unfollowOk": "Unfollow",
+    "done": "You are now following {name}",
+    "failed": "Could not change the follow",
+    "count": {
+      "one": "{n} follower",
+      "other": "{n} followers"
+    }
+  }
 }

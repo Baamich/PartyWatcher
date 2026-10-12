@@ -75,7 +75,10 @@ async function onImageSelected(event, kind) {
   }
 
   try {
-    const base64 = await readFileAsBase64(file);
+    // пережимаем, как PRO-редактор: аватар до 512 px, баннер до 1600 (исходник в base64 весил мегабайты и тормозил списки)
+    const base64 = window.PWLayout?.imageToDataUrl
+      ? (await PWLayout.imageToDataUrl(file, kind === 'avatar' ? 512 : 1600)).url
+      : await readFileAsBase64(file);
     setPreview(kind, base64);
     if (kind === 'avatar') pendingAvatarBase64 = base64;
     else pendingBannerBase64 = base64;

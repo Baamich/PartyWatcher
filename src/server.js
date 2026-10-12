@@ -28,6 +28,8 @@ const supportRoutes = require('./routes/support.routes');
 const streamersRoutes = require('./routes/streams/streamers.routes');
 const workbenchRoutes = require('./routes/streams/workbench.routes');
 const presetsRoutes = require('./routes/streams/presets.routes');
+const categoriesRoutes = require('./routes/streams/categories.routes');
+const directoryRoutes = require('./routes/streams/directory.routes');
 const registerChatSocket = require('./sockets/chatSocket');
 const rtmpServer = require('./services/rtmpServer');
 const streamKeyCache = require('./services/streamKeyCache');
@@ -158,6 +160,8 @@ async function start() {
   app.use('/api/streamers', streamersRoutes);
   app.use('/api/workbench', workbenchRoutes);
   app.use('/api/presets', presetsRoutes);
+  app.use('/api/categories', categoriesRoutes);
+  app.use('/api/streams', directoryRoutes);
 
   app.use('/api/chat', CHAT_ROUTES);
   app.use('/api/news', NEWS_ROUTES);

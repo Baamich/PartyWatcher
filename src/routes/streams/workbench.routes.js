@@ -7,6 +7,10 @@ const User = require('../../models/User');
 const ChannelBan = require('../../models/ChannelBan');
 const WorkbenchLayout = require('../../models/WorkbenchLayout');
 const ChannelActionLog = require('../../models/ChannelActionLog');
+const Follow = require('../../models/Follow');
+const Category = require('../../models/Category');
+const categories = require('../../services/categories');
+const i18n = require('../../services/i18n');
 const auth = require('../../middleware/auth');
 const streamKeyCache = require('../../services/streamKeyCache');
 const StreamVod = require('../../models/StreamVod');
@@ -56,9 +60,13 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     await me.save();
   }
 
+  // категория нужна только при открытии студии (?full=1), а не опросу раз в 3 с
+  const cat = req.query.full && me.streamCategoryId ? await Category.findOne({ tid: me.streamCategoryId }).select('-cover').lean() : null;
+
   res.json({
     streamTitle: me.streamTitle || '',
     streamDescription: me.streamDescription || '',
+    category: categories.publicView(cat),
     streamKeyMasked: maskKey(me.streamKey),
     chatApiKeyMasked: maskChatKey(me.chatApiKey),
     streamPlaybackId: me.streamPlaybackId || null,
@@ -97,7 +105,7 @@ router.post('/stream-key/reveal', auth, requireStreamer, async (req, res) => {
 
 // PATCH /workbench/settings — название и описание трансляции
 router.patch('/settings', auth, requireStreamer, async (req, res) => {
-  const { streamTitle, streamDescription } = req.body;
+  const { streamTitle, streamDescription, streamCategoryId } = req.body;
   if (streamTitle !== undefined) {
     if (String(streamTitle).length > 140) return res.status(400).json({ error: req.t('server.wb.titleLong') });
     req.streamerUser.streamTitle = String(streamTitle).trim();
@@ -106,8 +114,27 @@ router.patch('/settings', auth, requireStreamer, async (req, res) => {
     if (String(streamDescription).length > 2000) return res.status(400).json({ error: req.t('server.streamers.bioLong') });
     req.streamerUser.streamDescription = String(streamDescription).trim();
   }
+  let cat = null;
+  if (streamCategoryId !== undefined) {
+    // пусто — без категории; иначе id из поиска (при первом выборе категория копируется из Twitch)
+    if (streamCategoryId) {
+      try {
+        cat = await categories.ensure(streamCategoryId);
+      } catch (e) {
+        if (!e.i18nKey) console.error('[PATCH /workbench/settings] категория', e);
+        return res.status(400).json({ error: i18n.errText(req, e.i18nKey ? e : null, 'server.cat.searchFailed') });
+      }
+    }
+    req.streamerUser.streamCategoryId = cat ? cat.tid : null;
+  } else if (req.streamerUser.streamCategoryId) {
+    cat = await Category.findOne({ tid: req.streamerUser.streamCategoryId }).select('-cover').lean();
+  }
   await req.streamerUser.save();
-  res.json({ streamTitle: req.streamerUser.streamTitle, streamDescription: req.streamerUser.streamDescription });
+  res.json({
+    streamTitle: req.streamerUser.streamTitle,
+    streamDescription: req.streamerUser.streamDescription,
+    category: categories.publicView(cat),
+  });
 });
 
 // GET /workbench/bans — список заблокированных в чате этого канала
@@ -124,6 +151,17 @@ router.delete('/bans/:userId', auth, requireStreamer, async (req, res) => {
   await ChannelBan.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
   chatBus.emitToUser(req.streamerUser.streamerNameLower, req.params.userId, 'chat:restriction', { type: 'none' });
   res.json({ status: 'ok' });
+});
+
+// GET /workbench/followers — число подписчиков и последние 100 (имя аккаунта, когда подписался)
+router.get('/followers', auth, requireStreamer, async (req, res) => {
+  const rows = await Follow.find({ streamerId: req.streamerUser._id }).sort({ createdAt: -1 }).limit(100).lean();
+  const users = await User.find({ _id: { $in: rows.map((r) => r.followerId) } }).select('username').lean();
+  const names = new Map(users.map((u) => [String(u._id), u.username]));
+  res.json({
+    count: req.streamerUser.followersCount || 0,
+    list: rows.filter((r) => names.has(String(r.followerId))).map((r) => ({ username: names.get(String(r.followerId)), at: r.createdAt })),
+  });
 });
 
 // GET /workbench/layout — сохранённое расположение окон этого пользователя

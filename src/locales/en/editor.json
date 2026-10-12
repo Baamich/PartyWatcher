@@ -64,7 +64,8 @@
     "text": "Text",
     "image": "Photo",
     "link": "Photo button",
-    "default": "Block"
+    "default": "Block",
+    "follow": "“Follow” button"
   },
   "shape": {
     "rect": "Square",
@@ -80,7 +81,8 @@
   },
   "stub": {
     "player": "▶ Stream player",
-    "chat": "💬 Chat"
+    "chat": "💬 Chat",
+    "follow": "❤ Follow"
   },
   "blockSettings": "Block settings",
   "phone": {
