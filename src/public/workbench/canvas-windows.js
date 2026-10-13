@@ -84,9 +84,60 @@
       wins.set(id, el);
       makeMovable(el, id);
       fit();
+      unstickSoon();
       return parts(el);
     }
     const parts = (el) => ({ el, title: el.querySelector('.cw-title'), right: el.querySelector('.cw-head-right'), close: el.querySelector('.cw-close'), content: el.querySelector('.wb-window-content') });
+
+    // Окно оказалось под панелью сверху, меню или галочками (раскладка сохранена при другой ширине окна,
+    // панель стала выше после загрузки данных) — опускаем его под панель, ниже окон, с которыми оно столкнулось,
+    // и сохраняем новое место. Зовётся после открытия окон, при смене размеров и после полной загрузки страницы
+    const GAP = 12;
+    const rectEl = (el) => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+    const hits = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    function blockers() {
+      const list = [];
+      for (const el of [topBar, document.getElementById('wbNavFixed'), picker]) {
+        if (el && el.offsetParent !== null) list.push(rectEl(el));
+      }
+      return list;
+    }
+    function unstick() {
+      if (window.matchMedia('(max-width: 900px)').matches) return; // на телефоне окна идут столбиком
+      const fixed = blockers();
+      if (!fixed.length) return;
+      const moved = [];
+      const all = [...wins.entries()].sort((a, b) => a[1].offsetTop - b[1].offsetTop);
+      for (const [id, el] of all) {
+        let r = rectEl(el);
+        if (!fixed.some((f) => hits(r, f))) continue;
+        const p = clampPos(el, r.x, Math.max(r.y, topMin()));
+        r = { ...r, x: p.left, y: p.top };
+        // ниже всех окон, на которые теперь наезжает (по порядку сверху вниз)
+        for (let guard = 0; guard < 50; guard++) {
+          const other = [...wins.values()].find((o) => o !== el && hits(r, rectEl(o)));
+          const block = fixed.find((f) => hits(r, f));
+          const below = other ? rectEl(other) : block;
+          if (!below) break;
+          r.y = below.y + below.h + GAP;
+        }
+        el.style.left = r.x + 'px';
+        el.style.top = r.y + 'px';
+        if (panels[id]) panels[id] = { ...panels[id], x: r.x, y: r.y };
+        moved.push(id);
+      }
+      if (moved.length) {
+        fit();
+        if (moved.some((id) => panels[id])) onLayout?.(panels);
+      }
+    }
+    let unstickTimer = null;
+    const unstickSoon = () => {
+      clearTimeout(unstickTimer);
+      unstickTimer = setTimeout(unstick, 60);
+    };
+    if (topBar && typeof ResizeObserver !== 'undefined') new ResizeObserver(unstickSoon).observe(topBar);
+    if (document.readyState !== 'complete') window.addEventListener('load', unstickSoon, { once: true });
 
     function close(id) {
       wins.get(id)?.remove();
@@ -105,13 +156,14 @@
           Object.assign(el.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
         });
         fit();
+        unstick();
       }, 200);
     });
 
     return {
       setPanels(p) { panels = p && typeof p === 'object' ? { ...p } : {}; },
       resetPanels() { panels = {}; wins.forEach((el, id) => { const r = defRect(id); Object.assign(el.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' }); }); fit(); },
-      open, close, has: (id) => wins.has(id), get: (id) => (wins.has(id) ? parts(wins.get(id)) : null), ids: () => [...wins.keys()], fit,
+      open, close, has: (id) => wins.has(id), get: (id) => (wins.has(id) ? parts(wins.get(id)) : null), ids: () => [...wins.keys()], fit, unstick,
     };
   }
 

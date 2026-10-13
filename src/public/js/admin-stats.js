@@ -514,6 +514,7 @@
       loading = false;
     }
     renderAll();
+    win.unstick(); // окна, заехавшие под панель периода или галочки, — вниз под панель
   }
 
   document.querySelectorAll('.pwa-period-btn').forEach((b) => b.addEventListener('click', () => {
