@@ -66,9 +66,13 @@
               <label><span data-i18n="news.from">С</span> <input type="date" id="newsFrom" /></label>
               <label><span data-i18n="news.to">По</span> <input type="date" id="newsTo" /></label>
               <button type="button" class="icon-btn" id="newsResetBtn" data-i18n="news.reset">Сбросить</button>
+              <button type="button" class="icon-btn news-important-filter" id="newsImportantBtn" aria-pressed="false" data-i18n="news.important.filter" data-i18n-title="news.important.filterTitle" title="Показать только важные новости">❗ Важное</button>
             </div>
           </div>
-          <button type="button" class="icon-btn news-create-btn hidden" id="newsCreateBtn" data-i18n="news.create">＋ Создать новость</button>
+          <div class="news-head-side">
+            <button type="button" class="icon-btn news-create-btn hidden" id="newsCreateBtn" data-i18n="news.create">＋ Создать новость</button>
+            <a class="news-terms-link" href="/terms" data-i18n="news.terms">📄 Условия пользования</a>
+          </div>
         </section>
 
         <div id="newsList" class="news-list"></div>
@@ -96,6 +100,11 @@
       <label class="auth-label" for="newsBodyInput" data-i18n="news.body">Описание</label>
       <textarea id="newsBodyInput" rows="8" maxlength="5000" spellcheck="true" lang="ru" placeholder="Что изменилось" data-i18n-placeholder="news.bodyPh"></textarea>
       <div id="newsBodySpell" class="news-spell"></div>
+
+      <label class="news-important-check">
+        <input type="checkbox" id="newsImportantInput" />
+        <span data-i18n="news.important.check">❗ Важная новость — метка на карточке и фильтр «Важное»</span>
+      </label>
 
       <p id="newsFormError" class="news-form-error hidden"></p>
       <button type="button" class="auth-submit" id="newsPublishBtn" data-click="publishNews" data-i18n="news.publish">Опубликовать</button>

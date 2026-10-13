@@ -39,5 +39,15 @@
     "auto": "Machine translation",
     "showOriginal": "Show original",
     "showTranslation": "Show translation"
+  },
+  "terms": "📄 Terms of Service",
+  "important": {
+    "filter": "❗ Important",
+    "filterTitle": "Show only important news (click again for all)",
+    "badge": "❗ Important",
+    "mark": "❗ Mark important",
+    "unmark": "Unmark important",
+    "check": "❗ Important news — badge on the card and the “Important” filter",
+    "empty": "No important news yet"
   }
 }

@@ -96,11 +96,12 @@ function serialize(n, lang) {
     translation: fresh && n.lang && n.lang !== lang ? { title: n.tr[lang].title, body: n.tr[lang].body } : null,
     publishedAt: n.publishedAt,
     editedAt: n.editedAt || null,
+    important: !!n.important,
     imageUrl: n.hasImage ? `/api/news/${n._id}/image?v=${stamp}` : null,
   };
 }
 
-// GET /news?from=<ISO>&to=<ISO> — от новых к старым
+// GET /news?from=<ISO>&to=<ISO>&important=1 — от новых к старым (important=1 — только «важные»)
 router.get('/', async (req, res) => {
   try {
     const range = {};
@@ -110,6 +111,7 @@ router.get('/', async (req, res) => {
     if (to && !isNaN(to)) range.$lte = to;
 
     const filter = Object.keys(range).length ? { publishedAt: range } : {};
+    if (req.query.important === '1') filter.important = true;
     const items = await News.find(filter).sort({ publishedAt: -1 }).limit(100).lean();
 
     // старые новости без перевода (или изменённые после него) переводим в фоне — увидят при следующем открытии
@@ -153,6 +155,7 @@ router.post('/', adminGuard, async (req, res) => {
       body,
       image,
       hasImage: !!image,
+      important: req.body?.important === true,
       authorUsername: me?.username || '',
     });
 
@@ -165,11 +168,15 @@ router.post('/', adminGuard, async (req, res) => {
 });
 
 // PATCH /news/:id — изменить (только админ). Дата публикации не меняется.
-// В теле: title, body, image (новая картинка) или removeImage: true
+// В теле: title, body, image (новая картинка) или removeImage: true, important.
+// Только important (кнопка «❗ пометить») — без отметки «изменено» и без нового перевода
 router.patch('/:id', adminGuard, async (req, res) => {
   try {
     const news = await News.findById(req.params.id);
     if (!news) return res.status(404).json({ error: req.t('server.news.notFound') });
+
+    const contentChanged = ['title', 'body', 'image', 'removeImage'].some((k) => req.body?.[k] !== undefined);
+    if (typeof req.body?.important === 'boolean') news.important = req.body.important;
 
     if (req.body?.title !== undefined) {
       const title = String(req.body.title).trim();
@@ -196,10 +203,10 @@ router.patch('/:id', adminGuard, async (req, res) => {
       news.hasImage = true;
     }
 
-    news.editedAt = new Date();
+    if (contentChanged) news.editedAt = new Date();
     await news.save();
 
-    scheduleTranslation(news._id);
+    if (contentChanged) scheduleTranslation(news._id);
     res.json(serialize(news, req.lang));
   } catch (err) {
     console.error('[PATCH /news/:id]', err);

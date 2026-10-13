@@ -8,6 +8,7 @@ const newsSchema = new mongoose.Schema(
     // картинка лежит отдельно (data:image/...;base64,...) и в списки не попадает — отдаётся через /news/:id/image
     image: { type: String, default: null, select: false },
     hasImage: { type: Boolean, default: false },
+    important: { type: Boolean, default: false }, // ❗ «важное»: метка на карточке и фильтр «Важное»
     authorUsername: { type: String, default: '' },
     publishedAt: { type: Date, default: Date.now, index: true },
     editedAt: { type: Date, default: null },

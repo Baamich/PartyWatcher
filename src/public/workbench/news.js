@@ -6,6 +6,7 @@ let pendingImage = null;     // новая выбранная картинка (
 let delNewsId = null;
 let titleSpell = null;
 let bodySpell = null;
+let onlyImportant = false;   // нажат фильтр «❗ Важное»
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,7 +41,14 @@ function buildNewsRow(n) {
   row.className = 'news-row';
 
   const card = document.createElement('article');
-  card.className = 'news-card';
+  card.className = 'news-card' + (n.important ? ' news-card--important' : '');
+
+  if (n.important) {
+    const badge = document.createElement('span');
+    badge.className = 'news-important-badge';
+    badge.textContent = t('news.important.badge');
+    card.appendChild(badge);
+  }
 
   if (n.imageUrl) {
     const img = document.createElement('img');
@@ -111,7 +119,23 @@ function buildNewsRow(n) {
     del.textContent = t('news.delBtn');
     del.onclick = () => openDelNews(n.id);
 
-    actions.append(edit, del);
+    // ❗ пометить важной / снять — без отметки «изменено» и без нового перевода
+    const imp = document.createElement('button');
+    imp.type = 'button';
+    imp.className = 'icon-btn';
+    imp.textContent = n.important ? t('news.important.unmark') : t('news.important.mark');
+    imp.onclick = async () => {
+      imp.disabled = true;
+      try {
+        await api('/news/' + n.id, { method: 'PATCH', body: { important: !n.important } });
+        await loadNews();
+      } catch (e) {
+        PW.toast(e.message || t('common.saveFailed'), 'error');
+        imp.disabled = false;
+      }
+    };
+
+    actions.append(edit, imp, del);
     row.appendChild(actions);
   }
 
@@ -129,6 +153,7 @@ async function loadNews() {
   const qs = new URLSearchParams();
   if (from) qs.set('from', new Date(from + 'T00:00:00').toISOString());
   if (to) qs.set('to', new Date(to + 'T23:59:59.999').toISOString());
+  if (onlyImportant) qs.set('important', '1');
 
   try {
     const data = await api('/news' + (qs.toString() ? '?' + qs.toString() : ''));
@@ -139,7 +164,7 @@ async function loadNews() {
     if (!data.items.length) {
       const empty = document.createElement('p');
       empty.className = 'wb-subpage-hint';
-      empty.textContent = from || to ? t('news.emptyPeriod') : t('news.empty');
+      empty.textContent = onlyImportant ? t('news.important.empty') : from || to ? t('news.emptyPeriod') : t('news.empty');
       list.appendChild(empty);
       return;
     }
@@ -306,6 +331,7 @@ function openNewsModal(item) {
 
   $('newsTitleInput').value = item ? item.title : '';
   $('newsBodyInput').value = item ? item.body : '';
+  $('newsImportantInput').checked = !!(item && item.important);
   $('newsImageInput').value = '';
   hideFormError();
   renderImageUi();
@@ -334,7 +360,7 @@ async function publishNews() {
     return;
   }
 
-  const payload = { title, body };
+  const payload = { title, body, important: $('newsImportantInput').checked };
   if (pendingImage) payload.image = pendingImage;
   else if (editingId && imageRemoved) payload.removeImage = true;
 
@@ -397,6 +423,11 @@ async function init() {
     loadNews();
   });
   $('newsCreateBtn').addEventListener('click', () => openNewsModal(null));
+  $('newsImportantBtn').addEventListener('click', () => {
+    onlyImportant = !onlyImportant;
+    $('newsImportantBtn').setAttribute('aria-pressed', String(onlyImportant));
+    loadNews();
+  });
 
   $('newsImageRemove').addEventListener('click', removeImage);
   $('newsImageInput').addEventListener('change', async (e) => {
