@@ -275,10 +275,16 @@ async function register() {
   }
 
   try {
-    await api('/auth/register', {
+    const reg = await api('/auth/register', {
       method: 'POST',
       body: { username, email, password, acceptTerms: true },
     });
+    if (reg.pending) {
+      // вход только после подтверждения почты: показываем, куда ушло письмо, и экран входа
+      await PW.alert(reg.message, { title: t('index.register.title') });
+      showLoginPanel();
+      return;
+    }
     const returnTo = getReturnTo();
     if (returnTo) {
       location.href = returnTo;

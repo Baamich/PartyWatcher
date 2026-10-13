@@ -149,8 +149,16 @@
     card.appendChild(head);
 
     const info = node('dl', 'pwa-info');
-    const add = (k, v) => { info.appendChild(node('dt', '', t('admin.users.f.' + k))); info.appendChild(node('dd', '', v || '—')); };
-    add('email', u.email);
+    const add = (k, v) => { info.appendChild(node('dt', '', t('admin.users.f.' + k))); const dd = node('dd', '', v || '—'); info.appendChild(dd); return dd; };
+    // тексты, которые вводил сам человек, — «✏️ Редактировать» превращает этот блок в форму
+    const own = node('dl', 'pwa-info');
+    const addOwn = (k, v) => { own.appendChild(node('dt', '', t('admin.users.f.' + k))); own.appendChild(node('dd', 'pwa-pre', v || '—')); };
+    for (const f of EDIT_FIELDS) addOwn(f.k, u[f.k]);
+    const ownBox = node('div', 'pwa-own');
+    const ownHead = node('div', 'pwa-own-head');
+    ownHead.append(node('div', 'pwa-sub', t('admin.users.ownTitle')), btn(t('admin.users.edit'), 'pwa-small', () => editOwn(ownBox, u)));
+    ownBox.append(ownHead, own);
+    card.appendChild(ownBox);
     add('channel', u.streamerName ? u.streamerName + (u.isLive ? ' · 🔴' : '') : '');
     add('created', fmt(u.createdAt));
     add('seen', ago(u.lastSeenAt));
@@ -258,6 +266,55 @@
     table.append(thead, tbody);
     wrap.appendChild(table);
     card.appendChild(wrap);
+  }
+
+  // поля, которые вводил сам человек (ограничения — как на сервере, PATCH /admin/users/:id)
+  const EDIT_FIELDS = [
+    { k: 'username', max: 32 },
+    { k: 'email', max: 254, type: 'email' },
+    { k: 'streamerBio', max: 2000, area: true },
+    { k: 'streamTitle', max: 140 },
+    { k: 'streamDescription', max: 2000, area: true },
+    { k: 'liveNotice', max: 140 },
+  ];
+
+  // «✏️ Редактировать»: блок текстов человека становится формой, «Сохранить» шлёт только изменённые поля
+  function editOwn(box, u) {
+    box.innerHTML = '';
+    const form = node('div', 'pwa-edit');
+    const inputs = {};
+    for (const f of EDIT_FIELDS) {
+      const lab = node('label', 'auth-label', t('admin.users.f.' + f.k));
+      const input = node(f.area ? 'textarea' : 'input');
+      if (!f.area) input.type = f.type || 'text';
+      else input.rows = 3;
+      input.maxLength = f.max;
+      input.value = u[f.k] || '';
+      inputs[f.k] = input;
+      form.append(lab, input);
+    }
+    form.appendChild(node('p', 'pwa-hint', t('admin.users.editHint')));
+    const row = node('div', 'pwa-actions-row');
+    const save = btn(t('common.save'), '', async () => {
+      const body = {};
+      for (const f of EDIT_FIELDS) if (inputs[f.k].value !== (u[f.k] || '')) body[f.k] = inputs[f.k].value;
+      if (!Object.keys(body).length) return openUser(u.id);
+      if (body.username && !(await PW.confirm(t('admin.users.renameConfirm', { name: body.username })))) return;
+      save.disabled = true;
+      try {
+        await api('/admin/users/' + encodeURIComponent(u.id), { method: 'PATCH', body });
+        PW.toast(t('admin.users.saved'), 'success');
+        openUser(u.id);
+        if (!usersModal.classList.contains('hidden')) loadUsers(false);
+      } catch (e) {
+        PW.toast(e.message, 'error');
+        save.disabled = false;
+      }
+    });
+    row.append(save, btn(t('common.dialog.cancel'), '', () => openUser(u.id)));
+    form.appendChild(row);
+    box.appendChild(form);
+    inputs.username.focus();
   }
 
   // ---------- баны IP и устройств ----------

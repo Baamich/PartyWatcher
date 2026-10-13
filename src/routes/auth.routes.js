@@ -10,10 +10,12 @@ const auth = require('../middleware/auth');
 const { meOf } = require('../services/me');
 const { TERMS_VERSION } = require('../services/terms');
 const { clientIp, parseUA } = require('../services/clientInfo');
-const { sendPasswordReset, maskEmail } = require('../services/mailer');
+const { sendPasswordReset, sendVerifyEmail, isMailConfigured, maskEmail } = require('../services/mailer');
 const rateLimit = require('express-rate-limit');
 
 const RESET_TTL_MIN = 30;
+const VERIFY_TTL_MIN = 30; // столько живёт неподтверждённая регистрация (потом её удаляет TTL-индекс User)
+const VERIFY_RESEND_MS = 2 * 60 * 1000;
 const RESET_RESEND_MS = 2 * 60 * 1000; // одно письмо на аккаунт раз в 2 минуты
 
 // cookie на весь домен (сайт + live. + админка); на localhost домен не ставим, иначе браузер её не примет
@@ -59,6 +61,13 @@ const registerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: (req) => ({ error: req.t('server.auth.tooManyRegs') }),
+});
+const resendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: (req) => ({ error: req.t('server.auth.tooManyAttempts') }),
 });
 // для логинов, которых нет в базе: сравниваем с «пустышкой», чтобы время ответа не выдавало, что такого логина нет
 const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', 12);
@@ -139,7 +148,15 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (passErr) return res.status(400).json({ error: req.t(passErr) });
 
     const usernameLower = username.toLowerCase();
-    const exists = await User.findOne({ $or: [{ usernameLower }, { email }] });
+    let exists = await User.findOne({ $or: [{ usernameLower }, { email }] });
+    // неподтверждённая регистрация, срок которой вышел (TTL-индекс удаляет с задержкой до минуты), — место свободно
+    if (exists && isExpiredPending(exists)) {
+      await User.deleteOne({ _id: exists._id, verifyPending: true });
+      exists = await User.findOne({ $or: [{ usernameLower }, { email }] });
+    }
+    if (exists && exists.verifyPending) {
+      return res.status(409).json({ error: req.t('server.auth.pendingExists', { n: VERIFY_TTL_MIN }) });
+    }
     if (exists) {
       if (exists.usernameLower === usernameLower) {
         return res.status(409).json({ error: req.t('server.auth.usernameTaken') });
@@ -148,13 +165,28 @@ router.post('/register', registerLimiter, async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    // без настроенной почты (локальная разработка) подтверждать нечем — аккаунт сразу активен
+    const needVerify = isMailConfigured();
+    const verifyToken = needVerify ? crypto.randomBytes(32).toString('base64url') : null;
     // streamerName не передаём — pre('validate') скопирует username
     const user = await User.create({
       username, email, passwordHash,
       termsVersion: TERMS_VERSION, termsAt: new Date(),
       regIp: clientIp(req), regDevice: parseUA(req.headers).name,
+      ...(needVerify
+        ? { verifyPending: true, verifyTokenHash: hashResetToken(verifyToken), verifyExpires: new Date(Date.now() + VERIFY_TTL_MIN * 60000), verifySentAt: new Date() }
+        : {}),
     });
 
+    if (needVerify) {
+      sendVerify(user, verifyToken, req.lang).catch((e) => console.error('[auth/register] письмо подтверждения не отправлено:', e.message));
+      // входа нет, пока не подтвердит почту: cookie не ставим
+      return res.status(201).json({
+        pending: true,
+        message: req.t('server.auth.verifySent', { email: maskEmail(email), n: VERIFY_TTL_MIN }),
+      });
+    }
+    console.warn('[auth/register] SMTP не настроен — аккаунт активирован без подтверждения почты');
     const token = signToken(user);
     setTokenCookie(res, token);
     res.status(201).json({ id: user._id, username: user.username, role: user.role });
@@ -178,6 +210,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     const user = await User.findOne({ $or: [{ usernameLower: loginLower }, { email: loginLower }] });
     const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
     if (!user || !ok) return res.status(401).json({ error: req.t('server.auth.badLogin') });
+    if (user.verifyPending) {
+      if (isExpiredPending(user)) {
+        await User.deleteOne({ _id: user._id, verifyPending: true });
+        return res.status(410).json({ error: req.t('server.auth.verifyExpired', { n: VERIFY_TTL_MIN }), code: 'verifyExpired' });
+      }
+      return res.status(403).json({ error: req.t('server.auth.unverified', { email: maskEmail(user.email) }), code: 'unverified' });
+    }
     // про бан говорим только тому, кто знает пароль
     if (user.banPerm) {
       return res.status(403).json({ error: banText(req, null, user.banReason), code: 'banned' });
@@ -193,6 +232,59 @@ router.post('/login', loginLimiter, async (req, res) => {
     console.error('[auth/login]', err);
     res.status(500).json({ error: req.t('server.serverError') });
   }
+});
+
+function isExpiredPending(u) {
+  return !!u.verifyPending && (!u.verifyExpires || new Date(u.verifyExpires).getTime() <= Date.now());
+}
+
+// ссылка подтверждения: токен во фрагменте (#t=), как у сброса пароля — в логи и Referer не попадает
+function sendVerify(user, token, lang) {
+  const link = `${config.publicUrl.replace(/\/$/, '')}/verify-email.html#t=${token}`;
+  return sendVerifyEmail(user.email, user.username, link, VERIFY_TTL_MIN, lang);
+}
+
+// POST /auth/verify { token } — подтвердить почту по ссылке из письма: аккаунт активен, сразу входим
+router.post('/verify', resetLimiter, async (req, res) => {
+  const token = String(req.body?.token || '');
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) return res.status(400).json({ error: req.t('server.auth.verifyBadLink') });
+  const user = await User.findOne({ verifyTokenHash: hashResetToken(token), verifyPending: true });
+  if (!user) return res.status(400).json({ error: req.t('server.auth.verifyBadLink') });
+  if (isExpiredPending(user)) {
+    await User.deleteOne({ _id: user._id, verifyPending: true });
+    return res.status(410).json({ error: req.t('server.auth.verifyExpired', { n: VERIFY_TTL_MIN }) });
+  }
+  await User.updateOne({ _id: user._id }, { $unset: { verifyPending: 1, verifyTokenHash: 1, verifyExpires: 1, verifySentAt: 1 } });
+  setTokenCookie(res, signToken(user));
+  res.json({ ok: true, username: user.username });
+});
+
+// POST /auth/verify/resend { login, password } — письмо ещё раз (не чаще раза в 2 мин). С паролем: иначе по
+// чужому логину можно было бы засыпать человека письмами. Срок 30 минут не продлевается
+router.post('/verify/resend', resendLimiter, async (req, res) => {
+  const loginLower = String(req.body?.login ?? '').trim().toLowerCase();
+  const password = String(req.body?.password ?? '');
+  const user = await User.findOne({ $or: [{ usernameLower: loginLower }, { email: loginLower }] });
+  const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
+  if (!user || !ok) return res.status(401).json({ error: req.t('server.auth.badLogin') });
+  if (!user.verifyPending) return res.json({ ok: true, already: true });
+  if (isExpiredPending(user)) {
+    await User.deleteOne({ _id: user._id, verifyPending: true });
+    return res.status(410).json({ error: req.t('server.auth.verifyExpired', { n: VERIFY_TTL_MIN }) });
+  }
+  if (user.verifySentAt && Date.now() - new Date(user.verifySentAt).getTime() < VERIFY_RESEND_MS) {
+    return res.status(429).json({ error: req.t('server.auth.forgotWait') });
+  }
+  const token = crypto.randomBytes(32).toString('base64url');
+  await User.updateOne({ _id: user._id }, { $set: { verifyTokenHash: hashResetToken(token), verifySentAt: new Date() } });
+  try {
+    await sendVerify(user, token, req.lang);
+  } catch (e) {
+    console.error('[auth/verify/resend] письмо не отправлено:', e.message);
+    return res.status(502).json({ error: req.t('server.sendFailed') });
+  }
+  const left = Math.max(1, Math.ceil((new Date(user.verifyExpires).getTime() - Date.now()) / 60000));
+  res.json({ ok: true, message: req.t('server.auth.verifySent', { email: maskEmail(user.email), n: left }) });
 });
 
 // «Аккаунт заблокирован до 14.10.2026, 18:00. Причина: …» — дата в часовом поясе UTC (у сервера нет зоны человека)
@@ -220,26 +312,29 @@ router.post('/logout', (req, res) => {
 });
 
 // POST /auth/forgot { email } — письмо со ссылкой сброса.
-// Ответ всегда одинаковый, чтобы по нему нельзя было проверить, зарегистрирована ли почта.
+// Говорим прямо, если аккаунта с такой почтой нет или письмо уже ушло: регистрация и так сообщает «почта занята»,
+// так что новой утечки нет, а человек сразу видит опечатку. От перебора — forgotLimiter (5 в час с IP)
 router.post('/forgot', forgotLimiter, async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   if (validateEmail(email)) return res.status(400).json({ error: req.t('server.badEmail') });
 
   const okAnswer = { status: 'ok', message: req.t('server.auth.forgotSent') };
   try {
-    const user = await User.findOne({ email }).select('username email resetTokenExpires').lean();
+    const user = await User.findOne({ email }).select('username email resetTokenExpires verifyPending').lean();
     // повторный запрос раньше чем через 2 минуты молча игнорируем (защита ящика от флуда)
     const sentRecently =
       user?.resetTokenExpires &&
       user.resetTokenExpires.getTime() - RESET_TTL_MIN * 60 * 1000 > Date.now() - RESET_RESEND_MS;
-    // человеку ответ одинаковый, а в лог — почему письма нет (адрес замаскирован)
     if (!user) {
       console.log(`[auth/forgot] аккаунта с почтой ${maskEmail(email)} нет — письмо не отправлялось`);
-      return res.json(okAnswer);
+      return res.status(404).json({ error: req.t('server.auth.forgotNoAccount') });
+    }
+    if (user.verifyPending) {
+      return res.status(403).json({ error: req.t('server.auth.unverified', { email: maskEmail(email) }) });
     }
     if (sentRecently) {
       console.log(`[auth/forgot] ${maskEmail(email)}: письмо уже уходило меньше 2 мин назад — повтор пропущен`);
-      return res.json(okAnswer);
+      return res.status(429).json({ error: req.t('server.auth.forgotWait') });
     }
 
     const token = crypto.randomBytes(32).toString('base64url');

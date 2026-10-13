@@ -38,9 +38,16 @@
     "taken": "Username or email is already taken",
     "loginEmpty": "Enter your username and password",
     "badLogin": "Wrong username or password",
-    "forgotSent": "If this email is registered, we have sent a password reset link to it",
+    "forgotSent": "Done: a password reset link has been sent to this email. Can’t see it? Check your spam folder.",
     "badLink": "The link is invalid or expired",
-    "usernameBad": "This username isn’t allowed — it contains profanity. Pick another one"
+    "usernameBad": "This username isn’t allowed — it contains profanity. Pick another one",
+    "forgotNoAccount": "There is no account with this email. Check for typos or sign up.",
+    "forgotWait": "The email has already been sent — check your inbox (and spam). You can try again in 2 minutes.",
+    "verifySent": "Almost done! We sent an email to {email}. Open the link in it within {n} min — otherwise you will have to sign up again. Can’t see it? Check your spam folder.",
+    "unverified": "Your account is not activated yet: open the link from the email sent to {email}.",
+    "verifyExpired": "The email was not confirmed in time ({n} min) — the sign-up was cancelled. Please sign up again.",
+    "verifyBadLink": "The link is invalid or has already been used.",
+    "pendingExists": "This username or email is waiting for confirmation — open the link from the email (valid for {n} min)."
   },
   "chatApi": {
     "needKey": "An API key is required (Authorization: Bearer <key>)",
@@ -248,6 +255,16 @@
       "historyRequest": "Your request #{n}, {date}:",
       "historyYou": "You",
       "historySupport": "Support"
+    },
+    "verify": {
+      "subject": "Confirm your PartyWatcher email",
+      "hello": "Hi, {name}!",
+      "intro": "You signed up on PartyWatcher. Confirm your email to activate the account.",
+      "openLink": "Open the link within {n} minutes:",
+      "button": "Activate account",
+      "linkHint": "If the button does not work, open this link:",
+      "footer": "The link is valid for {n} minutes. If the account is not activated, the sign-up is cancelled.",
+      "ignore": "If this wasn’t you, just ignore this email."
     }
   },
   "kodik": {

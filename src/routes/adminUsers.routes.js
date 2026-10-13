@@ -11,6 +11,11 @@ const UserSeen = require('../models/UserSeen');
 const Ban = require('../models/Ban');
 const bans = require('../services/bans');
 const { TERMS_VERSION } = require('../services/terms');
+const { hasProfanity } = require('../services/profanity');
+const ChannelMod = require('../models/ChannelMod');
+const ChannelBan = require('../models/ChannelBan');
+const ChannelTimeout = require('../models/ChannelTimeout');
+const Redemption = require('../models/Redemption');
 
 const PAGE = 50;
 const BLOCK_HOURS = [1, 6, 24, 72, 168, 720];
@@ -68,13 +73,13 @@ router.get('/users', auth, adminOnly, async (req, res) => {
 // GET /admin/users/:id — карточка: IP и устройства, баны по ним
 router.get('/users/:id', auth, adminOnly, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: req.t('server.notFound') });
-  const u = await User.findById(req.params.id).select(FIELDS).lean();
+  const u = await User.findById(req.params.id).select(FIELDS + ' streamerBio streamTitle streamDescription liveNotice').lean();
   if (!u) return res.status(404).json({ error: req.t('server.notFound') });
   const seen = await UserSeen.find({ userId: u._id }).sort({ lastAt: -1 }).limit(100).lean();
   // IP регистрации тоже показываем, даже если с него больше не заходил
   if (u.regIp && !seen.some((s) => s.ip === u.regIp)) seen.push({ ip: u.regIp, name: u.regDevice, firstAt: u.createdAt, lastAt: u.createdAt, hits: 0, did: '', hw: '' });
   res.json({
-    user: view(u),
+    user: { ...view(u), streamerBio: u.streamerBio || '', streamTitle: u.streamTitle || '', streamDescription: u.streamDescription || '', liveNotice: u.liveNotice || '' },
     seen: seen.map((s) => ({
       ip: s.ip, did: s.did || '', hw: s.hw || '', name: s.name || '', country: s.country || '',
       firstAt: s.firstAt, lastAt: s.lastAt, hits: s.hits || 0,
@@ -108,6 +113,69 @@ async function setAccountBan(req, res, set) {
   auth.forgetUser(u._id); // сессии забаненного умирают сразу (в админ-сервере — у сайта через минуту)
   res.json({ ok: true });
 }
+
+// PATCH /admin/users/:id { username?, email?, streamerBio?, streamTitle?, streamDescription?, liveNotice? } —
+// исправить то, что вводил сам человек (опечатка в почте, плохой логин или описание). Проверки — как у самого
+// пользователя. Смена логина: обновляются подписи в модераторах/банах/покупках и заканчиваются все его сессии
+// (логин зашит в токен). Имя канала здесь не меняется — оно разнесено по многим коллекциям
+const TEXT_LIMITS = { streamerBio: [2000, 'server.streamers.bioLong'], streamTitle: [140, 'server.wb.titleLong'], streamDescription: [2000, 'server.streamers.bioLong'], liveNotice: [140, 'server.wb.noticeLong'] };
+router.patch('/users/:id', auth, adminOnly, async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: req.t('server.notFound') });
+  const u = await User.findById(req.params.id).select('username email').lean();
+  if (!u) return res.status(404).json({ error: req.t('server.notFound') });
+  const b = req.body || {};
+  const set = {};
+
+  if (b.email !== undefined) {
+    const email = String(b.email).trim().toLowerCase();
+    if (!email || email.length > 254 || /\s/.test(email) || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return res.status(400).json({ error: req.t('server.auth.emailFormat') });
+    }
+    if (email !== u.email) {
+      if (await User.exists({ email, _id: { $ne: u._id } })) return res.status(409).json({ error: req.t('server.auth.emailTaken') });
+      set.email = email;
+    }
+  }
+
+  let renamed = false;
+  if (b.username !== undefined) {
+    const username = String(b.username).trim();
+    if (username.length < 3 || username.length > 32) return res.status(400).json({ error: req.t('server.auth.usernameLen') });
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: req.t('server.auth.usernameChars') });
+    if (hasProfanity(username)) return res.status(400).json({ error: req.t('server.auth.usernameBad') });
+    if (username !== u.username) {
+      const usernameLower = username.toLowerCase();
+      if (await User.exists({ usernameLower, _id: { $ne: u._id } })) return res.status(409).json({ error: req.t('server.auth.usernameTaken') });
+      set.username = username;
+      set.usernameLower = usernameLower; // updateOne не зовёт pre('validate')
+      renamed = true;
+    }
+  }
+
+  let profileChanged = false;
+  for (const [k, [max, errKey]] of Object.entries(TEXT_LIMITS)) {
+    if (b[k] === undefined) continue;
+    const v = String(b[k]).trim();
+    if (v.length > max) return res.status(400).json({ error: req.t(errKey) });
+    set[k] = v;
+    if (k === 'streamerBio') profileChanged = true;
+  }
+
+  if (!Object.keys(set).length) return res.json({ ok: true });
+  const update = { $set: set };
+  if (renamed || profileChanged) {
+    update.$inc = {};
+    if (renamed) update.$inc.tokenVersion = 1; // старый логин в токене — пусть войдёт заново
+    if (profileChanged) update.$inc.profileRev = 1; // профиль у зрителей обновится, а не возьмётся из кэша
+  }
+  await User.updateOne({ _id: u._id }, update);
+  if (renamed) {
+    auth.forgetUser(u._id);
+    await Promise.all([ChannelMod, ChannelBan, ChannelTimeout, Redemption].map((M) => M.updateMany({ userId: u._id }, { $set: { username: set.username } })));
+  }
+  console.log(`[admin] ${req.user.username}: аккаунт ${u._id} изменён (${Object.keys(set).filter((k) => k !== 'usernameLower').join(', ')})`);
+  res.json({ ok: true, renamed });
+});
 
 // POST /admin/users/:id/block { hours, reason } — временная блокировка
 router.post('/users/:id/block', auth, adminOnly, async (req, res) => {

@@ -243,7 +243,12 @@
       "regDevice": "Sign-up device",
       "terms": "Terms of Service",
       "ban": "Block",
-      "reason": "Reason"
+      "reason": "Reason",
+      "username": "Username",
+      "streamerBio": "Channel description",
+      "streamTitle": "Stream title",
+      "streamDescription": "Stream description",
+      "liveNotice": "Follower notification"
     },
     "termsYes": "accepted (current version)",
     "termsNo": "not accepted",
@@ -271,7 +276,12 @@
     "bannedN": {
       "one": "Banned: {n}",
       "other": "Banned: {n}"
-    }
+    },
+    "edit": "✏️ Edit",
+    "ownTitle": "Entered by the user",
+    "saved": "Saved",
+    "editHint": "Changing the username ends all of the person’s sessions — they will need to sign in again (with the new username or email). The channel name is not changed here.",
+    "renameConfirm": "Change the username to “{name}”? The person will be signed out and will need to sign in again."
   },
   "bans": {
     "title": "IP & device bans",

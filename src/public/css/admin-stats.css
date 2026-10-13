@@ -110,3 +110,11 @@ body > .pw-dialog-overlay { z-index: 4100; } /* подтверждения — �
   .cw-topbar .pwa-reset { margin-left: 0; }
   .pwa-chart { min-height: 200px; }
 }
+/* тексты человека и форма «Редактировать» в карточке аккаунта */
+.pwa-own { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 12px 10px; margin: 8px 0 10px; }
+.pwa-own-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pwa-own-head .pwa-sub { margin: 8px 0; }
+.pwa-pre { white-space: pre-wrap; max-height: 9em; overflow: auto; }
+.pwa-edit { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.pwa-edit input, .pwa-edit textarea { margin: 0 0 6px; }
+.pwa-edit .pwa-actions-row { margin-top: 6px; }

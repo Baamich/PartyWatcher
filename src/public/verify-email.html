@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <script src="/js/i18n.js" data-ns="verify"></script>
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/css/index.css" />
+  <title data-i18n="verify.pageTitle">Подтверждение почты — PartyWatcher</title>
+</head>
+<body>
+  <div id="authBox">
+    <div class="auth-card">
+      <div class="brand-row reset-title-row">
+        <h2 class="auth-title" data-i18n="verify.title">Подтверждение почты</h2>
+        <div data-lang-switch></div>
+      </div>
+      <p id="verifyWait" data-i18n="verify.checking">Проверяем ссылку…</p>
+      <div id="verifyOk" class="support-ok hidden" data-i18n="verify.done">Аккаунт активирован ✓ Переходим на сайт…</div>
+      <div id="verifyError" class="auth-error hidden"></div>
+      <p class="auth-switch"><a class="auth-link" href="/" data-i18n="verify.home">На главную</a></p>
+    </div>
+  </div>
+  <script src="/js/api.js"></script>
+  <script src="/js/actions.js"></script>
+  <script src="/js/verify-email.js"></script>
+</body>
+</html>

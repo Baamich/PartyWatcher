@@ -89,4 +89,25 @@ async function sendPasswordReset(to, username, link, ttlMinutes, lang) {
   return sendMail({ to, subject, text, html });
 }
 
-module.exports = { sendMail, sendPasswordReset, isMailConfigured, escapeHtml, maskEmail };
+// Письмо подтверждения почты после регистрации: кнопка и та же ссылка обычным текстом (если кнопка не нажимается)
+async function sendVerifyEmail(to, username, link, ttlMinutes, lang) {
+  const tr = (key, vars) => i18n.t(lang, 'server.mail.verify.' + key, vars);
+  const subject = tr('subject');
+  const text =
+    `${tr('hello', { name: username })}\n\n` +
+    `${tr('intro')}\n` +
+    `${tr('openLink', { n: ttlMinutes })}\n\n${link}\n\n` +
+    `${tr('ignore')}\n\n` +
+    `— PartyWatcher`;
+  const html =
+    `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;max-width:520px">` +
+    `<p>${escapeHtml(tr('hello', { name: username }))}</p>` +
+    `<p>${escapeHtml(tr('intro'))}</p>` +
+    `<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#6c5ce7;color:#fff;border-radius:8px;text-decoration:none">${escapeHtml(tr('button'))}</a></p>` +
+    `<p style="font-size:13px;color:#444">${escapeHtml(tr('linkHint'))}<br><a href="${escapeHtml(link)}" style="color:#6c5ce7;word-break:break-all">${escapeHtml(link)}</a></p>` +
+    `<p style="color:#666;font-size:13px">${escapeHtml(tr('footer', { n: ttlMinutes }))}</p>` +
+    `</div>`;
+  return sendMail({ to, subject, text, html });
+}
+
+module.exports = { sendMail, sendPasswordReset, sendVerifyEmail, isMailConfigured, escapeHtml, maskEmail };

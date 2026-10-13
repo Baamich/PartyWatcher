@@ -16,6 +16,13 @@ const userSchema = new mongoose.Schema(
     // растёт при смене пароля — все старые JWT с меньшей версией перестают действовать
     tokenVersion: { type: Number, default: 0 },
 
+    // ---- подтверждение почты (новые регистрации; у старых аккаунтов полей нет — они подтверждены) ----
+    // пока verifyPending — входа нет; не подтвердил за 30 минут — запись удаляет TTL-индекс (логин и почта свободны)
+    verifyPending: { type: Boolean, default: undefined },
+    verifyTokenHash: { type: String, default: undefined, index: { sparse: true } }, // sha256 токена из письма
+    verifyExpires: { type: Date, default: undefined },
+    verifySentAt: { type: Date, default: undefined },
+
     // ---- условия пользования (services/terms.js) ----
     termsVersion: { type: String, default: null }, // какую версию принял; не текущая — окно «условия изменились»
     termsAt: { type: Date, default: null },
@@ -88,5 +95,8 @@ userSchema.pre('validate', function (next) {
 });
 
 userSchema.index({ createdAt: -1 }); // админка: новые аккаунты сверху
+// неподтверждённая регистрация живёт до verifyExpires, потом MongoDB сама удаляет её (проверка раз в минуту).
+// partialFilter — страховка: подтверждённый аккаунт этот индекс не тронет, даже если поле где-то осталось
+userSchema.index({ verifyExpires: 1 }, { expireAfterSeconds: 0, partialFilterExpression: { verifyPending: true } });
 
 module.exports = mongoose.model('User', userSchema);
