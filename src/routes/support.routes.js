@@ -5,7 +5,9 @@ const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/adminOnly');
 const crypto = require('crypto');
 const { simpleParser } = require('mailparser');
+const mongoose = require('mongoose');
 const SupportTicket = require('../models/SupportTicket');
+const SupportFile = require('../models/SupportFile');
 const Counter = require('../models/Counter');
 const User = require('../models/User');
 const rateLimit = require('express-rate-limit');
@@ -17,6 +19,43 @@ const STATUSES = ['unread', 'accepted', 'trivial', 'answered'];
 const MAX_MESSAGES = 100; // переписка по одному обращению
 
 const nextNumber = () => Counter.next('supportTicket');
+
+// ---- скриншоты к обращению: до 5 картинок data:URL (браузер уже пережал), тип — по первым байтам ----
+const MAX_FILES = 5;
+const MAX_FILE_BYTES = 1024 * 1024;
+function sniffImage(buf) {
+  if (buf.length > 8 && buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG') return 'image/png';
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length > 12 && buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+// → [{ mime, data }] или ключ ошибки строкой
+function parseFiles(raw) {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) return 'server.support.badFile';
+  if (raw.length > MAX_FILES) return 'server.support.tooManyFiles';
+  const out = [];
+  for (const f of raw) {
+    const m = /^data:image\/[a-z+]+;base64,([A-Za-z0-9+/=]+)$/.exec(typeof f === 'string' ? f : '');
+    if (!m || m[1].length > Math.ceil(MAX_FILE_BYTES / 3) * 4 + 4) return 'server.support.badFile';
+    const data = Buffer.from(m[1], 'base64');
+    const mime = sniffImage(data);
+    if (!mime || data.length > MAX_FILE_BYTES) return 'server.support.badFile';
+    out.push({ mime, data });
+  }
+  return out;
+}
+// сначала файлы (с заранее выданным _id обращения), потом само обращение; не создалось — файлы убираем
+async function createWithFiles(doc, files) {
+  const _id = new mongoose.Types.ObjectId();
+  const saved = files.length ? await SupportFile.insertMany(files.map((f) => ({ ...f, ticketId: _id }))) : [];
+  try {
+    return await SupportTicket.create({ ...doc, _id, ...(saved.length ? { files: saved.map((f) => f._id) } : {}) });
+  } catch (e) {
+    if (saved.length) await SupportFile.deleteMany({ ticketId: _id }).catch(() => {});
+    throw e;
+  }
+}
 // язык писем для обращения с почты: есть кириллица — русский, иначе английский
 const guessLang = (...texts) => (/[А-Яа-яЁё]/.test(texts.join(' ')) ? 'ru' : 'en');
 
@@ -48,8 +87,10 @@ router.post('/', auth.optional, guestLimiter, async (req, res) => {
     if (description.length < 5) {
       return res.status(400).json({ error: req.t('server.support.short') });
     }
+    const files = parseFiles(req.body.files);
+    if (typeof files === 'string') return res.status(400).json({ error: req.t(files) });
 
-    const ticket = await SupportTicket.create({
+    const ticket = await createWithFiles({
       number: await nextNumber(),
       name,
       email,
@@ -57,7 +98,7 @@ router.post('/', auth.optional, guestLimiter, async (req, res) => {
       lang: req.lang,
       userId: req.user ? req.user.id : null,
       username: req.user ? req.user.username || '' : '',
-    });
+    }, files);
 
     await notifyAdmins(req, ticket);
     res.status(201).json({ ok: true, id: ticket._id, number: ticket.number });
@@ -84,11 +125,15 @@ router.post('/stream-report', auth, reportLimiter, async (req, res) => {
     const reason = String(req.body?.reason || '');
     const text = String(req.body?.description || '').trim().slice(0, 1000);
     if (!REPORT_REASONS.includes(reason)) return res.status(400).json({ error: req.t('server.support.reportReason') });
+    const files = parseFiles(req.body?.files);
+    if (typeof files === 'string') return res.status(400).json({ error: req.t(files) });
+    // «угроза детям» — без картинок: такие материалы нельзя хранить даже как доказательство, только описание словами
+    if (reason === 'minors' && files.length) return res.status(400).json({ error: req.t('server.support.noFilesMinors') });
     const streamer = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('streamerName isLive streamTitle').lean());
     if (!streamer) return res.status(404).json({ error: req.t('server.notFound') });
     const me = await User.findById(req.user.id).select('username email').lean();
     const reasonText = i18n.t(req.lang, 'server.support.reasons.' + reason);
-    const ticket = await SupportTicket.create({
+    const ticket = await createWithFiles({
       number: await nextNumber(),
       name: String(me?.username || '').slice(0, 12),
       email: me?.email || '',
@@ -99,7 +144,7 @@ router.post('/stream-report', auth, reportLimiter, async (req, res) => {
       source: 'stream',
       subject: `🚩 ${streamer.streamerName}`,
       report: { streamer: streamer.streamerName, reason, title: streamer.streamTitle || '', live: !!streamer.isLive },
-    });
+    }, files);
     await notifyAdmins(req, ticket);
     res.status(201).json({ ok: true, number: ticket.number });
   } catch (err) {
@@ -267,7 +312,7 @@ function briefOf(t) {
     _id: o._id, number: o.number, name: o.name, email: o.email, source: o.source, subject: o.subject,
     description: o.description, status: o.status, hasNewReply: !!o.hasNewReply, username: o.username,
     lang: o.lang, createdAt: o.createdAt, updatedAt: o.updatedAt, report: o.report && o.report.streamer ? o.report : null,
-    messagesCount: (o.messages || []).length, lastMessage: last ? { from: last.from, kind: last.kind, at: last.at } : null,
+    files: (o.files || []).map(String), messagesCount: (o.messages || []).length, lastMessage: last ? { from: last.from, kind: last.kind, at: last.at } : null,
   };
 }
 
@@ -336,6 +381,20 @@ router.get('/count', auth, adminOnly, async (req, res) => {
     ]);
     res.json({ unreadCount, streamUnread });
   } catch (err) {
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// скриншот обращения — только админу (картинку не кэширует Cloudflare: private)
+router.get('/file/:id', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+    const f = await SupportFile.findById(req.params.id).lean();
+    if (!f) return res.status(404).json({ error: req.t('server.notFound') });
+    res.set({ 'Content-Type': f.mime, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+    res.send(Buffer.from(f.data.buffer || f.data));
+  } catch (err) {
+    console.error('[support/file]', err.message);
     res.status(500).json({ error: req.t('server.serverError') });
   }
 });

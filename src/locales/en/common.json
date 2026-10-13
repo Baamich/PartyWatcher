@@ -243,5 +243,14 @@
     "more": "Learn more",
     "accept": "Accept statistics",
     "essential": "Necessary only"
+  },
+  "attach": {
+    "add": "📎 Add screenshot",
+    "hint": "{n} of {max} · Ctrl+V or drag and drop also work",
+    "remove": "Remove",
+    "tooMany": "No more than {max} images",
+    "notImage": "This is not an image (PNG, JPG, WebP work)",
+    "tooBig": "The image is too large",
+    "wait": "Wait, the images are still being prepared"
   }
 }

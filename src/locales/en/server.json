@@ -196,7 +196,10 @@
       "copyright": "Someone else’s content (films, sports, TV)",
       "spam": "Spam, ads, fraud, gambling",
       "other": "Other"
-    }
+    },
+    "badFile": "Could not accept the image: PNG, JPG or WebP up to 1 MB",
+    "tooManyFiles": "No more than 5 images",
+    "noFilesMinors": "Images are not attached to a “danger to children” report — describe it in words"
   },
   "yt": {
     "hostOnly": "Only the host can switch the source",

@@ -387,3 +387,9 @@ button {
 /* вкладка «🚩 Эфиры»: число непрочитанных жалоб на эфиры */
 .support-tab-count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
 .support-card-subject a { color: var(--accent-text); }
+
+/* скриншоты обращения */
+.ticket-files { margin-top: 8px; }
+.ticket-files-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.ticket-files-list a { display: block; width: 120px; height: 90px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-alt); }
+.ticket-files-list img { width: 100%; height: 100%; object-fit: cover; display: block; }

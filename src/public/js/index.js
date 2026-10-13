@@ -951,6 +951,8 @@ function stopAutoRefresh() {
   const closeBtn = document.getElementById('supportModalClose');
   const sendBtn = document.getElementById('supportSendBtn');
   if (!fab || !modal) return;
+  const attachBox = document.getElementById('supportAttach');
+  const attach = attachBox && window.PWAttach ? PWAttach.create(attachBox, { max: 5, pasteRoot: modal }) : null;
 
   function openSupport() {
     // без входа отвечаем только на почту, поэтому она обязательна
@@ -988,16 +990,18 @@ function stopAutoRefresh() {
     if (!window.__pwAuthed && !email) return fail(t('index.support.needEmail'));
     if (email && getEmailError(email)) return fail(t('index.support.badEmail'));
     if (!description || description.length < 5) return fail(t('index.support.shortDesc'));
+    if (attach?.busy()) return fail(t('common.attach.wait'));
 
     sendBtn.disabled = true;
     try {
       await api('/support', {
         method: 'POST',
-        body: { name, email, description },
+        body: { name, email, description, files: attach ? attach.files() : [] },
       });
       if (okEl) okEl.classList.remove('hidden');
       const desc = document.getElementById('supportDesc');
       if (desc) desc.value = '';
+      attach?.clear();
       setTimeout(closeSupport, 1200);
     } catch (e) {
       if (errEl) {

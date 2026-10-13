@@ -70,7 +70,11 @@
     "emailed": "email sent",
     "notEmailed": "no email",
     "support": "Support ({name})",
-    "user": "User"
+    "user": "User",
+    "files": {
+      "one": "{n} screenshot",
+      "other": "{n} screenshots"
+    }
   },
   "reply": {
     "title": "Reply to request #{n}",

@@ -91,6 +91,7 @@ async function start() {
   app.use('/api/streamers', express.json({ limit: '15mb' })); // аватар, баннер, макет
   app.use('/api/emotes', express.json({ limit: '1mb' })); // картинка смайла (до 256 КБ в base64)
   app.use('/api/alerts', express.json({ limit: '5mb' })); // своя GIF алерта (до 3 МБ в base64)
+  app.use('/api/support', express.json({ limit: '7mb' })); // скриншоты к обращению (до 5 по 1 МБ, base64)
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
   app.use(i18n.middleware); // req.lang и req.t для сообщений API

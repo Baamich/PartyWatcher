@@ -260,6 +260,8 @@
       </select>
       <label class="auth-label" for="reportText" data-i18n="streamer.report.text">Что случилось (необязательно)</label>
       <textarea id="reportText" rows="4" maxlength="1000" placeholder="Например: на 1:20:00 показывали…" data-i18n-placeholder="streamer.report.textPh"></textarea>
+      <div id="reportAttach"></div>
+      <p id="reportMinorsHint" class="report-hint hidden" data-i18n="streamer.report.minorsNoFiles">Скриншоты здесь не прикладывай — просто опиши словами, что и когда было в эфире. Мы проверим сами.</p>
       <div id="reportError" class="auth-error hidden"></div>
       <button type="button" id="reportSendBtn" class="auth-submit" data-click="sendReport" data-i18n="streamer.report.send">Отправить жалобу</button>
     </div>
@@ -281,6 +283,7 @@
   <script src="/js/rewards-popup.js?v=1"></script>
   <script src="/js/raid.js?v=1"></script>
   <script src="/js/chat-emotes.js?v=2"></script>
+  <script src="/js/attach-images.js?v=1"></script>
   <script src="/streamers/streamer.js?v=18"></script>
   <script src="/js/live-notify.js?v=1"></script>
 </body>

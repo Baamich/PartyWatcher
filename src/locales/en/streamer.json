@@ -128,6 +128,7 @@
       "copyright": "Someone else’s content (films, sports, TV)",
       "spam": "Spam, ads, fraud, gambling",
       "other": "Other"
-    }
+    },
+    "minorsNoFiles": "Do not attach screenshots here — just describe in words what happened on the stream and when. We will check it ourselves."
   }
 }

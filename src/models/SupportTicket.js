@@ -29,6 +29,7 @@ const supportTicketSchema = new mongoose.Schema(
       live: { type: Boolean, default: undefined },
     },
     subject: { type: String, trim: true, maxlength: 200, default: '' }, // тема письма (только для source=email)
+    files: { type: [mongoose.Schema.Types.ObjectId], default: undefined }, // скриншоты (SupportFile, до 5, живут 90 дней)
     lang: { type: String, enum: ['ru', 'en'], default: 'ru' }, // язык писем этому человеку
     status: {
       type: String,

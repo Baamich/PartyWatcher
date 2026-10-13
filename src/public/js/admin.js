@@ -170,6 +170,7 @@ function pollStatus(log) {
         <div class="support-card-name">${escapeHtml(tk.name || t('admin.support.noName'))}${tk.email ? ' · ' + escapeHtml(tk.email) : ' · ' + t('admin.support.noEmail')}</div>
         ${tk.report ? reportHtml(tk.report, tk.status) : tk.subject ? `<div class="support-card-subject" data-no-i18n>${escapeHtml(tk.subject)}</div>` : ''}
         <div class="support-card-desc" data-no-i18n>${escapeHtml(tk.description)}</div>
+        ${tk.files?.length ? `<div class="support-card-meta">📎 ${t('admin.thread.files', { n: tk.files.length })}</div>` : ''}
         ${tk.messagesCount ? `<div class="support-card-meta">${t('admin.support.messages', { n: tk.messagesCount })}</div>` : ''}
         <div class="support-card-actions">${actionsHtml(tk, true)}</div>
       </div>`;
@@ -233,7 +234,13 @@ function pollStatus(log) {
       (tk.email ? escapeHtml(tk.email) : t('admin.support.noEmail')) + ' · ' +
       escapeHtml(t('admin.thread.lang', { lang: (tk.lang || 'ru').toUpperCase() }));
     const first = { from: 'user', kind: 'user', text: tk.description, at: tk.createdAt };
-    document.getElementById('ticketViewThread').innerHTML = [first, ...(tk.messages || [])].map(messageHtml).join('');
+    // скриншоты (живут 90 дней — потом картинка не найдётся): клик открывает в полном размере
+    const shots = (tk.files || []).map((id) => {
+      const src = '/api/support/file/' + encodeURIComponent(id);
+      return `<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="" loading="lazy"></a>`;
+    }).join('');
+    document.getElementById('ticketViewThread').innerHTML = [first, ...(tk.messages || [])].map(messageHtml).join('') +
+      (shots ? `<div class="ticket-files"><div class="ticket-msg-head">📎 ${escapeHtml(t('admin.thread.files', { n: tk.files.length }))}</div><div class="ticket-files-list">${shots}</div></div>` : '');
     document.getElementById('ticketViewActions').innerHTML = actionsHtml(tk, false);
   }
 
