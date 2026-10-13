@@ -89,4 +89,4 @@ async function sendPasswordReset(to, username, link, ttlMinutes, lang) {
   return sendMail({ to, subject, text, html });
 }
 
-module.exports = { sendMail, sendPasswordReset, isMailConfigured, escapeHtml };
+module.exports = { sendMail, sendPasswordReset, isMailConfigured, escapeHtml, maskEmail };

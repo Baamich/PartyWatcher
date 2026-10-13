@@ -10,7 +10,7 @@ const auth = require('../middleware/auth');
 const { meOf } = require('../services/me');
 const { TERMS_VERSION } = require('../services/terms');
 const { clientIp, parseUA } = require('../services/clientInfo');
-const { sendPasswordReset } = require('../services/mailer');
+const { sendPasswordReset, maskEmail } = require('../services/mailer');
 const rateLimit = require('express-rate-limit');
 
 const RESET_TTL_MIN = 30;
@@ -232,7 +232,15 @@ router.post('/forgot', forgotLimiter, async (req, res) => {
     const sentRecently =
       user?.resetTokenExpires &&
       user.resetTokenExpires.getTime() - RESET_TTL_MIN * 60 * 1000 > Date.now() - RESET_RESEND_MS;
-    if (!user || sentRecently) return res.json(okAnswer);
+    // человеку ответ одинаковый, а в лог — почему письма нет (адрес замаскирован)
+    if (!user) {
+      console.log(`[auth/forgot] аккаунта с почтой ${maskEmail(email)} нет — письмо не отправлялось`);
+      return res.json(okAnswer);
+    }
+    if (sentRecently) {
+      console.log(`[auth/forgot] ${maskEmail(email)}: письмо уже уходило меньше 2 мин назад — повтор пропущен`);
+      return res.json(okAnswer);
+    }
 
     const token = crypto.randomBytes(32).toString('base64url');
     // updateOne, а не save(): документ загружен не целиком, и pre('validate') стёр бы streamerNameLower
