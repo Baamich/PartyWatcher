@@ -62,9 +62,9 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(layout)); } catch (_) {}
   }
 
-  const canvas = document.getElementById('adCanvas');
-  const picker = document.getElementById('adPicker');
-  const topBar = document.getElementById('adTop');
+  const canvas = document.getElementById('pwaCanvas');
+  const picker = document.getElementById('pwaPicker');
+  const topBar = document.getElementById('pwaTop');
   if (!canvas) return;
 
   // места по умолчанию: включённые окна по порядку строками от меню до галочек
@@ -173,23 +173,23 @@
   function drawChart(box, { points, series, kind, fmtV, max: fixedMax }) {
     box.innerHTML = '';
     if (!points || !points.length) {
-      box.appendChild(Object.assign(document.createElement('p'), { className: 'ad-empty', textContent: t('admin.stats.empty') }));
+      box.appendChild(Object.assign(document.createElement('p'), { className: 'pwa-empty', textContent: t('admin.stats.empty') }));
       return;
     }
     if (series.length > 1) {
       const leg = document.createElement('div');
-      leg.className = 'ad-legend';
+      leg.className = 'pwa-legend';
       for (const s of series) {
         const it = document.createElement('span');
         const sw = document.createElement('i');
-        sw.className = 'ad-swatch ' + s.cls;
+        sw.className = 'pwa-swatch ' + s.cls;
         it.append(sw, document.createTextNode(s.label));
         leg.appendChild(it);
       }
       box.appendChild(leg);
     }
     const wrap = document.createElement('div');
-    wrap.className = 'ad-chart';
+    wrap.className = 'pwa-chart';
     box.appendChild(wrap);
     const W = Math.max(120, wrap.clientWidth), H = Math.max(80, wrap.clientHeight);
     const pad = { l: 40, r: 8, t: 8, b: 20 };
@@ -198,12 +198,12 @@
     for (const p of points) for (const s of series) maxV = Math.max(maxV, p[s.key] || 0);
     const top = fixedMax || niceMax(maxV);
     const y = (v) => pad.t + ih - (Math.min(v, top) / top) * ih;
-    const svg = svgEl('svg', { width: W, height: H, class: 'ad-svg', role: 'img' });
+    const svg = svgEl('svg', { width: W, height: H, class: 'pwa-svg', role: 'img' });
 
     for (const f of [0, 0.5, 1]) {
       const yy = Math.round(y(top * f)) + 0.5;
-      svg.appendChild(svgEl('line', { x1: pad.l, x2: W - pad.r, y1: yy, y2: yy, class: 'ad-grid' }));
-      const lab = svgEl('text', { x: pad.l - 6, y: yy + 4, class: 'ad-axis', 'text-anchor': 'end' });
+      svg.appendChild(svgEl('line', { x1: pad.l, x2: W - pad.r, y1: yy, y2: yy, class: 'pwa-grid' }));
+      const lab = svgEl('text', { x: pad.l - 6, y: yy + 4, class: 'pwa-axis', 'text-anchor': 'end' });
       lab.textContent = fmtV(top * f, true);
       svg.appendChild(lab);
     }
@@ -213,7 +213,7 @@
     const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 56))));
     points.forEach((p, i) => {
       if (i % every !== 0 && i !== n - 1) return;
-      const lab = svgEl('text', { x: xc(i), y: H - 5, class: 'ad-axis', 'text-anchor': 'middle' });
+      const lab = svgEl('text', { x: xc(i), y: H - 5, class: 'pwa-axis', 'text-anchor': 'middle' });
       lab.textContent = bucketLabel(p.t, false);
       svg.appendChild(lab);
     });
@@ -225,21 +225,21 @@
         const v = p[s.key] || 0;
         if (!v) return;
         const h = Math.max(2, pad.t + ih - y(v));
-        svg.appendChild(svgEl('rect', { x: xc(i) - bw / 2, y: pad.t + ih - h, width: bw, height: h, rx: Math.min(4, bw / 2), class: 'ad-bar ' + s.cls }));
+        svg.appendChild(svgEl('rect', { x: xc(i) - bw / 2, y: pad.t + ih - h, width: bw, height: h, rx: Math.min(4, bw / 2), class: 'pwa-bar ' + s.cls }));
       });
     } else {
       for (const s of series) {
         const d = points.map((p, i) => (i ? 'L' : 'M') + xc(i).toFixed(1) + ' ' + y(p[s.key] || 0).toFixed(1)).join(' ');
-        svg.appendChild(svgEl('path', { d, class: 'ad-line ' + s.cls }));
+        svg.appendChild(svgEl('path', { d, class: 'pwa-line ' + s.cls }));
       }
     }
 
     // подсказка: столбик/точка под курсором
     const tip = document.createElement('div');
-    tip.className = 'ad-tip hidden';
-    const cross = svgEl('line', { y1: pad.t, y2: pad.t + ih, class: 'ad-cross hidden' });
+    tip.className = 'pwa-tip hidden';
+    const cross = svgEl('line', { y1: pad.t, y2: pad.t + ih, class: 'pwa-cross hidden' });
     svg.appendChild(cross);
-    const dots = series.map((s) => { const c = svgEl('circle', { r: 4, class: 'ad-dot hidden ' + s.cls }); svg.appendChild(c); return c; });
+    const dots = series.map((s) => { const c = svgEl('circle', { r: 4, class: 'pwa-dot hidden ' + s.cls }); svg.appendChild(c); return c; });
     const hit = svgEl('rect', { x: pad.l, y: pad.t, width: iw, height: ih, fill: 'transparent' });
     svg.appendChild(hit);
     hit.addEventListener('pointermove', (e) => {
@@ -320,26 +320,26 @@
   function drawList(box, rows) {
     box.innerHTML = '';
     if (!rows.length) {
-      box.appendChild(Object.assign(document.createElement('p'), { className: 'ad-empty', textContent: t('admin.stats.empty') }));
+      box.appendChild(Object.assign(document.createElement('p'), { className: 'pwa-empty', textContent: t('admin.stats.empty') }));
       return;
     }
     const total = rows.reduce((a, r) => a + r.n, 0) || 1;
     const max = Math.max(...rows.map((r) => r.n)) || 1;
     const list = document.createElement('div');
-    list.className = 'ad-list';
+    list.className = 'pwa-list';
     list.setAttribute('data-no-i18n', '');
     for (const r of rows) {
       const row = document.createElement('div');
-      row.className = 'ad-list-row';
+      row.className = 'pwa-list-row';
       row.title = r.label + ' — ' + num(r.n);
       const lab = document.createElement('span');
-      lab.className = 'ad-list-label';
+      lab.className = 'pwa-list-label';
       lab.textContent = r.label;
       const val = document.createElement('span');
-      val.className = 'ad-list-val';
+      val.className = 'pwa-list-val';
       val.textContent = num(r.n) + ' · ' + Math.round((r.n / total) * 100) + '%';
       const bar = document.createElement('span');
-      bar.className = 'ad-list-bar';
+      bar.className = 'pwa-list-bar';
       const fill = document.createElement('i');
       fill.className = 'viz1';
       fill.style.width = Math.max(2, (r.n / max) * 100) + '%';
@@ -355,11 +355,11 @@
     box.innerHTML = '';
     const rows = d.recent || [];
     if (!rows.length) {
-      box.appendChild(Object.assign(document.createElement('p'), { className: 'ad-empty', textContent: t('admin.stats.empty') }));
+      box.appendChild(Object.assign(document.createElement('p'), { className: 'pwa-empty', textContent: t('admin.stats.empty') }));
       return;
     }
     const table = document.createElement('table');
-    table.className = 'ad-table';
+    table.className = 'pwa-table';
     const head = document.createElement('tr');
     for (const k of ['time', 'device', 'ip', 'country', 'user', 'pages']) {
       const th = document.createElement('th');
@@ -376,9 +376,9 @@
       [fmtTime(r.at), dev, r.ip, r.country, r.user || '—', num(r.pages) + ' / ' + num(r.hits)].forEach((v, i) => {
         const td = document.createElement('td');
         td.textContent = v || '';
-        if (i === 1) td.className = 'ad-td-wide';
+        if (i === 1) td.className = 'pwa-td-wide';
         if (i === 4 && r.user) {
-          td.className = 'ad-link';
+          td.className = 'pwa-link';
           td.addEventListener('click', () => window.openUsers && window.openUsers({ q: r.user }));
         }
         tr.appendChild(td);
@@ -393,29 +393,29 @@
   const observers = new Map();
   function renderWindow(id) {
     const w = BY_ID.get(id);
-    const parts = win.open(id, 'ad-win ad-win-' + w.k);
+    const parts = win.open(id, 'pwa-win pwa-win-' + w.k);
     parts.title.textContent = t('admin.stats.w.' + id);
     parts.close.title = t('admin.stats.hide');
     parts.close.setAttribute('aria-label', t('admin.stats.hide'));
     const box = parts.content;
     if (!data) {
-      box.innerHTML = '<div class="ad-tile-value">…</div>';
+      box.innerHTML = '<div class="pwa-tile-value">…</div>';
       return;
     }
     if (w.k === 'tile') {
       const [v, sub] = tile(id, data);
       box.innerHTML = '';
       const vv = document.createElement('div');
-      vv.className = 'ad-tile-value';
+      vv.className = 'pwa-tile-value';
       vv.textContent = v;
       const ss = document.createElement('div');
-      ss.className = 'ad-tile-label';
+      ss.className = 'pwa-tile-label';
       ss.textContent = sub;
       box.append(vv, ss);
       if (id === 'newAccounts') {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'icon-btn ad-tile-btn';
+        b.className = 'icon-btn pwa-tile-btn';
         b.textContent = t('admin.stats.view');
         b.addEventListener('click', () => window.openUsers && window.openUsers({ sort: 'new' }));
         box.appendChild(b);
@@ -423,7 +423,7 @@
       if (id === 'bannedAccounts' && data.bannedAccounts) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'icon-btn ad-tile-btn';
+        b.className = 'icon-btn pwa-tile-btn';
         b.textContent = t('admin.stats.view');
         b.addEventListener('click', () => window.openUsers && window.openUsers({ filter: 'banned' }));
         box.appendChild(b);
@@ -461,11 +461,11 @@
   }
 
   function renderChecks() {
-    const box = document.getElementById('adChecks');
+    const box = document.getElementById('pwaChecks');
     box.innerHTML = '';
     for (const g of GROUPS) {
       const h = document.createElement('div');
-      h.className = 'ad-check-group';
+      h.className = 'pwa-check-group';
       h.textContent = t('admin.stats.group.' + g);
       box.appendChild(h);
       for (const w of WINDOWS.filter((x) => x.g === g)) {
@@ -484,13 +484,13 @@
   }
 
   function renderTop() {
-    document.querySelectorAll('.ad-period-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.days) === days));
-    const up = document.getElementById('adUpdated');
+    document.querySelectorAll('.pwa-period-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.days) === days));
+    const up = document.getElementById('pwaUpdated');
     if (!up) return;
     if (!data) { up.textContent = ''; return; }
     let text = t('admin.stats.updatedAt', { time: new Date(data.at).toLocaleTimeString(I18N.locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) });
     const liveAge = data.live?.at ? (Date.now() - new Date(data.live.at).getTime()) / 60000 : Infinity;
-    up.classList.toggle('ad-stale', liveAge > 3);
+    up.classList.toggle('pwa-stale', liveAge > 3);
     if (liveAge > 3) text += ' · ' + t('admin.stats.stale', { n: Number.isFinite(liveAge) ? Math.round(liveAge) : '∞' });
     up.textContent = text;
   }
@@ -516,13 +516,13 @@
     renderAll();
   }
 
-  document.querySelectorAll('.ad-period-btn').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.pwa-period-btn').forEach((b) => b.addEventListener('click', () => {
     days = Number(b.dataset.days);
     try { localStorage.setItem(PERIOD_KEY, String(days)); } catch (_) {}
     renderTop();
     load();
   }));
-  document.getElementById('adRefresh')?.addEventListener('click', () => load(true));
+  document.getElementById('pwaRefresh')?.addEventListener('click', () => load(true));
   setInterval(() => { if (!document.hidden) load(); }, 60 * 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && data && Date.now() - new Date(data.at).getTime() > 60000) load(); });
   window.addEventListener('pw:langchange', renderAll);

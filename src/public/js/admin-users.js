@@ -33,11 +33,11 @@
     return b;
   }
   function statusOf(u) {
-    if (u.banPerm) return { cls: 'ad-badge-ban', text: t('admin.users.banned') };
-    if (u.banUntil) return { cls: 'ad-badge-block', text: t('admin.users.blockedUntil', { d: fmt(u.banUntil) }) };
-    if (u.role === 'admin') return { cls: 'ad-badge-admin', text: t('admin.users.admin') };
-    if (!u.termsOk) return { cls: 'ad-badge-muted', text: t('admin.users.noTerms') };
-    return { cls: 'ad-badge-ok', text: t('admin.users.active') };
+    if (u.banPerm) return { cls: 'pwa-badge-ban', text: t('admin.users.banned') };
+    if (u.banUntil) return { cls: 'pwa-badge-block', text: t('admin.users.blockedUntil', { d: fmt(u.banUntil) }) };
+    if (u.role === 'admin') return { cls: 'pwa-badge-admin', text: t('admin.users.admin') };
+    if (!u.termsOk) return { cls: 'pwa-badge-muted', text: t('admin.users.noTerms') };
+    return { cls: 'pwa-badge-ok', text: t('admin.users.active') };
   }
 
   // ---------- список ----------
@@ -49,7 +49,7 @@
       st.page = 1;
       body.innerHTML = '';
       const tr = node('tr');
-      tr.appendChild(Object.assign(node('td', 'ad-empty', t('common.loading')), { colSpan: 5 }));
+      tr.appendChild(Object.assign(node('td', 'pwa-empty', t('common.loading')), { colSpan: 5 }));
       body.appendChild(tr);
     }
     try {
@@ -61,7 +61,7 @@
       $('usersTotal').textContent = t('admin.users.total', { n: r.total });
       if (!r.users.length && !append) {
         const tr = node('tr');
-        tr.appendChild(Object.assign(node('td', 'ad-empty', t('admin.users.empty')), { colSpan: 5 }));
+        tr.appendChild(Object.assign(node('td', 'pwa-empty', t('admin.users.empty')), { colSpan: 5 }));
         body.appendChild(tr);
       }
       for (const u of r.users) body.appendChild(userRow(u));
@@ -75,15 +75,15 @@
   }
 
   function userRow(u) {
-    const tr = node('tr', 'ad-row-click');
+    const tr = node('tr', 'pwa-row-click');
     const c1 = node('td');
-    c1.appendChild(node('div', 'ad-user-name', u.username));
-    c1.appendChild(node('div', 'ad-user-sub', u.email));
+    c1.appendChild(node('div', 'pwa-user-name', u.username));
+    c1.appendChild(node('div', 'pwa-user-sub', u.email));
     const s = statusOf(u);
-    const badge = node('span', 'ad-badge ' + s.cls, s.text);
+    const badge = node('span', 'pwa-badge ' + s.cls, s.text);
     const c5 = node('td');
     c5.appendChild(badge);
-    tr.append(c1, node('td', '', fmt(u.createdAt)), node('td', '', ago(u.lastSeenAt)), node('td', 'ad-mono', u.lastIp || u.regIp || '—'), c5);
+    tr.append(c1, node('td', '', fmt(u.createdAt)), node('td', '', ago(u.lastSeenAt)), node('td', 'pwa-mono', u.lastIp || u.regIp || '—'), c5);
     tr.addEventListener('click', () => openUser(u.id));
     return tr;
   }
@@ -142,13 +142,13 @@
     const card = $('userCard');
     card.innerHTML = '';
     card.setAttribute('data-no-i18n', '');
-    const head = node('div', 'ad-card-head');
+    const head = node('div', 'pwa-card-head');
     head.appendChild(node('h3', '', u.username));
     const s = statusOf(u);
-    head.appendChild(node('span', 'ad-badge ' + s.cls, s.text));
+    head.appendChild(node('span', 'pwa-badge ' + s.cls, s.text));
     card.appendChild(head);
 
-    const info = node('dl', 'ad-info');
+    const info = node('dl', 'pwa-info');
     const add = (k, v) => { info.appendChild(node('dt', '', t('admin.users.f.' + k))); info.appendChild(node('dd', '', v || '—')); };
     add('email', u.email);
     add('channel', u.streamerName ? u.streamerName + (u.isLive ? ' · 🔴' : '') : '');
@@ -164,7 +164,7 @@
     }
     card.appendChild(info);
     if (u.streamerName) {
-      const a = node('a', 'ad-link', t('admin.users.openChannel'));
+      const a = node('a', 'pwa-link', t('admin.users.openChannel'));
       a.href = '/streamers/' + encodeURIComponent(u.streamerName.toLowerCase());
       a.target = '_blank';
       a.rel = 'noopener';
@@ -173,12 +173,12 @@
 
     // действия (админов не трогаем — сервер тоже не даст)
     if (u.role !== 'admin') {
-      const box = node('div', 'ad-actions');
+      const box = node('div', 'pwa-actions');
       const reason = node('input');
       reason.type = 'text';
       reason.maxLength = 300;
       reason.placeholder = t('admin.users.reasonPh');
-      reason.className = 'ad-reason';
+      reason.className = 'pwa-reason';
       const hours = node('select');
       for (const h of r.blockHours) {
         const o = node('option', '', h < 24 ? t('admin.stats.dur.h', { n: h }) : t('admin.stats.dur.d', { n: h / 24 }));
@@ -186,7 +186,7 @@
         if (h === 24) o.selected = true;
         hours.appendChild(o);
       }
-      const row1 = node('div', 'ad-actions-row');
+      const row1 = node('div', 'pwa-actions-row');
       row1.append(
         hours,
         btn(t('admin.users.block'), '', async () => {
@@ -194,42 +194,42 @@
             act('/block', { hours: Number(hours.value), reason: reason.value }, 'admin.users.done');
           }
         }),
-        btn(t('admin.users.ban'), 'ad-danger', async () => {
+        btn(t('admin.users.ban'), 'pwa-danger', async () => {
           if (await PW.confirm(t('admin.users.banConfirm', { name: u.username }), { danger: true })) act('/ban', { reason: reason.value }, 'admin.users.done');
         }),
       );
       if (u.banPerm || u.banUntil) {
         row1.appendChild(btn(t('admin.users.unban'), '', () => act('/unban', {}, 'admin.users.done')));
       }
-      const row2 = node('div', 'ad-actions-row');
+      const row2 = node('div', 'pwa-actions-row');
       row2.append(
-        btn(t('admin.users.banIps'), 'ad-danger', async () => {
+        btn(t('admin.users.banIps'), 'pwa-danger', async () => {
           const ips = [...new Set(r.seen.map((x) => x.ip).filter(Boolean))];
           if (await PW.confirm(t('admin.users.banIpsConfirm', { n: ips.length, list: ips.slice(0, 8).join(', ') }), { danger: true })) {
             act('/ban-ip', { reason: reason.value }, 'admin.users.bannedN');
           }
         }),
-        btn(t('admin.users.banDevices'), 'ad-danger', async () => {
+        btn(t('admin.users.banDevices'), 'pwa-danger', async () => {
           const devs = r.seen.filter((x) => x.did || x.hw).length;
           if (await PW.confirm(t('admin.users.banDevicesConfirm', { n: devs }), { danger: true })) {
             act('/ban-device', { reason: reason.value }, 'admin.users.bannedN');
           }
         }),
       );
-      box.append(node('div', 'ad-sub', t('admin.users.actions')), reason, row1, row2, node('p', 'ad-hint', t('admin.users.banHint')));
+      box.append(node('div', 'pwa-sub', t('admin.users.actions')), reason, row1, row2, node('p', 'pwa-hint', t('admin.users.banHint')));
       card.appendChild(box);
     } else {
-      card.appendChild(node('p', 'ad-hint', t('admin.users.adminHint')));
+      card.appendChild(node('p', 'pwa-hint', t('admin.users.adminHint')));
     }
 
     // откуда заходил
-    card.appendChild(node('div', 'ad-sub', t('admin.users.seenTitle', { n: r.seen.length })));
+    card.appendChild(node('div', 'pwa-sub', t('admin.users.seenTitle', { n: r.seen.length })));
     if (!r.seen.length) {
-      card.appendChild(node('p', 'ad-empty', t('admin.users.seenEmpty')));
+      card.appendChild(node('p', 'pwa-empty', t('admin.users.seenEmpty')));
       return;
     }
-    const wrap = node('div', 'ad-table-wrap');
-    const table = node('table', 'ad-table');
+    const wrap = node('div', 'pwa-table-wrap');
+    const table = node('table', 'pwa-table');
     const htr = node('tr');
     for (const k of ['device', 'ip', 'country', 'first', 'last', 'hits', '']) htr.appendChild(node('th', '', k ? t('admin.users.col.' + k) : ''));
     const thead = node('thead');
@@ -237,22 +237,22 @@
     const tbody = node('tbody');
     for (const x of r.seen) {
       const tr = node('tr');
-      const dev = node('td', 'ad-td-wide', x.name || '—');
+      const dev = node('td', 'pwa-td-wide', x.name || '—');
       if (x.hw) dev.title = 'did ' + (x.did || '—') + ' · hw ' + x.hw;
-      const ops = node('td', 'ad-td-ops');
+      const ops = node('td', 'pwa-td-ops');
       if (u.role !== 'admin') {
         if (x.ip) {
           ops.appendChild(x.banned.ip
-            ? node('span', 'ad-badge ad-badge-ban', t('admin.users.ipBanned'))
-            : btn(t('admin.users.banIp'), 'ad-small', () => act('/ban-ip', { ip: x.ip }, 'admin.users.bannedN')));
+            ? node('span', 'pwa-badge pwa-badge-ban', t('admin.users.ipBanned'))
+            : btn(t('admin.users.banIp'), 'pwa-small', () => act('/ban-ip', { ip: x.ip }, 'admin.users.bannedN')));
         }
         if (x.did || x.hw) {
           ops.appendChild((x.banned.did || x.banned.hw)
-            ? node('span', 'ad-badge ad-badge-ban', t('admin.users.devBanned'))
-            : btn(t('admin.users.banDevice'), 'ad-small', () => act('/ban-device', { did: x.did, hw: x.hw }, 'admin.users.bannedN')));
+            ? node('span', 'pwa-badge pwa-badge-ban', t('admin.users.devBanned'))
+            : btn(t('admin.users.banDevice'), 'pwa-small', () => act('/ban-device', { did: x.did, hw: x.hw }, 'admin.users.bannedN')));
         }
       }
-      tr.append(dev, node('td', 'ad-mono', x.ip || '—'), node('td', '', x.country || ''), node('td', '', fmt(x.firstAt)), node('td', '', fmt(x.lastAt)), node('td', '', String(x.hits || 0)), ops);
+      tr.append(dev, node('td', 'pwa-mono', x.ip || '—'), node('td', '', x.country || ''), node('td', '', fmt(x.firstAt)), node('td', '', fmt(x.lastAt)), node('td', '', String(x.hits || 0)), ops);
       tbody.appendChild(tr);
     }
     table.append(thead, tbody);
@@ -273,7 +273,7 @@
     }
     if (!r.bans.length) {
       const tr = node('tr');
-      tr.appendChild(Object.assign(node('td', 'ad-empty', t('admin.bans.empty')), { colSpan: 5 }));
+      tr.appendChild(Object.assign(node('td', 'pwa-empty', t('admin.bans.empty')), { colSpan: 5 }));
       body.appendChild(tr);
       return;
     }
@@ -281,11 +281,11 @@
       const tr = node('tr');
       const what = node('td');
       what.appendChild(node('div', '', t('admin.bans.kind.' + b.kind)));
-      what.appendChild(node('div', 'ad-mono ad-user-sub', b.value + (b.name ? ' · ' + b.name : '')));
-      const who = node('td', b.userId ? 'ad-link' : '', b.username || '—');
+      what.appendChild(node('div', 'pwa-mono pwa-user-sub', b.value + (b.name ? ' · ' + b.name : '')));
+      const who = node('td', b.userId ? 'pwa-link' : '', b.username || '—');
       if (b.userId) who.addEventListener('click', () => openUser(b.userId));
       const ops = node('td');
-      ops.appendChild(btn(t('admin.bans.remove'), 'ad-small', async () => {
+      ops.appendChild(btn(t('admin.bans.remove'), 'pwa-small', async () => {
         try {
           await api('/admin/bans/' + encodeURIComponent(b.id), { method: 'DELETE' });
           PW.toast(t('admin.bans.removed'), 'success');
