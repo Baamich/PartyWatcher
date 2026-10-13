@@ -432,7 +432,8 @@ async function resolveStream(targetUrl, { fromQuery = '' } = {}) {
       return { ok: false, status: lastStatus || 502, body: lastBody };
     }
 
-    console.log('[stream-relay] OK', usedProxy ? 'proxy:ON' : 'proxy:OFF', 'referer:', winningCandidate.referer, 'status:', response.status, 'vk:', isVk, 'url:', targetUrl.slice(0, 80));
+    // в лог — только плейлисты: строка на каждый сегмент каждого зрителя забивала лог и диск
+    if (/\.m3u8/i.test(targetUrl)) console.log('[stream-relay] OK', usedProxy ? 'proxy:ON' : 'proxy:OFF', 'referer:', winningCandidate.referer, 'status:', response.status, 'vk:', isVk, 'url:', targetUrl.slice(0, 80));
     if (host) rememberWorkingReferer(host, winningCandidate, usedProxy);
 
     const contentType = response.headers.get('content-type') || '';
@@ -554,7 +555,6 @@ router.get('/relay', auth, async (req, res) => {
     const cacheKey = targetUrl;
     const cached = segmentCacheGet(cacheKey);
     if (cached) {
-      console.log('[stream-relay] cache HIT', targetUrl.slice(0, 80));
       res.setHeader('Content-Type', cached.contentType || 'application/octet-stream');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=60');

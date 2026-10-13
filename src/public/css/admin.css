@@ -1,5 +1,5 @@
 body {
-  max-width: 900px;
+  max-width: 1640px; /* холст статистики: меню + окна + галочки */
   margin: 0 auto;
   padding: 20px 16px 60px;
 }

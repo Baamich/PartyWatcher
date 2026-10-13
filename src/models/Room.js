@@ -40,4 +40,8 @@ const roomSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
+// «Мои комнаты» и публичный список (сортировка по дате) — без перебора всей коллекции
+roomSchema.index({ owner: 1, createdAt: -1 });
+roomSchema.index({ isPublic: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Room', roomSchema);

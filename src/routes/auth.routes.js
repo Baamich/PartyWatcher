@@ -7,6 +7,9 @@ const router = express.Router();
 const User = require('../models/User');
 const config = require('../config');
 const auth = require('../middleware/auth');
+const { meOf } = require('../services/me');
+const { TERMS_VERSION } = require('../services/terms');
+const { clientIp, parseUA } = require('../services/clientInfo');
 const { sendPasswordReset } = require('../services/mailer');
 const rateLimit = require('express-rate-limit');
 
@@ -118,6 +121,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({ error: req.t('server.auth.fillAll') });
     }
+    if (req.body.acceptTerms !== true) {
+      return res.status(400).json({ error: req.t('server.terms.mustAccept') });
+    }
     if (username.length < 3 || username.length > 32) {
       return res.status(400).json({ error: req.t('server.auth.usernameLen') });
     }
@@ -143,7 +149,11 @@ router.post('/register', registerLimiter, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     // streamerName не передаём — pre('validate') скопирует username
-    const user = await User.create({ username, email, passwordHash });
+    const user = await User.create({
+      username, email, passwordHash,
+      termsVersion: TERMS_VERSION, termsAt: new Date(),
+      regIp: clientIp(req), regDevice: parseUA(req.headers).name,
+    });
 
     const token = signToken(user);
     setTokenCookie(res, token);
@@ -168,6 +178,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     const user = await User.findOne({ $or: [{ usernameLower: loginLower }, { email: loginLower }] });
     const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
     if (!user || !ok) return res.status(401).json({ error: req.t('server.auth.badLogin') });
+    // про бан говорим только тому, кто знает пароль
+    if (user.banPerm) {
+      return res.status(403).json({ error: banText(req, null, user.banReason), code: 'banned' });
+    }
+    if (user.banUntil && user.banUntil.getTime() > Date.now()) {
+      return res.status(403).json({ error: banText(req, user.banUntil, user.banReason), code: 'banned' });
+    }
 
     const token = signToken(user);
     setTokenCookie(res, token);
@@ -176,6 +193,22 @@ router.post('/login', loginLimiter, async (req, res) => {
     console.error('[auth/login]', err);
     res.status(500).json({ error: req.t('server.serverError') });
   }
+});
+
+// «Аккаунт заблокирован до 14.10.2026, 18:00. Причина: …» — дата в часовом поясе UTC (у сервера нет зоны человека)
+function banText(req, until, reason) {
+  const base = until
+    ? req.t('server.ban.accountUntil', { until: until.toISOString().slice(0, 16).replace('T', ' ') + ' UTC' })
+    : req.t('server.ban.accountPerm');
+  return reason ? base + ' ' + req.t('server.ban.reason', { reason }) : base;
+}
+
+// POST /auth/terms { accept: true } — принять текущие условия пользования (окно js/terms-gate.js)
+router.post('/terms', auth, async (req, res) => {
+  if (req.body?.accept !== true) return res.status(400).json({ error: req.t('server.terms.mustAccept') });
+  await User.updateOne({ _id: req.user.id }, { $set: { termsVersion: TERMS_VERSION, termsAt: new Date() } });
+  auth.forgetUser(req.user.id);
+  res.json({ ok: true, version: TERMS_VERSION });
 });
 
 router.post('/logout', (req, res) => {
@@ -253,16 +286,9 @@ router.post('/reset', resetLimiter, async (req, res) => {
 });
 
 router.get('/me', auth, async (req, res) => {
-  const user = await User.findById(req.user.id).select('username role streamerName adultConfirmed showAdult');
-  if (!user) return res.status(401).json({ error: req.t('server.userNotFound') });
-  res.json({
-    id: user._id,
-    username: user.username,
-    role: user.role,
-    streamerName: user.streamerName || null,
-    adultConfirmed: !!user.adultConfirmed,
-    showAdult: !!user.adultConfirmed && !!user.showAdult,
-  });
+  const me = await meOf(req.user.id);
+  if (!me) return res.status(401).json({ error: req.t('server.userNotFound') });
+  res.json(me);
 });
 
 // 18+: { confirmed: true } — подтвердил возраст (отменить нельзя); { showAdult } — галочка «18+» в публичных комнатах.

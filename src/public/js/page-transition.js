@@ -1,4 +1,5 @@
+// Переход по кнопкам меню. Раньше страница 150 мс гасла перед уходом — это была чистая задержка:
+// браузер и так держит старую страницу на экране, пока новая не нарисуется
 function navigateWithFade(url) {
-  document.body.classList.add('page-fade-out');
-  setTimeout(() => { location.href = url; }, 150);
+  location.href = url;
 }

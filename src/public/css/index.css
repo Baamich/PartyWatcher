@@ -811,3 +811,8 @@ html.pw-authed #appBox.hidden { display: block !important; }
   background-size: 18px 18px;
 }
 
+
+/* галочка «принимаю условия пользования» при регистрации */
+.auth-terms { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 4px; font-size: 13px; line-height: 1.4; cursor: pointer; color: var(--text-muted); }
+.auth-terms input { width: auto; margin: 2px 0 0; flex-shrink: 0; }
+.auth-terms a { color: var(--accent-text); }

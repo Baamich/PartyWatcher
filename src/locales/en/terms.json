@@ -1,0 +1,56 @@
+{
+  "pageTitle": "Terms of Service — PartyWatcher",
+  "title": "Terms of Service",
+  "updated": "Version of 13 October 2026",
+  "back": "← Home",
+  "toc": "Contents",
+  "intro": "These terms are an agreement between you and the PartyWatcher Administration (“we”, “the service”). By signing up or continuing to use partywatcher.de you confirm that you have read and accept them. If you do not agree, do not use the service.",
+  "s1": {
+    "h": "1. General",
+    "body": "<p>PartyWatcher is a free service for watching videos together (rooms with a synced player, chat and voice), live streams, clips and related features.</p><p>These terms exist in Russian and English. If the versions differ, the <b>Russian</b> version prevails.</p><p>Contact: <a href=\"mailto:support@partywatcher.de\">support@partywatcher.de</a>.</p>"
+  },
+  "s2": {
+    "h": "2. Account",
+    "body": "<ul><li>You may sign up <b>from the age of 12</b>. If you are under 16, use the service only with the consent of your parents or legal guardians.</li><li><b>One account per person</b>. Additional accounts (alts), including ones used to evade a ban or to inflate followers or channel points, are forbidden and are blocked together with the main one.</li><li>Selling, buying, renting out or transferring an account or channel is forbidden.</li><li>You are responsible for keeping your password safe and for everything done from your account. Your email must be real — password resets and support replies are sent there.</li><li>Do not impersonate another person, streamer, the administration or support (other people's names, logos, “official” accounts).</li></ul>"
+  },
+  "s3": {
+    "h": "3. Watch parties and copyright",
+    "body": "<ul><li>The service <b>does not store or distribute</b> the films and videos played in rooms: the player shows them from third-party sites and services (YouTube, Twitch, VK Video, Kodik and others) using the link provided by the room creator.</li><li>Whoever created the room or changed its video is responsible for the links and videos in it. Only use material you are entitled to watch.</li><li>If you are a rights holder and believe a room infringes your rights, write to <a href=\"mailto:support@partywatcher.de\">support@partywatcher.de</a> — we will check and remove the material.</li><li><b>18+ content</b> (erotica, pornography) is allowed only in rooms the site marks as 18+ and only for adults. Minors must not enter such rooms. 18+ rooms are hidden from the public list until you confirm your age.</li></ul>"
+  },
+  "s4": {
+    "h": "4. Live streams",
+    "body": "<ul><li>The streamer is responsible for the stream, its title, description and channel design. Anything not expressly forbidden by these terms is up to the author's conscience.</li><li>Streams must <b>not</b> contain: casinos, betting, roulette and other gambling, including advertising them; real violence and cruelty, self-harm, life-threatening stunts; using, selling or promoting drugs.</li><li>The streamer and their moderators set their own chat rules (word filter, slow mode, bans). The service rules apply on top of them.</li></ul>"
+  },
+  "s5": {
+    "h": "5. Forbidden everywhere",
+    "body": "<p>In streams, chats, rooms, titles, profiles, clips and rewards the following is forbidden:</p><ul><li>extremism, terrorism, calls to violence, hate speech and discrimination based on nationality, race, religion, gender, orientation or other characteristics;</li><li>political agitation and propaganda in a crude or intrusive form;</li><li><b>revealing other people's personal data</b> (addresses, phone numbers, documents, photos without consent) — strictly forbidden;</li><li>harassment, threats and targeted insults. Swearing as such is not forbidden — the channel or room owner decides whether it is allowed in their chat;</li><li><b>spam, advertising and fraud</b> — flooding, third-party ads, phishing and malicious links, scamming for money or data — strictly forbidden;</li><li>inflating viewers, followers or channel points with bots or scripts;</li><li>recording other participants of a voice chat without their consent.</li></ul>"
+  },
+  "s6": {
+    "h": "6. Security and automation",
+    "body": "<ul><li>Hacking accounts, attempting to access other people's data or the server, overloading the service (DDoS, mass requests) and bypassing limits or bans are forbidden.</li><li>Bots and programs may work with the service <b>only through our API keys</b> (chat key, events key in the studio). Scraping the site and automated actions on behalf of users without a key are forbidden.</li><li>Found a vulnerability? Report it to <a href=\"mailto:support@partywatcher.de\">support@partywatcher.de</a> and do not exploit it. Thank you!</li></ul>"
+  },
+  "s7": {
+    "h": "7. Channel points and rewards",
+    "body": "<p>Channel points are in-channel game points. They are <b>not money</b>, have no monetary value and cannot be sold, bought, exchanged or withdrawn. The streamer may change rewards and their prices; points may be reset if a channel is closed or an account is blocked.</p>"
+  },
+  "s8": {
+    "h": "8. Your content",
+    "body": "<ul><li>You keep the rights to your content (streams, recordings, clips, messages, profile design).</li><li>By posting it you grant the service a free, non-exclusive right to store, process and display it on the site for as long as the service needs it to work.</li><li>Any viewer can make a clip of a stream. The streamer can delete clips of their channel. Clips and stream recordings are kept for a limited time.</li><li>We may hide or remove content that violates these terms or the law.</li></ul>"
+  },
+  "s9": {
+    "h": "9. Moderation and bans",
+    "body": "<ul><li>For violating these terms the administration may, <b>without prior warning</b>, remove content, temporarily block an account, ban it permanently, and block access from an IP address or device.</li><li>Creating a new account to evade a ban is also a violation.</li><li>If you disagree with a ban, write to <a href=\"mailto:support@partywatcher.de\">support@partywatcher.de</a> from your account's email and we will review it.</li></ul>"
+  },
+  "s10": {
+    "h": "10. What data we collect and why",
+    "body": "<p>To run the service and protect it from abuse we process:</p><ul><li><b>account data</b>: username, email, password hash (the password itself is not stored), settings, follows;</li><li><b>what you publish</b>: chat messages, room and stream titles, profile design, clips and stream recordings, support requests;</li><li><b>technical data</b>: IP address, country (from IP), device type, operating system, browser and version, device model (if the browser reports it), a random browser identifier and an anonymised fingerprint of device characteristics (graphics card, CPU cores, screen, time zone);</li><li><b>cookies and browser storage</b>: sign-in, language, theme, device identifier, window and player settings.</li></ul><p>Why: signing in and making features work; protection from hacking, spam, inflation and ban evasion (IP and device bans); load and traffic statistics for the administration.</p><p>Retention: visit statistics are kept for <b>120 days</b>, an account's IP and device history for <b>1 year</b> after the last visit; account data for as long as the account exists.</p><p>We <b>do not sell</b> data or share it with advertisers. Videos, some features, and delivery of the site and emails work through third-party services — they receive the technical information they need (for example, your IP address) and follow their own policies.</p><p>Voice chat is not recorded: audio goes directly between participants or through our relay server without recording.</p><p>To delete your account and related data, write to <a href=\"mailto:support@partywatcher.de\">support@partywatcher.de</a> from your account's email — we will delete it within 30 days. Inactive accounts are not deleted automatically.</p>"
+  },
+  "s11": {
+    "h": "11. Liability",
+    "body": "<p>The service is free and provided <b>“as is”</b>, without any guarantee of uninterrupted operation. We may change, suspend or discontinue features or the whole service. To the extent permitted by law, we are not liable for the content of third-party sites and videos, for other users' actions or for data loss.</p><p>We may change or release a channel name that is offensive, infringes someone's rights or impersonates someone else.</p>"
+  },
+  "s12": {
+    "h": "12. Changes to these terms",
+    "body": "<p>We may update these terms. The date of the current version is shown at the top of this page. After a change, a window will appear on your next visit asking you to read and accept the new version. Without accepting you cannot use your account: you can sign out and browse as a guest, or write to us to delete your account.</p>"
+  }
+}

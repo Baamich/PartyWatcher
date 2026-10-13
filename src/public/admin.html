@@ -8,7 +8,10 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
-  <link rel="stylesheet" href="/css/admin.css?v=3" />
+  <link rel="stylesheet" href="/workbench/workbench.css" />
+  <link rel="stylesheet" href="/workbench/cards.css" />
+  <link rel="stylesheet" href="/css/admin.css" />
+  <link rel="stylesheet" href="/css/admin-stats.css" />
   <meta name="robots" content="noindex, nofollow" />
   <title data-i18n="admin.pageTitle">Админка — PartyWatcher</title>
 </head>
@@ -25,6 +28,44 @@
 
   <h2 data-i18n="admin.title">Панель администратора</h2>
 
+  <!-- статистика: окна-показатели как в студии (двигать за заголовок, тянуть за угол), справа — галочки -->
+  <div id="adCanvas" class="wb-canvas cw-canvas ad-canvas">
+    <nav id="wbNavFixed" class="wb-nav">
+      <button type="button" class="wb-nav-btn active" data-click="adScrollTop" data-i18n="admin.nav.stats">📊 Статистика</button>
+      <button type="button" class="wb-nav-btn" data-click="openUsers" data-i18n="admin.nav.users">👥 Аккаунты</button>
+      <button type="button" class="wb-nav-btn" data-click="openBans" data-i18n="admin.nav.bans">🛡️ Баны IP и устройств</button>
+      <button type="button" class="wb-nav-btn" data-click="openUpdate" data-i18n="admin.nav.update">🔄 Обновление сайта</button>
+      <button type="button" class="wb-nav-btn" data-click="openSupport" data-i18n="admin.nav.support">💬 Обращения</button>
+    </nav>
+
+    <div id="adTop" class="cw-topbar">
+      <span class="cw-topbar-label" data-i18n="admin.stats.period">Период</span>
+      <div class="ad-period" role="group">
+        <button type="button" class="ad-period-btn" data-days="1" data-i18n="admin.stats.day">24 часа</button>
+        <button type="button" class="ad-period-btn" data-days="7" data-i18n="admin.stats.week">7 дней</button>
+        <button type="button" class="ad-period-btn" data-days="30" data-i18n="admin.stats.month">30 дней</button>
+      </div>
+      <button type="button" class="icon-btn" id="adRefresh" data-i18n-title="admin.stats.refresh" title="Обновить">⟳</button>
+      <span class="ad-updated" id="adUpdated"></span>
+      <button type="button" class="icon-btn ad-reset" data-click="adResetLayout" data-i18n="admin.stats.reset">↺ По умолчанию</button>
+    </div>
+
+    <aside id="adPicker" class="cw-picker">
+      <div class="cw-picker-title" data-i18n="admin.stats.title">Статистика</div>
+      <div class="cw-picker-sub" data-i18n="admin.stats.pickHint">Галочки — какие окна показывать</div>
+      <div class="ad-picker-all">
+        <button type="button" class="icon-btn" data-click="adShowAll" data-arg="1" data-i18n="admin.stats.all">Все</button>
+        <button type="button" class="icon-btn" data-click="adShowAll" data-arg="0" data-i18n="admin.stats.none">Ничего</button>
+      </div>
+      <div id="adChecks" class="cw-checks"></div>
+      <p class="cw-picker-sub" data-i18n="admin.stats.keepHint">Посещения хранятся 120 дней, нагрузка — по часам. Посетитель считается один раз в сутки, повторные заходы — нет.</p>
+    </aside>
+  </div>
+
+  <!-- обновление сайта и история коммитов -->
+  <div id="updateModal" class="modal hidden">
+    <div class="modal-content ad-wide-modal">
+      <button type="button" class="modal-close" data-close="updateModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
   <div class="admin-grid">
     <div class="panel panel-update">
       <h3 data-i18n="admin.update.title">Обновление</h3>
@@ -43,6 +84,72 @@
       />
       <div id="commitList" class="commit-list" data-i18n="common.loading">Загрузка...</div>
       <button id="revertBtn" data-click="revertToCommit" disabled data-i18n="admin.commits.revert">Вернуться к коммиту</button>
+    </div>
+  </div>
+    </div>
+  </div>
+
+  <!-- аккаунты: список (новые сверху), поиск, сортировка -->
+  <div id="usersModal" class="modal hidden">
+    <div class="modal-content ad-wide-modal ad-users-modal">
+      <button type="button" class="modal-close" data-close="usersModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 data-i18n="admin.users.title">Аккаунты</h3>
+      <div class="ad-users-bar">
+        <input id="usersSearch" type="search" autocomplete="off" maxlength="100" placeholder="Логин, почта, имя канала или IP" data-i18n-placeholder="admin.users.searchPh" />
+        <select id="usersSort" aria-label="Сортировка" data-i18n-aria-label="admin.users.sort">
+          <option value="new" data-i18n="admin.users.sortNew">Сначала новые</option>
+          <option value="old" data-i18n="admin.users.sortOld">Сначала старые</option>
+          <option value="seen" data-i18n="admin.users.sortSeen">Недавно заходили</option>
+          <option value="name" data-i18n="admin.users.sortName">По логину (А–Я)</option>
+        </select>
+        <select id="usersFilter" aria-label="Фильтр" data-i18n-aria-label="admin.users.filter">
+          <option value="all" data-i18n="admin.users.filterAll">Все</option>
+          <option value="online" data-i18n="admin.users.filterOnline">На сайте сейчас</option>
+          <option value="banned" data-i18n="admin.users.filterBanned">Заблокированные</option>
+        </select>
+        <span class="ad-users-total" id="usersTotal"></span>
+      </div>
+      <div class="ad-table-wrap">
+        <table class="ad-table" id="usersTable">
+          <thead><tr>
+            <th data-i18n="admin.users.col.user">Аккаунт</th>
+            <th data-i18n="admin.users.col.created">Регистрация</th>
+            <th data-i18n="admin.users.col.seen">Последний заход</th>
+            <th data-i18n="admin.users.col.ip">IP</th>
+            <th data-i18n="admin.users.col.status">Статус</th>
+          </tr></thead>
+          <tbody id="usersBody" data-no-i18n></tbody>
+        </table>
+      </div>
+      <button type="button" class="icon-btn ad-more hidden" id="usersMore" data-i18n="admin.users.more">Показать ещё</button>
+    </div>
+  </div>
+
+  <!-- карточка аккаунта: IP, устройства, блокировки -->
+  <div id="userModal" class="modal support-layer hidden">
+    <div class="modal-content ad-wide-modal">
+      <button type="button" class="modal-close" data-close="userModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <div id="userCard"></div>
+    </div>
+  </div>
+
+  <!-- баны IP и устройств -->
+  <div id="bansModal" class="modal hidden">
+    <div class="modal-content ad-wide-modal">
+      <button type="button" class="modal-close" data-close="bansModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 data-i18n="admin.bans.title">Баны IP и устройств</h3>
+      <div class="ad-table-wrap">
+        <table class="ad-table">
+          <thead><tr>
+            <th data-i18n="admin.bans.col.what">Что</th>
+            <th data-i18n="admin.bans.col.user">Чей</th>
+            <th data-i18n="admin.bans.col.reason">Причина</th>
+            <th data-i18n="admin.bans.col.when">Когда</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="bansBody" data-no-i18n></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -98,8 +205,11 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/api.js?v=2"></script>
-  <script src="/js/actions.js?v=3"></script>
-  <script src="/js/admin.js?v=6"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/actions.js"></script>
+  <script src="/workbench/canvas-windows.js"></script>
+  <script src="/js/admin.js"></script>
+  <script src="/js/admin-stats.js"></script>
+  <script src="/js/admin-users.js"></script>
 </body>
 </html>

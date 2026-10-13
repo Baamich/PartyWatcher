@@ -6,10 +6,14 @@ const config = require('./config');
 const connectDB = require('./db/mongoose');
 const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');
+const adminStatsRoutes = require('./routes/adminStats.routes');
+const adminUsersRoutes = require('./routes/adminUsers.routes');
+const bans = require('./services/bans');
 const supportRoutes = require('./routes/support.routes');
 const cspRoutes = require('./routes/csp.routes');
 const securityHeaders = require('./middleware/securityHeaders');
 const i18n = require('./services/i18n');
+const pages = require('./services/pages');
 
 async function start() {
   await connectDB();
@@ -32,17 +36,22 @@ async function start() {
   app.use('/api/support', supportRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/admin', adminStatsRoutes);
+  app.use('/api/admin', adminUsersRoutes);
+  bans.start(); // для отметок «забанен» в карточке аккаунта (сам сайт банит в своём процессе)
   app.use('/api/csp-report', cspRoutes);
   
 
   // Статика БЕЗ автоматической отдачи index.html
+  app.get('/vendor/socket.io.min.js', pages.sendVendor('/vendor/socket.io.min.js'));
   app.use(express.static(path.join(__dirname, 'public'), {
     index: false,   // ← важно!
+    setHeaders: pages.staticHeaders, // файлы с ?v=<хэш> — кэш на год (версии ставит pages.js)
   }));
 
-  // Главная страница админки
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  // Главная страница админки (словарь, версии файлов и данные входа — сразу в HTML, как на сайте)
+  app.get('/', (req, res, next) => {
+    pages.send(req, res, 'admin.html').catch(next);
   });
 
   // Всё остальное

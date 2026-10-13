@@ -1,0 +1,21 @@
+/* /terms — условия пользования: текст на всю ширину колонки, оглавление сверху */
+.terms-page { max-width: 820px; margin: 0 auto; padding: 20px 16px 80px; line-height: 1.6; }
+.terms-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.terms-top-right { display: flex; align-items: center; gap: 8px; }
+.terms-back { text-decoration: none; width: auto; }
+.terms-page h1 { font-size: 30px; margin: 0 0 4px; }
+.terms-updated { color: var(--text-muted); font-size: 14px; margin: 0 0 18px; }
+.terms-intro { font-size: 16px; }
+.terms-toc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin: 20px 0 28px; }
+.terms-toc-title { font-weight: 800; margin-bottom: 6px; }
+.terms-toc ol { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 24px; }
+.terms-toc li { break-inside: avoid; padding: 2px 0; font-size: 14px; }
+.terms-toc a, .terms-page section a { color: var(--accent-text); }
+.terms-page section { scroll-margin-top: 16px; margin-bottom: 26px; }
+.terms-page section h2 { font-size: 20px; margin: 0 0 8px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.terms-page section ul { padding-left: 20px; margin: 8px 0; }
+.terms-page section li { margin: 6px 0; }
+@media (max-width: 600px) {
+  .terms-toc ol { columns: 1; }
+  .terms-page h1 { font-size: 24px; }
+}

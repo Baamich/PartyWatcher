@@ -209,7 +209,7 @@
   }
 
   // в OBS сокет сам переподключается
-  const socket = io('/chat', { reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000 });
+  const socket = io('/chat', { transports: ['websocket', 'polling'], tryAllTransports: true, reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000 });
 
   socket.on('connect', () => socket.emit('chat:join', { chatKey: key }));
 

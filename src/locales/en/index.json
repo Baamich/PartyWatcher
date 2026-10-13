@@ -40,7 +40,10 @@
     "noUsername": "Enter a username",
     "mismatch": "Passwords do not match",
     "weak": "Password does not meet the requirements",
-    "failed": "Could not sign up"
+    "failed": "Could not sign up",
+    "termsAgree": "I have read and accept the",
+    "termsLink": "Terms of Service",
+    "termsNeeded": "Please tick the box: you need to accept the Terms of Service"
   },
   "rules": {
     "length": "At least 8 characters",

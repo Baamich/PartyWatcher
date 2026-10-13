@@ -49,6 +49,12 @@ const NEWS_ROUTES = require('./routes/news');
 const securityHeaders = require('./middleware/securityHeaders');
 const cspRoutes = require('./routes/csp.routes');
 const i18n = require('./services/i18n');
+const pages = require('./services/pages');
+const perf = require('./services/perf');
+const bans = require('./services/bans');
+const analytics = require('./services/analytics');
+const adminStatsRoutes = require('./routes/adminStats.routes');
+const adminUsersRoutes = require('./routes/adminUsers.routes');
 
 async function start() {
   await connectDB();
@@ -68,12 +74,14 @@ async function start() {
   const io = new Server(server, {
     cors: { origin: siteOrigin ? [siteOrigin] : false },
     allowRequest: (req, cb) => {
+      if (!bans.allowSocket(req)) return cb(null, false); // забаненный IP/устройство
       const origin = req.headers.origin;
       if (!origin) return cb(null, true);            // не браузер: бот на C#
       cb(null, !siteOrigin || origin === siteOrigin); // браузер: только наш сайт
     },
   });
   
+  app.use(perf.serverTiming); // Server-Timing: сколько запрос считался на сервере
   app.use(securityHeaders()); // CSP и остальные заголовки безопасности (режим — CSP_MODE в .env)
   // браузеры с чужих сайтов к API не пускаем; запросы без Origin (бот, curl) CORS не касается
   app.use(cors({ origin: siteOrigin ? [siteOrigin] : false, credentials: true }));
@@ -83,10 +91,12 @@ async function start() {
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
   app.use(i18n.middleware); // req.lang и req.t для сообщений API
+  app.use(bans.guard); // забаненные IP и устройства — 403 на всё (админа не трогает)
+  app.use(analytics.middleware); // статистика админки: счётчики в памяти, в базу раз в минуту
   app.get('/locales/:lang.js', i18n.bundle); // словари для браузера (src/locales)
   // страницы документации студии: src/locales/<язык>/docs/*.html
   for (const lang of i18n.LANGS) {
-    app.use(`/locales/${lang}/docs`, express.static(path.join(i18n.LOCALES_DIR, lang, 'docs'), { index: false }));
+    app.use(`/locales/${lang}/docs`, express.static(path.join(i18n.LOCALES_DIR, lang, 'docs'), { index: false, setHeaders: pages.staticHeaders }));
   }
 
   // API не должно кэшироваться ни браузером, ни Cloudflare — иначе статус isLive/чат зависают на старом значении
@@ -102,7 +112,7 @@ async function start() {
     res.redirect(301, '/' + qs);
   });
 
-  const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin\.js|css\/admin\.css)\/?$/i;
+  const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin(-stats|-users)?\.js|css\/admin(-stats)?\.css)\/?$/i;
   app.use((req, res, next) => {
     if (!ADMIN_PATHS.test(req.path)) return next();
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -114,7 +124,7 @@ async function start() {
     } catch (_) {}
     if (!isAdmin) return res.status(404).send('Not found');
     if (/^\/admin(\.html)?\/?$/i.test(req.path)) {
-      return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+      return pages.send(req, res, 'admin.html').catch(next);
     }
     next();
   });
@@ -127,7 +137,11 @@ async function start() {
     console.warn('[server] hls.js не установлен — /vendor/hls.min.js будет только из public/vendor');
   }
 
-  app.use(express.static(path.join(__dirname, 'public')));
+  // клиент Socket.IO — минифицированный файл из npm с версией по хэшу (вместо /socket.io/socket.io.js: 156 КБ без кэша)
+  app.get('/vendor/socket.io.min.js', pages.sendVendor('/vendor/socket.io.min.js'));
+
+  app.use(pages.middleware); // HTML-страницы: версии файлов, словарь, перевод и данные входа сразу в разметке
+  app.use(express.static(path.join(__dirname, 'public'), { setHeaders: pages.staticHeaders }));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
@@ -156,6 +170,8 @@ async function start() {
   app.use('/api/auth', authRoutes);
   app.use('/api/rooms', roomRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/admin', adminStatsRoutes);
+  app.use('/api/admin', adminUsersRoutes);
   app.use('/api/drive', driveRoutes);
   app.use('/api/player-capture', playerCaptureRoutes);
   app.use('/api/stream', streamProxyRoutes);
@@ -186,17 +202,22 @@ async function start() {
 process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
 
   // новости как раздел сайта: та же страница, что в студии, но короткий адрес и меню сайта (переключает news.js)
-  app.get(['/news', '/news/'], (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'workbench', 'news.html'));
+  app.get(['/news', '/news/'], (req, res, next) => {
+    pages.send(req, res, 'workbench/news.html').catch(next);
+  });
+
+  // условия пользования (текст — src/locales/<язык>/terms.json, версия — services/terms.js)
+  app.get(['/terms', '/terms/'], (req, res, next) => {
+    pages.send(req, res, 'terms.html').catch(next);
   });
 
   // страница профиля стримера — единый шаблон на любое имя
-  app.get('/clips/:id', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'clips', 'clip.html'));
+  app.get('/clips/:id', (req, res, next) => {
+    pages.send(req, res, 'clips/clip.html').catch(next);
   });
 
-  app.get('/streamers/:name', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'streamers', 'streamer.html'));
+  app.get('/streamers/:name', (req, res, next) => {
+    pages.send(req, res, 'streamers/streamer.html').catch(next);
   });
     
   app.set('io', io);
@@ -204,6 +225,9 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
   registerRoomSocket(io);
   registerChatSocket(io);
   registerAlertsSocket(io);
+
+  bans.start(); // список банов IP/устройств — в память, перечитывается раз в 30 с
+  analytics.start(io); // CPU, память, сокеты и посещения — раз в минуту в базу
 
   await streamKeyCache.loadAll(); // заполняем кэш ключей ДО старта RTMP-сервера
   rtmpServer.run();

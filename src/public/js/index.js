@@ -35,9 +35,8 @@ async function checkAuth() {
 
     // Kodik выбран по умолчанию: после входа спрашиваем, есть ли поиск (до входа /kodik/config недоступен)
     if (isKodikType()) updateKodikMode();
-    await loadMyRooms();
-    await loadPublicRooms();
-    initLobbySocket();
+    initLobbySocket(); // сокет и оба списка — параллельно: каждый запрос к серверу — полсекунды дороги
+    await Promise.all([loadMyRooms(), loadPublicRooms()]);
     startAutoRefresh();
   } catch (err) {
     console.warn('[checkAuth] не авторизован:', err?.message || err);
@@ -214,8 +213,9 @@ function validateRegisterForm() {
   const username = document.getElementById('regUsername')?.value.trim() || '';
   const emailOk = !getEmailError(document.getElementById('regEmail')?.value || '');
   const passwordOk = updatePasswordRules();
+  const termsOk = !!document.getElementById('regTerms')?.checked;
   const btn = document.getElementById('registerBtn');
-  if (btn) btn.disabled = !(username && emailOk && passwordOk);
+  if (btn) btn.disabled = !(username && emailOk && passwordOk && termsOk);
 }
 
 async function login() {
@@ -270,11 +270,15 @@ async function register() {
     }
     return;
   }
+  if (!document.getElementById('regTerms')?.checked) {
+    showAuthError('registerError', t('index.register.termsNeeded'));
+    return;
+  }
 
   try {
     await api('/auth/register', {
       method: 'POST',
-      body: { username, email, password },
+      body: { username, email, password, acceptTerms: true },
     });
     const returnTo = getReturnTo();
     if (returnTo) {
@@ -295,6 +299,7 @@ document.getElementById('regEmail')?.addEventListener('input', () => {
 document.getElementById('regPassword')?.addEventListener('input', validateRegisterForm);
 document.getElementById('regPasswordConfirm')?.addEventListener('input', validateRegisterForm);
 document.getElementById('regUsername')?.addEventListener('input', validateRegisterForm);
+document.getElementById('regTerms')?.addEventListener('change', validateRegisterForm);
 
 async function logout() {
   await api('/auth/logout', { method: 'POST' });
@@ -481,7 +486,8 @@ window.addEventListener('pw:langchange', () => {
 });
 // браузер мог восстановить выбранный тип при возврате на страницу
 document.addEventListener('DOMContentLoaded', () => {
-  if (isKodikType()) updateKodikMode();
+  // гостю /kodik/config недоступен (401) — не спрашиваем; после входа checkAuth вызовет сам
+  if (isKodikType() && window.__pwAuthed !== false) updateKodikMode();
 });
 
 let creatingRoom = false; // двойной клик не должен создать две комнаты (и обойти лимит)
@@ -866,7 +872,7 @@ function initLobbySocket() {
   if (lobbySocket) return;
 
   // socket.io должен быть уже подключён на странице (как в room.html)
-  lobbySocket = io();
+  lobbySocket = io({ transports: ['websocket', 'polling'], tryAllTransports: true }); // сразу WebSocket: polling через туннель — лишние круги по полсекунды
 
   lobbySocket.on('connect', () => {
     lobbySocket.emit('lobby:join');

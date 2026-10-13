@@ -388,5 +388,19 @@
       "unraid": "Raid cancelled",
       "title": "Stream title changed"
     }
+  },
+  "ban": {
+    "pageTitle": "Access denied",
+    "pageText": "Access to PartyWatcher from this device or network has been blocked by the administration. If this is a mistake, write to support@partywatcher.de.",
+    "blocked": "Access from this device or network is blocked",
+    "accountShort": "Account blocked",
+    "accountUntil": "Your account is blocked until {until}.",
+    "accountPerm": "Your account is permanently banned.",
+    "reason": "Reason: {reason}",
+    "notAdmin": "You can’t block administrators or yourself"
+  },
+  "terms": {
+    "required": "Please accept the Terms of Service first",
+    "mustAccept": "You need to accept the Terms of Service"
   }
 }

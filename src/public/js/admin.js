@@ -352,7 +352,7 @@ function pollStatus(log) {
   // socket (если доступен на этом origin)
   try {
     if (typeof io === 'function') {
-      const socket = io({ withCredentials: true });
+      const socket = io({ withCredentials: true, transports: ['websocket', 'polling'], tryAllTransports: true });
       socket.on('support:count', (p) => setBadge(p.unreadCount));
       socket.on('support:new', () => {
         refreshCount();

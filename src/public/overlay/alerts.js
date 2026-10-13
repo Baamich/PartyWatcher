@@ -18,7 +18,7 @@
     PWAlertRender.show(stage, { ...a, text }, { onDone: () => { busy = false; setTimeout(next, 300); } });
   }
 
-  const socket = io('/alerts', { reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000 });
+  const socket = io('/alerts', { transports: ['websocket', 'polling'], tryAllTransports: true, reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000 });
   socket.on('connect', () => socket.emit('alerts:join', { key }));
   socket.on('alerts:ready', () => { err.hidden = true; });
   socket.on('alerts:error', () => showError('alerts.overlay.badKey'));

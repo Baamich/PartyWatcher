@@ -113,6 +113,11 @@
           <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPasswordConfirm" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
         </div>
 
+        <label class="auth-terms" for="regTerms">
+          <input type="checkbox" id="regTerms" />
+          <span><span data-i18n="index.register.termsAgree">Я прочитал(а) и принимаю</span> <a href="/terms" target="_blank" rel="noopener" data-i18n="index.register.termsLink">условия пользования</a></span>
+        </label>
+
         <button id="registerBtn" class="auth-submit" data-click="register" disabled data-i18n="index.register.submit">Зарегистрироваться</button>
 
         <p class="auth-switch">

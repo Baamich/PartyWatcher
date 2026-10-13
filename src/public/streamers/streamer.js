@@ -1377,7 +1377,7 @@ function applyLiveRestriction(r) {
 
 window.addEventListener('pw:langchange', (e) => liveSocket?.emit('lang:set', e.detail.lang)); // язык ответов бота
 function connectLiveChat(nameLower) {
-  liveSocket = io('/chat', { reconnection: false });
+  liveSocket = io('/chat', { reconnection: false, transports: ['websocket', 'polling'], tryAllTransports: true }); // сразу WebSocket: чат появляется на 1–2 круга к серверу раньше
 
   liveSocket.on('chat:history', (messages) => {
     document.getElementById('liveMessages').innerHTML = '';

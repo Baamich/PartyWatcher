@@ -29,7 +29,7 @@ function generateCode() {
 
 function withLiveStatus(room, io) {
   const viewerCount = io.sockets.adapter.rooms.get(room.code)?.size || 0;
-  return { ...room.toObject(), viewerCount };
+  return { ...(typeof room.toObject === 'function' ? room.toObject() : room), viewerCount };
 }
 
 const VIDEO_TYPES = ['youtube', 'twitch', 'drive', 'player_capture', 'direct', 'kodik', 'vk'];
@@ -154,18 +154,16 @@ router.get('/public', auth, async (req, res) => {
   if (sort === 'most')   sortOption = { viewerCount: -1, createdAt: -1 };
   if (sort === 'least')  sortOption = { viewerCount: 1, createdAt: -1 };
 
-  const total = await Room.countDocuments(filter);
-  const rooms = await Room.find(filter)
-    .select('-bannedUsers')
-    .sort(sortOption)
-    .skip((page - 1) * limit)
-    .limit(limit);
+  const [total, rooms] = await Promise.all([
+    Room.countDocuments(filter),
+    Room.find(filter).select('-bannedUsers').sort(sortOption).skip((page - 1) * limit).limit(limit).lean(),
+  ]);
 
   // подстраховка: если вдруг кэш устарел — берём актуальный из сокетов
   const result = rooms.map((r) => {
     const live = io.sockets.adapter.rooms.get(r.code)?.size;
     return {
-      ...r.toObject(),
+      ...r,
       viewerCount: live !== undefined ? live : r.viewerCount || 0,
     };
   });
@@ -181,7 +179,7 @@ router.get('/public', auth, async (req, res) => {
 
 router.get('/mine', auth, async (req, res) => {
   const io = req.app.get('io');
-  const rooms = await Room.find({ owner: req.user.id }).sort({ createdAt: -1 });
+  const rooms = await Room.find({ owner: req.user.id }).sort({ createdAt: -1 }).lean();
   res.json(rooms.map((r) => withLiveStatus(r, io)));
 });
 

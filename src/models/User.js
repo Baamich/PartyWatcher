@@ -16,6 +16,23 @@ const userSchema = new mongoose.Schema(
     // растёт при смене пароля — все старые JWT с меньшей версией перестают действовать
     tokenVersion: { type: Number, default: 0 },
 
+    // ---- условия пользования (services/terms.js) ----
+    termsVersion: { type: String, default: null }, // какую версию принял; не текущая — окно «условия изменились»
+    termsAt: { type: Date, default: null },
+
+    // ---- блокировка аккаунта (админка) ----
+    banPerm: { type: Boolean, default: false }, // забанен навсегда
+    banUntil: { type: Date, default: null }, // заблокирован до (временная блокировка)
+    banReason: { type: String, default: '' },
+    banAt: { type: Date, default: null },
+    banBy: { type: String, default: '' }, // логин админа
+
+    // ---- откуда заходит (services/analytics.js; история — UserSeen) ----
+    regIp: { type: String, default: '' },
+    regDevice: { type: String, default: '' }, // «Windows 11 · Chrome 141»
+    lastSeenAt: { type: Date, default: null },
+    lastIp: { type: String, default: '' },
+
     // ---- 18+ ----
     adultConfirmed: { type: Boolean, default: false }, // хоть раз подтвердил, что ему есть 18 (в комнате с контентом 18+)
     showAdult: { type: Boolean, default: false }, // показывать комнаты 18+ в публичном списке (галочка «18+» на главной)
@@ -69,5 +86,7 @@ userSchema.pre('validate', function (next) {
 
   next();
 });
+
+userSchema.index({ createdAt: -1 }); // админка: новые аккаунты сверху
 
 module.exports = mongoose.model('User', userSchema);

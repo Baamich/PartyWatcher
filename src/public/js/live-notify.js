@@ -100,6 +100,10 @@
   }
 
   function start() {
+    // гость (сервер положил это в страницу, см. api.js) — спрашивать нечего, лишний запрос не делаем
+    try {
+      if (typeof pwBoot !== 'undefined' && pwBoot && pwBoot.data && !pwBoot.data.me) return;
+    } catch (_) {}
     setTimeout(poll, 1500); // не мешаем загрузке страницы
     setInterval(poll, POLL_MS);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });

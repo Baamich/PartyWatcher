@@ -1,6 +1,9 @@
 // Локализация в браузере. Подключается ПЕРВЫМ скриптом в <head> (без defer/async):
 //   <script src="/js/i18n.js?v=5" data-ns="index"></script>
 // data-ns — разделы словаря этой страницы (common грузится всегда), файлы — src/locales/<язык>/<раздел>.json.
+// Сервер (services/pages.js) ставит перед этим тегом словарь языка запроса, переводит data-i18n* в разметке
+// и добавляет сюда data-lang (этот язык) и data-h (версия словарей). Без них (или язык не тот) — словарь
+// дописывается здесь через document.write, как раньше.
 // В JS:     t('room.copied'), t('room.viewers', { n: 5 }) — значение-объект { one, few, many, other } = плюрал.
 // В HTML:   data-i18n="ключ" (текст), data-i18n-html (разметка), data-i18n-placeholder, data-i18n-title,
 //           data-i18n-aria-label, data-i18n-alt, data-i18n-content (для <meta>). Ставить только на «листья»:
@@ -45,20 +48,25 @@
     return 'en';
   }
 
-  let lang = detect();
+  const me = document.currentScript;
+  const ssrLang = me && me.getAttribute('data-lang');
+  // язык, на котором сервер уже собрал страницу, важнее языков браузера (cookie — важнее всего)
+  let lang = readCookie() || (LANGS[ssrLang] ? ssrLang : null) || detect();
+  const ssr = ssrLang === lang && !!window.PW_I18N_DATA; // разметка уже переведена, словарь уже загружен
   document.documentElement.setAttribute('lang', lang);
 
   // словари этой страницы — синхронно, сразу после этого скрипта (до остальных <script>)
-  const me = document.currentScript;
   const ns = (me && me.getAttribute('data-ns')) || '';
   const nsList = ['common'].concat(ns.split(',').map((s) => s.trim()).filter(Boolean));
-  // &h= — версия словарей из cookie pw_i18n (ставит сервер при открытии страницы): с ней словарь берётся
-  // из кэша браузера без запроса к серверу, поэтому смена языка и переходы быстрые. Без cookie — свежий запрос
+  // &h= — версия словарей (data-h от сервера; у старых страниц — cookie pw_i18n): с ней словарь берётся
+  // из кэша браузера без запроса к серверу, поэтому смена языка и переходы быстрые. Без версии — свежий запрос
+  const verAttr = me && me.getAttribute('data-h');
   function bundleUrl(l) {
-    const ver = document.cookie.match(/(?:^|;\s*)pw_i18n=([0-9a-f]+)/);
+    const ver = verAttr ? [0, verAttr] : document.cookie.match(/(?:^|;\s*)pw_i18n=([0-9a-f]+)/);
     return '/locales/' + l + '.js?ns=' + encodeURIComponent(nsList.join(',')) + (ver ? '&h=' + ver[1] : '');
   }
-  if (!window.PW_I18N_DATA) {
+  if (!ssr) {
+    window.PW_I18N_DATA = null;
     document.write('<script src="' + bundleUrl(lang) + '"><\/script>');
   }
 
@@ -119,7 +127,7 @@
 
   // пока страница разбирается, переводим элементы по мере появления — без мигания русского текста
   let observer = null;
-  if (typeof MutationObserver !== 'undefined' && document.readyState === 'loading') {
+  if (!ssr && typeof MutationObserver !== 'undefined' && document.readyState === 'loading') {
     observer = new MutationObserver((records) => {
       for (const rec of records) {
         const parent = rec.target;

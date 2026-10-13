@@ -221,5 +221,16 @@
     "testHint": "You own the channel: no points are spent, the reward runs for real",
     "tested": "“{title}” — test started",
     "studioBtn": "Test rewards (free)"
+  },
+  "terms": {
+    "needTitle": "Terms of Service",
+    "needText": "To use your account, please read and accept the PartyWatcher Terms of Service.",
+    "changedTitle": "The Terms of Service have changed",
+    "changedText": "We have updated our Terms of Service. Please read the new version and confirm your agreement to continue.",
+    "open": "📄 Open the Terms of Service",
+    "agree": "I have read and accept the Terms of Service",
+    "accept": "Accept",
+    "decline": "I don’t accept — sign out",
+    "thanks": "Thank you! Terms accepted"
   }
 }

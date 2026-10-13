@@ -524,17 +524,26 @@ function updatePlayer(isLive, playbackId, liveStartedAt) {
   video.play().catch(() => {});
 }
 
+// статус эфира раз в 3 с — только в видимой вкладке (студия часто висит в фоне рядом с OBS) и без наложения
+// запросов, если сервер отвечает дольше; при возврате на вкладку — сразу
+let liveStatusBusy = false;
+async function pollLiveStatus() {
+  if (liveStatusBusy || document.hidden) return;
+  liveStatusBusy = true;
+  try {
+    const data = await api('/workbench/me?_=' + Date.now());
+    updatePlayer(!!data.isLive, data.streamPlaybackId, data.liveStartedAt);
+  } catch (err) {
+    console.warn('[liveStatusPoll]', err.message);
+  } finally {
+    liveStatusBusy = false;
+  }
+}
 function startLiveStatusPolling() {
   clearInterval(liveStatusPollTimer);
-  liveStatusPollTimer = setInterval(async () => {
-    try {
-      const data = await api('/workbench/me?_=' + Date.now());
-      updatePlayer(!!data.isLive, data.streamPlaybackId, data.liveStartedAt);
-    } catch (err) {
-      console.warn('[liveStatusPoll]', err.message);
-    }
-  }, 3000);
+  liveStatusPollTimer = setInterval(pollLiveStatus, 3000);
 }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && liveStatusPollTimer) pollLiveStatus(); });
 
 async function copyStreamKey() {
   try {
@@ -990,7 +999,7 @@ let chatModeUi = null;
 window.addEventListener('pw:langchange', (e) => socket?.emit('lang:set', e.detail.lang)); // язык ответов бота
 function initChat(streamerNameLower) {
   // reconnection: false — отключаем встроенную схему socket.io, управляем сами по своему графику
-  socket = io('/chat', { reconnection: false });
+  socket = io('/chat', { reconnection: false, transports: ['websocket', 'polling'], tryAllTransports: true });
 
   const bindSocketEvents = () => {
     socket.on('chat:history', (messages) => {
@@ -1075,10 +1084,9 @@ async function init() {
   }
   myStreamerNameLower = me.streamerName.toLowerCase();
 
-  await loadLayout();
-  initDraggablePanels();
-  await loadSettings();
-  await loadActionLog();
+  // раскладка, настройки и журнал не зависят друг от друга — параллельно (было 3 запроса подряд по полсекунды);
+  // чат — после журнала: его события дописываются в уже загруженный список
+  await Promise.all([loadLayout().then(initDraggablePanels), loadSettings(), loadActionLog()]);
   initChat(myStreamerNameLower);
   startLiveStatusPolling();
 }
