@@ -1,0 +1,103 @@
+/* Студия → Актив канала: карточки в две колонки */
+.act-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) { .act-main { grid-template-columns: minmax(0, 1fr); } }
+/* две независимые колонки: высокая карточка прав не растягивает соседнюю */
+.act-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.act-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.act-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.act-head h2 { margin: 0; font-size: 15px; color: var(--text); text-transform: none; letter-spacing: 0; font-weight: 800; }
+.act-sub { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+.act-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.act-count:empty { display: none; }
+
+/* назначить модератора */
+.act-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.act-add input { flex: 1 1 160px; min-width: 0; margin: 0; }
+.act-add select { flex: 0 0 auto; margin: 0; }
+.act-add button { flex: 0 0 auto; width: auto; }
+
+/* списки */
+.act-list { display: flex; flex-direction: column; gap: 2px; max-height: 420px; overflow-y: auto; }
+.act-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
+.act-row:hover { background: var(--surface-alt); }
+.act-ava {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+.act-ava .pw-badge { margin: 0 !important; transform: scale(1.25); }
+.act-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.act-row-text b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-row-text small { font-size: 12px; color: var(--text-muted); }
+.act-row-ctl { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.act-row-ctl select { margin: 0; padding: 4px 6px; font-size: 13px; width: auto; }
+.act-row-ctl .icon-btn { width: auto; margin: 0; white-space: nowrap; }
+[data-theme] .act-del { color: var(--danger); }
+.act-empty { margin: 4px 0; color: var(--text-muted); font-size: 13px; }
+.act-error { margin: 4px 0; color: var(--danger); font-size: 13px; }
+
+/* таблица прав */
+.act-perm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.act-perm-table th {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.act-perm-table th span { vertical-align: middle; }
+.act-perm-table td { padding: 7px 8px; border-top: 1px solid var(--border); }
+.act-perm-table td:not(:first-child) { text-align: center; width: 130px; }
+.act-perm-table input[type="checkbox"] { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.act-perm-group td {
+  border-top: none;
+  padding-top: 14px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.act-locked input { cursor: not-allowed; opacity: 0.35; }
+.act-locked::after { content: ' 🔒'; font-size: 11px; opacity: 0.7; }

@@ -8,7 +8,8 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
-  <link rel="stylesheet" href="/workbench/workbench.css" />
+  <link rel="stylesheet" href="/workbench/workbench.css?v=4" />
+  <link rel="stylesheet" href="/workbench/activity.css?v=2" />
   <title data-i18n="activity.pageTitle">PartyWatcher — Актив канала</title>
 </head>
 <body>
@@ -40,6 +41,8 @@
       <nav class="wb-nav wb-nav-static">
         <button type="button" class="wb-nav-btn" data-href="/workbench/news.html" data-i18n="workbench.nav.news">📰 Новости</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench.html" data-i18n="workbench.nav.stream">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/events.html" data-i18n="workbench.nav.events">🔔 События</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/rewards.html" data-i18n="workbench.nav.rewards">🎁 Награды</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/stats.html" data-i18n="workbench.nav.stats">📊 Статистика</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html" data-i18n="workbench.nav.videos">🎬 Видеостудия</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html" data-i18n="workbench.nav.activity">🛡️ Актив канала</button>
@@ -49,22 +52,62 @@
       </nav>
 
       
-      <div class="wb-subpage-main">
-        <section class="wb-panel">
-          <h2 data-i18n="activity.bans">Заблокированные пользователи</h2>
-          <div id="bansList"></div>
-        </section>
-        <section class="wb-panel">
-          <h2 data-i18n="activity.subs">Подписчики</h2>
-          <div id="followersBox"></div>
-        </section>
+      <div class="wb-subpage-main act-main">
+        <div class="act-col">
+          <!-- модераторы: назначить по логину, уровень, снять -->
+          <section class="act-card">
+            <header class="act-head">
+              <div>
+                <h2 data-i18n="activity.mods.title">Модераторы</h2>
+                <p class="act-sub" data-i18n="activity.mods.sub">Модератор следит за чатом. Высший модератор может ещё и управлять эфиром — что именно, решаешь ты в «Правах».</p>
+              </div>
+              <span id="modsCount" class="act-count" data-no-i18n></span>
+            </header>
+            <form id="modAddForm" class="act-add" autocomplete="off">
+              <input id="modAddName" maxlength="40" placeholder="Логин аккаунта" data-i18n-placeholder="activity.mods.namePh" />
+              <select id="modAddLevel">
+                <option value="mod" data-i18n="activity.mods.levelMod">Модератор</option>
+                <option value="senior" data-i18n="activity.mods.levelSenior">Высший модератор</option>
+              </select>
+              <button type="submit" data-i18n="activity.mods.add">Назначить</button>
+            </form>
+            <div id="modsList" class="act-list" data-no-i18n></div>
+          </section>
+          <section class="act-card">
+            <header class="act-head">
+              <h2 data-i18n="activity.bans">Заблокированные</h2>
+              <span id="bansCount" class="act-count" data-no-i18n></span>
+            </header>
+            <div id="bansList" class="act-list" data-no-i18n></div>
+          </section>
+        </div>
+        <div class="act-col">
+          <!-- права: что может каждый уровень -->
+          <section class="act-card">
+            <header class="act-head">
+              <div>
+                <h2 data-i18n="activity.perms.title">Права</h2>
+                <p class="act-sub" data-i18n="activity.perms.sub">Снимешь галочку — у модераторов этого уровня пропадёт кнопка в чате. Управление эфиром можно дать только высшему.</p>
+              </div>
+            </header>
+            <div id="permsTable" class="act-perms"></div>
+          </section>
+          <section class="act-card">
+            <header class="act-head">
+              <h2 data-i18n="activity.subs">Подписчики</h2>
+              <span id="subsCount" class="act-count" data-no-i18n></span>
+            </header>
+            <div id="followersBox" class="act-list" data-no-i18n></div>
+          </section>
+        </div>
       </div>
     </div>
   </div>
 
   <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
-  <script src="/workbench/channel-activity.js?v=4"></script>
+  <script src="/js/chat-badges.js?v=1"></script>
+  <script src="/workbench/channel-activity.js?v=5"></script>
   <script src="/js/minipip.js?v=2"></script>
   <script src="/js/live-notify.js?v=1"></script>
 </body>

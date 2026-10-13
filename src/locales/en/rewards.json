@@ -1,0 +1,86 @@
+{
+  "pageTitle": "PartyWatcher — Rewards",
+  "layoutReset": "Put the reward cards back in their default places?",
+  "newTitle": "New reward",
+  "create": "➕ Create reward",
+  "api": {
+    "label": "Rewards API",
+    "hint": "the key is the same as in “Events”, in the Authorization: Bearer header",
+    "key": "🔑 Key",
+    "docs": "📖 How to use"
+  },
+  "picker": {
+    "title": "Rewards",
+    "hint": "Ticked — viewers see the reward and can buy it"
+  },
+  "points": {
+    "title": "Channel stream points",
+    "default": "Stream points",
+    "icon": "Stream points icon",
+    "rename": "Rename",
+    "renameText": "New name for stream points (2–24 characters). It can be changed once every 30 days.",
+    "renameHint": "The name can be changed once every 30 days",
+    "renameAt": "Next rename — {date}",
+    "rule": "Viewers get them every {min} min of watching: +{f} for followers, +{v} for others (they have to click the bonus)."
+  },
+  "image": {
+    "title": "Reward image",
+    "letter": "Letter",
+    "upload": "Upload"
+  },
+  "card": {
+    "disable": "Turn the reward off",
+    "hide": "Hide",
+    "titlePh": "Title",
+    "descPh": "Description (what the viewer gets)",
+    "cost": "Price",
+    "needInput": "Viewer writes a text",
+    "color": "Background",
+    "copyApi": "📋 API",
+    "copied": "API address copied",
+    "delete": "🗑 Delete reward",
+    "deleteConfirm": "Delete the reward “{name}”?",
+    "costShort": "Cost: {n}",
+    "noDesc": "No description",
+    "edit": "✏️ Edit",
+    "publish": "📤 Publish",
+    "publishHint": "Share this reward in “Presets”",
+    "published": "The reward is published in “Presets”"
+  },
+  "kind": {
+    "highlight": "Starter: the viewer's message is highlighted in chat and in the OBS overlay.",
+    "coinflip": "Starter: the bot flips a coin and posts the result in chat.",
+    "hello": "Starter: the viewer's text shows up in OBS (the “Reward” event)."
+  },
+  "queue": {
+    "title": "Purchases",
+    "empty": "No purchases yet",
+    "done": "✓ Done",
+    "refund": "↩ Refund points",
+    "refunded": "points refunded"
+  },
+  "limit": "You can have up to {n} rewards",
+  "edit": {
+    "title": "Edit reward",
+    "newTitle": "New reward",
+    "name": "Title",
+    "desc": "Description — what the viewer gets",
+    "reply": "Bot reply in chat",
+    "replyHint": "(optional — the bot posts it after a purchase)",
+    "replyPh": "For example: {user} bought “{reward}”!",
+    "preview": "In chat:",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "created": "Reward created"
+  },
+  "vars": {
+    "user": "who bought it",
+    "reward": "reward title",
+    "cost": "cost",
+    "message": "viewer’s text",
+    "points": "points name",
+    "balance": "points left",
+    "sampleMessage": "hi!"
+  }
+}

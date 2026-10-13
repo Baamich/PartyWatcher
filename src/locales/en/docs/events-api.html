@@ -1,0 +1,39 @@
+<h1>Events API</h1>
+<p class="docs-lead">For those writing their own bot: all channel events arrive in real time over Socket.IO. The key is the same as in the OBS link (studio → 🔔 Events).</p>
+
+<h2>Connecting</h2>
+<p>Connect over Socket.IO to <code>https://partywatcher.de/alerts</code> and right away send <code>alerts:join</code> with the key:</p>
+<pre><code>const { io } = require('socket.io-client');
+const socket = io('https://partywatcher.de/alerts');
+socket.on('connect', () => socket.emit('alerts:join', { key: 'YOUR_KEY' }));
+socket.on('alerts:ready', ({ channel }) => console.log('connected to', channel));
+socket.on('alerts:error', () => console.log('wrong key'));
+socket.on('event', (e) => console.log(e.type, e.vars));</code></pre>
+
+<h2>What arrives</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Socket event</th><th>What it is</th></tr>
+  <tr><td><code>event</code></td><td><code>{ type, vars, at }</code> — every channel event, <b>even ones turned off</b> in the studio. <code>type</code> is one of the types below, <code>vars</code> are the same variables as in the text.</td></tr>
+  <tr><td><code>alert</code></td><td>What the OBS overlay shows (only events that are on, and “Test”): animation, sound and text settings.</td></tr>
+  <tr><td><code>alerts:ready</code> / <code>alerts:error</code></td><td>The key was accepted / is wrong. After 5 failed tries the socket is disconnected.</td></tr>
+</table>
+</div>
+
+<h2>Event types</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th><code>type</code></th><th><code>vars</code></th></tr>
+  <tr><td><code>follow</code></td><td><code>name</code></td></tr>
+  <tr><td><code>raid</code></td><td><code>streamer</code>, <code>viewers</code></td></tr>
+  <tr><td><code>reward</code></td><td><code>name</code>, <code>reward</code>, <code>cost</code>, <code>message</code>, <code>rewardSlug</code>, <code>redemptionId</code></td></tr>
+  <tr><td><code>clip</code></td><td><code>name</code>, <code>title</code></td></tr>
+  <tr><td><code>firstChat</code></td><td><code>name</code>, <code>message</code></td></tr>
+  <tr><td><code>viewers</code>, <code>followGoal</code>, <code>hype</code></td><td><code>count</code></td></tr>
+  <tr><td><code>emoteCombo</code></td><td><code>emote</code>, <code>count</code></td></tr>
+  <tr><td><code>command</code></td><td><code>name</code>, <code>command</code></td></tr>
+  <tr><td><code>ban</code>, <code>mod</code></td><td><code>name</code></td></tr>
+  <tr><td><code>pointsGoal</code></td><td><code>name</code>, <code>points</code></td></tr>
+</table>
+</div>
+<p>Reward purchases can also be fetched over HTTP and marked as done — see the “Rewards” chapter, “Rewards API” page.</p>

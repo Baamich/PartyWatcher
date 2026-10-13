@@ -98,4 +98,5 @@ function hasProfanity(text) {
   return check(t) || (t.includes('3') && check(t.replace(/3/g, 'з')));
 }
 
-module.exports = { hasProfanity };
+// разбор слов нужен и фильтру чата (services/chatFilter.js)
+module.exports = { hasProfanity, toLatin, skeletons, prep, strip };

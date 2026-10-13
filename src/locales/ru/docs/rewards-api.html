@@ -1,0 +1,35 @@
+<h1>API наград</h1>
+<p class="docs-lead">Своя логика на покупку награды: например, бот крутит рулетку или меняет сцену в OBS. Ключ — тот же, что у событий (студия → 🔔 События).</p>
+
+<h2>Сразу узнавать о покупке</h2>
+<p>Подключись к API событий (глава «События», страница «API событий») и слушай <code>event</code> с <code>type: "reward"</code>. В <code>vars</code> есть <code>rewardSlug</code> и <code>redemptionId</code>.</p>
+
+<h2>Список покупок по HTTP</h2>
+<p>У каждой награды свой адрес — его копирует кнопка <b>📋 API</b> в карточке:</p>
+<pre><code>GET https://partywatcher.de/api/rewards/&lt;канал&gt;/&lt;награда&gt;?status=new
+Authorization: Bearer ТВОЙ_КЛЮЧ</code></pre>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Параметр</th><th>Что это</th></tr>
+  <tr><td><code>status</code></td><td><code>new</code>, <code>done</code> или <code>refunded</code>. Без него — все.</td></tr>
+  <tr><td><code>after</code></td><td>Время ISO, например <code>2026-10-13T18:00:00Z</code>: только покупки после него.</td></tr>
+</table>
+</div>
+<p>Ответ — до 100 покупок, новые сверху:</p>
+<pre><code>[{ "id": "…", "reward": "coinflip", "user": "viewer123", "userId": "…",
+   "cost": 50, "message": "", "status": "new", "createdAt": "…" }]</code></pre>
+
+<h2>Отметить покупку</h2>
+<pre><code>POST https://partywatcher.de/api/rewards/&lt;канал&gt;/&lt;награда&gt;/&lt;id&gt;/done
+POST https://partywatcher.de/api/rewards/&lt;канал&gt;/&lt;награда&gt;/&lt;id&gt;/refund</code></pre>
+<p><code>done</code> — выполнено, <code>refund</code> — вернуть зрителю поинты. В студии статус меняется там же.</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Код</th><th>Что значит</th></tr>
+  <tr><td><code>200</code></td><td>Готово.</td></tr>
+  <tr><td><code>401</code></td><td>Ключа нет, он неверный или от другого канала.</td></tr>
+  <tr><td><code>404</code></td><td>Нет такой покупки.</td></tr>
+  <tr><td><code>409</code></td><td>Покупку уже отметили раньше.</td></tr>
+</table>
+</div>
+<div class="docs-note"><p>Ключ передавай только в заголовке <code>Authorization</code>, не в адресе — иначе он попадёт в журналы.</p></div>

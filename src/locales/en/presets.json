@@ -1,11 +1,12 @@
 {
   "pageTitle": "PartyWatcher — Presets",
-  "hint": "Ready-made chat styles and commands from other streamers. Add them in one click or share your own.",
+  "hint": "Ready-made chat styles, commands and rewards from other streamers. Add them in one click or share your own.",
   "publishBtn": "＋ Publish preset",
   "filter": {
     "all": "All",
     "style": "Styles",
-    "command": "Commands"
+    "command": "Commands",
+    "reward": "Rewards"
   },
   "sort": {
     "likes": "Most liked",
@@ -75,6 +76,19 @@
     "whichCmd": "Which command to publish",
     "response": "Response:",
     "done": "Preset published",
-    "failed": "Could not publish"
+    "failed": "Could not publish",
+    "noRewards": "You don’t have your own rewards yet. Create one in “Rewards”, then publish it (starter rewards can’t be published).",
+    "whichReward": "Which reward to publish",
+    "rewardHint": "The reward picture isn’t published — others get a color with a letter."
+  },
+  "typeReward": "Reward",
+  "rewardCost": "Cost: {n}",
+  "rewardInput": "viewer writes a text",
+  "rewardReply": "Bot:",
+  "unaddReward": "The “{name}” reward will also be removed from your rewards.",
+  "addReward": {
+    "title": "Add the reward?",
+    "text": "The “{name}” reward (cost {cost}) will appear in your “Rewards” — you can edit it later.",
+    "done": "The “{name}” reward is added to “Rewards”"
   }
 }

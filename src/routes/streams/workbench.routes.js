@@ -11,6 +11,8 @@ const Follow = require('../../models/Follow');
 const Category = require('../../models/Category');
 const categories = require('../../services/categories');
 const StreamSession = require('../../models/StreamSession');
+const ChannelMod = require('../../models/ChannelMod');
+const mods = require('../../services/channelMods');
 const i18n = require('../../services/i18n');
 const auth = require('../../middleware/auth');
 const streamKeyCache = require('../../services/streamKeyCache');
@@ -155,7 +157,8 @@ router.get('/bans', auth, requireStreamer, async (req, res) => {
 // DELETE /workbench/bans/:userId — разблокировать
 router.delete('/bans/:userId', auth, requireStreamer, async (req, res) => {
   if (!/^[a-f0-9]{24}$/i.test(req.params.userId)) return res.status(400).json({ error: req.t('server.badId') });
-  await ChannelBan.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
+  const ban = await ChannelBan.findOneAndDelete({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId }).select('username').lean();
+  if (ban) chatBus.logAction(req.streamerUser.streamerNameLower, req.streamerUser.username || req.streamerUser.streamerName, 'unban', ban.username);
   chatBus.emitToUser(req.streamerUser.streamerNameLower, req.params.userId, 'chat:restriction', { type: 'none' });
   res.json({ status: 'ok' });
 });
@@ -242,6 +245,74 @@ router.put('/stats-layout', auth, requireStreamer, async (req, res) => {
 router.delete('/stats-layout', auth, requireStreamer, async (req, res) => {
   await WorkbenchLayout.updateOne({ userId: req.streamerUser._id }, { $set: { stats: null } });
   res.json({ status: 'ok' });
+});
+
+// ---------- модераторы канала ----------
+const ID24 = /^[a-f0-9]{24}$/i;
+
+function modsChanged(nameLower) {
+  mods.invalidate(nameLower);
+  chatBus.refreshRoles(nameLower); // в открытых чатах кнопки модерации появятся/пропадут сразу
+}
+
+// GET /workbench/mods — модераторы, их права и каталог прав
+router.get('/mods', auth, requireStreamer, async (req, res) => {
+  const me = req.streamerUser;
+  const rows = await ChannelMod.find({ streamerNameLower: me.streamerNameLower }).sort({ level: -1, addedAt: 1 }).lean();
+  res.json({
+    mods: rows.map((r) => ({ userId: String(r.userId), username: r.username, level: r.level, addedAt: r.addedAt })),
+    perms: mods.cleanPerms(me.modPerms),
+    catalog: { chat: mods.CHAT_PERMS, stream: mods.STREAM_PERMS },
+    max: mods.MAX_MODS,
+  });
+});
+
+// POST /workbench/mods { username, level } — назначить по логину аккаунта
+router.post('/mods', auth, requireStreamer, async (req, res) => {
+  const me = req.streamerUser;
+  const level = req.body?.level === 'senior' ? 'senior' : 'mod';
+  const name = String(req.body?.username || '').trim().toLowerCase();
+  if (!name) return res.status(400).json({ error: req.t('server.mods.userNotFound') });
+  const u = await User.findOne({ usernameLower: name }).select('_id username').lean();
+  if (!u) return res.status(404).json({ error: req.t('server.mods.userNotFound') });
+  if (String(u._id) === String(me._id)) return res.status(400).json({ error: req.t('server.mods.self') });
+  const count = await ChannelMod.countDocuments({ streamerNameLower: me.streamerNameLower });
+  const exists = await ChannelMod.exists({ streamerNameLower: me.streamerNameLower, userId: u._id });
+  if (!exists) require('../../services/alerts').fire(me.streamerNameLower, 'mod', { name: u.username }).catch(() => {});
+  if (!exists && count >= mods.MAX_MODS) return res.status(400).json({ error: req.t('server.mods.tooMany', { n: mods.MAX_MODS }) });
+  await ChannelMod.updateOne(
+    { streamerNameLower: me.streamerNameLower, userId: u._id },
+    { $set: { username: u.username, level }, $setOnInsert: { addedAt: new Date() } },
+    { upsert: true }
+  );
+  modsChanged(me.streamerNameLower);
+  res.status(201).json({ userId: String(u._id), username: u.username, level });
+});
+
+// PATCH /workbench/mods/:userId { level }
+router.patch('/mods/:userId', auth, requireStreamer, async (req, res) => {
+  if (!ID24.test(req.params.userId)) return res.status(400).json({ error: req.t('server.badId') });
+  const level = req.body?.level === 'senior' ? 'senior' : 'mod';
+  const r = await ChannelMod.updateOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId }, { $set: { level } });
+  if (!r.matchedCount) return res.status(404).json({ error: req.t('server.mods.notMod') });
+  modsChanged(req.streamerUser.streamerNameLower);
+  res.json({ level });
+});
+
+// DELETE /workbench/mods/:userId — снять модератора
+router.delete('/mods/:userId', auth, requireStreamer, async (req, res) => {
+  if (!ID24.test(req.params.userId)) return res.status(400).json({ error: req.t('server.badId') });
+  await ChannelMod.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
+  modsChanged(req.streamerUser.streamerNameLower);
+  res.json({ status: 'ok' });
+});
+
+// PUT /workbench/mod-perms { mod: [...], senior: [...] } — у обычного модератора только права чата
+router.put('/mod-perms', auth, requireStreamer, async (req, res) => {
+  const perms = mods.cleanPerms(req.body);
+  await User.updateOne({ _id: req.streamerUser._id }, { $set: { modPerms: perms } });
+  modsChanged(req.streamerUser.streamerNameLower);
+  res.json({ perms });
 });
 
 // GET /workbench/followers — число подписчиков и последние 100 (имя аккаунта, когда подписался)

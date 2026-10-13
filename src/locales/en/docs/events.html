@@ -1,0 +1,60 @@
+<h1>Events and OBS alerts</h1>
+<p class="docs-lead">When something happens on your channel — a follow, a raid, a reward purchase — an animation with text and sound pops up on stream. Everything is set up in the studio under <b>🔔 Events</b>, no code needed.</p>
+
+<h2>How to connect OBS</h2>
+<ol>
+  <li>Open the studio → <b>🔔 Events</b>.</li>
+  <li>At the top click <b>📋 Link for OBS</b>. If there is no key yet, it is created automatically. The link is copied.</li>
+  <li>In OBS: <b>Sources → ＋ → Browser</b>. Paste the link into “URL”, width <code>1920</code>, height <code>1080</code>.</li>
+  <li>Tick <b>“Control audio via OBS”</b> so alert sounds go to the stream.</li>
+  <li>Click <b>Test</b> on any card — the alert shows up in OBS and right on the page.</li>
+</ol>
+<div class="docs-note"><p>The link with the key works like a password: don't show it on stream. If it leaked, click <b>🔄 New key</b> and paste the new link into OBS. The old one stops working.</p></div>
+
+<h2>Turn an event on</h2>
+<p>On the right is the list of events. The <b>checkbox</b> turns an event on: it gets a card and starts showing in OBS. Untick it or click <b>×</b> on the card to turn it off.</p>
+<figure class="docs-figure">
+  <img src="/workbench/docs/img/events-1.webp" width="800" height="412" loading="lazy" alt="The “Events” page in the studio">
+  <figcaption>Studio → “Events”: the key and OBS link at the top, event checkboxes on the right, cards of enabled events on the canvas</figcaption>
+</figure>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Event</th><th>When it fires</th><th>Variables</th></tr>
+  <tr><td>❤ New follower</td><td>Someone followed the channel</td><td><code>{name}</code></td></tr>
+  <tr><td>🚀 Raid</td><td>Another streamer brought their viewers</td><td><code>{streamer}</code>, <code>{viewers}</code></td></tr>
+  <tr><td>🎁 Reward</td><td>A viewer bought a reward with stream points</td><td><code>{name}</code>, <code>{reward}</code>, <code>{cost}</code>, <code>{message}</code></td></tr>
+  <tr><td>✂ Clip</td><td>Someone made a clip</td><td><code>{name}</code>, <code>{title}</code></td></tr>
+  <tr><td>👋 New chatter</td><td>Someone wrote in the channel chat for the first time</td><td><code>{name}</code>, <code>{message}</code></td></tr>
+  <tr><td>👀 Viewer milestone</td><td>Viewers reached 10, 25, 50, 100… — once per stream</td><td><code>{count}</code></td></tr>
+  <tr><td>🏆 Follower milestone</td><td>Followers reached 10, 25, 50, 100… — once</td><td><code>{count}</code></td></tr>
+  <tr><td>🔥 Hype chat</td><td>N messages a minute (N is set in the card), at most once per 10 minutes</td><td><code>{count}</code></td></tr>
+  <tr><td>😂 Emote combo</td><td>The same emote in a row from N different people</td><td><code>{emote}</code>, <code>{count}</code></td></tr>
+  <tr><td>⌨ Chat command</td><td>Someone used a command from the “Constructor”</td><td><code>{name}</code>, <code>{command}</code></td></tr>
+  <tr><td>🔨 Ban or timeout</td><td>You or a moderator punished a viewer</td><td><code>{name}</code></td></tr>
+  <tr><td>💰 Saved up stream points</td><td>A viewer's balance reached N</td><td><code>{name}</code>, <code>{points}</code></td></tr>
+  <tr><td>🛡 New moderator</td><td>You assigned a moderator</td><td><code>{name}</code></td></tr>
+</table>
+</div>
+
+<h2>Event card</h2>
+<figure class="docs-figure docs-figure--narrow">
+  <img src="/workbench/docs/img/events-2.webp" width="292" height="342" loading="lazy" alt="The “New follower” event card">
+  <figcaption>An event card: animation preview and ⟳, text, sound, voice, duration and “Test”</figcaption>
+</figure>
+<ul>
+  <li><b>Animation.</b> The green ⟳ button in the preview corner opens the picker: 20 built-in animations or your own GIF (up to 3 MB). The selected one is previewed at the top.</li>
+  <li><b>🔊 Sound.</b> 20 built-in sounds (▶ to listen), “No sound” or your own mp3/ogg/wav file up to 1 MB. Volume is there too.</li>
+  <li><b>✏️ Text.</b> Your own text with variables: click <code>{name}</code> and the like to insert them. Variables are highlighted on stream. You can pick the text color, the highlight color and one of 14 text animations. “Default” brings back the standard text (shown in the OBS language).</li>
+  <li><b>Voice.</b> Ticked — the text is also read aloud by the system voice (in OBS on Windows — Microsoft voices). Off by default.</li>
+  <li><b>Display time</b> — 3 to 10 seconds. A larger or smaller value is corrected automatically.</li>
+  <li><b>Test</b> — show the event in OBS with sample data.</li>
+</ul>
+<p>Everything saves by itself — there is no “Save” button. Cards can be dragged by the title and resized by the corner, like studio windows. <b>↺ Default</b> at the top puts them back.</p>
+<p>Alerts are queued: the next one appears after the previous one has faded out.</p>
+
+<h2>Not working?</h2>
+<ul>
+  <li>Nothing shows in OBS — check that the whole link is pasted (with <code>?key=…</code>) and the event is ticked.</li>
+  <li>“The key is wrong” in the OBS corner — the key was changed. Copy the link again.</li>
+  <li>No sound — turn on “Control audio via OBS” in the source properties and check the volume in the card.</li>
+</ul>

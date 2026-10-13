@@ -1,0 +1,54 @@
+<h1>Channel activity</h1>
+<p class="docs-lead">Moderators, their permissions, banned viewers and followers — in the studio under <b>🛡️ Channel activity</b>.</p>
+
+<h2>Moderators</h2>
+<ul>
+  <li>Enter the <b>account login</b> (not the streamer name), choose a level and click <b>Assign</b>. Up to 50 moderators.</li>
+  <li>A <b>moderator</b> (green axe badge) watches the chat.</li>
+  <li>A <b>senior moderator</b> (orange shield with an axe) can also manage the stream: change the title and category, start a raid.</li>
+  <li>The level is changed in the list, <b>✕</b> removes a moderator. Changes reach an open chat right away, without reloading.</li>
+</ul>
+
+<h2>Permissions</h2>
+<p>In the <b>“Moderator permissions”</b> card, tick what each level can do. Untick a box and moderators of that level lose that button in chat.</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Permission</th><th>Where it works</th></tr>
+  <tr><td>Delete messages</td><td>🗑️ next to a chat message</td></tr>
+  <tr><td>Timeout, Ban</td><td>⏱️ and 🚫 next to a message</td></tr>
+  <tr><td>Clear the whole chat</td><td>🧹 in the chat header</td></tr>
+  <tr><td>Chat settings</td><td>⚙ in the chat header: followers only, slow mode, word filter</td></tr>
+  <tr><td>Title and description, category, raid</td><td>🛠 “Stream management” in the chat header — <b>senior only</b> (🔒 for regular moderators)</td></tr>
+</table>
+</div>
+<p>Only lower ranks can be punished: a moderator can't ban a moderator, a senior can't ban a senior, and nobody can touch you. “Followers only” and slow mode don't apply to you and your moderators.</p>
+
+<h2>Chat commands</h2>
+<p>You and your moderators don't have to look for buttons: type a command right in the chat field — on the channel page or in the studio. Type <b>/</b> and a list of the commands you're allowed to use appears above the field (a moderator sees only the ones their permissions allow). <b>↑/↓</b> — choose, <b>Tab</b> or <b>Enter</b> — insert, then add the name. Commands don't go to chat; the result is shown only to you.</p>
+<figure class="docs-figure docs-figure--narrow">
+  <img src="/workbench/docs/img/activity-1.webp" width="320" height="420" loading="lazy" alt="The list of moderation commands above the chat field">
+  <figcaption>Type “/” to see the commands you’re allowed to use</figcaption>
+</figure>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Command</th><th>What it does</th><th>Permission</th></tr>
+  <tr><td><code>/ban name</code>, <code>/unban name</code></td><td>Ban permanently / lift the ban</td><td>Ban</td></tr>
+  <tr><td><code>/timeout name [time]</code>, <code>/untimeout name</code></td><td>Mute for a while / lift the timeout. Time: <code>90</code> (seconds), <code>10m</code>, <code>2h</code>, <code>1d</code>; none — 10 minutes</td><td>Timeout</td></tr>
+  <tr><td><code>/clear</code></td><td>Clear the whole chat</td><td>Clear chat</td></tr>
+  <tr><td><code>/slow [seconds]</code>, <code>/slowoff</code></td><td>Slow mode (3, 5, 10, 30, 60 or 120 s; no number — 30) / turn off</td><td>Chat settings</td></tr>
+  <tr><td><code>/followers [time]</code>, <code>/followersoff</code></td><td>Followers only (<code>10m</code>, <code>30m</code>, <code>1h</code>, <code>1d</code>; no time — right after following) / turn off</td><td>Chat settings</td></tr>
+  <tr><td><code>/filter 0–4</code></td><td>Word filter: 0 — off, 4 — maximum</td><td>Chat settings</td></tr>
+  <tr><td><code>/raid channel [seconds]</code>, <code>/unraid</code></td><td>Raid another stream (in 15 s, 5–120 allowed) / cancel</td><td>Raid</td></tr>
+  <tr><td><code>/title text</code></td><td>Change the stream title</td><td>Title</td></tr>
+</table>
+</div>
+<p>The name can be written with <code>@</code> and in any case. The rank rule is the same as for the buttons: a moderator can't ban a moderator.</p>
+
+<h2>Action log</h2>
+<p>Everything your moderators and you do is written to the <b>“Action log”</b> on the main studio page: bans and unbans, timeouts and lifting them, deleted messages, clearing the chat, chat mode changes (followers only, slow mode, filter), raids and cancelling them, changes of the stream title, description and category. You see who did it and when. Entries are kept for 7 days.</p>
+
+<h2>Banned</h2>
+<p>Everyone banned in chat. <b>Unban</b> lets the person write again.</p>
+
+<h2>Followers</h2>
+<p>The total number of followers and the latest 100 — with the follow date.</p>

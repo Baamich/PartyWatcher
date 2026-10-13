@@ -1,0 +1,199 @@
+{
+  "pageTitle": "PartyWatcher — Events",
+  "overlayTitle": "PartyWatcher — Alerts",
+  "overlay": {
+    "noKey": "The link has no key — copy it again in the studio (🔔 Events)",
+    "badKey": "The key is wrong — copy the link again in the studio (🔔 Events)"
+  },
+  "layoutReset": "Put the event cards back in their default places?",
+  "key": {
+    "label": "Events key",
+    "none": "not created yet",
+    "copyUrl": "📋 Link for OBS",
+    "generate": "🔄 New key",
+    "docs": "📖 How to connect",
+    "copied": "Link copied — paste it in OBS: Source → Browser",
+    "created": "New key is ready — update the link in OBS",
+    "newConfirm": "Create a new key? The old OBS link and bots with the old key will stop working."
+  },
+  "picker": {
+    "title": "Events",
+    "hint": "Ticked — the event is on and shows in OBS"
+  },
+  "card": {
+    "disable": "Turn the event off",
+    "editText": "✏️ Text",
+    "tts": "Voice",
+    "sec": "s",
+    "test": "Test",
+    "testSent": "Sent to OBS"
+  },
+  "anim": {
+    "title": "Animation",
+    "builtin": "Built-in",
+    "own": "Your GIFs",
+    "upload": "Upload",
+    "confetti": "Confetti",
+    "fireworks": "Fireworks",
+    "hearts": "Hearts",
+    "stars": "Stars",
+    "rocket": "Rocket",
+    "coins": "Coins",
+    "trophy": "Trophy",
+    "fire": "Fire",
+    "balloons": "Balloons",
+    "sparkles": "Sparkles",
+    "rainbow": "Rainbow",
+    "crown": "Crown",
+    "gift": "Gift",
+    "lightning": "Lightning",
+    "party": "Party",
+    "music": "Music",
+    "bubbles": "Bubbles",
+    "snow": "Snow",
+    "diamond": "Diamond",
+    "clap": "Applause"
+  },
+  "sound": {
+    "title": "Sound",
+    "volume": "Volume",
+    "listen": "Listen",
+    "none": "No sound",
+    "upload": "＋ Upload your sound (mp3, ogg, wav)",
+    "chime": "Chimes",
+    "fanfare": "Fanfare",
+    "coin": "Coin",
+    "pop": "Pop",
+    "whoosh": "Whoosh",
+    "laser": "Laser",
+    "levelup": "Level up",
+    "magic": "Magic",
+    "drumroll": "Drum roll",
+    "bell": "Bell",
+    "boing": "Boing",
+    "blip": "Blip",
+    "victory": "Victory",
+    "thunder": "Thunder",
+    "shutter": "Camera shutter",
+    "bubble": "Bubble",
+    "siren": "Siren",
+    "jump": "Jump",
+    "success": "Success",
+    "harp": "Harp"
+  },
+  "text": {
+    "title": "Text",
+    "vars": "Variables:",
+    "reset": "Default",
+    "color": "Text",
+    "accent": "Highlight",
+    "anim": "Text animation"
+  },
+  "textAnim": {
+    "pop": "Pop",
+    "fade": "Fade",
+    "slideUp": "From below",
+    "slideDown": "From above",
+    "zoom": "Zoom",
+    "bounce": "Bounce",
+    "wave": "Wave",
+    "typewriter": "Typewriter",
+    "shake": "Shake",
+    "glow": "Glow",
+    "rainbow": "Rainbow",
+    "flip": "Flip",
+    "jelly": "Jelly",
+    "letters": "Letter by letter"
+  },
+  "var": {
+    "name": "viewer name",
+    "streamer": "who raided",
+    "viewers": "how many viewers",
+    "reward": "reward name",
+    "cost": "price",
+    "message": "message text",
+    "title": "clip title",
+    "count": "number",
+    "emote": "emote",
+    "command": "command",
+    "points": "stream points"
+  },
+  "media": {
+    "ownSound": "Your sound",
+    "readFailed": "Couldn't read the file",
+    "tooBig": "The file is larger than {mb} MB",
+    "deleteConfirm": "Delete the file? Events using it will go back to a built-in one."
+  },
+  "ev": {
+    "follow": {
+      "name": "New follower",
+      "desc": "Someone followed the channel"
+    },
+    "raid": {
+      "name": "Raid",
+      "desc": "Another streamer brought their viewers to you"
+    },
+    "reward": {
+      "name": "Reward",
+      "desc": "A viewer bought a reward with stream points"
+    },
+    "clip": {
+      "name": "Clip",
+      "desc": "Someone made a clip of the stream"
+    },
+    "firstChat": {
+      "name": "New chatter",
+      "desc": "Someone wrote in the channel chat for the first time"
+    },
+    "viewers": {
+      "name": "Viewer milestone",
+      "desc": "Live viewers reached 10, 25, 50, 100… (once per stream)"
+    },
+    "followGoal": {
+      "name": "Follower milestone",
+      "desc": "Followers reached 10, 25, 50, 100… (once)"
+    },
+    "hype": {
+      "name": "Hype chat",
+      "desc": "Lots of messages in a minute (at most once per 10 minutes)",
+      "param": "Messages per minute"
+    },
+    "emoteCombo": {
+      "name": "Emote combo",
+      "desc": "The same emote in a row from several people",
+      "param": "How many people"
+    },
+    "command": {
+      "name": "Chat command",
+      "desc": "Someone used a command from the “Constructor”"
+    },
+    "ban": {
+      "name": "Ban or timeout",
+      "desc": "You or a moderator punished a viewer"
+    },
+    "pointsGoal": {
+      "name": "Saved up stream points",
+      "desc": "A viewer saved up lots of stream points",
+      "param": "How many points"
+    },
+    "mod": {
+      "name": "New moderator",
+      "desc": "You assigned a channel moderator"
+    }
+  },
+  "default": {
+    "follow": "{name} is with us now! Thanks for the follow ❤",
+    "raid": "Raid from {streamer}! Viewers: {viewers} 🚀",
+    "reward": "{name} gets “{reward}” for {cost}!",
+    "clip": "{name} made a clip “{title}” ✂",
+    "firstChat": "{name} is in chat for the first time — hi! 👋",
+    "viewers": "We're already {count} live! 👀",
+    "followGoal": "Already {count} followers! Thank you! 🏆",
+    "hype": "Chat is on fire: {count} messages a minute! 🔥",
+    "emoteCombo": "{emote} combo ×{count}!",
+    "command": "{name} uses {command}",
+    "ban": "{name} gets the ban hammer 🔨",
+    "pointsGoal": "{name} saved up {points} stream points! 💰",
+    "mod": "{name} is a new channel moderator 🛡"
+  }
+}

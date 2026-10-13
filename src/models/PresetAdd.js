@@ -5,6 +5,7 @@ const presetAddSchema = new mongoose.Schema(
     presetId: { type: mongoose.Schema.Types.ObjectId, ref: 'Preset', required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     commandId: { type: mongoose.Schema.Types.ObjectId, default: null }, // команда, созданная этим добавлением
+    rewardId: { type: mongoose.Schema.Types.ObjectId, default: null }, // награда, созданная этим добавлением
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

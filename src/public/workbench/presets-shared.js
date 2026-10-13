@@ -23,6 +23,10 @@
     { nick: tr('common.sys.bot'), src: 'bot', text: tr('constructor.sample.bot') },
   ];
 
+  const escH = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const COLOR_RE = /^#[0-9a-f]{6}$/i;
+  const TYPE_LABEL = { style: 'presets.typeStyle', command: 'presets.typeCommand', reward: 'presets.typeReward' };
+
   const usageText = (args) => (args || []).map((a) => (a.optional ? `[${a.name}]` : `<${a.name}>`)).join(' ');
 
   // ---------- стиль из Конструктора ----------
@@ -53,6 +57,27 @@
     return box;
   }
 
+  // награда: квадрат (цвет + первая буква), название, цена, описание, пример ответа бота
+  function rewardBox(item) {
+    const d = item.data || {};
+    const box = el('div', 'pst-rw');
+    const tile = el('span', 'pst-rw-tile', String(d.title || '?').trim().charAt(0).toUpperCase());
+    tile.style.background = COLOR_RE.test(d.color) ? d.color : '#7c3aed';
+    const main = el('div', 'pst-rw-main');
+    main.append(el('b', null, d.title || ''), el('span', 'pst-rw-cost', tr('presets.rewardCost', { n: d.cost })));
+    if (d.needInput) main.appendChild(el('span', 'pst-rw-tag', '✍ ' + tr('presets.rewardInput')));
+    const top = el('div', 'pst-rw-top');
+    top.append(tile, main);
+    box.appendChild(top);
+    if (d.description) box.appendChild(el('p', 'pst-rw-desc', d.description));
+    if (item.preview?.text) {
+      const r = el('div', 'pst-cmd-row');
+      r.append(el('span', 'pst-cmd-lbl', tr('presets.rewardReply')), el('span', 'pst-cmd-out', '🤖 ' + item.preview.text));
+      box.appendChild(r);
+    }
+    return box;
+  }
+
   // ---------- карточка ----------
   // o: { onLike, onAdd, onTrash, readonly }
   function buildCard(item, o = {}) {
@@ -70,12 +95,12 @@
     }
 
     const main = el('div', 'pst-main');
-    main.appendChild(item.type === 'style' ? styleStage(item.data, item.authorName) : commandBox(item));
+    main.appendChild(item.type === 'style' ? styleStage(item.data, item.authorName) : item.type === 'reward' ? rewardBox(item) : commandBox(item));
     main.appendChild(el('h3', 'pst-name', item.name));
     if (item.description) main.appendChild(el('p', 'pst-desc', item.description));
     const tag = item.mine ? ' · ' + tr('presets.tagMine') : item.added ? ' · ' + tr('presets.tagAdded') : '';
     main.appendChild(el('div', 'pst-meta',
-      `${item.type === 'style' ? tr('presets.typeStyle') : tr('presets.typeCommand')} · ${tr('presets.by', { name: item.authorName })} · ${new Date(item.createdAt).toLocaleDateString(I18N.locale)}${tag}`));
+      `${tr(TYPE_LABEL[item.type] || 'presets.typeCommand')} · ${tr('presets.by', { name: item.authorName })} · ${new Date(item.createdAt).toLocaleDateString(I18N.locale)}${tag}`));
     card.appendChild(main);
 
     const foot = el('div', 'pst-foot');
@@ -117,7 +142,8 @@
   }
 
   async function unaddItem(item, after) {
-    const extra = ' ' + (item.type === 'command' ? tr('presets.unaddCmd', { name: item.data.name }) : tr('presets.unaddStyle'));
+    const extra = ' ' + (item.type === 'command' ? tr('presets.unaddCmd', { name: item.data.name })
+      : item.type === 'reward' ? tr('presets.unaddReward', { name: item.data.title }) : tr('presets.unaddStyle'));
     const ok = await PW.confirm(tr('presets.unaddText', { name: item.name }) + extra,
       { title: tr('presets.unaddTitle'), okText: tr('presets.yes'), cancelText: tr('presets.no'), danger: true });
     if (!ok) return;
@@ -131,10 +157,13 @@
   const trash = (item, after) => (item.canDelete ? deleteItem(item, after) : unaddItem(item, after));
 
   // ---------- окно «Опубликовать пре-сет» ----------
-  async function openPublish({ type, onDone } = {}) {
+  // type — сразу нужный тип без переключателя; rewardId — какую награду выбрать (из студии «Награды»)
+  async function openPublish({ type, rewardId, onDone } = {}) {
     let t = type || 'style';
     let cmds = [];
     let cmdsLoaded = false;
+    let rewards = [];
+    let rewardsLoaded = false;
 
     const back = el('div', 'modal');
     const box = el('div', 'modal-content pst-modal');
@@ -164,13 +193,15 @@
     const body = el('div', 'pst-pub-body');
     const select = el('select');
     select.addEventListener('change', drawBody);
+    const rwSelect = el('select');
+    rwSelect.addEventListener('change', () => { name.value = (rewards[parseInt(rwSelect.value, 10) || 0] || {}).title || name.value; drawBody(); });
 
     function drawTypeRow() {
       typeRow.replaceChildren();
-      [['style', tr('presets.pub.typeStyle')], ['command', tr('presets.typeCommand')]].forEach(([k, label]) => {
+      [['style', tr('presets.pub.typeStyle')], ['command', tr('presets.typeCommand')], ['reward', tr('presets.typeReward')]].forEach(([k, label]) => {
         const b = el('button', k === t ? 'active' : '', label);
         b.type = 'button';
-        b.addEventListener('click', async () => { t = k; drawTypeRow(); await ensureCmds(); drawBody(); });
+        b.addEventListener('click', async () => { t = k; drawTypeRow(); await ensureCmds(); await ensureRewards(); drawBody(); });
         typeRow.appendChild(b);
       });
     }
@@ -187,9 +218,37 @@
       });
     }
 
+    // свои награды (стартовые публиковать нельзя — они и так есть у всех)
+    async function ensureRewards() {
+      if (t !== 'reward' || rewardsLoaded) return;
+      try { rewards = ((await api('/rewards/studio')).rewards || []).filter((r) => r.kind === 'custom'); } catch (_) { rewards = []; }
+      rewardsLoaded = true;
+      rwSelect.replaceChildren();
+      rewards.forEach((r, i) => {
+        const o = el('option', null, `${r.title} · ${r.cost}`);
+        o.value = String(i);
+        if (r.id === rewardId) o.selected = true;
+        rwSelect.appendChild(o);
+      });
+      if (!name.value) name.value = (rewards[parseInt(rwSelect.value, 10) || 0] || {}).title || '';
+    }
+
     function drawBody() {
       body.replaceChildren();
       err.classList.add('hidden');
+      if (t === 'reward') {
+        if (!rewards.length) {
+          body.appendChild(el('p', 'wb-hint', tr('presets.pub.noRewards')));
+          submit.disabled = true;
+          return;
+        }
+        const r = rewards[parseInt(rwSelect.value, 10) || 0];
+        body.append(el('div', 'auth-label', tr('presets.pub.whichReward')), rwSelect,
+          rewardBox({ data: r, preview: r.reply ? { text: r.reply } : null }),
+          el('p', 'wb-hint', tr('presets.pub.rewardHint')));
+        submit.disabled = false;
+        return;
+      }
       if (t === 'style') {
         body.append(
           el('p', 'wb-hint', tr('presets.pub.styleHint')),
@@ -214,7 +273,11 @@
       err.classList.add('hidden');
       const payload = { type: t, name: name.value, description: desc.value };
       if (t === 'style') payload.data = currentStyle();
-      else {
+      else if (t === 'reward') {
+        const r = rewards[parseInt(rwSelect.value, 10) || 0];
+        if (!r) return;
+        payload.data = { title: r.title, description: r.description, cost: r.cost, color: r.color, needInput: r.needInput, reply: r.reply || '' };
+      } else {
         const c = cmds[parseInt(select.value, 10) || 0];
         if (!c) return;
         payload.data = { name: c.name, response: c.response, args: c.args || [] };
@@ -238,6 +301,7 @@
 
     drawTypeRow();
     await ensureCmds();
+    await ensureRewards();
     drawBody();
     document.body.appendChild(back);
     name.focus();

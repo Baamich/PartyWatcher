@@ -1,0 +1,91 @@
+<h1>Stream points and rewards</h1>
+<p class="docs-lead">Viewers collect stream points for watching and spend them on your channel's rewards. Set it up in the studio under <b>🎁 Rewards</b>.</p>
+
+<figure class="docs-figure">
+  <img src="/workbench/docs/img/rewards-1.webp" width="800" height="289" loading="lazy" alt="The “Rewards” page in the studio">
+  <figcaption>Studio → “Rewards”: purchases, reward cards, and on the right — “Create”, stream points and checkboxes with ✏️</figcaption>
+</figure>
+
+<h2>How viewers get points</h2>
+<ul>
+  <li>Under the chat of your stream, on the left, is a button with the balance. Every <b>5 minutes</b> of watching a gift 🎁 appears on its top edge.</li>
+  <li>Click it — <b>+50 SP</b> for followers or <b>+10 SP</b> for others. The bonus has to be clicked: just an open tab collects nothing.</li>
+  <li>The gift appears <b>only during a stream</b>. Time counts from the start of the stream: minutes spent on the page before it don't count. When the stream ends, the gift disappears right away.</li>
+  <li>The server checks that the viewer really was on the page for all 5 minutes, so scripts can't farm points.</li>
+  <li>Every channel has its own balance. You don't collect points on your own channel.</li>
+</ul>
+<figure class="docs-figure docs-figure--narrow">
+  <img src="/workbench/docs/img/rewards-3.webp" width="320" height="315" loading="lazy" alt="The bonus gift above the balance under the chat">
+  <figcaption>The bonus is ready: a gift above the balance</figcaption>
+</figure>
+
+<h2>Name and icon</h2>
+<p>On the right of the “Rewards” page is the <b>“Channel stream points”</b> block. The name can be changed <b>once every 30 days</b> — that's the only limit; everything else (icon, rewards, prices, texts) you can change as often as you like. The “+50 SP” pop-up always says “SP”, even with a custom name.</p>
+
+<h2>Create and edit a reward</h2>
+<p><b>➕ Create reward</b> opens the editor (up to 30 rewards). To change an existing one — <b>✏️ Edit</b> in its card or ✏️ next to it in the list on the right (this works for a reward that is off, too). In the editor:</p>
+<ul>
+  <li><b>Icon</b> — a colored square with the first letter of the title or your own photo (⟳ in the corner).</li>
+  <li><b>Title</b>, <b>cost</b>, <b>background</b> color and <b>description</b> — what the viewer gets. The viewer sees the description when choosing the reward.</li>
+  <li><b>“Viewer writes a text”</b> — when buying, the viewer enters a message. It goes to the “Reward” event, the API and the bot reply.</li>
+  <li><b>Bot reply in chat</b> — optional. The bot posts it in chat right after a purchase. Under the field are the variables: click one and it's inserted where the cursor is. Below you can see how the reply will look in chat.</li>
+</ul>
+<figure class="docs-figure">
+  <img src="/workbench/docs/img/rewards-2.webp" width="520" height="525" loading="lazy" alt="The “Edit reward” window">
+  <figcaption>The reward editor: bot reply variables are inserted with a click, below — how the reply will look in chat</figcaption>
+</figure>
+
+<p>Changes are saved with the <b>Save</b> button: if the title has a mistake or the cost is wrong, the reward isn't broken — the editor shows what's wrong.</p>
+
+<h2>Bot reply variables</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Variable</th><th>Replaced with</th></tr>
+  <tr><td><code>{user}</code></td><td>The buyer's name</td></tr>
+  <tr><td><code>{reward}</code></td><td>The reward title</td></tr>
+  <tr><td><code>{cost}</code></td><td>The cost</td></tr>
+  <tr><td><code>{message}</code></td><td>The viewer's text (if “Viewer writes a text” is on)</td></tr>
+  <tr><td><code>{points}</code></td><td>The channel's stream points name</td></tr>
+  <tr><td><code>{balance}</code></td><td>How many points the viewer has left after the purchase</td></tr>
+</table>
+</div>
+<p>For example: <code>🎵 {user} requests: {message}</code> → “🎵 viewer123 requests: Nirvana — Lithium”. The channel's word filter applies to the bot reply too.</p>
+
+<h2>Cards and checkboxes</h2>
+<ul>
+  <li>The checkbox on the right turns a reward on and off: viewers don't see a reward that is off.</li>
+  <li>The card shows how the reward looks, the bot reply, <b>📋 API</b> (the reward address for your bot), <b>📤 Publish</b> and <b>🗑 Delete</b>.</li>
+  <li><b>📤 Publish</b> shares the reward in “Presets” so other streamers can add it. Starter rewards and ones similar to them can't be published — every channel already has them.</li>
+</ul>
+
+<h2>How a viewer buys</h2>
+<ul>
+  <li>Clicks the balance button — the rewards window opens: three in a row, the rest scrolls.</li>
+  <li>Clicks a reward — sees the description, the cost and, if needed, a text field. <b>Buy for …</b> spends the points. Not enough — the button is disabled and shows how many more are needed.</li>
+  <li>Someone banned in the channel's chat or in a timeout can't buy rewards.</li>
+</ul>
+<div class="docs-figure-row">
+<figure class="docs-figure">
+  <img src="/workbench/docs/img/rewards-4.webp" width="320" height="315" loading="lazy" alt="The viewer’s rewards window">
+  <figcaption>The rewards window: three in a row, the rest scrolls</figcaption>
+</figure>
+<figure class="docs-figure">
+  <img src="/workbench/docs/img/rewards-5.webp" width="320" height="380" loading="lazy" alt="A selected reward with its description and buy button">
+  <figcaption>A selected reward: description, the viewer’s text and “Buy for …”</figcaption>
+</figure>
+</div>
+
+<h2>Starter rewards</h2>
+<p>Every channel already has them — you can turn them off, edit or delete them:</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Reward</th><th>What it does</th></tr>
+  <tr><td>Highlight my message (100)</td><td>The viewer's message appears in chat as a colored bar — on the page and in the OBS chat overlay.</td></tr>
+  <tr><td>Heads or tails (50)</td><td>The bot flips a coin and posts the result in chat.</td></tr>
+  <tr><td>Hello on screen (200)</td><td>The viewer's text shows in OBS through the “🎁 Reward” event (turn it on in “Events”).</td></tr>
+</table>
+</div>
+<p>“Highlight my message” and “Hello on screen” always need a text: that checkbox can't be turned off for them.</p>
+
+<h2>Purchases</h2>
+<p>The <b>🧾 Purchases</b> card shows recent purchases. Did what was asked — click <b>✓ Done</b>. Can't — <b>↩ Refund points</b>, and the viewer gets the whole price back. Purchases are kept for 30 days.</p>

@@ -7,10 +7,13 @@ const DOCS_HOME = 'intro';
 // названия глав и страниц — в словаре: docs.ch.<глава>, docs.page.<страница>.title / .desc
 const DOCS_CHAPTERS = [
   ['stream', ['stream-obs']],
+  ['events', ['events', 'events-api']],
+  ['rewards', ['rewards', 'rewards-api']],
+  ['activity', ['channel-activity']],
   ['chat', ['chat-obs', 'chat-code', 'chat-style', 'chat-reference', 'chat-security']],
   ['constructor', ['constructor-chat', 'constructor-commands']],
   ['editor', ['editor-standard', 'editor-pro']],
-  ['presets', ['presets-styles', 'presets-commands']],
+  ['presets', ['presets-styles', 'presets-commands', 'presets-rewards']],
 ].map(([id, pages]) => ({
   id,
   title: t('docs.ch.' + id),

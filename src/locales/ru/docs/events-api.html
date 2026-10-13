@@ -1,0 +1,39 @@
+<h1>API событий</h1>
+<p class="docs-lead">Для тех, кто пишет своего бота: все события канала приходят в реальном времени по Socket.IO. Ключ — тот же, что у ссылки для OBS (студия → 🔔 События).</p>
+
+<h2>Подключение</h2>
+<p>Подключись по Socket.IO к адресу <code>https://partywatcher.de/alerts</code> и сразу отправь <code>alerts:join</code> с ключом:</p>
+<pre><code>const { io } = require('socket.io-client');
+const socket = io('https://partywatcher.de/alerts');
+socket.on('connect', () => socket.emit('alerts:join', { key: 'ТВОЙ_КЛЮЧ' }));
+socket.on('alerts:ready', ({ channel }) => console.log('подключено к', channel));
+socket.on('alerts:error', () => console.log('ключ не подходит'));
+socket.on('event', (e) => console.log(e.type, e.vars));</code></pre>
+
+<h2>Что приходит</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Событие сокета</th><th>Что это</th></tr>
+  <tr><td><code>event</code></td><td><code>{ type, vars, at }</code> — каждое событие канала, <b>даже выключенное</b> в студии. <code>type</code> — один из типов ниже, <code>vars</code> — те же переменные, что в надписи.</td></tr>
+  <tr><td><code>alert</code></td><td>Что показывает оверлей OBS (только включённые события и «Проверить»): настройки анимации, звука и надписи.</td></tr>
+  <tr><td><code>alerts:ready</code> / <code>alerts:error</code></td><td>Ключ принят / не подходит. После 5 неудачных попыток сокет отключается.</td></tr>
+</table>
+</div>
+
+<h2>Типы событий</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th><code>type</code></th><th><code>vars</code></th></tr>
+  <tr><td><code>follow</code></td><td><code>name</code></td></tr>
+  <tr><td><code>raid</code></td><td><code>streamer</code>, <code>viewers</code></td></tr>
+  <tr><td><code>reward</code></td><td><code>name</code>, <code>reward</code>, <code>cost</code>, <code>message</code>, <code>rewardSlug</code>, <code>redemptionId</code></td></tr>
+  <tr><td><code>clip</code></td><td><code>name</code>, <code>title</code></td></tr>
+  <tr><td><code>firstChat</code></td><td><code>name</code>, <code>message</code></td></tr>
+  <tr><td><code>viewers</code>, <code>followGoal</code>, <code>hype</code></td><td><code>count</code></td></tr>
+  <tr><td><code>emoteCombo</code></td><td><code>emote</code>, <code>count</code></td></tr>
+  <tr><td><code>command</code></td><td><code>name</code>, <code>command</code></td></tr>
+  <tr><td><code>ban</code>, <code>mod</code></td><td><code>name</code></td></tr>
+  <tr><td><code>pointsGoal</code></td><td><code>name</code>, <code>points</code></td></tr>
+</table>
+</div>
+<p>Покупки наград можно ещё и забирать по HTTP и отмечать выполненными — см. главу «Награды», страница «API наград».</p>

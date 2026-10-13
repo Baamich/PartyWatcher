@@ -8,6 +8,7 @@ const User = require('../models/User');
 const StreamSession = require('../models/StreamSession');
 const Follow = require('../models/Follow');
 const chatBus = require('./chatBus');
+const alerts = require('./alerts');
 const StreamVod = require('../models/StreamVod');
 const streamKeyCache = require('./streamKeyCache');
 
@@ -104,6 +105,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
       const vs = viewerStats.get(key);
       viewerStats.delete(key);
       const chat = chatBus.chatStatsTake(entry.streamerNameLower);
+      alerts.resetStream(entry.streamerNameLower); // эфир закончился — рубежи зрителей в следующем эфире заново
       if (sec >= 30) {
         Follow.countDocuments({ streamerId: entry.userId, createdAt: { $gte: startedAt } })
           .catch(() => 0)
@@ -278,6 +280,7 @@ function liveTick() {
     const v = chatBus.viewerCount(entry.streamerNameLower, entry.userId);
     const s = viewerStats.get(key) || { peak: 0, sum: 0, n: 0 };
     s.peak = Math.max(s.peak, v);
+    alerts.viewers(entry.streamerNameLower, v); // рубеж зрителей → алерт (один раз за эфир)
     s.sum += v;
     s.n += 1;
     viewerStats.set(key, s);
@@ -496,7 +499,7 @@ async function createVodDoc(key) {
   const entry = streamKeyCache.get(key);
   if (!entry) return null;
   const user = await User.findById(entry.userId)
-    .select('streamerNameLower streamTitle streamDescription')
+    .select('streamerNameLower streamTitle streamDescription streamCategoryId')
     .lean();
   if (!user) return null;
 
@@ -513,6 +516,7 @@ async function createVodDoc(key) {
     streamerNameLower: user.streamerNameLower,
     title: user.streamTitle || '', // без названия сайт сам покажет «Запись» на языке зрителя
     description: user.streamDescription || '',
+    categoryId: user.streamCategoryId || null,
     fileRel,
     published: false,
     status: 'recording',
@@ -581,6 +585,8 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions) {
     '-hls_time', '1',
     '-hls_list_size', '4',
     '-hls_flags', 'delete_segments+omit_endlist+independent_segments',
+    // вышедшие из плейлиста сегменты ещё ~40 с лежат на диске: из них режутся клипы (services/clips.js)
+    '-hls_delete_threshold', '40',
     // номера сегментов от времени: после перезапуска ffmpeg имена не повторяются, поэтому сегменты можно кэшировать
     '-hls_start_number_source', 'epoch',
     '-hls_allow_cache', '0',

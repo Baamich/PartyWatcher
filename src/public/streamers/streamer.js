@@ -84,6 +84,7 @@ function liveInfoHtml(s, p) {
 
 function renderLiveInfo() {
   const s = currentStreamer || {};
+  document.querySelectorAll('.live-clip-btn').forEach((b) => b.classList.toggle('hidden', !s.isLive));
   const on = !!s.isLive && !!(s.title || s.category);
   const bar = document.getElementById('liveInfoBar');
   const line = document.getElementById('profileLiveLine');
@@ -106,6 +107,267 @@ function peekLiveInfo() {
   clearTimeout(liveInfoPeekTimer);
   liveInfoPeekTimer = setTimeout(() => bar.classList.remove('peek'), 6000);
 }
+
+// ---------- клипы: «✂ Клип» под чатом и вкладка «Клипы» в профиле ----------
+
+let cachedClips = [];
+let vodTab = 'vods';
+let clipBusy = false;
+const hasMedia = () => cachedVods.length > 0 || cachedClips.length > 0;
+
+function fmtClipDur(sec) {
+  const s = Math.max(0, Math.round(sec || 0));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function renderClipGrid() {
+  const grid = document.getElementById('clipGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const c of cachedClips) {
+    const a = document.createElement('a');
+    a.className = 'vod-card clip-card';
+    a.href = '/clips/' + encodeURIComponent(c.id);
+    const meta = [t('streamer.clips.views', { n: c.views || 0 }), c.creatorName, vodDate(c.createdAt)];
+    if (c.category) meta.push('🎮 ' + liveCatName(c.category));
+    a.innerHTML = `
+      <div class="clip-thumb">${c.thumb ? `<img src="${liveEscapeHtml(c.thumb)}" loading="lazy" alt="" />` : ''}<span class="clip-dur">${fmtClipDur(c.durationSec)}</span></div>
+      <div class="vod-card-body">
+        <div class="vod-card-title">${liveEscapeHtml(c.title || t('streamer.clips.untitled'))}</div>
+        <div class="vod-card-meta">${liveEscapeHtml(meta.join(' · '))}</div>
+      </div>`;
+    grid.appendChild(a);
+  }
+}
+
+// вкладки «Записи / Клипы»: показываем только те, где что-то есть
+function renderMediaTabs() {
+  const hv = cachedVods.length > 0, hc = cachedClips.length > 0;
+  if (vodTab === 'vods' && !hv && hc) vodTab = 'clips';
+  if (vodTab === 'clips' && !hc && hv) vodTab = 'vods';
+  document.querySelectorAll('#vodTabs .vod-tab').forEach((b) => {
+    const tab = b.dataset.tab;
+    b.classList.toggle('hidden', tab === 'vods' ? !hv : !hc);
+    b.classList.toggle('active', tab === vodTab);
+  });
+  document.getElementById('vodGrid')?.classList.toggle('hidden', vodTab !== 'vods');
+  document.getElementById('clipGrid')?.classList.toggle('hidden', vodTab !== 'clips');
+}
+
+document.querySelectorAll('#vodTabs .vod-tab').forEach((b) => b.addEventListener('click', () => {
+  vodTab = b.dataset.tab;
+  renderMediaTabs();
+}));
+
+function applyClips(list) {
+  cachedClips = Array.isArray(list) ? list : [];
+  renderClipGrid();
+  applyVods(cachedVods); // пересчитать, виден ли блок «Записи / Клипы»
+  if (window.PWProView?.active) document.getElementById('vodSection').classList.toggle('hidden', !hasMedia());
+}
+window.addEventListener('pw:langchange', renderClipGrid);
+
+let clipDoneTimer = null;
+function showClipDone(c) {
+  const box = document.getElementById('liveClipDone');
+  const url = location.origin + '/clips/' + encodeURIComponent(c.id);
+  document.getElementById('liveClipOpen').href = url;
+  document.getElementById('liveClipCopy').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      PW.toast(t('streamer.clips.copied'), 'success');
+    } catch (_) {
+      PW.toast(url, 'info');
+    }
+  };
+  box.classList.remove('hidden');
+  clearTimeout(clipDoneTimer);
+  clipDoneTimer = setTimeout(() => box.classList.add('hidden'), 20000);
+}
+document.getElementById('liveClipClose')?.addEventListener('click', () => document.getElementById('liveClipDone').classList.add('hidden'));
+
+async function makeClip() {
+  if (!liveIsAuthed) return openLiveAuthModal('clip');
+  if (clipBusy) return;
+  clipBusy = true;
+  const btns = document.querySelectorAll('.live-clip-btn');
+  btns.forEach((b) => { b.disabled = true; b.classList.add('busy'); });
+  try {
+    const c = await api('/clips', { method: 'POST', body: { streamer: getNameFromUrl() } });
+    showClipDone(c);
+    applyClips([c, ...cachedClips].slice(0, 24));
+  } catch (err) {
+    if (err.status === 401) openLiveAuthModal('clip');
+    else PW.toast(err.message || t('streamer.clips.failed'), 'error');
+  } finally {
+    clipBusy = false;
+    btns.forEach((b) => { b.disabled = false; b.classList.remove('busy'); });
+  }
+}
+document.querySelectorAll('.live-clip-btn').forEach((b) => b.addEventListener('click', makeClip));
+
+// ---------- стрим-поинты и награды ----------
+let pointsState = null;
+let bonusTimer = null;
+const fmtPoints = (n) => new Intl.NumberFormat(I18N.locale, { notation: n >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(n || 0);
+const pointsLabel = () => pointsState?.pointsName || t('streamer.points.default');
+
+function renderPointsBtn() {
+  const s = pointsState;
+  document.getElementById('livePointsBalance').textContent = fmtPoints(s?.balance || 0);
+  const icon = document.getElementById('livePointsIcon');
+  icon.innerHTML = s?.icon ? `<img src="${liveEscapeHtml(s.icon)}" alt="" />` : '';
+  icon.classList.toggle('coin', !s?.icon);
+}
+
+// эфир идёт (по последнему опросу live-status)
+const channelLive = () => !!(currentStreamer?.isLive && currentStreamer?.streamPlaybackId);
+
+// бонус показывается, только пока идёт эфир. Когда подходит время — сначала переспрашиваем сервер
+// (вкладка могла быть в фоне, эфир — закончиться), показываем по его ответу
+function scheduleBonus() {
+  clearTimeout(bonusTimer);
+  const bonus = document.getElementById('livePointsBonus');
+  bonus.classList.add('hidden');
+  const at = pointsState?.nextClaimAt ? new Date(pointsState.nextClaimAt).getTime() : null;
+  if (!at || !liveIsAuthed || !pointsState?.isLive || !channelLive()) return;
+  const wait = at - Date.now();
+  if (wait <= 0) bonus.classList.remove('hidden');
+  else bonusTimer = setTimeout(loadPoints, Math.min(wait + 500, 2 ** 31 - 1));
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && pointsState && !isOwnerFlag) loadPoints();
+});
+
+async function loadPoints() {
+  try {
+    pointsState = await api('/points/' + encodeURIComponent(getNameFromUrl()));
+  } catch (_) {
+    return;
+  }
+  renderPointsBtn();
+  scheduleBonus();
+  if (!document.getElementById('livePointsPopup').classList.contains('hidden')) renderPointsPopup();
+}
+
+// «+50 СП» взлетает над кнопкой (сокращение одинаковое при любом названии поинтов)
+function floatPoints(n) {
+  const wrap = document.querySelector('.live-points-wrap');
+  const f = document.createElement('span');
+  f.className = 'live-points-float';
+  f.textContent = '+' + n + ' ' + t('streamer.points.short');
+  wrap.appendChild(f);
+  setTimeout(() => f.remove(), 1600);
+}
+
+document.getElementById('livePointsBonus')?.addEventListener('click', async () => {
+  const bonus = document.getElementById('livePointsBonus');
+  bonus.classList.add('hidden');
+  try {
+    const r = await api('/points/' + encodeURIComponent(getNameFromUrl()) + '/claim', { method: 'POST' });
+    pointsState = { ...pointsState, balance: r.balance, nextClaimAt: r.nextClaimAt };
+    floatPoints(r.added);
+    renderPointsBtn();
+    scheduleBonus();
+  } catch (err) {
+    PW.toast(err.message, 'error');
+    loadPoints();
+  }
+});
+
+let lpSelected = null; // id награды, открытой в окне (описание и «Купить»)
+
+function rewardTileHtml(r) {
+  return `<span class="lp-tile" style="background:${liveEscapeHtml(r.color)}">${r.image ? `<img src="${liveEscapeHtml(r.image)}" alt="" />` : liveEscapeHtml(r.title.trim().charAt(0).toUpperCase())}</span>`;
+}
+
+function renderPointsPopup() {
+  const box = document.getElementById('livePointsPopup');
+  const s = pointsState || { rewards: [], balance: 0 };
+  const sel = lpSelected && s.rewards.find((r) => r.id === lpSelected);
+  if (sel) return renderRewardDetail(box, sel, s);
+  lpSelected = null;
+  box.innerHTML = `<div class="lp-head"><span class="lp-name"></span><b class="lp-bal"></b></div><div class="lp-grid"></div>`;
+  box.querySelector('.lp-name').textContent = pointsLabel();
+  box.querySelector('.lp-bal').textContent = fmtPoints(s.balance);
+  const grid = box.querySelector('.lp-grid');
+  if (!s.rewards.length) {
+    const p = document.createElement('p');
+    p.className = 'lp-empty';
+    p.textContent = t('streamer.points.noRewards');
+    grid.appendChild(p);
+  }
+  for (const r of s.rewards) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lp-reward' + (s.balance < r.cost ? ' poor' : '');
+    b.title = r.description || r.title;
+    b.innerHTML = `${rewardTileHtml(r)}<span class="lp-title">${liveEscapeHtml(r.title)}</span><span class="lp-cost">${fmtPoints(r.cost)}</span>`;
+    b.addEventListener('click', () => { lpSelected = r.id; renderPointsPopup(); });
+    grid.appendChild(b);
+  }
+}
+
+// выбранная награда: описание, поле текста (если нужно) и «Купить»
+function renderRewardDetail(box, r, s) {
+  const short = Math.max(0, r.cost - (s.balance || 0));
+  box.innerHTML = `<div class="lp-head"><button type="button" class="lp-back">← <span></span></button><b class="lp-bal"></b></div>
+    <div class="lp-detail">${rewardTileHtml(r)}<div class="lp-d-main"><div class="lp-d-title"></div><div class="lp-cost"></div></div></div>
+    <p class="lp-desc"></p>
+    ${r.needInput ? '<textarea class="lp-input" rows="2" maxlength="200"></textarea>' : ''}
+    <button type="button" class="lp-buy"></button>
+    <p class="lp-short"></p>`;
+  box.querySelector('.lp-back span').textContent = t('streamer.points.back');
+  box.querySelector('.lp-bal').textContent = fmtPoints(s.balance);
+  box.querySelector('.lp-d-title').textContent = r.title;
+  box.querySelector('.lp-detail .lp-cost').textContent = fmtPoints(r.cost) + ' ' + pointsLabel();
+  const desc = box.querySelector('.lp-desc');
+  desc.textContent = r.description || t('streamer.points.noDesc');
+  desc.classList.toggle('muted', !r.description);
+  const input = box.querySelector('.lp-input');
+  if (input) input.placeholder = t('streamer.points.inputPh');
+  const buy = box.querySelector('.lp-buy');
+  buy.textContent = t('streamer.points.buyFor', { cost: fmtPoints(r.cost) });
+  buy.disabled = short > 0;
+  box.querySelector('.lp-short').textContent = short > 0 ? t('streamer.points.notEnough', { n: fmtPoints(short) }) : '';
+  box.querySelector('.lp-back').addEventListener('click', () => { lpSelected = null; renderPointsPopup(); });
+  buy.addEventListener('click', () => redeemReward(r, input, buy));
+  (input || buy).focus();
+}
+
+async function redeemReward(r, input, btn) {
+  if (!liveIsAuthed) return openLiveAuthModal('points');
+  if ((pointsState?.balance || 0) < r.cost) return PW.toast(t('streamer.points.notEnough', { n: fmtPoints(r.cost - (pointsState?.balance || 0)) }), 'info');
+  const message = input ? input.value.trim() : '';
+  if (r.needInput && !message) {
+    input.focus();
+    return PW.toast(t('streamer.points.needText'), 'info');
+  }
+  btn.disabled = true; // двойной клик не купит дважды
+  try {
+    const res = await api('/points/' + encodeURIComponent(getNameFromUrl()) + '/redeem', { method: 'POST', body: { rewardId: r.id, message } });
+    pointsState.balance = res.balance;
+    lpSelected = null;
+    renderPointsBtn();
+    renderPointsPopup();
+    PW.toast(t('streamer.points.bought', { title: r.title }), 'success');
+  } catch (err) {
+    btn.disabled = false;
+    PW.toast(err.message, 'error');
+  }
+}
+
+document.getElementById('livePointsBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!liveIsAuthed) return openLiveAuthModal('points');
+  const box = document.getElementById('livePointsPopup');
+  const open = box.classList.toggle('hidden') === false;
+  if (open) { lpSelected = null; renderPointsPopup(); loadPoints(); }
+});
+document.getElementById('livePointsPopup')?.addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => document.getElementById('livePointsPopup')?.classList.add('hidden'));
+window.addEventListener('pw:langchange', () => { renderPointsBtn(); if (!document.getElementById('livePointsPopup').classList.contains('hidden')) renderPointsPopup(); });
+renderPointsBtn();
 
 // ---------- подписка ----------
 // одно состояние на две кнопки: в профиле (у владельца видна, но неактивна) и под чатом эфира (не у владельца)
@@ -203,6 +465,8 @@ function clearVodList(el) {
 }
 
 const vodDate = (d) => new Date(d).toLocaleString(I18N.locale);
+// дата записи и категория эфира, в котором она записана
+const vodMeta = (v) => vodDate(v.createdAt) + (v.category ? ' · 🎮 ' + liveCatName(v.category) : '');
 
 function renderVodGrid(vods) {
   const grid = document.getElementById('vodGrid');
@@ -218,7 +482,7 @@ function renderVodGrid(vods) {
       </div>`;
     card.prepend(makeVodVideo(v.url, { controls: true }));
     card.querySelector('.vod-card-title').textContent = v.title || t('streamer.vod');
-    card.querySelector('.vod-card-meta').textContent = vodDate(v.createdAt);
+    card.querySelector('.vod-card-meta').textContent = vodMeta(v);
     grid.appendChild(card);
   });
 }
@@ -236,7 +500,7 @@ function renderVodColumn(vods) {
       </div>`;
     card.querySelector('.vod-card-title').textContent = v.title || t('streamer.vod');
     card.prepend(makeVodVideo(v.url, { muted: true }));
-    card.querySelector('.vod-card-meta').textContent = vodDate(v.createdAt);
+    card.querySelector('.vod-card-meta').textContent = vodMeta(v);
     card.onclick = () => switchToVodPlayback(v);
     list.appendChild(card);
   });
@@ -274,14 +538,15 @@ function applyVods(vods) {
     renderVodColumn(list);
   }
   const pro = !!window.PWProView?.active;
-  document.getElementById('vodSection').classList.toggle('hidden', !hasVods || (liveOpen && !pro));
+  document.getElementById('vodSection').classList.toggle('hidden', !hasMedia() || (liveOpen && !pro));
+  renderMediaTabs();
   document.getElementById('vodColumn').classList.toggle('hidden', pro || !hasVods || !liveOpen);
 }
 
 function switchVodLayout(open) {
   const hasVods = cachedVods.length > 0;
   const pro = !!window.PWProView?.active;
-  document.getElementById('vodSection').classList.toggle('hidden', (open && !pro) || !hasVods);
+  document.getElementById('vodSection').classList.toggle('hidden', (open && !pro) || !hasMedia());
   document.getElementById('vodColumn').classList.toggle('hidden', pro || !open || !hasVods);
 }
 
@@ -350,9 +615,9 @@ function startLiveSession() {
 
   if (isOwnerFlag) {
     document.getElementById('liveOwnerBar').classList.remove('hidden');
-    document.getElementById('liveClearChatBtn').classList.remove('hidden');
   } else {
     document.getElementById('liveFollowBar').classList.remove('hidden'); // владельцу подписка не нужна
+    setTimeout(loadPoints, 1500); // стрим-поинты — после входа в чат: сервер считает просмотр с этого момента
   }
 }
 
@@ -817,16 +1082,18 @@ function liveEscapeHtml(s) {
 
 function buildLiveMessageHtml(msg) {
   if (msg.deleted) return `<span style="color:var(--text-muted);font-style:italic;">${t('common.chat.deleted')}</span>`;
+  if (msg.source === 'raid') return `<span class="live-raid-msg">🚀 ${liveEscapeHtml(PWRaid.messageText(msg))}</span>`;
 
-  // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick
-  const delBtn = isOwnerFlag
+  // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick.
+  // Кнопки — по правам (стример задаёт их модераторам в «Активе канала»); наказывать можно только тех, кто ниже рангом
+  const delBtn = canDo('deleteMsg')
     ? `<button type="button" class="live-mod-btn" title="${t('common.delete')}" data-act="del" data-id="${liveEscapeHtml(msg._id)}">🗑️</button>`
     : '';
 
-  // бан и таймаут — только для сообщений реальных юзеров
-  const userBtns = isOwnerFlag && !msg.external && msg.senderId ? `
-    <button type="button" class="live-mod-btn" title="${t('common.mod.ban')}" data-act="ban" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">🚫</button>
-    <button type="button" class="live-mod-btn" title="${t('common.mod.timeout')}" data-act="timeout" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">⏱️</button>
+  const lower = !msg.external && msg.senderId && PWBadges.rank(liveRole.role) > PWBadges.rank(msg);
+  const userBtns = lower ? `
+    ${canDo('ban') ? `<button type="button" class="live-mod-btn" title="${t('common.mod.ban')}" data-act="ban" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">🚫</button>` : ''}
+    ${canDo('timeout') ? `<button type="button" class="live-mod-btn" title="${t('common.mod.timeout')}" data-act="timeout" data-uid="${liveEscapeHtml(msg.senderId)}" data-name="${liveEscapeHtml(msg.senderUsername)}">⏱️</button>` : ''}
   ` : '';
 
   const src = msg.external
@@ -838,7 +1105,11 @@ function buildLiveMessageHtml(msg) {
     ? ` style="color:${msg.nickColor}"`
     : '';
 
-  return `${delBtn}${userBtns}${src}<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(I18N.sysName(msg.senderUsername))}</b>: ${liveEscapeHtml(msg.text)}`;
+  // фильтр слов: показываем «****», по клику (с подтверждением) — оригинал
+  const body = msg.masked && !msg.revealed
+    ? `<span class="live-masked" data-act="reveal" title="${liveEscapeHtml(t('streamer.chat.maskedHint'))}">${PWEmotes.render(liveEscapeHtml(msg.masked), msg.emotes)}</span>`
+    : PWEmotes.render(liveEscapeHtml(msg.text), msg.emotes);
+  return `${delBtn}${userBtns}${src}${PWBadges.html(msg.modLevel)}<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(I18N.sysName(msg.senderUsername))}</b>: ${body}`;
 }
 
 function renderLiveMessage(msg) {
@@ -846,6 +1117,8 @@ function renderLiveMessage(msg) {
   if (!box) return;
   const row = document.createElement('div');
   row.dataset.id = msg._id;
+  row._msg = msg; // для перерисовки, когда меняются права (стал модератором) или открыли скрытое фильтром
+  if (msg.highlight) row.className = 'live-msg-hl';
   row.innerHTML = buildLiveMessageHtml(msg);
   box.appendChild(row);
   // в живом чате за эфир набегают тысячи сообщений — держим последние
@@ -939,17 +1212,191 @@ function fmtHMS(ms) {
 }
 
 // r: { type: 'none' | 'ban' | 'timeout', until } или null
-// значок «только подписчики» в шапке чата (режим включает стример в студии)
-let liveFollowMin = null;
-function renderFollowersBadge(min) {
-  liveFollowMin = min;
+// значки режима в шапке чата: «только подписчики» и медленный режим (включает стример или модератор)
+let liveMode = {};
+function renderModeBadges() {
+  const min = liveMode.followMin ?? null;
   const el = document.getElementById('liveFollowersBadge');
-  if (!el) return;
-  el.classList.toggle('hidden', min === null);
-  el.textContent = t('streamer.chat.followersBadge');
-  el.title = min ? t('streamer.chat.followersBadgeMin', { n: min }) : t('streamer.chat.followersBadgeHint');
+  if (el) {
+    el.classList.toggle('hidden', min === null);
+    el.textContent = t('streamer.chat.followersBadge');
+    el.title = min ? t('streamer.chat.followersBadgeMin', { n: min }) : t('streamer.chat.followersBadgeHint');
+  }
+  const slow = document.getElementById('liveSlowBadge');
+  if (slow) {
+    slow.classList.toggle('hidden', !liveMode.slowSec);
+    slow.textContent = '🐢 ' + PWChatMode.slowLabel(liveMode.slowSec || 0);
+    slow.title = t('streamer.chat.slowHint');
+  }
 }
-window.addEventListener('pw:langchange', () => renderFollowersBadge(liveFollowMin));
+window.addEventListener('pw:langchange', renderModeBadges);
+
+// медленный режим: сервер не принял сообщение — поле ввода ждёт оставшиеся секунды
+let slowTimer = null;
+function startSlowCountdown(wait) {
+  const input = document.getElementById('liveChatInput');
+  if (!input || !wait) return;
+  clearInterval(slowTimer);
+  let left = wait;
+  const tick = () => {
+    if (left <= 0) {
+      clearInterval(slowTimer);
+      input.disabled = false;
+      input.placeholder = t('streamer.chat.placeholder');
+      return;
+    }
+    input.disabled = true;
+    input.placeholder = t('streamer.chat.slowWait', { n: left });
+    left -= 1;
+  };
+  tick();
+  slowTimer = setInterval(tick, 1000);
+}
+
+let raidBar = null;
+let raidStay = false;
+
+// ---------- роль в чате канала: стример, высший модератор, модератор или зритель ----------
+let liveRole = { role: null, perms: [] };
+const canDo = (perm) => liveRole.perms.includes(perm);
+let liveChatModeUi = null;
+
+function applyLiveRole(rp) {
+  liveRole = { role: rp?.role || null, perms: Array.isArray(rp?.perms) ? rp.perms : [] };
+  document.getElementById('liveClearChatBtn')?.classList.toggle('hidden', !canDo('clearChat'));
+  document.getElementById('liveChatModeBtn')?.classList.toggle('hidden', !canDo('chatSettings'));
+  // 🛠 — высшему модератору, если стример дал ему что-то из управления эфиром (у стримера есть студия)
+  const streamPerms = ['editTitle', 'editCategory', 'raid'].some(canDo);
+  document.getElementById('liveModPanelBtn')?.classList.toggle('hidden', liveRole.role !== 'senior' || !streamPerms);
+  if (!canDo('chatSettings')) document.getElementById('liveChatModePopup')?.classList.add('hidden');
+  // кнопки модерации у уже показанных сообщений
+  document.querySelectorAll('#liveMessages > div').forEach((row) => {
+    if (row._msg && !row._msg.deleted) row.innerHTML = buildLiveMessageHtml(row._msg);
+  });
+}
+
+// ---------- 🛠 управление эфиром (высший модератор): то, что разрешил стример ----------
+let modPanelData = null;
+let modCatChosen; // undefined — категорию не трогали, null — убрать, объект — новая
+let modCatTimer = null;
+
+function renderModCat(c) {
+  const box = document.getElementById('modPanelCatCurrent');
+  box.innerHTML = '';
+  if (!c) {
+    box.textContent = t('streamer.mod.noCategory');
+    return;
+  }
+  const img = c.cover || c.box;
+  box.innerHTML = `${img ? `<img src="${liveEscapeHtml(img)}" alt="" />` : ''}<b>${liveEscapeHtml(liveCatName(c))}</b>`;
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'live-head-btn';
+  x.textContent = '×';
+  x.title = t('streamer.mod.clearCategory');
+  x.addEventListener('click', () => { modCatChosen = null; renderModCat(null); });
+  box.appendChild(x);
+}
+
+async function openModPanel() {
+  try {
+    modPanelData = await api('/channel/' + encodeURIComponent(getNameFromUrl()) + '/settings');
+  } catch (err) {
+    PW.toast(err.message, 'error');
+    return;
+  }
+  const p = modPanelData.perms || [];
+  document.getElementById('modPanelTitleBox').classList.toggle('hidden', !p.includes('editTitle'));
+  document.getElementById('modPanelCatBox').classList.toggle('hidden', !p.includes('editCategory') || !modPanelData.categoriesEnabled);
+  document.getElementById('modPanelRaidBtn').classList.toggle('hidden', !p.includes('raid'));
+  document.getElementById('modPanelSave').classList.toggle('hidden', !p.includes('editTitle') && !p.includes('editCategory'));
+  document.getElementById('modPanelTitle').value = modPanelData.streamTitle || '';
+  document.getElementById('modPanelDesc').value = modPanelData.streamDescription || '';
+  document.getElementById('modPanelCatInput').value = '';
+  modCatChosen = undefined;
+  renderModCat(modPanelData.category);
+  document.getElementById('modPanelModal').classList.remove('hidden');
+}
+const closeModPanel = () => document.getElementById('modPanelModal').classList.add('hidden');
+
+document.getElementById('liveModPanelBtn')?.addEventListener('click', openModPanel);
+document.getElementById('modPanelRaidBtn')?.addEventListener('click', () => {
+  closeModPanel();
+  PWRaid.openPicker({ self: getNameFromUrl(), onStart: (to, seconds) => liveSocket?.emit('chat:raid-start', { to, seconds }) });
+});
+document.getElementById('modPanelClose')?.addEventListener('click', closeModPanel);
+document.getElementById('modPanelModal')?.addEventListener('click', (e) => { if (e.target.id === 'modPanelModal') closeModPanel(); });
+
+document.getElementById('modPanelCatInput')?.addEventListener('input', (e) => {
+  clearTimeout(modCatTimer);
+  const q = e.target.value.trim();
+  const box = document.getElementById('modPanelCatResults');
+  if (q.length < 2) return box.classList.add('hidden');
+  modCatTimer = setTimeout(async () => {
+    try {
+      const list = await api('/categories/search?q=' + encodeURIComponent(q));
+      box.innerHTML = '';
+      for (const c of list) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'mod-cat-row';
+        row.innerHTML = `${c.box ? `<img src="${liveEscapeHtml(c.box)}" alt="" />` : ''}<span>${liveEscapeHtml(liveCatName(c))}</span>`;
+        row.addEventListener('mousedown', (ev) => {
+          ev.preventDefault();
+          modCatChosen = c;
+          renderModCat(c);
+          e.target.value = '';
+          box.classList.add('hidden');
+        });
+        box.appendChild(row);
+      }
+      if (!list.length) box.textContent = t('streamer.mod.nothing');
+      box.classList.remove('hidden');
+    } catch (err) {
+      PW.toast(err.message, 'error');
+    }
+  }, 350);
+});
+document.getElementById('modPanelCatInput')?.addEventListener('blur', () => setTimeout(() => document.getElementById('modPanelCatResults').classList.add('hidden'), 150));
+
+document.getElementById('modPanelSave')?.addEventListener('click', async () => {
+  const p = modPanelData?.perms || [];
+  const body = {};
+  if (p.includes('editTitle')) {
+    body.streamTitle = document.getElementById('modPanelTitle').value;
+    body.streamDescription = document.getElementById('modPanelDesc').value;
+  }
+  if (p.includes('editCategory') && modCatChosen !== undefined) body.streamCategoryId = modCatChosen ? modCatChosen.id : '';
+  try {
+    await api('/channel/' + encodeURIComponent(getNameFromUrl()) + '/settings', { method: 'PATCH', body });
+    PW.toast(t('common.saved'), 'success');
+    closeModPanel();
+    pollStreamerLiveStatus(); // плашка над плеером обновится сразу
+  } catch (err) {
+    PW.toast(err.message, 'error');
+  }
+});
+
+// 😀 у поля чата: смайлы канала (подписчикам) и публичные
+(function initLiveEmotes() {
+  const form = document.getElementById('liveChatForm');
+  const input = document.getElementById('liveChatInput');
+  if (!form || !input || !window.PWEmotes) return;
+  PWEmotes.mountPicker({ form, input, channel: getNameFromUrl, before: form.querySelector('button[type="submit"]') });
+})();
+
+// подсказка команд модерации: в поле чата набрали «/» (js/chat-slash.js)
+window.PWChatSlash?.attach(document.getElementById('liveChatInput'), () => liveRole.perms);
+
+(function initLiveChatMode() {
+  const btn = document.getElementById('liveChatModeBtn');
+  const pop = document.getElementById('liveChatModePopup');
+  if (!btn || !pop || !window.PWChatMode) return;
+  liveChatModeUi = PWChatMode.mount(pop, (patch) => liveSocket?.emit('chat:set-mode', patch));
+  btn.addEventListener('click', (e) => { e.stopPropagation(); pop.classList.toggle('hidden'); });
+  pop.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => pop.classList.add('hidden'));
+})();
 
 function applyLiveRestriction(r) {
   clearInterval(liveRestrictTimer);
@@ -1008,12 +1455,43 @@ function connectLiveChat(nameLower) {
   liveSocket.on('chat:message', renderLiveMessage);
   liveSocket.on('chat:message-deleted', ({ messageId }) => {
     document.querySelectorAll(`[data-id="${messageId}"]`).forEach((row) => {
+      if (row._msg) row._msg.deleted = true;
       row.innerHTML = `<span style="color:var(--text-muted);font-style:italic;">${t('common.chat.deleted')}</span>`;
     });
   });
   liveSocket.on('chat:cleared', () => { document.getElementById('liveMessages').innerHTML = ''; });
   liveSocket.on('chat:restriction', applyLiveRestriction);
-  liveSocket.on('chat:mode', ({ followMin } = {}) => renderFollowersBadge(followMin ?? null));
+  liveSocket.on('chat:mode', (mode = {}) => {
+    liveMode = mode;
+    renderModeBadges();
+    liveChatModeUi?.set(mode);
+    document.getElementById('liveChatModeBtn')?.classList.toggle('on', PWChatMode.isActive(mode));
+  });
+  liveSocket.on('chat:role', (rp) => applyLiveRole(rp));
+  // рейд: плашка с отсчётом; по сигналу сервера — переход на чужой эфир (кроме стримера и тех, кто «Остаться»)
+  liveSocket.on('chat:raid', (ev) => {
+    raidStay = false;
+    raidBar = PWRaid.banner(document.getElementById('liveRaidSlot'), ev, {
+      canCancel: canDo('raid'),
+      onCancel: () => liveSocket?.emit('chat:raid-cancel'),
+      onStay: () => { raidStay = true; },
+    });
+  });
+  liveSocket.on('chat:raid-cancelled', () => {
+    raidBar?.destroy();
+    raidBar = null;
+    PW.toast(t('common.raid.cancelled'), 'info');
+  });
+  liveSocket.on('chat:raid-go', ({ to, from } = {}) => {
+    raidBar?.destroy();
+    raidBar = null;
+    if (raidStay || isOwnerFlag || !to) return;
+    location.href = '/streamers/' + encodeURIComponent(to) + '?raid=' + encodeURIComponent(from || '');
+  });
+  liveSocket.on('chat:raid-error', ({ error } = {}) => PW.toast(error || t('common.requestFailed'), 'error'));
+  liveSocket.on('chat:raided', (raid) => PWRaid.raided(document.getElementById('liveRaidSlot'), raid));
+  liveSocket.on('chat:slow', ({ wait } = {}) => startSlowCountdown(wait));
+  liveSocket.on('chat:cmd-result', ({ ok, text } = {}) => PW.toast(text || t('common.requestFailed'), ok ? 'success' : 'error'));
 
   liveSocket.on('chat:viewers', (payload) => {
     if (typeof payload === 'number') {
@@ -1040,14 +1518,16 @@ function connectLiveChat(nameLower) {
   );
 }
 
-// kind: 'chat' (по умолчанию) или 'follow' — меняется только заголовок и текст окна
+// kind: 'chat' (по умолчанию), 'follow' или 'clip' — меняется только заголовок и текст окна
 function openLiveAuthModal(kind) {
-  const follow = kind === 'follow';
-  for (const [id, key] of [['liveAuthTitle', follow ? 'streamer.auth.followTitle' : 'streamer.auth.title'], ['liveAuthText', follow ? 'streamer.auth.followText' : 'streamer.auth.text']]) {
+  const pre = ['follow', 'clip', 'points'].includes(kind) ? kind : '';
+  const key = (k) => 'streamer.auth.' + (pre ? pre + k[0].toUpperCase() + k.slice(1) : k);
+  for (const [id, k] of [['liveAuthTitle', 'title'], ['liveAuthText', 'text']]) {
+    const key2 = key(k);
     const el = document.getElementById(id);
     if (!el) continue;
-    el.setAttribute('data-i18n', key); // при смене языка перевод возьмёт этот ключ
-    el.textContent = t(key);
+    el.setAttribute('data-i18n', key2); // при смене языка перевод возьмёт этот ключ
+    el.textContent = t(key2);
   }
   document.getElementById('liveAuthModal')?.classList.remove('hidden');
 }
@@ -1096,7 +1576,7 @@ const PREVIEW = new URLSearchParams(location.search).get('preview') === '1' && !
 let previewLayout = null;
 
 function applyLayout(layout) {
-  window.PWProView?.apply(previewLayout || layout, cachedVods.length > 0);
+  window.PWProView?.apply(previewLayout || layout, hasMedia());
 }
 
 if (PREVIEW) {
@@ -1134,6 +1614,7 @@ async function loadProfile() {
   }
 
   // 2) параллельно: сверка версии и записи
+  api('/streamers/' + enc + '/clips').then(applyClips).catch((e) => console.warn('[clips]', e.message));
   const vodsP = api('/streamers/' + enc + '/vods').catch((e) => {
     console.warn('[vods]', e.message);
     return null;
@@ -1212,6 +1693,10 @@ async function pollStreamerLiveStatus() {
     document.getElementById('liveBadge')?.classList.toggle('hidden', !data.isLive);
     renderLiveInfo();
 
+    if (nowLive !== wasLive && !isOwnerFlag) {
+      if (!nowLive) scheduleBonus(); // эфир кончился — бонус прячем сразу, не ждём ответа сервера
+      setTimeout(loadPoints, 1500);
+    }
     if (nowLive && !wasLive) {
       // стрим только что начался — открыть плеер без F5
       if (!liveOpen) openLiveStrip();
@@ -1451,6 +1936,16 @@ applyVolumeToLive(getSavedVolume());
 
 // ---- кнопки модерации в чате: данные в data-атрибутах, а не в onclick ----
 document.getElementById('liveMessages')?.addEventListener('click', (e) => {
+  const masked = e.target.closest('.live-masked');
+  if (masked) {
+    const row = masked.closest('#liveMessages > div');
+    PW.confirm(t('streamer.chat.revealText'), { title: t('streamer.chat.revealTitle'), okText: t('streamer.chat.revealOk') }).then((ok) => {
+      if (!ok || !row?._msg) return;
+      row._msg.revealed = true;
+      row.innerHTML = buildLiveMessageHtml(row._msg);
+    });
+    return;
+  }
   const btn = e.target.closest('.live-mod-btn');
   if (!btn) return;
   const { act, id, uid, name } = btn.dataset;

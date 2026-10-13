@@ -711,3 +711,186 @@
   text-decoration: none;
 }
 .live-info-cat:hover { filter: brightness(1.12); }
+
+/* ---- под чатом: «Подписаться» / «Настройки трансляции» и рядом «✂ Клип» ---- */
+.live-bar-split:not(.hidden) { display: flex; gap: 8px; }
+.live-bar-split > :first-child { flex: 1; min-width: 0; }
+#liveOwnerBar .live-clip-btn,
+#liveFollowBar .live-clip-btn { width: auto; flex: 0 0 auto; white-space: nowrap; }
+.live-clip-btn.busy { opacity: 0.6; cursor: progress; }
+
+.live-clip-done {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  animation: pw-clip-in 0.25s ease;
+}
+.live-clip-done.hidden { display: none; }
+@keyframes pw-clip-in { from { opacity: 0; transform: translateY(6px); } }
+.live-clip-done-text { font-weight: 700; flex: 1; min-width: 0; }
+.live-clip-open { color: var(--text); font-weight: 600; }
+[data-theme] .live-clip-copy { width: auto; padding: 4px 8px; font-size: 12px; }
+[data-theme] .live-clip-close,
+[data-theme] .live-clip-close:hover { width: auto; padding: 0 4px; background: none; box-shadow: none; color: var(--text-muted); font-size: 16px; }
+
+/* ---- шапка чата: медленный режим, ⚙ и 🛠 у модераторов ---- */
+.live-head-spacer { flex: 1; }
+.live-chat-header .live-followers-badge { margin-left: 0; }
+.live-slow-badge { font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap; margin-left: 8px; cursor: default; }
+[data-theme] .live-head-btn {
+  width: auto;
+  padding: 2px 6px;
+  margin-left: 6px;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+[data-theme] .live-head-btn:hover { color: var(--text); }
+[data-theme] .live-head-btn.on { color: var(--danger); }
+.live-chat-side { position: relative; }
+.live-chatmode-popup {
+  position: absolute;
+  top: 40px;
+  right: 8px;
+  z-index: 8;
+  width: 270px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.live-chatmode-popup.hidden { display: none; }
+
+/* скрытое фильтром слово: по клику — оригинал */
+.live-masked { cursor: pointer; border-bottom: 1px dotted var(--text-muted); }
+.live-masked:hover { color: var(--text); }
+
+/* 🛠 управление эфиром (высший модератор) */
+.mod-panel-content { max-width: 460px; text-align: left; display: flex; flex-direction: column; gap: 6px; }
+.mod-panel-block { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.mod-panel-block.hidden { display: none; }
+.mod-panel-block input, .mod-panel-block textarea { width: 100%; box-sizing: border-box; margin: 0; }
+.mod-panel-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.mod-cat-current { display: flex; align-items: center; gap: 8px; min-height: 30px; font-size: 13px; }
+.mod-cat-current img { width: 24px; height: 32px; object-fit: cover; border-radius: 3px; }
+.mod-cat-picker { position: relative; }
+.mod-cat-results {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 20; max-height: 240px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow);
+}
+.mod-cat-results.hidden { display: none; }
+[data-theme] .mod-cat-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px;
+  background: none; box-shadow: none; border-radius: 0; color: var(--text); font-weight: 500; text-align: left;
+}
+[data-theme] .mod-cat-row:hover { background: var(--surface-alt); }
+.mod-cat-row img { width: 24px; height: 32px; object-fit: cover; border-radius: 3px; }
+
+/* ---- рейд ---- */
+.live-raid-slot { flex-shrink: 0; }
+.live-raid-msg {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(120deg, #7c3aed, #db2777 60%, #f97316);
+}
+
+/* ---- стрим-поинты: слева под чатом, бонус над кнопкой, награды над чатом ---- */
+#liveFollowBar .live-points-wrap { position: relative; flex: 0 0 auto; }
+.live-bar-split > .live-points-wrap:first-child { flex: 0 0 auto; }
+.live-bar-split > .live-points-wrap + .follow-btn { flex: 1; min-width: 0; }
+#liveFollowBar .live-points-btn { width: auto; display: flex; align-items: center; gap: 6px; height: 100%; }
+.live-points-icon { width: 18px; height: 18px; border-radius: 50%; overflow: hidden; display: inline-flex; flex-shrink: 0; }
+.live-points-icon img { width: 100%; height: 100%; object-fit: cover; }
+.live-points-icon.coin { background: radial-gradient(circle at 35% 35%, #fde68a, #f59e0b 60%, #b45309); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
+[data-theme] .live-points-bonus,
+#liveFollowBar .live-points-bonus {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 11px); /* низ кружка — сразу над цифрами баланса */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 17px;
+  line-height: 1;
+  background: radial-gradient(circle at 35% 35%, #c4b5fd, #7c3aed);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.35), 0 6px 16px rgba(0, 0, 0, 0.4);
+  transform: translateX(-50%);
+  animation: lp-bounce 1.2s ease-in-out infinite;
+  z-index: 6;
+}
+.live-points-bonus.hidden { display: none; }
+@keyframes lp-bounce { 0%, 100% { transform: translate(-50%, 0) rotate(0); } 25% { transform: translate(-50%, -4px) rotate(-8deg); } 50% { transform: translate(-50%, -6px) rotate(0); } 75% { transform: translate(-50%, -4px) rotate(8deg); } }
+.live-points-float {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-weight: 900;
+  font-size: 15px;
+  color: #a78bfa;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: lp-float 1.6s ease-out forwards;
+  z-index: 7;
+}
+@keyframes lp-float { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.8); } 20% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -48px) scale(1); } }
+
+.live-points-popup {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 60px;
+  z-index: 9;
+  max-height: 70%;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+.live-points-popup.hidden { display: none; }
+.lp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+.lp-name { color: var(--text-muted); font-weight: 700; }
+.lp-bal { font-size: 16px; }
+/* по 3 в ряд: виден ряд и чуть меньше половины следующего — дальше прокрутка */
+.lp-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 96px; gap: 8px; max-height: 142px; overflow-y: auto; padding-right: 2px; }
+[data-theme] .lp-reward { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 8px 4px; background: var(--surface-alt); box-shadow: none; border-radius: var(--radius-sm); color: var(--text); font-size: 11px; font-weight: 600; }
+[data-theme] .lp-reward:hover { filter: brightness(1.12); }
+.lp-reward.poor { opacity: .55; }
+.lp-tile { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 22px; overflow: hidden; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.lp-tile img { width: 100%; height: 100%; object-fit: cover; }
+.lp-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-cost { color: #f59e0b; font-weight: 800; }
+.lp-empty { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--text-muted); }
+/* выбранная награда */
+[data-theme] .lp-back { width: auto; padding: 2px 8px 2px 4px; background: none; box-shadow: none; color: var(--text-muted); font-size: 13px; font-weight: 700; }
+[data-theme] .lp-back:hover { color: var(--text); transform: none; }
+.lp-detail { display: flex; align-items: center; gap: 12px; }
+.lp-detail .lp-tile { width: 56px; height: 56px; font-size: 28px; flex-shrink: 0; }
+.lp-d-main { min-width: 0; }
+.lp-d-title { font-weight: 800; font-size: 15px; overflow-wrap: anywhere; }
+.lp-desc { margin: 10px 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lp-desc.muted { color: var(--text-muted); font-style: italic; }
+.lp-input { width: 100%; box-sizing: border-box; margin: 0 0 10px; resize: vertical; font-size: 14px; }
+#livePointsPopup .lp-buy { width: 100%; }
+#livePointsPopup .lp-buy:disabled { opacity: .45; filter: grayscale(.5); cursor: not-allowed; box-shadow: none; }
+.lp-short { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); text-align: center; }
+.lp-short:empty { display: none; }
+
+/* выделенное сообщение (награда «Выделить сообщение») */
+#liveMessages > .live-msg-hl { margin: 4px 0; padding: 6px 8px; border-radius: 8px; background: linear-gradient(120deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.25)); border-left: 3px solid #a78bfa; }

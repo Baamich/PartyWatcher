@@ -39,6 +39,14 @@ const userSchema = new mongoose.Schema(
     streamCategoryId: { type: String, default: null }, // Category.tid, выбирается в студии
     liveNotice: { type: String, default: '' }, // текст в уведомлении подписчикам «вышел в эфир»
     chatFollowMin: { type: Number, default: null }, // чат только для подписчиков: null — выкл, 0 — сразу, N — подписан не меньше N минут
+    chatFilter: { type: Number, default: 0 }, // фильтр слов в чате: 0 — выкл … 4 — очень сильно (services/chatFilter)
+    chatSlowSec: { type: Number, default: 0 }, // медленный режим: секунд между сообщениями зрителя (0 — выкл)
+    modPerms: { type: mongoose.Schema.Types.Mixed, default: null }, // права модераторов { mod: [...], senior: [...] } (services/channelMods)
+    // ---- стрим-поинты канала (студия → 🎁 Награды) ----
+    pointsName: { type: String, default: null }, // своё название; null — «стрим-поинты» на языке зрителя
+    pointsNameAt: { type: Date, default: null }, // когда меняли название (раз в 30 дней)
+    pointsIcon: { type: String, default: null }, // 'media:<id>' — свой значок
+    rewardsSeeded: { type: Boolean, default: false }, // стартовые награды уже созданы
     streamKey: { type: String, default: undefined, unique: true, sparse: true },
     streamPlaybackId: { type: String, default: undefined, unique: true, sparse: true },
 

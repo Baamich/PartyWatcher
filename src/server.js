@@ -30,6 +30,12 @@ const workbenchRoutes = require('./routes/streams/workbench.routes');
 const presetsRoutes = require('./routes/streams/presets.routes');
 const categoriesRoutes = require('./routes/streams/categories.routes');
 const directoryRoutes = require('./routes/streams/directory.routes');
+const clipsRoutes = require('./routes/streams/clips.routes');
+const channelRoutes = require('./routes/streams/channel.routes');
+const emotesRoutes = require('./routes/streams/emotes.routes');
+const alertsRoutes = require('./routes/streams/alerts.routes');
+const { pointsRouter, rewardsRouter } = require('./routes/streams/rewards.routes');
+const registerAlertsSocket = require('./sockets/alertsSocket');
 const registerChatSocket = require('./sockets/chatSocket');
 const rtmpServer = require('./services/rtmpServer');
 const streamKeyCache = require('./services/streamKeyCache');
@@ -72,6 +78,8 @@ async function start() {
   // браузеры с чужих сайтов к API не пускаем; запросы без Origin (бот, curl) CORS не касается
   app.use(cors({ origin: siteOrigin ? [siteOrigin] : false, credentials: true }));
   app.use('/api/streamers', express.json({ limit: '15mb' })); // аватар, баннер, макет
+  app.use('/api/emotes', express.json({ limit: '1mb' })); // картинка смайла (до 256 КБ в base64)
+  app.use('/api/alerts', express.json({ limit: '5mb' })); // своя GIF алерта (до 3 МБ в base64)
   app.use(express.json({ limit: '200kb' }));
   app.use(cookieParser());
   app.use(i18n.middleware); // req.lang и req.t для сообщений API
@@ -123,6 +131,8 @@ async function start() {
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
+  // клипы не меняются (у каждого свой id) — кэш на неделю
+  app.use('/media/clips', express.static(path.join(process.cwd(), 'media', 'clips'), { maxAge: '7d', index: false }));
 
   app.get('/media/live/:playbackId/*', (req, res) => {
     const key = streamKeyCache.keyByPlaybackId(req.params.playbackId);
@@ -162,6 +172,12 @@ async function start() {
   app.use('/api/presets', presetsRoutes);
   app.use('/api/categories', categoriesRoutes);
   app.use('/api/streams', directoryRoutes);
+  app.use('/api/clips', clipsRoutes);
+  app.use('/api/channel', channelRoutes);
+  app.use('/api/emotes', emotesRoutes);
+  app.use('/api/alerts', alertsRoutes);
+  app.use('/api/points', pointsRouter);
+  app.use('/api/rewards', rewardsRouter);
 
   app.use('/api/chat', CHAT_ROUTES);
   app.use('/api/news', NEWS_ROUTES);
@@ -175,6 +191,10 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
   });
 
   // страница профиля стримера — единый шаблон на любое имя
+  app.get('/clips/:id', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'clips', 'clip.html'));
+  });
+
   app.get('/streamers/:name', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'streamers', 'streamer.html'));
   });
@@ -183,6 +203,7 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
 
   registerRoomSocket(io);
   registerChatSocket(io);
+  registerAlertsSocket(io);
 
   await streamKeyCache.loadAll(); // заполняем кэш ключей ДО старта RTMP-сервера
   rtmpServer.run();

@@ -127,7 +127,8 @@
     "own": "This is your own preset",
     "alreadyAdded": "You have already added this preset",
     "maxCommands": "You already have {n} commands: delete some",
-    "cmdExists": "You already have the command !{name}"
+    "cmdExists": "You already have the command !{name}",
+    "rewardStarter": "Every channel already has this reward — publish your own"
   },
   "streamers": {
     "badName": "Invalid name",
@@ -268,5 +269,123 @@
     "searchFailed": "Category search is not working right now, try again later",
     "notFound": "Category not found",
     "notConfigured": "Categories are not set up on the server yet"
+  },
+  "clips": {
+    "notLive": "Clips can only be made during a live stream",
+    "busy": "A clip of this stream is already being made, try again in a couple of seconds",
+    "tooShort": "The stream has just started — wait a few seconds",
+    "failed": "Could not make a clip",
+    "tooMany": "Too many clips, wait a little",
+    "notFound": "Clip not found",
+    "forbidden": "Only the clip author or the streamer can do this",
+    "titleLong": "The title can be at most 100 characters",
+    "titleBad": "The title contains forbidden words"
+  },
+  "mods": {
+    "userNotFound": "No account with this login",
+    "self": "You can't assign yourself — you already own the channel",
+    "tooMany": "There can be at most {n} moderators",
+    "notMod": "This person is not a channel moderator",
+    "forbidden": "Not enough permissions"
+  },
+  "raid": {
+    "badTarget": "Pick another stream",
+    "notLive": "This streamer is not live right now"
+  },
+  "emotes": {
+    "tooMany": "Too many uploads, wait a little",
+    "badCode": "Code — 2–20 Latin letters, digits or “_”",
+    "badWord": "The code contains forbidden words",
+    "badImage": "A PNG, WebP, JPG or GIF image is needed",
+    "tooBig": "The image is larger than {kb} KB",
+    "limit": "A channel can have at most {n} emotes",
+    "publicAnimated": "An animated emote can't be made public",
+    "publicLimit": "There can be at most {n} public emotes",
+    "publicTaken": "Someone already has a public emote with this code — pick another code",
+    "codeTaken": "You already have an emote with this code",
+    "notFound": "Emote not found"
+  },
+  "alerts": {
+    "badEvent": "No such event",
+    "noKey": "The events key has not been created yet",
+    "tooMany": "Too often, wait a little",
+    "badImage": "A GIF, PNG, WebP or JPG image is needed",
+    "badSound": "An mp3, ogg or wav sound is needed",
+    "tooBig": "The file is larger than {mb} MB",
+    "mediaLimit": "You can have at most {n} files — delete the ones you do not need",
+    "mediaNotFound": "File not found"
+  },
+  "points": {
+    "notLive": "The bonus is only given during a stream",
+    "own": "Stream points don't add up on your own channel",
+    "notWatching": "The bonus is for watching: stay on the channel page",
+    "tooEarly": "The bonus is not ready yet",
+    "tooMany": "Too often, wait a little",
+    "failed": "Didn't work — try again",
+    "renameWait": "You can change the name on {date}",
+    "nameLen": "The name must be 2 to 24 characters",
+    "nameBad": "The name contains forbidden words"
+  },
+  "rewards": {
+    "notFound": "Reward not found",
+    "needText": "This reward needs a text",
+    "notEnough": "Not enough stream points",
+    "titleLen": "The title must be 1 to 45 characters",
+    "titleBad": "The title contains forbidden words",
+    "badCost": "The price must be from 1 to 1,000,000",
+    "badImage": "Image not found — upload it again",
+    "limit": "There can be at most {n} rewards",
+    "alreadyHandled": "This purchase has already been handled",
+    "badKey": "Wrong key or channel",
+    "heads": "Heads",
+    "tails": "Tails",
+    "coinflipResult": "{name} flips a coin… {side}!",
+    "starter": {
+      "highlight": {
+        "title": "Highlight my message",
+        "desc": "Your message will be highlighted in chat"
+      },
+      "coinflip": {
+        "title": "Heads or tails",
+        "desc": "The bot will flip a coin"
+      },
+      "hello": {
+        "title": "Hello on screen",
+        "desc": "Your text will show up on stream"
+      }
+    },
+    "banned": "You are banned in this channel’s chat — rewards are unavailable",
+    "replyLen": "The bot reply can be up to {n} characters",
+    "replyBad": "The bot reply contains forbidden words",
+    "descBad": "The description contains forbidden words",
+    "pointsDefault": "stream points"
+  },
+  "modcmd": {
+    "unknown": "There is no {cmd} command. Type “/” to see the list",
+    "forbidden": "You can’t use this command",
+    "usage": "Usage: {usage}",
+    "noUser": "User {name} not found",
+    "rank": "Not allowed: this person has the same or a higher rank",
+    "notBanned": "{name} is not banned",
+    "notTimedOut": "{name} has no timeout",
+    "raidActive": "A raid is already running — cancel it first (/unraid)",
+    "noRaid": "There is no raid right now",
+    "done": {
+      "ban": "{name} is banned",
+      "unban": "{name} is unbanned",
+      "timeout": "{name} is muted for {time}",
+      "untimeout": "{name}’s timeout is lifted",
+      "clear": "Chat cleared",
+      "slow": "Slow mode: {n} s",
+      "slowoff": "Slow mode is off",
+      "followers": "Followers only (followed for {n} min)",
+      "followersNow": "Followers only",
+      "followersoff": "“Followers only” is off",
+      "filter": "Word filter: level {n}",
+      "filteroff": "Word filter is off",
+      "raid": "Raid on {name} started",
+      "unraid": "Raid cancelled",
+      "title": "Stream title changed"
+    }
   }
 }

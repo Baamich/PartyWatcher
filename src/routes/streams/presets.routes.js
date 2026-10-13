@@ -7,6 +7,9 @@ const Preset = require('../../models/Preset');
 const PresetLike = require('../../models/PresetLike');
 const PresetAdd = require('../../models/PresetAdd');
 const ChatCommand = require('../../models/ChatCommand');
+const Reward = require('../../models/Reward');
+const rewardsApi = require('./rewards.routes');
+const { hasProfanity } = require('../../services/profanity');
 const PWStyle = require('../../public/js/pwstyle.js');
 const { parseArgsInput, parseCommandLine, buildReply } = require('../../services/chatCommands');
 
@@ -16,6 +19,7 @@ const MAX_COMMANDS = 50;
 const LIKE_MIN_AGE_MS = 24 * 60 * 60 * 1000; // лайкать можно аккаунтам старше суток
 const COMMAND_NAME_RE = /^[a-zA-Z0-9_а-яА-ЯёЁ]{1,20}$/;
 
+const TYPES = ['style', 'command', 'reward'];
 const isId = (s) => /^[a-f0-9]{24}$/i.test(String(s));
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
 const cleanCmdName = (v) => String(v ?? '').trim().replace(/^!+/, '').toLowerCase();
@@ -52,7 +56,28 @@ function cleanMeta(body) {
   return { name, description };
 }
 
+// пре-сет награды не должен повторять стартовые (они и так есть у всех каналов)
+const squash = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
+const STARTER_TITLES = new Set(['highlight', 'coinflip', 'hello'].flatMap((k) => ['ru', 'en'].map((l) => squash(i18n.t(l, `server.rewards.starter.${k}.title`)))));
+
+function cleanReward(data) {
+  const title = String(data?.title ?? '').trim().replace(/\s+/g, ' ');
+  if (title.length < 1 || title.length > 45) return { error: 'server.rewards.titleLen' };
+  if (hasProfanity(title)) return { error: 'server.rewards.titleBad' };
+  if (STARTER_TITLES.has(squash(title))) return { error: 'server.presets.rewardStarter' };
+  const description = String(data?.description ?? '').trim().slice(0, 200);
+  if (hasProfanity(description)) return { error: 'server.rewards.descBad' };
+  const cost = Math.round(Number(data?.cost));
+  if (!Number.isFinite(cost) || cost < rewardsApi.COST_MIN || cost > rewardsApi.COST_MAX) return { error: 'server.rewards.badCost' };
+  const reply = String(data?.reply ?? '').trim().replace(/\s+/g, ' ');
+  if (reply.length > rewardsApi.REPLY_MAX) return { error: 'server.rewards.replyLen', vars: { n: rewardsApi.REPLY_MAX } };
+  if (hasProfanity(reply.replace(/\{\w+\}/g, ' '))) return { error: 'server.rewards.replyBad' };
+  const color = rewardsApi.COLOR_RE.test(data?.color) ? data.color : '#7c3aed';
+  return { data: { title, description, cost, color, needInput: !!data?.needInput, reply } };
+}
+
 function cleanData(type, data) {
+  if (type === 'reward') return cleanReward(data);
   if (type === 'style') {
     const s = PWStyle.sanitize(data);
     if (PWStyle.isDefault(s)) return { error: 'server.presets.defaultStyle' };
@@ -71,6 +96,15 @@ function cleanData(type, data) {
 // ---------- ответ клиенту ----------
 function sampleArgs(args, lang) {
   return (args || []).filter((a) => !a.optional).map((a) => (/чис|кол|num|count|^n$/i.test(a.name) ? '30' : i18n.t(lang, 'server.cmd.sampleArg'))).join(' ');
+}
+
+// пример ответа бота награды: переменные — как у настоящей покупки
+function rewardPreview(p, lang) {
+  const d = p.data || {};
+  return d.reply ? rewardsApi.fillReply(d.reply, {
+    user: 'Viewer1', reward: d.title, cost: d.cost, message: d.needInput ? i18n.t(lang, 'server.cmd.sampleArg') : '',
+    points: i18n.t(lang, 'server.rewards.pointsDefault'), balance: 1250,
+  }) : '';
 }
 
 function cmdPreview(p, lang) {
@@ -110,7 +144,7 @@ async function decorate(rows, me, lang) {
       adds: p.adds || 0,
       createdAt: p.createdAt,
       data: p.data,
-      preview: p.type === 'command' ? cmdPreview(p, lang) : undefined,
+      preview: p.type === 'command' ? cmdPreview(p, lang) : p.type === 'reward' ? { text: rewardPreview(p, lang) } : undefined,
       mine,
       liked: liked.has(id),
       added: added.has(id),
@@ -120,9 +154,9 @@ async function decorate(rows, me, lang) {
 }
 
 // ---------- список ----------
-// GET /presets?type=style|command&sort=likes|adds|new&q=текст&page=1
+// GET /presets?type=style|command|reward&sort=likes|adds|new&q=текст&page=1
 router.get('/', auth, requireStreamer, async (req, res) => {
-  const type = ['style', 'command'].includes(req.query.type) ? req.query.type : null;
+  const type = TYPES.includes(req.query.type) ? req.query.type : null;
   const sorts = {
     likes: { likes: -1, adds: -1, createdAt: -1 },
     adds: { adds: -1, likes: -1, createdAt: -1 },
@@ -157,7 +191,7 @@ router.get('/mine', auth, requireStreamer, async (req, res) => {
 // ---------- публикация ----------
 router.post('/', auth, requireStreamer, rate, async (req, res) => {
   const type = req.body?.type;
-  if (!['style', 'command'].includes(type)) return res.status(400).json({ error: req.t('server.presets.unknownType') });
+  if (!TYPES.includes(type)) return res.status(400).json({ error: req.t('server.presets.unknownType') });
 
   const meta = cleanMeta(req.body);
   if (meta.error) return res.status(400).json({ error: req.t(meta.error) });
@@ -232,7 +266,19 @@ router.post('/:id/add', auth, requireStreamer, rate, async (req, res) => {
   }
 
   let commandId = null;
-  if (p.type === 'command') {
+  let rewardId = null;
+  if (p.type === 'reward') {
+    const d = cleanReward(p.data); // данные старого пре-сета проверяем заново
+    if (d.error) return res.status(400).json({ error: req.t(d.error, d.vars) });
+    if ((await Reward.countDocuments({ streamerId: req.me._id })) >= rewardsApi.MAX_REWARDS) {
+      return res.status(400).json({ error: req.t('server.rewards.limit', { n: rewardsApi.MAX_REWARDS }) });
+    }
+    const r = await Reward.create({
+      ...d.data, streamerId: req.me._id, streamerNameLower: req.me.streamerNameLower,
+      slug: await rewardsApi.uniqueSlug(req.me._id, d.data.title),
+    });
+    rewardId = r._id;
+  } else if (p.type === 'command') {
     const nameLower = req.me.streamerNameLower;
     if ((await ChatCommand.countDocuments({ streamerNameLower: nameLower })) >= MAX_COMMANDS) {
       return res.status(400).json({ error: req.t('server.presets.maxCommands', { n: MAX_COMMANDS }) });
@@ -251,15 +297,16 @@ router.post('/:id/add', auth, requireStreamer, rate, async (req, res) => {
   }
 
   try {
-    await PresetAdd.create({ presetId: p._id, userId: req.me._id, commandId });
+    await PresetAdd.create({ presetId: p._id, userId: req.me._id, commandId, rewardId });
   } catch (e) {
     if (commandId) await ChatCommand.deleteOne({ _id: commandId });
+    if (rewardId) await Reward.deleteOne({ _id: rewardId });
     if (e.code === 11000) return res.status(409).json({ error: req.t('server.presets.alreadyAdded') });
     throw e;
   }
 
   const upd = await Preset.findByIdAndUpdate(p._id, { $inc: { adds: 1 } }, { new: true }).select('adds');
-  res.status(201).json({ added: true, adds: upd ? upd.adds : (p.adds || 0) + 1, data: p.type === 'style' ? p.data : undefined });
+  res.status(201).json({ added: true, adds: upd ? upd.adds : (p.adds || 0) + 1, data: p.type === 'style' ? p.data : undefined, rewardId: rewardId ? String(rewardId) : undefined });
 });
 
 // ---------- убрать у себя ----------
@@ -271,6 +318,7 @@ router.delete('/:id/add', auth, requireStreamer, rate, async (req, res) => {
   if (rec.commandId) {
     await ChatCommand.deleteOne({ _id: rec.commandId, streamerNameLower: req.me.streamerNameLower });
   }
+  if (rec.rewardId) await Reward.deleteOne({ _id: rec.rewardId, streamerId: req.me._id });
   const upd = await Preset.findByIdAndUpdate(req.params.id, { $inc: { adds: -1 } }, { new: true }).select('adds');
   res.json({ added: false, adds: Math.max(0, upd?.adds || 0) });
 });

@@ -1,0 +1,35 @@
+<h1>Rewards API</h1>
+<p class="docs-lead">Your own logic on a reward purchase: for example, a bot spins a roulette or switches an OBS scene. The key is the same as for events (studio → 🔔 Events).</p>
+
+<h2>Know about a purchase right away</h2>
+<p>Connect to the events API (“Events” chapter, “Events API” page) and listen for <code>event</code> with <code>type: "reward"</code>. Its <code>vars</code> include <code>rewardSlug</code> and <code>redemptionId</code>.</p>
+
+<h2>List purchases over HTTP</h2>
+<p>Every reward has its own address — the <b>📋 API</b> button in the card copies it:</p>
+<pre><code>GET https://partywatcher.de/api/rewards/&lt;channel&gt;/&lt;reward&gt;?status=new
+Authorization: Bearer YOUR_KEY</code></pre>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Parameter</th><th>What it is</th></tr>
+  <tr><td><code>status</code></td><td><code>new</code>, <code>done</code> or <code>refunded</code>. Without it — all.</td></tr>
+  <tr><td><code>after</code></td><td>ISO time, for example <code>2026-10-13T18:00:00Z</code>: only purchases after it.</td></tr>
+</table>
+</div>
+<p>The response is up to 100 purchases, newest first:</p>
+<pre><code>[{ "id": "…", "reward": "coinflip", "user": "viewer123", "userId": "…",
+   "cost": 50, "message": "", "status": "new", "createdAt": "…" }]</code></pre>
+
+<h2>Mark a purchase</h2>
+<pre><code>POST https://partywatcher.de/api/rewards/&lt;channel&gt;/&lt;reward&gt;/&lt;id&gt;/done
+POST https://partywatcher.de/api/rewards/&lt;channel&gt;/&lt;reward&gt;/&lt;id&gt;/refund</code></pre>
+<p><code>done</code> — done, <code>refund</code> — give the points back to the viewer. The status changes in the studio as well.</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Code</th><th>What it means</th></tr>
+  <tr><td><code>200</code></td><td>Done.</td></tr>
+  <tr><td><code>401</code></td><td>No key, a wrong key, or a key of another channel.</td></tr>
+  <tr><td><code>404</code></td><td>No such purchase.</td></tr>
+  <tr><td><code>409</code></td><td>The purchase was already marked.</td></tr>
+</table>
+</div>
+<div class="docs-note"><p>Send the key only in the <code>Authorization</code> header, not in the address — otherwise it ends up in logs.</p></div>

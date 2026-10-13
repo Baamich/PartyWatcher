@@ -945,7 +945,51 @@
   flex-direction: column;
   gap: 10px;
 }
-.wb-chatmode-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.wb-chatmode-row input[type="checkbox"] { width: auto; margin: 0; }
-.wb-chatmode-row select { flex: 1; margin: 0; padding: 4px 6px; font-size: 13px; }
-.wb-chatmode-popup .wb-hint { margin: 0; }
+.wb-chatmode-popup { width: 270px; }
+
+/* ---- рейд ---- */
+[data-theme] .wb-raid-btn {
+  width: auto;
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #fff;
+  background: linear-gradient(120deg, #7c3aed, #db2777);
+  box-shadow: none;
+}
+.wb-raid-slot { flex-shrink: 0; margin: 0 -16px; }
+.wb-raid-msg {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(120deg, #7c3aed, #db2777 60%, #f97316);
+}
+
+/* ---- 😀 смайлы канала ---- */
+.emote-modal { max-width: 560px; text-align: left; display: flex; flex-direction: column; gap: 10px; }
+.emote-limits { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+.emote-upload { display: flex; gap: 12px; align-items: stretch; }
+.emote-file { position: relative; flex: 0 0 84px; height: 84px; border: 2px dashed var(--border); border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.emote-file:hover { border-color: var(--text-muted); }
+.emote-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.emote-preview { font-size: 28px; color: var(--text-muted); }
+.emote-preview img { max-width: 64px; max-height: 64px; }
+.emote-upload-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.emote-upload-fields input[type="text"], .emote-upload-fields #emoteCode { margin: 0; width: 100%; box-sizing: border-box; }
+.emote-upload-fields button { align-self: flex-start; width: auto; }
+.emote-public { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.emote-public input { width: auto; margin: 0; }
+.emote-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; }
+.emote-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 8px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: var(--surface-alt); }
+.emote-card img { width: 40px; height: 40px; object-fit: contain; }
+.emote-card code { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emote-card-pub { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
+.emote-card-pub input { width: auto; margin: 0; }
+[data-theme] .emote-del { position: absolute; top: 2px; right: 2px; width: auto; padding: 0 5px; background: none; box-shadow: none; color: var(--text-muted); font-size: 13px; }
+[data-theme] .emote-del:hover { color: var(--danger); }
+.wb-chat-input-row { position: relative; }
+
+/* выделенное сообщение (награда) */
+.wb-msg-hl { padding: 2px 6px; border-radius: 6px; background: linear-gradient(120deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.25)); }

@@ -126,9 +126,10 @@
 
   function addMessage(msg) {
     if (!msg || msg.deleted) return;
+    if (msg.source === 'raid') return addRaid(msg);
 
     const row = document.createElement('div');
-    row.className = 'msg';
+    row.className = 'msg' + (msg.highlight ? ' hl' : '');
     row.dataset.id = msg._id;
 
     if (msg.external && msg.source) {
@@ -136,6 +137,13 @@
       s.className = 'src';
       s.textContent = msg.source;
       row.appendChild(s);
+    }
+
+    // значок модератора (js/chat-badges.js)
+    if (msg.modLevel && window.PWBadges) {
+      const b = document.createElement('span');
+      b.innerHTML = PWBadges.html(msg.modLevel);
+      if (b.firstChild) row.appendChild(b.firstChild);
     }
 
     const nick = document.createElement('span');
@@ -164,7 +172,9 @@
 
     const text = document.createElement('span');
     text.className = 'text';
-    text.textContent = msg.text;
+    // в эфир — с маской фильтра слов, если стример его включил; смайлы :code: — картинками
+    const plain = String(msg.masked || msg.text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    text.innerHTML = window.PWEmotes ? PWEmotes.render(plain, msg.emotes) : plain;
     row.appendChild(text);
 
     // плоская плашка показывает только последнее сообщение
@@ -181,6 +191,23 @@
     }
   }
 
+  // рейд в оверлее: строка «🚀 Рейд от …» и большой баннер сверху на 9 с
+  function addRaid(msg) {
+    const row = document.createElement('div');
+    row.className = 'msg raid';
+    row.dataset.id = msg._id;
+    row.textContent = '🚀 ' + t('common.raid.message', { name: msg.raid?.from || msg.senderUsername, n: msg.raid?.viewers ?? 0 });
+    box.appendChild(row);
+    while (box.children.length > maxMsgs) box.removeChild(box.firstChild);
+  }
+  function showRaidBanner(raid) {
+    const b = document.createElement('div');
+    b.className = 'raid-banner';
+    b.textContent = '🚀 ' + t('common.raid.raided', { name: raid.from }) + ' · ' + t('common.raid.raidedViewers', { n: raid.viewers || 0 });
+    document.body.appendChild(b);
+    setTimeout(() => { b.classList.add('out'); setTimeout(() => b.remove(), 700); }, 9000);
+  }
+
   // в OBS сокет сам переподключается
   const socket = io('/chat', { reconnection: true, reconnectionDelay: 1000, reconnectionDelayMax: 5000 });
 
@@ -191,6 +218,7 @@
     if (fadeSec === 0) (list || []).forEach(addMessage); // при fade старую историю не показываем
   });
   socket.on('chat:message', addMessage);
+  socket.on('chat:raided', showRaidBanner);
   socket.on('chat:message-deleted', ({ messageId }) => {
     box.querySelectorAll('[data-id="' + CSS.escape(String(messageId)) + '"]').forEach((el) => el.remove());
   });

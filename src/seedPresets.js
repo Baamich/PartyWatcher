@@ -85,6 +85,35 @@ const COMMANDS = [
   },
 ];
 
+// награды за стрим-поинты: {user} купивший, {reward} награда, {cost} цена, {message} текст зрителя, {points} название поинтов, {balance} остаток
+const REWARDS = [
+  {
+    name: 'Пей воду!', description: 'Зритель напоминает стримеру попить воды — бот пишет в чат.',
+    data: { title: 'Пей воду!', description: 'Стример сделает глоток воды', cost: 300, color: '#0ea5e9', needInput: false,
+      reply: '💧 {user} заботится о стримере: пора попить воды!' },
+  },
+  {
+    name: '10 отжиманий', description: 'Стример делает 10 отжиманий прямо в эфире.',
+    data: { title: '10 отжиманий', description: 'Стример сделает 10 отжиманий в эфире', cost: 1000, color: '#dc2626', needInput: false,
+      reply: '💪 {user} потратил {cost} {points}: стример, 10 отжиманий!' },
+  },
+  {
+    name: 'Вопрос стримеру', description: 'Зритель пишет вопрос — бот выделяет его в чате, стример отвечает голосом.',
+    data: { title: 'Вопрос стримеру', description: 'Напиши вопрос — стример ответит в эфире', cost: 500, color: '#7c3aed', needInput: true,
+      reply: '❓ Вопрос от {user}: {message}' },
+  },
+  {
+    name: 'Заказ песни', description: 'Зритель пишет название песни, стример включает её на фоне.',
+    data: { title: 'Заказ песни', description: 'Напиши исполнителя и название песни', cost: 1500, color: '#db2777', needInput: true,
+      reply: '🎵 {user} заказывает: {message}' },
+  },
+  {
+    name: 'Выбор следующей игры', description: 'Зритель предлагает, во что стример сыграет дальше.',
+    data: { title: 'Выбери следующую игру', description: 'Напиши игру — стример сыграет в неё следующей', cost: 5000, color: '#16a34a', needInput: true,
+      reply: '🎮 {user} выбирает следующую игру: {message}. Осталось {balance} {points}.' },
+  },
+];
+
 (async () => {
   const name = String(process.argv[2] || '').trim().toLowerCase();
   if (!name) { console.error('Укажи имя стримера: node scripts/seedPresets.js baamich'); process.exit(1); }
@@ -118,6 +147,8 @@ const COMMANDS = [
     if (a.error) { console.warn('ошибка в аргументах', c.name, a.error); continue; }
     await put('command', c, { name: c.data.name, response: c.data.response, args: a.args });
   }
+
+  for (const r of REWARDS) await put('reward', r, r.data);
 
   console.log('Готово, добавлено:', made);
   await mongoose.disconnect();

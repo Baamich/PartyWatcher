@@ -1,4 +1,6 @@
 // Мост между HTTP-роутами и сокет-неймспейсом /chat
+const ChannelActionLog = require('../models/ChannelActionLog');
+
 let nsp = null;
 
 function init(namespace) {
@@ -51,4 +53,28 @@ function chatStatsTake(streamerNameLower) {
   return { chatMessages: s ? s.n : 0, chatters: s ? s.users.size : 0 };
 }
 
-module.exports = { init, emitMessage, emitToUser, setViewerCounter, viewerCount, chatStatsStart, countChatMessage, chatStatsTake };
+// модераторы канала изменились — разослать всем в чате их новые роли и права (делает сокет-файл)
+let roleRefresher = async () => {};
+function setRoleRefresher(fn) {
+  roleRefresher = fn;
+}
+function refreshRoles(streamerNameLower) {
+  roleRefresher(streamerNameLower).catch((e) => console.warn('[chatBus] refreshRoles', e.message));
+}
+
+// журнал действий канала (студия → «Журнал действий»): пишем запись и сразу шлём её стримеру, если он в чате.
+// details — без слов (журнал читают на разных языках): «00:10:00», «chatSlowSec=30», название категории
+async function logAction(streamerNameLower, actorUsername, action, targetUsername, details) {
+  const entry = await ChannelActionLog.create({
+    streamerNameLower, actorUsername, action, targetUsername: targetUsername || null, details: details || '',
+  });
+  const room = nsp?.adapter.rooms.get(`chat:${streamerNameLower}`);
+  if (!room) return;
+  room.forEach((sid) => {
+    const s = nsp.sockets.get(sid);
+    if (s?.data?.isOwner) s.emit('action:logged', entry);
+  });
+}
+const logActionQuiet = (...a) => logAction(...a).catch((e) => console.warn('[chatBus] logAction', e.message));
+
+module.exports = { init, emitMessage, emitToUser, logAction: logActionQuiet, setViewerCounter, viewerCount, chatStatsStart, countChatMessage, chatStatsTake, setRoleRefresher, refreshRoles };

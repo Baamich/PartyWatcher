@@ -1,0 +1,17 @@
+{
+  "pageTitle": "PartyWatcher — Clip",
+  "toStreams": "📡 Live streams",
+  "notFound": "Clip not found — it may have been deleted or expired.",
+  "untitled": "Untitled clip",
+  "copy": "📋 Link",
+  "copied": "Clip link copied",
+  "rename": "✏️ Title",
+  "renameText": "Clip title (up to 100 characters)",
+  "delete": "🗑 Delete",
+  "deleteConfirm": "Delete this clip? It can't be restored.",
+  "by": "clipped by {name}",
+  "views": {
+    "one": "{n} view",
+    "other": "{n} views"
+  }
+}

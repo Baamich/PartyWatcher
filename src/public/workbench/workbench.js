@@ -155,12 +155,33 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// режим чата в журнале: details = «chatSlowSec=30» | «chatFollowMin=off» | «chatFilter=2»
+function chatModeLogLabel(details) {
+  const [field, raw] = String(details || '').split('=');
+  const off = raw === 'off' || raw === '0' && field !== 'chatFollowMin';
+  const n = Number(raw);
+  if (field === 'chatFollowMin') return off ? t('workbench.log.mode.followersOff') : n ? t('workbench.log.mode.followers', { n }) : t('workbench.log.mode.followersNow');
+  if (field === 'chatSlowSec') return off ? t('workbench.log.mode.slowOff') : t('workbench.log.mode.slow', { n });
+  if (field === 'chatFilter') return off ? t('workbench.log.mode.filterOff') : t('workbench.log.mode.filter', { n });
+  return details;
+}
+
 function actionLogLabel(entry) {
+  const name = entry.targetUsername || '';
+  const details = entry.details || '';
   switch (entry.action) {
     case 'clear_chat': return t('workbench.log.clear_chat');
-    case 'delete_message': return t('workbench.log.delete_message', { name: entry.targetUsername || '' });
-    case 'ban': return t('workbench.log.ban', { name: entry.targetUsername || '' });
-    case 'timeout': return t('workbench.log.timeout', { name: entry.targetUsername || '', details: entry.details || '' });
+    case 'delete_message': return t('workbench.log.delete_message', { name });
+    case 'ban': return t('workbench.log.ban', { name });
+    case 'unban': return t('workbench.log.unban', { name });
+    case 'timeout': return t('workbench.log.timeout', { name, details });
+    case 'untimeout': return t('workbench.log.untimeout', { name });
+    case 'raid': return t('workbench.log.raid', { name, details });
+    case 'raid_cancel': return t('workbench.log.raid_cancel', { name });
+    case 'chat_mode': return chatModeLogLabel(details);
+    case 'edit_title': return t('workbench.log.edit_title', { details });
+    case 'edit_desc': return t('workbench.log.edit_desc');
+    case 'edit_category': return details ? t('workbench.log.edit_category', { details }) : t('workbench.log.clear_category');
     default: return entry.action;
   }
 }
@@ -653,6 +674,8 @@ function escapeHtml(s) {
 
 function buildMessageHtml(msg) {
   if (msg.deleted) return `<span class="wb-msg-deleted">${t('workbench.chat.deletedByAdmin')}</span>`;
+  if (msg.source === 'raid') return `<span class="wb-raid-msg">🚀 ${escapeHtml(PWRaid.messageText(msg))}</span>`;
+  const hl = msg.highlight ? ' wb-msg-hl' : '';
 
   // данные кнопок лежат в data-атрибутах (клики ловит общий обработчик внизу файла), а не в onclick
   const delBtn = `<button type="button" class="wb-mod-btn" title="${t('common.delete')}" data-act="del" data-id="${escapeHtml(msg._id)}">🗑️</button>`;
@@ -676,8 +699,8 @@ function buildMessageHtml(msg) {
   return `
     ${delBtn}${userBtns}
     ${src}
-    <span class="wb-msg-author-wrap"><span class="${nickCls}"${nickStyle}>${escapeHtml(I18N.sysName(msg.senderUsername))}</span>:</span>
-    <span class="wb-msg-text">${escapeHtml(msg.text)}</span>
+    <span class="wb-msg-author-wrap">${window.PWBadges ? PWBadges.html(msg.modLevel) : ''}<span class="${nickCls}"${nickStyle}>${escapeHtml(I18N.sysName(msg.senderUsername))}</span>:</span>
+    <span class="wb-msg-text${hl}">${window.PWEmotes ? PWEmotes.render(escapeHtml(msg.text), msg.emotes) : escapeHtml(msg.text)}</span>
   `;
 }
 
@@ -759,40 +782,178 @@ function confirmTimeout() {
 }
 
 let chatReconnectScheduler = null;
+let wbRaidBar = null;
 
-// ---- «чат только для подписчиков» (⚙ у чата): режим хранит сервер, сюда он приходит событием chat:mode ----
-let chatFollowMin = null;
+// ---- 😀 смайлы канала: окно управления и выбор у поля чата ----
+let emoteImage = null; // data:URL выбранной картинки (уменьшенной; GIF — как есть)
 
-function renderChatMode() {
-  const on = chatFollowMin !== null;
-  document.getElementById('wbChatModeBtn')?.classList.toggle('on', on);
-  const cb = document.getElementById('wbFollowersOnly');
-  const sel = document.getElementById('wbFollowMin');
-  if (cb) cb.checked = on;
-  if (sel) {
-    sel.value = String(on ? chatFollowMin : 0);
-    sel.disabled = !on;
+function renderEmotes(data) {
+  const lim = data.limits;
+  document.getElementById('emoteLimits').textContent =
+    t('common.emotes.limits', { n: lim.count, max: lim.max, p: lim.publicCount, pmax: lim.publicMax });
+  const list = document.getElementById('emoteList');
+  list.innerHTML = '';
+  if (!data.emotes.length) {
+    const p = document.createElement('p');
+    p.className = 'wb-hint';
+    p.textContent = t('common.emotes.empty');
+    list.appendChild(p);
+    return;
+  }
+  for (const e of data.emotes) {
+    const card = document.createElement('div');
+    card.className = 'emote-card';
+    card.innerHTML = `<img src="${PWEmotes.imgUrl(e.id)}" alt="" /><code>:${escapeHtml(e.code)}:</code>`;
+    const pub = document.createElement('label');
+    pub.className = 'emote-card-pub';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = e.isPublic;
+    cb.disabled = e.animated;
+    pub.title = e.animated ? t('common.emotes.animatedNoPublic') : t('common.emotes.publicHint');
+    cb.addEventListener('change', async () => {
+      try {
+        renderEmotes(await api('/emotes/' + e.id, { method: 'PATCH', body: { isPublic: cb.checked } }).then(() => api('/emotes/mine')));
+      } catch (err) {
+        cb.checked = !cb.checked;
+        showToast('error', err.message);
+      }
+    });
+    const pubTxt = document.createElement('span');
+    pubTxt.textContent = t('common.emotes.public');
+    pub.append(cb, pubTxt);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'emote-del';
+    del.textContent = '✕';
+    del.title = t('common.delete');
+    del.addEventListener('click', async () => {
+      const ok = await PW.confirm(t('common.emotes.deleteConfirm', { code: e.code }), { danger: true, okText: t('common.delete') });
+      if (!ok) return;
+      try {
+        await api('/emotes/' + e.id, { method: 'DELETE' });
+        renderEmotes(await api('/emotes/mine'));
+      } catch (err) {
+        showToast('error', err.message);
+      }
+    });
+    card.append(pub, del);
+    list.appendChild(card);
   }
 }
 
-function sendChatMode() {
-  const on = document.getElementById('wbFollowersOnly').checked;
-  socket?.emit('chat:set-mode', { followMin: on ? Number(document.getElementById('wbFollowMin').value) : null });
+async function openEmoteModal() {
+  document.getElementById('emoteModal').classList.remove('hidden');
+  try {
+    renderEmotes(await api('/emotes/mine'));
+  } catch (err) {
+    showToast('error', err.message);
+  }
 }
+
+// статичную картинку уменьшаем до 112 px (webp), GIF оставляем как есть — иначе пропадёт анимация
+function readEmoteFile(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error(t('common.emotes.badImage')));
+    if (file.type === 'image/gif') {
+      if (file.size > 256 * 1024) return reject(new Error(t('common.emotes.gifBig')));
+      fr.onload = () => resolve(String(fr.result));
+      return fr.readAsDataURL(file);
+    }
+    fr.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 112 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * k));
+        c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        let url = c.toDataURL('image/webp', 0.9);
+        if (!url.startsWith('data:image/webp')) url = c.toDataURL('image/png');
+        resolve(url);
+      };
+      img.onerror = () => reject(new Error(t('common.emotes.badImage')));
+      img.src = String(fr.result);
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+(function initEmotes() {
+  const modal = document.getElementById('emoteModal');
+  if (!modal || !window.PWEmotes) return;
+  document.getElementById('emoteModalClose').addEventListener('click', () => modal.classList.add('hidden'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+  document.getElementById('emoteFile').addEventListener('change', async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      emoteImage = await readEmoteFile(f);
+      document.getElementById('emotePreview').innerHTML = `<img src="${emoteImage}" alt="" />`;
+      const pub = document.getElementById('emotePublic');
+      pub.disabled = f.type === 'image/gif';
+      if (pub.disabled) pub.checked = false;
+      const code = document.getElementById('emoteCode');
+      if (!code.value) code.value = f.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20);
+    } catch (err) {
+      emoteImage = null;
+      showToast('error', err.message);
+    }
+  });
+  document.getElementById('emoteUploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!emoteImage) return showToast('error', t('common.emotes.pickFile'));
+    try {
+      await api('/emotes', {
+        method: 'POST',
+        body: { code: document.getElementById('emoteCode').value.trim(), image: emoteImage, isPublic: document.getElementById('emotePublic').checked },
+      });
+      emoteImage = null;
+      e.target.reset();
+      document.getElementById('emotePreview').textContent = '＋';
+      document.getElementById('emotePublic').disabled = false;
+      renderEmotes(await api('/emotes/mine'));
+      showToast('success', t('common.emotes.added'));
+    } catch (err) {
+      showToast('error', err.message);
+    }
+  });
+  const row = document.querySelector('.wb-chat-input-row');
+  const input = document.getElementById('chatInput');
+  if (row && input) PWEmotes.mountPicker({ form: row, input, channel: () => myStreamerNameLower, before: row.querySelector('button') });
+})();
+
+document.getElementById('wbRaidBtn')?.addEventListener('click', () => {
+  PWRaid.openPicker({ self: myStreamerNameLower, onStart: (to, seconds) => socket?.emit('chat:raid-start', { to, seconds }) });
+});
+
+// ---- команды модерации «/ban имя» и т.п.: подсказка у поля чата (js/chat-slash.js), права — из chat:role ----
+let wbChatPerms = [];
+window.PWChatSlash?.attach(document.getElementById('chatInput'), () => wbChatPerms);
+
+// ---- меню ⚙ у чата: «только подписчики», медленный режим, фильтр слов (js/chat-mode.js) ----
+// режим хранит сервер, сюда он приходит событием chat:mode
+let chatModeUi = null;
 
 (function initChatModeUi() {
   const btn = document.getElementById('wbChatModeBtn');
   const pop = document.getElementById('wbChatModePopup');
-  if (!btn || !pop) return;
+  if (!btn || !pop || !window.PWChatMode) return;
+  // внизу меню — смайлы канала (только в студии: управляет ими стример)
+  const emoBtn = document.createElement('button');
+  emoBtn.type = 'button';
+  emoBtn.className = 'icon-btn';
+  emoBtn.setAttribute('data-i18n', 'common.emotes.manageBtn');
+  emoBtn.textContent = t('common.emotes.manageBtn');
+  emoBtn.addEventListener('click', () => { pop.classList.add('hidden'); openEmoteModal(); });
+  chatModeUi = PWChatMode.mount(pop, (patch) => socket?.emit('chat:set-mode', patch), emoBtn);
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     pop.classList.toggle('hidden');
   });
   pop.addEventListener('click', (e) => e.stopPropagation());
   document.addEventListener('click', () => pop.classList.add('hidden'));
-  document.getElementById('wbFollowersOnly').addEventListener('change', sendChatMode);
-  document.getElementById('wbFollowMin').addEventListener('change', sendChatMode);
-  renderChatMode();
 })();
 
 window.addEventListener('pw:langchange', (e) => socket?.emit('lang:set', e.detail.lang)); // язык ответов бота
@@ -827,9 +988,19 @@ function initChat(streamerNameLower) {
     });
 
     socket.on('action:logged', (entry) => renderActionLogEntry(entry, true));
-    socket.on('chat:mode', ({ followMin } = {}) => {
-      chatFollowMin = followMin ?? null;
-      renderChatMode();
+    // рейд: у стримера — плашка с «Отменить», сообщение и баннер, когда рейдят его
+    socket.on('chat:raid', (ev) => {
+      wbRaidBar = PWRaid.banner(document.getElementById('wbRaidSlot'), ev, { canCancel: true, onCancel: () => socket?.emit('chat:raid-cancel') });
+    });
+    socket.on('chat:raid-cancelled', () => { wbRaidBar?.destroy(); wbRaidBar = null; showToast('success', t('common.raid.cancelled')); });
+    socket.on('chat:raid-go', () => { wbRaidBar?.destroy(); wbRaidBar = null; showToast('success', t('common.raid.sent')); });
+    socket.on('chat:raid-error', ({ error } = {}) => showToast('error', error || t('common.requestFailed')));
+    socket.on('chat:role', (rp) => { wbChatPerms = Array.isArray(rp?.perms) ? rp.perms : []; });
+    socket.on('chat:cmd-result', ({ ok, text } = {}) => showToast(ok ? 'success' : 'error', text || t('common.requestFailed')));
+    socket.on('chat:raided', (raid) => PWRaid.raided(document.getElementById('wbRaidSlot'), raid));
+    socket.on('chat:mode', (mode = {}) => {
+      chatModeUi?.set(mode);
+      document.getElementById('wbChatModeBtn')?.classList.toggle('on', PWChatMode.isActive(mode));
     });
   };
 

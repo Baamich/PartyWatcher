@@ -2,11 +2,11 @@ const mongoose = require('mongoose');
 
 const presetSchema = new mongoose.Schema(
   {
-    type: { type: String, enum: ['style', 'command'], required: true },
+    type: { type: String, enum: ['style', 'command', 'reward'], required: true },
     name: { type: String, required: true, trim: true, maxlength: 40 },
     nameLower: { type: String, required: true },
     description: { type: String, default: '', maxlength: 200 },
-    data: { type: mongoose.Schema.Types.Mixed, required: true }, // стиль или { name, response, args }
+    data: { type: mongoose.Schema.Types.Mixed, required: true }, // стиль | { name, response, args } | награда { title, description, cost, color, needInput, reply }
     authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     authorName: { type: String, required: true },
     likes: { type: Number, default: 0, min: 0 },

@@ -278,9 +278,14 @@ router.get('/:name/vods', async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(50)
-      .select('title description fileRel createdAt durationSec')
+      .select('title description fileRel createdAt durationSec categoryId')
       .lean();
 
+    // категории записей — из памяти (categories.viewByTid), по одной на разный id
+    const cats = new Map();
+    for (const id of new Set(vods.map((v) => v.categoryId).filter(Boolean))) {
+      cats.set(id, await categories.viewByTid(id).catch(() => null));
+    }
     res.json(
       vods.map((v) => ({
         id: v._id,
@@ -289,6 +294,7 @@ router.get('/:name/vods', async (req, res) => {
         createdAt: v.createdAt,
         durationSec: v.durationSec,
         url: `/media/${v.fileRel}`,
+        category: (v.categoryId && cats.get(v.categoryId)) || null,
       }))
     );
   } catch (err) {
@@ -368,11 +374,17 @@ router.post('/:name/follow', auth, followLimiter, async (req, res) => {
     } catch (e) {
       if (e.code !== 11000) throw e; // два клика одновременно: второй упёрся в уникальный индекс — уже подписан
     }
+    require('../../services/emotes').forgetFollow(s._id, req.user.id);
     let followers = s.followersCount || 0;
     if (added) {
       const u = await User.findOneAndUpdate({ _id: s._id }, { $inc: { followersCount: 1 } }, { new: true })
         .select('followersCount').lean();
       followers = u?.followersCount ?? followers + 1;
+      // алерты: «новый подписчик» и рубеж подписчиков (оверлей OBS и боты)
+      const alerts = require('../../services/alerts');
+      const nameLower = String(req.params.name || '').trim().toLowerCase();
+      alerts.fire(nameLower, 'follow', { name: req.user.username }).catch(() => {});
+      alerts.followers(nameLower, s._id, followers).catch(() => {});
     }
     res.json({ followers, following: true, self: false });
   } catch (err) {
@@ -387,6 +399,7 @@ router.delete('/:name/follow', auth, followLimiter, async (req, res) => {
     const s = await followTarget(req, res);
     if (!s) return;
     const r = await Follow.deleteOne({ followerId: req.user.id, streamerId: s._id });
+    require('../../services/emotes').forgetFollow(s._id, req.user.id);
     let followers = s.followersCount || 0;
     if (r.deletedCount) {
       const u = await User.findOneAndUpdate(
@@ -400,6 +413,21 @@ router.delete('/:name/follow', auth, followLimiter, async (req, res) => {
   } catch (err) {
     console.error('[DELETE /streamers/:name/follow]', err);
     res.status(500).json({ error: req.t('server.follow.failed') });
+  }
+});
+
+// GET /streamers/:name/clips — последние клипы канала (блок «Клипы» в профиле)
+router.get('/:name/clips', async (req, res) => {
+  try {
+    const nameLower = String(req.params.name || '').trim().toLowerCase();
+    const Clip = require('../../models/Clip');
+    const { publicClip } = require('./clips.routes');
+    const list = await Clip.find({ streamerNameLower: nameLower }).sort({ createdAt: -1 }).limit(24).lean();
+    res.set('Cache-Control', 'no-store');
+    res.json(await Promise.all(list.map(publicClip)));
+  } catch (err) {
+    console.error('[GET /streamers/:name/clips]', err);
+    res.status(500).json({ error: req.t('server.error') });
   }
 });
 

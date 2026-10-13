@@ -231,6 +231,8 @@
   cursor: zoom-in;
 }
 .docs-figure--narrow img { max-width: 420px; }
+.docs-figure-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 0 24px; }
+.docs-figure-row .docs-figure { margin-left: 0; margin-right: 0; }
 .docs-figure figcaption {
   margin-top: 8px;
   font-size: 13px;

@@ -1,7 +1,7 @@
 {
   "pageTitle": "PartyWatcher — Channel activity",
-  "bans": "Banned users",
-  "subs": "Subscribers",
+  "bans": "🚫 Banned",
+  "subs": "❤ Followers",
   "noBans": "No banned users",
   "unban": "Unban",
   "unbanFailed": "Could not unban",
@@ -10,5 +10,34 @@
     "other": "Total: {n} followers"
   },
   "noSubs": "No followers yet",
-  "subsFailed": "Could not load followers"
+  "mods": {
+    "title": "🛡️ Moderators",
+    "sub": "A moderator watches the chat. A senior moderator can also manage the stream — you decide what exactly under “Permissions”.",
+    "namePh": "Account login",
+    "levelMod": "Moderator",
+    "levelSenior": "Senior moderator",
+    "add": "Assign",
+    "added": "{name} is now a channel moderator",
+    "empty": "No moderators yet. Enter an account login and click “Assign”.",
+    "remove": "Remove",
+    "removeConfirm": "Remove {name} from moderators?",
+    "since": "since {date}"
+  },
+  "perms": {
+    "title": "⚙️ Moderator permissions",
+    "sub": "Untick a box and moderators of that level lose that button in chat. Stream management can only be given to senior moderators.",
+    "seniorOnly": "Senior moderators only",
+    "chat": "Chat",
+    "stream": "Stream"
+  },
+  "perm": {
+    "deleteMsg": "Delete messages",
+    "timeout": "Timeout",
+    "ban": "Ban",
+    "clearChat": "Clear the whole chat",
+    "chatSettings": "Chat settings (followers, slow mode, filter)",
+    "editTitle": "Change stream title and description",
+    "editCategory": "Change category",
+    "raid": "Start a raid"
+  }
 }

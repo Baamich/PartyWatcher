@@ -1,96 +1,232 @@
+// Студия → 🛡️ Актив канала: модераторы (назначить, уровень, снять), их права, заблокированные, подписчики
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+const fmtDate = (d) => new Date(d).toLocaleString(I18N.locale, { dateStyle: 'medium', timeStyle: 'short' });
 
-async function unbanUser(userId, row) {
-  try {
-    await api('/workbench/bans/' + encodeURIComponent(userId), { method: 'DELETE' });
-    row.remove();
-  } catch (err) {
-    PW.toast(err.message || t('activity.unbanFailed'), 'error');
+function emptyNote(box, key) {
+  box.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = 'act-empty';
+  p.textContent = t(key);
+  box.appendChild(p);
+}
+function errorNote(box, err) {
+  box.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = 'act-error';
+  p.textContent = err.message || t('common.requestFailed');
+  box.appendChild(p);
+}
+
+// строка списка: значок/аватар, имя, подпись, справа — элементы управления
+function row(name, sub, right, badgeLevel) {
+  const r = document.createElement('div');
+  r.className = 'act-row';
+  r.innerHTML = `
+    <span class="act-ava">${badgeLevel ? PWBadges.html(badgeLevel) : escapeHtml(String(name).charAt(0).toUpperCase())}</span>
+    <span class="act-row-text"><b title="${escapeHtml(name)}">${escapeHtml(name)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`;
+  const ctl = document.createElement('span');
+  ctl.className = 'act-row-ctl';
+  right.forEach((el) => ctl.appendChild(el));
+  r.appendChild(ctl);
+  return r;
+}
+
+// ---------- модераторы и права ----------
+let modsData = null;
+
+function renderMods() {
+  const box = document.getElementById('modsList');
+  if (!modsData) return;
+  document.getElementById('modsCount').textContent = `${modsData.mods.length}/${modsData.max}`;
+  if (!modsData.mods.length) return emptyNote(box, 'activity.mods.empty');
+  box.innerHTML = '';
+  for (const m of modsData.mods) {
+    const sel = document.createElement('select');
+    sel.className = 'act-level';
+    for (const lv of ['mod', 'senior']) {
+      const o = document.createElement('option');
+      o.value = lv;
+      o.textContent = t(lv === 'mod' ? 'activity.mods.levelMod' : 'activity.mods.levelSenior');
+      sel.appendChild(o);
+    }
+    sel.value = m.level;
+    sel.addEventListener('change', async () => {
+      try {
+        await api('/workbench/mods/' + m.userId, { method: 'PATCH', body: { level: sel.value } });
+        m.level = sel.value;
+        renderMods();
+      } catch (err) {
+        PW.toast(err.message, 'error');
+        sel.value = m.level;
+      }
+    });
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'icon-btn act-del';
+    del.textContent = '✕';
+    del.title = t('activity.mods.remove');
+    del.addEventListener('click', async () => {
+      const ok = await PW.confirm(t('activity.mods.removeConfirm', { name: m.username }), { danger: true, okText: t('activity.mods.remove') });
+      if (!ok) return;
+      try {
+        await api('/workbench/mods/' + m.userId, { method: 'DELETE' });
+        modsData.mods = modsData.mods.filter((x) => x.userId !== m.userId);
+        renderMods();
+      } catch (err) {
+        PW.toast(err.message, 'error');
+      }
+    });
+    box.appendChild(row(m.username, t('activity.mods.since', { date: fmtDate(m.addedAt) }), [sel, del], m.level));
   }
 }
 
+let permsSaveTimer = null;
+function savePerms() {
+  clearTimeout(permsSaveTimer);
+  permsSaveTimer = setTimeout(async () => {
+    try {
+      const r = await api('/workbench/mod-perms', { method: 'PUT', body: modsData.perms });
+      modsData.perms = r.perms;
+      PW.toast(t('common.saved'), 'success');
+    } catch (err) {
+      PW.toast(err.message, 'error');
+    }
+    renderPerms();
+  }, 300);
+}
+
+function renderPerms() {
+  const box = document.getElementById('permsTable');
+  if (!modsData) return;
+  const { chat, stream } = modsData.catalog;
+  const table = document.createElement('table');
+  table.className = 'act-perm-table';
+  table.innerHTML = `<thead><tr><th></th>
+    <th>${PWBadges.html('mod')}<span>${escapeHtml(t('activity.mods.levelMod'))}</span></th>
+    <th>${PWBadges.html('senior')}<span>${escapeHtml(t('activity.mods.levelSenior'))}</span></th></tr></thead>`;
+  const tbody = document.createElement('tbody');
+  const group = (key) => {
+    const tr = document.createElement('tr');
+    tr.className = 'act-perm-group';
+    tr.innerHTML = `<td colspan="3">${escapeHtml(t(key))}</td>`;
+    tbody.appendChild(tr);
+  };
+  const line = (perm, streamOnly) => {
+    const tr = document.createElement('tr');
+    const name = document.createElement('td');
+    name.textContent = t('activity.perm.' + perm);
+    tr.appendChild(name);
+    for (const lv of ['mod', 'senior']) {
+      const td = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      if (lv === 'mod' && streamOnly) {
+        // управление эфиром — только высшему: галочку у обычного модератора не дать
+        cb.disabled = true;
+        td.title = t('activity.perms.seniorOnly');
+        td.className = 'act-locked';
+      } else {
+        cb.checked = modsData.perms[lv].includes(perm);
+        cb.addEventListener('change', () => {
+          const set = new Set(modsData.perms[lv]);
+          if (cb.checked) set.add(perm); else set.delete(perm);
+          modsData.perms[lv] = [...set];
+          savePerms();
+        });
+      }
+      td.appendChild(cb);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  };
+  group('activity.perms.chat');
+  chat.forEach((p) => line(p, false));
+  group('activity.perms.stream');
+  stream.forEach((p) => line(p, true));
+  table.appendChild(tbody);
+  box.replaceChildren(table);
+}
+
+async function loadMods() {
+  try {
+    modsData = await api('/workbench/mods');
+    renderMods();
+    renderPerms();
+  } catch (err) {
+    errorNote(document.getElementById('modsList'), err);
+  }
+}
+
+document.getElementById('modAddForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('modAddName');
+  const username = input.value.trim();
+  if (!username) return;
+  try {
+    const m = await api('/workbench/mods', { method: 'POST', body: { username, level: document.getElementById('modAddLevel').value } });
+    modsData.mods = modsData.mods.filter((x) => x.userId !== m.userId).concat({ ...m, addedAt: new Date().toISOString() });
+    input.value = '';
+    renderMods();
+    PW.toast(t('activity.mods.added', { name: m.username }), 'success');
+  } catch (err) {
+    PW.toast(err.message, 'error');
+  }
+});
+
+// ---------- заблокированные ----------
 async function loadBans() {
   const box = document.getElementById('bansList');
   try {
     const bans = await api('/workbench/bans');
-    if (!bans.length) {
-      box.innerHTML = `<p style="color:var(--text-muted); font-size:14px;">${t('activity.noBans')}</p>`;
-      return;
-    }
+    document.getElementById('bansCount').textContent = bans.length ? String(bans.length) : '';
+    if (!bans.length) return emptyNote(box, 'activity.noBans');
     box.innerHTML = '';
-    box.className = 'ban-list';
-    bans.forEach((b) => {
-      const row = document.createElement('div');
-      row.className = 'ban-row';
-
-      const name = document.createElement('span');
-      name.className = 'ban-name';
-      name.textContent = b.username;
-      name.title = b.username;
-
+    for (const b of bans) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'icon-btn';
       btn.textContent = t('activity.unban');
-      btn.onclick = () => unbanUser(b.userId, row);
-
-      row.append(name, btn);
-      box.appendChild(row);
-    });
+      const r = row(b.username, b.bannedAt ? fmtDate(b.bannedAt) : '', [btn]);
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/workbench/bans/' + encodeURIComponent(b.userId), { method: 'DELETE' });
+          r.remove();
+          if (!box.children.length) emptyNote(box, 'activity.noBans');
+        } catch (err) {
+          PW.toast(err.message || t('activity.unbanFailed'), 'error');
+        }
+      });
+      box.appendChild(r);
+    }
   } catch (err) {
-    box.innerHTML = `<p style="color:var(--danger); font-size:14px;">${escapeHtml(err.message)}</p>`;
+    errorNote(box, err);
   }
 }
 
-// подписчики: общее число и последние 100 (дата — на языке страницы, поэтому перерисовка при смене языка)
+// ---------- подписчики: число и последние 100 ----------
 let followersData = null;
 
 function renderFollowers() {
   const box = document.getElementById('followersBox');
   if (!box || !followersData) return;
+  document.getElementById('subsCount').textContent = followersData.count ? t('activity.subsCount', { n: followersData.count }) : '';
+  if (!followersData.list.length) return emptyNote(box, 'activity.noSubs');
   box.innerHTML = '';
-  const head = document.createElement('p');
-  head.style.cssText = 'color:var(--text-muted); font-size:14px;';
-  head.textContent = followersData.count ? t('activity.subsCount', { n: followersData.count }) : t('activity.noSubs');
-  box.appendChild(head);
-  if (!followersData.list.length) return;
-
-  const list = document.createElement('div');
-  list.className = 'ban-list';
-  list.setAttribute('data-no-i18n', '');
-  for (const f of followersData.list) {
-    const row = document.createElement('div');
-    row.className = 'ban-row';
-    const name = document.createElement('span');
-    name.className = 'ban-name';
-    name.textContent = f.username;
-    name.title = f.username;
-    const at = document.createElement('span');
-    at.style.cssText = 'color:var(--text-muted); font-size:12px; white-space:nowrap;';
-    at.textContent = new Date(f.at).toLocaleString(I18N.locale, { dateStyle: 'medium', timeStyle: 'short' });
-    row.append(name, at);
-    list.appendChild(row);
-  }
-  box.appendChild(list);
+  for (const f of followersData.list) box.appendChild(row(f.username, fmtDate(f.at), []));
 }
 
 async function loadFollowers() {
-  const box = document.getElementById('followersBox');
   try {
     followersData = await api('/workbench/followers');
     renderFollowers();
   } catch (err) {
-    box.innerHTML = '';
-    const p = document.createElement('p');
-    p.style.cssText = 'color:var(--danger); font-size:14px;';
-    p.textContent = err.message || t('activity.subsFailed');
-    box.appendChild(p);
+    errorNote(document.getElementById('followersBox'), err);
   }
 }
 
-window.addEventListener('pw:langchange', renderFollowers);
+window.addEventListener('pw:langchange', () => { renderMods(); renderPerms(); renderFollowers(); loadBans(); });
 
 async function goProfile() {
   try {
@@ -105,5 +241,6 @@ async function goProfile() {
   }
 }
 
+loadMods();
 loadBans();
 loadFollowers();

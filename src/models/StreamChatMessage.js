@@ -13,6 +13,9 @@ const streamChatMessageSchema = new mongoose.Schema(
     external: { type: Boolean, default: false },
     source: { type: String, default: null },
     nickColor: { type: String, default: null },
+    raidViewers: { type: Number, default: undefined },
+    highlight: { type: Boolean, default: undefined }, // выделенное сообщение (награда «Выделить сообщение»)
+    emotes: { type: mongoose.Schema.Types.Mixed, default: undefined }, // { code: id } смайлов в тексте (services/emotes) // source 'raid': сколько зрителей пришло (сайт пишет «Рейд от …» на языке зрителя)
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

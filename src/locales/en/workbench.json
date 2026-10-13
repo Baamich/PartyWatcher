@@ -11,7 +11,9 @@
     "constructor": "🧩 Builder",
     "presets": "🎨 Presets",
     "docs": "📚 Docs",
-    "stats": "📊 Statistics"
+    "stats": "📊 Statistics",
+    "events": "🔔 Events",
+    "rewards": "🎁 Rewards"
   },
   "key": {
     "title": "Stream key",
@@ -58,7 +60,24 @@
     "clear_chat": "cleared the chat",
     "delete_message": "deleted a message from {name}",
     "ban": "banned {name}",
-    "timeout": "timed out {name} ({details})"
+    "timeout": "timed out {name} ({details})",
+    "raid": "started a raid on {name} ({details})",
+    "unban": "unbanned {name}",
+    "untimeout": "lifted the timeout of {name}",
+    "raid_cancel": "cancelled the raid on {name}",
+    "edit_title": "changed the stream title: “{details}”",
+    "edit_desc": "changed the stream description",
+    "edit_category": "changed the category: {details}",
+    "clear_category": "removed the stream category",
+    "mode": {
+      "followers": "turned on “followers only” (followed for {n} min)",
+      "followersNow": "turned on “followers only”",
+      "followersOff": "turned off “followers only”",
+      "slow": "turned on slow mode ({n} s)",
+      "slowOff": "turned off slow mode",
+      "filter": "set the word filter to level {n}",
+      "filterOff": "turned off the word filter"
+    }
   },
   "chat": {
     "title": "Chat",
@@ -101,16 +120,5 @@
   "chatRegen": {
     "title": "Generate a new chat key?",
     "text": "The old key will stop working: the OBS overlay, bots and bridges will need the new one."
-  },
-  "chatMode": {
-    "title": "Chat settings",
-    "followersOnly": "Followers-only chat",
-    "minAge": "Following for at least",
-    "now": "no minimum",
-    "min10": "10 minutes",
-    "min30": "30 minutes",
-    "hour1": "1 hour",
-    "day1": "1 day",
-    "hint": "Everyone else can read the chat but can't write. The limit doesn't apply to you."
   }
 }

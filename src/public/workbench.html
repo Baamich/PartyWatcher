@@ -8,7 +8,7 @@
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
-  <link rel="stylesheet" href="/workbench/workbench.css?v=3" />
+  <link rel="stylesheet" href="/workbench/workbench.css?v=7" />
   <title data-i18n="workbench.pageTitle">PartyWatcher — Творческая студия</title>
 </head>
 <body>
@@ -44,6 +44,8 @@
       <nav id="wbNavFixed" class="wb-nav">
         <button type="button" class="wb-nav-btn" data-href="/workbench/news.html" data-i18n="workbench.nav.news">📰 Новости</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench.html" data-i18n="workbench.nav.stream">📡 Управление трансляцией</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/events.html" data-i18n="workbench.nav.events">🔔 События</button>
+        <button type="button" class="wb-nav-btn" data-href="/workbench/rewards.html" data-i18n="workbench.nav.rewards">🎁 Награды</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/stats.html" data-i18n="workbench.nav.stats">📊 Статистика</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/videos.html" data-i18n="workbench.nav.videos">🎬 Видеостудия</button>
         <button type="button" class="wb-nav-btn" data-href="/workbench/channel-activity.html" data-i18n="workbench.nav.activity">🛡️ Актив канала</button>
@@ -76,6 +78,7 @@
             <span class="wb-live-label" id="liveStatusLabel" data-i18n="workbench.status.offline">Офлайн</span>
             <span class="wb-live-timer" id="liveStatusTimer">00:00:00</span>
           </div>
+          <button type="button" id="wbRaidBtn" class="wb-raid-btn" title="Рейд: отправить зрителей на другой эфир" data-i18n-title="common.raid.btnTitle" data-i18n="common.raid.btn">🚀 Рейд</button>
         </div>
         <div class="wb-window-content wb-player-content">
           <button type="button" id="pipBtn" class="wb-mini-btn" title="Мини-окно поверх всех окон" data-i18n-title="common.mini.pip" data-click="togglePip" data-i18n="workbench.player.mini">⧉ Мини-окно</button>
@@ -124,7 +127,7 @@
         <div class="wb-window-titlebar wb-chat-titlebar">
           <span data-i18n="workbench.chat.title">Чат</span>
           <div class="wb-chat-head-right">
-            <button type="button" id="wbChatModeBtn" class="wb-viewers-btn wb-chatmode-btn" title="Настройки чата" data-i18n-title="workbench.chatMode.title">⚙</button>
+            <button type="button" id="wbChatModeBtn" class="wb-viewers-btn wb-chatmode-btn" title="Настройки чата" data-i18n-title="common.chatMode.title">⚙</button>
             <button type="button" id="wbViewersBtn" class="wb-viewers-btn" title="Зрители" data-i18n-title="workbench.viewers.title" data-click="toggleViewersPanel" data-event>
               👁 <span id="viewersCount">0</span>
             </button>
@@ -155,29 +158,15 @@
             <p class="wb-hint" data-i18n-html="workbench.chatApi.hint">Отправка в чат: <code>POST /api/chat/send</code> с заголовком <code>Authorization: Bearer ключ</code></p>
           </div>
 
+          <div id="wbRaidSlot" class="wb-raid-slot"></div>
           <div id="chatMessages" class="wb-chat-messages no-scrollbar" data-no-i18n></div>
           <div class="wb-chat-input-row">
             <input id="chatInput" placeholder="Написать в чат…" data-i18n-placeholder="workbench.chat.placeholder" data-keydown="handleChatKey" data-event />
             <button type="button" data-click="sendChatMessage">➤</button>
           </div>
 
-          <div id="wbChatModePopup" class="wb-chatmode-popup hidden">
-            <label class="wb-chatmode-row">
-              <input type="checkbox" id="wbFollowersOnly" />
-              <span data-i18n="workbench.chatMode.followersOnly">Чат только для подписчиков</span>
-            </label>
-            <label class="wb-chatmode-row">
-              <span data-i18n="workbench.chatMode.minAge">Подписан не меньше</span>
-              <select id="wbFollowMin">
-                <option value="0" data-i18n="workbench.chatMode.now">сразу</option>
-                <option value="10" data-i18n="workbench.chatMode.min10">10 минут</option>
-                <option value="30" data-i18n="workbench.chatMode.min30">30 минут</option>
-                <option value="60" data-i18n="workbench.chatMode.hour1">1 час</option>
-                <option value="1440" data-i18n="workbench.chatMode.day1">1 день</option>
-              </select>
-            </label>
-            <p class="wb-hint" data-i18n="workbench.chatMode.hint">Остальные видят чат, но писать не могут. На тебя ограничение не действует.</p>
-          </div>
+          <!-- меню ⚙ у чата: собирает js/chat-mode.js (общее со страницей канала) -->
+          <div id="wbChatModePopup" class="wb-chatmode-popup hidden"></div>
 
           <div id="wbViewersPanel" class="wb-viewers-panel">
             <div class="wb-viewers-panel-header">
@@ -226,6 +215,29 @@
     </div>
   </div>
 
+  <!-- 😀 смайлы канала: загрузить, сделать публичным, удалить -->
+  <div id="emoteModal" class="modal hidden">
+    <div class="modal-content emote-modal">
+      <button type="button" class="modal-close" id="emoteModalClose" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 data-i18n="common.emotes.manageTitle">Смайлы канала</h3>
+      <p class="wb-hint" data-i18n="common.emotes.manageHint">В чате смайл пишется как :код:. Смайлы канала доступны твоим подписчикам и модераторам, публичные — всем во всех чатах.</p>
+      <div id="emoteLimits" class="emote-limits" data-no-i18n></div>
+      <form id="emoteUploadForm" class="emote-upload" autocomplete="off">
+        <label class="emote-file">
+          <input type="file" id="emoteFile" accept="image/png,image/webp,image/jpeg,image/gif" />
+          <span id="emotePreview" class="emote-preview">＋</span>
+        </label>
+        <div class="emote-upload-fields">
+          <input id="emoteCode" maxlength="20" placeholder="код, например hype" data-i18n-placeholder="common.emotes.codePh" />
+          <label class="emote-public"><input type="checkbox" id="emotePublic" /> <span data-i18n="common.emotes.makePublic">Публичный (всем, без анимации)</span></label>
+          <button type="submit" data-i18n="common.emotes.upload">Загрузить</button>
+        </div>
+      </form>
+      <p class="wb-hint" data-i18n="common.emotes.fileHint">PNG, WebP или JPG уменьшаются до 112 px. GIF загружается как есть, до 256 КБ.</p>
+      <div id="emoteList" class="emote-list" data-no-i18n></div>
+    </div>
+  </div>
+
   <div id="chatKeyRegenModal" class="modal hidden">
     <div class="modal-content">
       <button type="button" class="modal-close" data-click="closeChatKeyRegen">×</button>
@@ -242,7 +254,12 @@
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/minipip.js?v=2"></script>
-  <script src="/workbench/workbench.js?v=7"></script>
+  <script src="/js/chat-mode.js?v=1"></script>
+  <script src="/js/chat-slash.js?v=1"></script>
+  <script src="/js/chat-badges.js?v=1"></script>
+  <script src="/js/raid.js?v=1"></script>
+  <script src="/js/chat-emotes.js?v=2"></script>
+  <script src="/workbench/workbench.js?v=12"></script>
   <script src="/js/live-notify.js?v=1"></script>
 </body>
 </html>

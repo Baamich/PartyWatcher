@@ -16,7 +16,10 @@
     "chat": "Chat",
     "constructor": "Builder",
     "editor": "Profile editor",
-    "presets": "Presets"
+    "presets": "Presets",
+    "events": "Events",
+    "rewards": "Rewards",
+    "activity": "Channel activity"
   },
   "page": {
     "stream-obs": {
@@ -66,6 +69,30 @@
     "presets-commands": {
       "title": "Commands",
       "desc": "Ready-made commands from other streamers"
+    },
+    "events": {
+      "title": "Events and OBS alerts",
+      "desc": "Connecting, animations, sounds, text"
+    },
+    "events-api": {
+      "title": "Events API",
+      "desc": "Channel events for your own bot"
+    },
+    "rewards": {
+      "title": "Stream points and rewards",
+      "desc": "How points add up, your rewards, purchases"
+    },
+    "rewards-api": {
+      "title": "Rewards API",
+      "desc": "Purchases over HTTP: list, done, refund"
+    },
+    "channel-activity": {
+      "title": "Moderators and permissions",
+      "desc": "Moderators, permissions, bans, followers"
+    },
+    "presets-rewards": {
+      "title": "Reward presets",
+      "desc": "Ready-made stream point rewards: add and share"
     }
   }
 }

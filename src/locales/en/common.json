@@ -71,5 +71,140 @@
   "liveNotify": {
     "live": "is live",
     "watch": "Watch"
+  },
+  "modBadge": {
+    "mod": "Moderator",
+    "senior": "Senior moderator"
+  },
+  "chatMode": {
+    "title": "Chat settings",
+    "followersOnly": "Followers-only chat",
+    "minAge": "Following for at least",
+    "now": "no minimum",
+    "min10": "10 minutes",
+    "min30": "30 minutes",
+    "hour1": "1 hour",
+    "day1": "1 day",
+    "slow": "Slow mode",
+    "off": "off",
+    "sec": "{n} s",
+    "mins": {
+      "one": "{n} min",
+      "other": "{n} min"
+    },
+    "filter": "Word filter",
+    "filter_off": "off",
+    "filter_weak": "light — swearing only",
+    "filter_medium": "medium — + insults",
+    "filter_strong": "strong — + crude words",
+    "filter_max": "very strong — + “stupid”, “idiot”",
+    "hint": "Filtered words show as ****, viewers can reveal the message. The OBS overlay always shows the asterisks. Limits do not apply to the streamer and moderators."
+  },
+  "raid": {
+    "btn": "🚀 Raid",
+    "btnTitle": "Raid: send your viewers to another stream",
+    "pickTitle": "Who do we raid?",
+    "search": "Search by name",
+    "close": "Close",
+    "notFound": "Nobody found",
+    "nobody": "Nobody else is live right now",
+    "confirm": "Start a raid on {name}?",
+    "seconds": "Send viewers in how many seconds (5–120)",
+    "back": "← Back",
+    "start": "🚀 Start raid",
+    "banner": "Raiding",
+    "cancel": "Cancel",
+    "stay": "Stay",
+    "cancelled": "Raid cancelled",
+    "sent": "Raid sent — viewers are on their way",
+    "raided": "Raid from {name}!",
+    "raidedViewers": {
+      "one": "{n} viewer arrived",
+      "other": "{n} viewers arrived"
+    },
+    "message": {
+      "one": "Raid from {name}: {n} viewer",
+      "other": "Raid from {name}: {n} viewers"
+    }
+  },
+  "emotes": {
+    "open": "Emotes",
+    "loading": "Loading…",
+    "recent": "Recent",
+    "channel": "Channel emotes",
+    "public": "Public",
+    "followToUse": "Follow the channel to use its emotes",
+    "noPublic": "No public emotes yet",
+    "manageBtn": "😀 Channel emotes…",
+    "manageTitle": "Channel emotes",
+    "manageHint": "In chat an emote is written as :code:. Channel emotes are for your followers and moderators, public ones are for everyone in every chat.",
+    "codePh": "code, for example hype",
+    "makePublic": "Public (for everyone, no animation)",
+    "upload": "Upload",
+    "fileHint": "PNG, WebP or JPG are scaled down to 112 px. GIF is uploaded as is, up to 256 KB. Code — 2–20 Latin letters, digits or “_”.",
+    "limits": "Emotes: {n}/{max} · public: {p}/{pmax}",
+    "empty": "No emotes yet — pick an image, come up with a code and click “Upload”.",
+    "animatedNoPublic": "An animated emote can't be made public",
+    "publicHint": "Public — everyone can use it in every chat",
+    "deleteConfirm": "Delete the :{code}: emote?",
+    "badImage": "Couldn't open the image",
+    "gifBig": "The GIF is larger than 256 KB — make it smaller",
+    "pickFile": "Pick an image first",
+    "added": "Emote added"
+  },
+  "slash": {
+    "heading": "Moderation commands",
+    "title": {
+      "use": "/title <text>",
+      "desc": "Change the stream title"
+    },
+    "ban": {
+      "use": "/ban <name>",
+      "desc": "Ban from chat permanently"
+    },
+    "unban": {
+      "use": "/unban <name>",
+      "desc": "Lift the ban"
+    },
+    "timeout": {
+      "use": "/timeout <name> [time]",
+      "desc": "Mute for a while: 90, 10m, 2h, 1d (10 minutes by default)"
+    },
+    "untimeout": {
+      "use": "/untimeout <name>",
+      "desc": "Lift the timeout early"
+    },
+    "clear": {
+      "use": "/clear",
+      "desc": "Clear the whole chat"
+    },
+    "slow": {
+      "use": "/slow [seconds]",
+      "desc": "Slow mode: 3, 5, 10, 30, 60 or 120 s (30 by default)"
+    },
+    "slowoff": {
+      "use": "/slowoff",
+      "desc": "Turn slow mode off"
+    },
+    "followers": {
+      "use": "/followers [time]",
+      "desc": "Followers only; follow age: 10m, 30m, 1h, 1d (none — right away)"
+    },
+    "followersoff": {
+      "use": "/followersoff",
+      "desc": "Turn “followers only” off"
+    },
+    "filter": {
+      "use": "/filter <0–4>",
+      "desc": "Word filter: 0 — off, 4 — maximum"
+    },
+    "raid": {
+      "use": "/raid <channel> [seconds]",
+      "desc": "Raid another stream (in 15 s, 5–120 allowed)"
+    },
+    "unraid": {
+      "use": "/unraid",
+      "desc": "Cancel the raid"
+    }
   }
 }

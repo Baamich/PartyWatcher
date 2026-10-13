@@ -6,6 +6,7 @@ const streamVodSchema = new mongoose.Schema(
     streamerNameLower: { type: String, required: true, index: true },
     title: { type: String, default: '' },
     description: { type: String, default: '' },
+    categoryId: { type: String, default: null }, // Category.tid на момент начала эфира
     /** относительный путь от MEDIA: vod/<userId>/<id>.mp4 */
     fileRel: { type: String, required: true },
     durationSec: { type: Number, default: 0 },

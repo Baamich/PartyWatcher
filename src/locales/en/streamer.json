@@ -41,7 +41,13 @@
     "followersBadgeMin": {
       "one": "Followers can chat after following for {n} minute",
       "other": "Followers can chat after following for {n} minutes"
-    }
+    },
+    "maskedHint": "Hidden by the word filter — click to show",
+    "revealTitle": "Show the message?",
+    "revealText": "The streamer's filter hid rude words here. Do you really want to see the whole message?",
+    "revealOk": "Show",
+    "slowHint": "Slow mode: you can write no more often than this",
+    "slowWait": "Slow mode: {n} s left"
   },
   "auth": {
     "title": "Sign in to chat",
@@ -49,7 +55,11 @@
     "login": "Sign in",
     "register": "Sign up",
     "followTitle": "Sign in to follow",
-    "followText": "Follows are tied to an account: sign in or register."
+    "followText": "Follows are tied to an account: sign in or register.",
+    "clipTitle": "Sign in to make clips",
+    "clipText": "Clips are saved under your account: sign in or register.",
+    "pointsTitle": "Sign in to collect stream points",
+    "pointsText": "Stream points and rewards are tied to an account: sign in or register."
   },
   "previewBadge": "Preview: changes are not saved yet",
   "follow": {
@@ -65,5 +75,49 @@
       "one": "{n} follower",
       "other": "{n} followers"
     }
+  },
+  "clips": {
+    "make": "Clip",
+    "makeTitle": "Clip: the last 30 seconds of the stream",
+    "tab": "Clips",
+    "done": "✂ Clip ready",
+    "open": "Open",
+    "copy": "📋 Link",
+    "copied": "Clip link copied",
+    "failed": "Could not make a clip",
+    "untitled": "Untitled clip",
+    "views": {
+      "one": "{n} view",
+      "other": "{n} views"
+    }
+  },
+  "mod": {
+    "panel": "Stream management",
+    "title": "Stream title",
+    "desc": "Description",
+    "category": "Category",
+    "categoryPh": "Find a game or category",
+    "noCategory": "No category",
+    "clearCategory": "Remove category",
+    "nothing": "Nothing found"
+  },
+  "raid": {
+    "start": "🚀 Raid"
+  },
+  "points": {
+    "title": "Stream points and rewards",
+    "default": "Stream points",
+    "short": "SP",
+    "bonus": "Claim bonus",
+    "noRewards": "The streamer has not added rewards yet",
+    "notEnough": "{n} short",
+    "buy": "Buy",
+    "buyText": "Buy “{title}” for {cost} ({name})?",
+    "inputPh": "Your text",
+    "bought": "“{title}” bought!",
+    "back": "Rewards",
+    "noDesc": "No description",
+    "buyFor": "Buy for {cost}",
+    "needText": "Write a text for this reward"
   }
 }
