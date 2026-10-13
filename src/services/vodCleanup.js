@@ -36,6 +36,7 @@ async function tick() {
   await cleanupExpiredVods();
   await finalizeStuckRecordings();
   await require('./clips').cleanupExpiredClips();
+  require('./clips').cleanupEvidence();
 }
 
 tick().catch((e) => console.error('[vod-cleanup]', e.message));

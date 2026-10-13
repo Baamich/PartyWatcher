@@ -113,7 +113,7 @@
   "report": {
     "btn": "Report the stream",
     "title": "Report the stream",
-    "hint": "The site administration will see the report. We usually review it within 1–2 days.",
+    "hint": "The site administration will see the report. If the stream is live, we will save its last ~30 seconds as evidence. We usually review reports within 1–2 days.",
     "reason": "Reason",
     "text": "What happened (optional)",
     "textPh": "For example: at 1:20:00 they showed…",

@@ -44,33 +44,19 @@ function pickSegments(dir) {
   return withTime.filter((s) => now - s.t <= (CLIP_SEC + 1) * 1000);
 }
 
-/**
- * streamer — { _id, streamerNameLower, streamPlaybackId, streamTitle, streamCategoryId }; creator — { id, username }
- * Бросает i18n.err с ключом server.clips.*
- */
-async function createClip(streamer, creator) {
-  const key = streamer.streamPlaybackId && streamKeyCache.keyByPlaybackId(streamer.streamPlaybackId);
-  if (!key) throw i18n.err('server.clips.notLive');
-  if (channelBusy.has(streamer.streamerNameLower) || jobs >= MAX_JOBS) throw i18n.err('server.clips.busy');
-
+// склеить последние ~30 с эфира (ключ потока key) в mp4 + кадр-обложку jpg; subs — порядок качеств.
+// Возвращает длительность в секундах, бросает i18n.err server.clips.tooShort|failed
+async function cutLast(key, subs, mp4, jpg) {
   const liveDir = path.join(MEDIA_ROOT, 'live', key);
   let segs = [];
-  for (const sub of ['source', '720']) { // клип — всегда в качестве эфира; 720p — запасной вариант
+  for (const sub of subs) {
     if (!fs.existsSync(path.join(liveDir, sub))) continue;
     segs = pickSegments(path.join(liveDir, sub));
     if (segs.length >= 3) break;
   }
   if (segs.length < 3) throw i18n.err('server.clips.tooShort');
 
-  const id = new mongoose.Types.ObjectId();
-  const dir = path.join(CLIPS_ROOT, String(streamer._id));
-  fs.mkdirSync(dir, { recursive: true });
-  const mp4 = path.join(dir, `${id}.mp4`);
-  const jpg = path.join(dir, `${id}.jpg`);
-  const list = path.join(dir, `${id}.txt`);
-
-  channelBusy.add(streamer.streamerNameLower);
-  jobs += 1;
+  const list = mp4.replace(/\.mp4$/, '.txt');
   try {
     fs.writeFileSync(list, segs.map((s) => `file '${s.file.replace(/'/g, "'\\''")}'`).join('\n'));
     await run(['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list,
@@ -83,11 +69,35 @@ async function createClip(streamer, creator) {
     throw i18n.err('server.clips.failed');
   } finally {
     try { fs.unlinkSync(list); } catch (_) {}
+  }
+  return Math.max(1, Math.round((segs[segs.length - 1].t - segs[0].t) / 1000) + 1);
+}
+
+/**
+ * streamer — { _id, streamerNameLower, streamPlaybackId, streamTitle, streamCategoryId }; creator — { id, username }
+ * Бросает i18n.err с ключом server.clips.*
+ */
+async function createClip(streamer, creator) {
+  const key = streamer.streamPlaybackId && streamKeyCache.keyByPlaybackId(streamer.streamPlaybackId);
+  if (!key) throw i18n.err('server.clips.notLive');
+  if (channelBusy.has(streamer.streamerNameLower) || jobs >= MAX_JOBS) throw i18n.err('server.clips.busy');
+
+  const id = new mongoose.Types.ObjectId();
+  const dir = path.join(CLIPS_ROOT, String(streamer._id));
+  fs.mkdirSync(dir, { recursive: true });
+  const mp4 = path.join(dir, `${id}.mp4`);
+  const jpg = path.join(dir, `${id}.jpg`);
+
+  channelBusy.add(streamer.streamerNameLower);
+  jobs += 1;
+  let durationSec;
+  try {
+    durationSec = await cutLast(key, ['source', '720'], mp4, jpg); // клип — всегда в качестве эфира; 720p — запасной вариант
+  } finally {
     channelBusy.delete(streamer.streamerNameLower);
     jobs -= 1;
   }
 
-  const durationSec = Math.max(1, Math.round((segs[segs.length - 1].t - segs[0].t) / 1000) + 1);
   const rel = (abs) => path.relative(MEDIA_ROOT, abs).split(path.sep).join('/');
   const clip = await Clip.create({
     _id: id,
@@ -123,4 +133,67 @@ async function cleanupExpiredClips() {
   if (old.length) console.log('[clips] удалено устаревших:', old.length);
 }
 
-module.exports = { createClip, removeClip, cleanupExpiredClips, CLIPS_ROOT };
+// ---- запись-доказательство к 🚩 жалобе на идущий эфир ----
+// Последние ~30 с эфира в 720p (если есть — легче «источника»), лежат в media/report-clips (статикой не раздаются):
+// смотрит только админ через GET /api/support/clip/:id. Стример её не видит и удалить не может.
+// 90 дней и не больше EVIDENCE_MAX файлов (старые удаляются). Несколько жалоб на канал за минуту — одна запись
+const EVIDENCE_ROOT = path.join(MEDIA_ROOT, 'report-clips'); // у /media/report-clips нет раздачи статикой
+const EVIDENCE_TTL_MS = 90 * 24 * 3600 * 1000;
+const EVIDENCE_MAX = 200; // ~20 МБ каждая → до ~4 ГБ
+const EVIDENCE_JOBS = 2;
+let evidenceJobs = 0;
+const evidenceRecent = new Map(); // streamerNameLower → { at, promise }
+
+// → Promise<{ id, sec }>; бросает i18n.err server.clips.*
+function createEvidence(streamer) {
+  const key = streamer.streamPlaybackId && streamKeyCache.keyByPlaybackId(streamer.streamPlaybackId);
+  if (!key) return Promise.reject(i18n.err('server.clips.notLive'));
+  const lower = streamer.streamerNameLower;
+  const hit = evidenceRecent.get(lower);
+  if (hit && Date.now() - hit.at < 60 * 1000) return hit.promise;
+  if (evidenceJobs >= EVIDENCE_JOBS) return Promise.reject(i18n.err('server.clips.busy'));
+
+  const id = String(new mongoose.Types.ObjectId());
+  evidenceJobs += 1;
+  const promise = (async () => {
+    try {
+      fs.mkdirSync(EVIDENCE_ROOT, { recursive: true });
+      const sec = await cutLast(key, ['720', 'source'], path.join(EVIDENCE_ROOT, id + '.mp4'), path.join(EVIDENCE_ROOT, id + '.jpg'));
+      return { id, sec };
+    } finally {
+      evidenceJobs -= 1;
+    }
+  })();
+  promise.catch(() => evidenceRecent.delete(lower));
+  if (evidenceRecent.size > 500) evidenceRecent.clear();
+  evidenceRecent.set(lower, { at: Date.now(), promise });
+  return promise;
+}
+
+// путь к файлу записи (mp4 или обложка jpg) по id; null — нет такого
+function evidencePath(id, thumb) {
+  if (!/^[a-f0-9]{24}$/.test(String(id))) return null;
+  const file = path.join(EVIDENCE_ROOT, id + (thumb ? '.jpg' : '.mp4'));
+  return fs.existsSync(file) ? file : null;
+}
+
+// старше 90 дней и сверх EVIDENCE_MAX самых свежих — удаляем (зовёт vodCleanup раз в минуту)
+function cleanupEvidence() {
+  if (!fs.existsSync(EVIDENCE_ROOT)) return;
+  const now = Date.now();
+  const files = fs.readdirSync(EVIDENCE_ROOT)
+    .filter((f) => /\.mp4$/.test(f))
+    .map((f) => ({ f, t: fs.statSync(path.join(EVIDENCE_ROOT, f)).mtimeMs }))
+    .sort((a, b) => b.t - a.t);
+  let n = 0;
+  files.forEach((x, i) => {
+    if (i < EVIDENCE_MAX && now - x.t < EVIDENCE_TTL_MS) return;
+    for (const ext of ['.mp4', '.jpg']) {
+      try { fs.unlinkSync(path.join(EVIDENCE_ROOT, x.f.replace(/\.mp4$/, ext))); } catch (_) {}
+    }
+    n += 1;
+  });
+  if (n) console.log('[clips] удалено записей к жалобам:', n);
+}
+
+module.exports = { createClip, removeClip, cleanupExpiredClips, CLIPS_ROOT, createEvidence, evidencePath, cleanupEvidence };

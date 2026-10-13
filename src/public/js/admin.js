@@ -153,6 +153,26 @@ function pollStatus(log) {
     return `<b class="support-num">#${escapeHtml(tk.number ?? '—')}</b> · ${src} · ${formatDate(tk.createdAt)} · @${escapeHtml(tk.username || '—')}${fresh}`;
   }
 
+  // запись последних ~30 с эфира к жалобе: готовится (крутилка) → обложка с ▶ (в карточке) / плеер (в окне) | не вышло.
+  // Ждём не дольше 3 мин: дольше — сервер перезапускался, записи не будет
+  function clipState(tk) {
+    const c = tk.report && tk.report.clip;
+    if (!c || !c.status) return null;
+    if (c.status === 'pending' && Date.now() - new Date(tk.createdAt).getTime() > 3 * 60 * 1000) return { status: 'failed' };
+    return c;
+  }
+  function clipHtml(tk, player) {
+    const c = clipState(tk);
+    if (!c) return '';
+    if (c.status === 'pending') return `<div class="report-clip report-clip--wait"><span class="report-clip-spin"></span>${escapeHtml(t('admin.support.clipPending'))}</div>`;
+    if (c.status !== 'ready') return `<div class="report-clip report-clip--fail">${escapeHtml(t('admin.support.clipFailed'))}</div>`;
+    const src = '/api/support/clip/' + encodeURIComponent(c.id);
+    const label = escapeHtml(t('admin.support.clipReady', { n: c.sec || 30 }));
+    if (player) return `<div class="report-clip"><div class="ticket-msg-head">🎬 ${label}</div><video src="${src}" poster="${src}?thumb=1" controls preload="metadata" playsinline></video></div>`;
+    return `<button type="button" class="report-clip-thumb" data-act="view" data-id="${escapeHtml(tk._id)}" title="${label}">` +
+      `<img src="${src}?thumb=1" alt="" loading="lazy"><span>▶ ${label}</span></button>`;
+  }
+
   // 🚩 жалоба на эфир: на кого (ссылка на канал), причина, название эфира и шёл ли он в момент жалобы
   function reportHtml(r, status) {
     const href = '/streamers/' + encodeURIComponent(String(r.streamer).toLowerCase());
@@ -168,7 +188,7 @@ function pollStatus(log) {
       <div class="support-card${tk.hasNewReply ? ' support-card--fresh' : ''}" data-id="${escapeHtml(tk._id)}">
         <div class="support-card-meta">${metaHtml(tk)}</div>
         <div class="support-card-name">${escapeHtml(tk.name || t('admin.support.noName'))}${tk.email ? ' · ' + escapeHtml(tk.email) : ' · ' + t('admin.support.noEmail')}</div>
-        ${tk.report ? reportHtml(tk.report, tk.status) : tk.subject ? `<div class="support-card-subject" data-no-i18n>${escapeHtml(tk.subject)}</div>` : ''}
+        ${tk.report ? reportHtml(tk.report, tk.status) + clipHtml(tk, false) : tk.subject ? `<div class="support-card-subject" data-no-i18n>${escapeHtml(tk.subject)}</div>` : ''}
         <div class="support-card-desc" data-no-i18n>${escapeHtml(tk.description)}</div>
         ${tk.files?.length ? `<div class="support-card-meta">📎 ${t('admin.thread.files', { n: tk.files.length })}</div>` : ''}
         ${tk.messagesCount ? `<div class="support-card-meta">${t('admin.support.messages', { n: tk.messagesCount })}</div>` : ''}
@@ -239,7 +259,7 @@ function pollStatus(log) {
       const src = '/api/support/file/' + encodeURIComponent(id);
       return `<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="" loading="lazy"></a>`;
     }).join('');
-    document.getElementById('ticketViewThread').innerHTML = [first, ...(tk.messages || [])].map(messageHtml).join('') +
+    document.getElementById('ticketViewThread').innerHTML = clipHtml(tk, true) + [first, ...(tk.messages || [])].map(messageHtml).join('') +
       (shots ? `<div class="ticket-files"><div class="ticket-msg-head">📎 ${escapeHtml(t('admin.thread.files', { n: tk.files.length }))}</div><div class="ticket-files-list">${shots}</div></div>` : '');
     document.getElementById('ticketViewActions').innerHTML = actionsHtml(tk, false);
   }
@@ -376,6 +396,10 @@ function pollStatus(log) {
     refreshCount();
     const busy = !viewModal.classList.contains('hidden') || !replyModal.classList.contains('hidden');
     if (!overlay.classList.contains('hidden') && !busy) loadTickets();
+    // открыта жалоба, запись к которой ещё готовится — подтягиваем, пока не будет готова
+    if (!viewModal.classList.contains('hidden') && replyModal.classList.contains('hidden') && clipState(openTicket?.ticket || {})?.status === 'pending') {
+      openView(openTicket.ticket._id);
+    }
   }, 5000);
 
   // socket (если доступен на этом origin)

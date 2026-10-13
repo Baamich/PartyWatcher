@@ -61,7 +61,13 @@
       "copyright": "Someone else’s content (films, sports, TV)",
       "spam": "Spam, ads, fraud, gambling",
       "other": "Other"
-    }
+    },
+    "clipPending": "Saving the stream recording…",
+    "clipReady": {
+      "one": "Stream recording, {n} second",
+      "other": "Stream recording, {n} seconds"
+    },
+    "clipFailed": "The stream recording was not saved"
   },
   "thread": {
     "title": "Request #{n}",

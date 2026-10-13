@@ -129,10 +129,13 @@ router.post('/stream-report', auth, reportLimiter, async (req, res) => {
     if (typeof files === 'string') return res.status(400).json({ error: req.t(files) });
     // «угроза детям» — без картинок: такие материалы нельзя хранить даже как доказательство, только описание словами
     if (reason === 'minors' && files.length) return res.status(400).json({ error: req.t('server.support.noFilesMinors') });
-    const streamer = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('streamerName isLive streamTitle').lean());
+    const streamer = nameLower && (await User.findOne({ streamerNameLower: nameLower })
+      .select('streamerName streamerNameLower isLive streamTitle streamPlaybackId').lean());
     if (!streamer) return res.status(404).json({ error: req.t('server.notFound') });
     const me = await User.findById(req.user.id).select('username email').lean();
     const reasonText = i18n.t(req.lang, 'server.support.reasons.' + reason);
+    // эфир идёт — сохраняем последние ~30 с как доказательство (кроме «угрозы детям»: такое хранить нельзя)
+    const withClip = !!streamer.isLive && reason !== 'minors';
     const ticket = await createWithFiles({
       number: await nextNumber(),
       name: String(me?.username || '').slice(0, 12),
@@ -143,15 +146,34 @@ router.post('/stream-report', auth, reportLimiter, async (req, res) => {
       username: me?.username || '',
       source: 'stream',
       subject: `🚩 ${streamer.streamerName}`,
-      report: { streamer: streamer.streamerName, reason, title: streamer.streamTitle || '', live: !!streamer.isLive },
+      report: {
+        streamer: streamer.streamerName, reason, title: streamer.streamTitle || '', live: !!streamer.isLive,
+        ...(withClip ? { clip: { status: 'pending' } } : {}),
+      },
     }, files);
     await notifyAdmins(req, ticket);
+    if (withClip) saveReportClip(req, ticket._id, streamer);
     res.status(201).json({ ok: true, number: ticket.number });
   } catch (err) {
     console.error('[support/stream-report]', err);
     res.status(500).json({ error: req.t('server.sendFailed') });
   }
 });
+
+// запись к жалобе — в фоне (ответ человеку не ждёт ffmpeg); готово/не вышло — админка обновит карточку
+function saveReportClip(req, ticketId, streamer) {
+  require('../services/clips').createEvidence(streamer)
+    .then(({ id, sec }) => ({ id, status: 'ready', sec }))
+    .catch((e) => {
+      console.warn('[support/stream-report] запись эфира не сохранена:', e.i18nKey || e.message);
+      return { status: 'failed' };
+    })
+    .then(async (clip) => {
+      const t = await SupportTicket.findByIdAndUpdate(ticketId, { $set: { 'report.clip': clip } }, { new: true }).select('-mailIds');
+      if (t) await broadcast(req, t);
+    })
+    .catch((e) => console.error('[support/stream-report] clip', e.message));
+}
 
 async function notifyAdmins(req, ticket) {
   const io = req.app.get('io');
@@ -383,6 +405,13 @@ router.get('/count', auth, adminOnly, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: req.t('server.serverError') });
   }
+});
+
+// запись эфира к жалобе (mp4 с перемоткой — sendFile умеет Range) или её обложка ?thumb=1 — только админу
+router.get('/clip/:id', auth, adminOnly, (req, res) => {
+  const file = require('../services/clips').evidencePath(req.params.id, req.query.thumb === '1');
+  if (!file) return res.status(404).json({ error: req.t('server.notFound') });
+  res.sendFile(file, { headers: { 'Cache-Control': 'private, max-age=86400' } });
 });
 
 // скриншот обращения — только админу (картинку не кэширует Cloudflare: private)

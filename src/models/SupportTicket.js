@@ -27,6 +27,12 @@ const supportTicketSchema = new mongoose.Schema(
       reason: { type: String, default: undefined },
       title: { type: String, default: undefined },
       live: { type: Boolean, default: undefined },
+      // запись последних ~30 с эфира (services/clips.js createEvidence): pending → ready (id файла, секунды) | failed
+      clip: {
+        id: { type: String, default: undefined },
+        status: { type: String, enum: ['pending', 'ready', 'failed'], default: undefined },
+        sec: { type: Number, default: undefined },
+      },
     },
     subject: { type: String, trim: true, maxlength: 200, default: '' }, // тема письма (только для source=email)
     files: { type: [mongoose.Schema.Types.ObjectId], default: undefined }, // скриншоты (SupportFile, до 5, живут 90 дней)
