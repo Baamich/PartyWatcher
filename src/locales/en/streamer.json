@@ -109,5 +109,25 @@
     "default": "Stream points",
     "short": "SP",
     "bonus": "Claim bonus"
+  },
+  "report": {
+    "btn": "Report the stream",
+    "title": "Report the stream",
+    "hint": "The site administration will see the report. We usually review it within 1–2 days.",
+    "reason": "Reason",
+    "text": "What happened (optional)",
+    "textPh": "For example: at 1:20:00 they showed…",
+    "send": "Send report",
+    "sent": "Report sent — thank you!",
+    "needLogin": "Sign in to report a stream",
+    "reasons": {
+      "violence": "Violence, cruelty, dangerous stunts",
+      "sexual": "Sexual content",
+      "minors": "Danger to children / minors",
+      "hate": "Harassment, hate, extremism",
+      "copyright": "Someone else’s content (films, sports, TV)",
+      "spam": "Spam, ads, fraud, gambling",
+      "other": "Other"
+    }
   }
 }

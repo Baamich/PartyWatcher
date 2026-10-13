@@ -1,6 +1,6 @@
 // services/adultContent.js — видео 18+ (порно) по адресу ссылки.
-// Такие комнаты не показываются в публичном списке тем, кто не подтвердил 18+ и не включил фильтр «18+»,
-// а при входе в комнату сайт спрашивает возраст (см. room.js → ensureAdult).
+// Такие комнаты никогда не показываются в публичном списке, создавать и открывать их могут только админ и друзья
+// (services/roles.js), при входе сайт ещё спрашивает возраст (room.js → ensureAdult).
 // Только имя хоста: сам сайт не открываем, сервер не нагружаем.
 
 const ADULT_HOSTS = [
@@ -12,6 +12,9 @@ const ADULT_HOSTS = [
   'camsoda.com', 'livejasmin.com', 'manyvids.com', 'clips4sale.com', 'brazzers.com', 'realitykings.com', 'bangbros.com',
   'nhentai.net', 'hanime.tv', 'rule34.xxx', 'rule34video.com', 'e-hentai.org', 'thisvid.com', 'daftsex.com',
   'sex.com', 'porno365.best', 'pornolab.net', 'rusporn.porn', 'xcadr.online',
+  // CDN этих сайтов: прямая ссылка на файл/плейлист (тип «Прямая ссылка») иначе не распознавалась как 18+
+  'phncdn.com', 'xvideos-cdn.com', 'xnxx-cdn.com', 'xhcdn.com', 'xhpingcdn.com', 'xhamster.one', 'rdtcdn.com',
+  'ypncdn.com', 'tube8cdn.com', 'sb-cd.com', 'spankbang.party', 'eporner.net', 'tnaflix.org', 'motherlessmedia.com',
 ];
 // слова в имени хоста (не «sex»: попадут sussex/essex и подобное)
 const ADULT_WORDS = /porn|xxx|hentai/i;

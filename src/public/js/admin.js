@@ -108,9 +108,14 @@ function pollStatus(log) {
   let openTicket = null; // { ticket, reply } — что открыто в окне просмотра
   let searchTimer = null;
 
+  // красный кружок с числом — только когда есть непрочитанные (наверху у «Жалобы» и в меню у «💬 Обращения»)
   function setBadge(n) {
-    if (!badge) return;
-    badge.textContent = String(n ?? 0);
+    const v = Number(n) || 0;
+    for (const el of [badge, document.getElementById('supportNavBadge')]) {
+      if (!el) continue;
+      el.textContent = v > 99 ? '99+' : String(v);
+      el.classList.toggle('hidden', !v);
+    }
   }
 
   function escapeHtml(str) {
@@ -143,9 +148,19 @@ function pollStatus(log) {
   }
 
   function metaHtml(tk) {
-    const src = tk.source === 'email' ? t('admin.support.fromEmail') : t('admin.support.fromSite');
+    const src = tk.source === 'email' ? t('admin.support.fromEmail') : tk.source === 'stream' ? t('admin.support.fromStream') : t('admin.support.fromSite');
     const fresh = tk.hasNewReply ? ` <span class="support-new">${t('admin.support.newReply')}</span>` : '';
     return `<b class="support-num">#${escapeHtml(tk.number ?? '—')}</b> · ${src} · ${formatDate(tk.createdAt)} · @${escapeHtml(tk.username || '—')}${fresh}`;
+  }
+
+  // 🚩 жалоба на эфир: на кого (ссылка на канал), причина, название эфира и шёл ли он в момент жалобы
+  function reportHtml(r, status) {
+    const href = '/streamers/' + encodeURIComponent(String(r.streamer).toLowerCase());
+    const reason = I18N.has('admin.support.reasons.' + r.reason) ? t('admin.support.reasons.' + r.reason) : r.reason;
+    const live = r.live ? t('admin.support.reportLive') : t('admin.support.reportOffline');
+    return `<div class="support-card-subject" data-no-i18n>🚩 <a href="${href}" target="_blank" rel="noopener">${escapeHtml(r.streamer)}</a>` +
+      ` · <b>${escapeHtml(reason)}</b> · ${escapeHtml(live)}${r.title ? ' · «' + escapeHtml(r.title) + '»' : ''}` +
+      `${status === 'unread' ? '' : ' · ' + escapeHtml(status)}</div>`;
   }
 
   function cardHtml(tk) {
@@ -153,7 +168,7 @@ function pollStatus(log) {
       <div class="support-card${tk.hasNewReply ? ' support-card--fresh' : ''}" data-id="${escapeHtml(tk._id)}">
         <div class="support-card-meta">${metaHtml(tk)}</div>
         <div class="support-card-name">${escapeHtml(tk.name || t('admin.support.noName'))}${tk.email ? ' · ' + escapeHtml(tk.email) : ' · ' + t('admin.support.noEmail')}</div>
-        ${tk.subject ? `<div class="support-card-subject" data-no-i18n>${escapeHtml(tk.subject)}</div>` : ''}
+        ${tk.report ? reportHtml(tk.report, tk.status) : tk.subject ? `<div class="support-card-subject" data-no-i18n>${escapeHtml(tk.subject)}</div>` : ''}
         <div class="support-card-desc" data-no-i18n>${escapeHtml(tk.description)}</div>
         ${tk.messagesCount ? `<div class="support-card-meta">${t('admin.support.messages', { n: tk.messagesCount })}</div>` : ''}
         <div class="support-card-actions">${actionsHtml(tk, true)}</div>
@@ -164,13 +179,20 @@ function pollStatus(log) {
     try {
       const data = await api('/support/count');
       setBadge(data.unreadCount);
+      const sc = document.getElementById('streamReportCount');
+      if (sc) {
+        sc.textContent = String(data.streamUnread || 0);
+        sc.classList.toggle('hidden', !data.streamUnread);
+      }
     } catch (_) {}
   }
 
   async function loadTickets() {
     if (!listEl) return;
     try {
-      const qs = currentQuery ? 'q=' + encodeURIComponent(currentQuery) : 'status=' + encodeURIComponent(currentStatus);
+      const qs = currentQuery
+        ? 'q=' + encodeURIComponent(currentQuery)
+        : currentStatus === 'stream' ? 'source=stream' : 'status=' + encodeURIComponent(currentStatus);
       const data = await api('/support?' + qs);
       const tickets = data.tickets || [];
       if (!tickets.length) {

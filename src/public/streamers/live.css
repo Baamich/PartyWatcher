@@ -868,3 +868,11 @@
 
 /* выделенное сообщение (награда «Выделить сообщение») */
 #liveMessages > .live-msg-hl { margin: 4px 0; padding: 6px 8px; border-radius: 8px; background: linear-gradient(120deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.25)); border-left: 3px solid #a78bfa; }
+
+/* 🚩 жалоба на эфир */
+#liveFollowBar .live-report-btn { width: auto; flex: 0 0 auto; padding-left: 10px; padding-right: 10px; }
+.report-modal { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 4px; }
+.report-modal h3 { margin: 0 0 4px; }
+.report-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; }
+.report-modal select, .report-modal textarea { margin: 0 0 8px; }
+

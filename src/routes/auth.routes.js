@@ -287,6 +287,44 @@ router.post('/verify/resend', resendLimiter, async (req, res) => {
   res.json({ ok: true, message: req.t('server.auth.verifySent', { email: maskEmail(user.email), n: left }) });
 });
 
+// POST /auth/verify/change-email { login, password, email } — ошибся в почте при регистрации: новая почта, новое
+// письмо, и 30 минут на подтверждение отсчитываются заново. Только для неподтверждённого аккаунта и с паролем
+router.post('/verify/change-email', resendLimiter, async (req, res) => {
+  const loginLower = String(req.body?.login ?? '').trim().toLowerCase();
+  const password = String(req.body?.password ?? '');
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const user = await User.findOne({ $or: [{ usernameLower: loginLower }, { email: loginLower }] });
+  const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
+  if (!user || !ok) return res.status(401).json({ error: req.t('server.auth.badLogin') });
+  if (!user.verifyPending) return res.status(400).json({ error: req.t('server.auth.alreadyVerified') });
+  if (isExpiredPending(user)) {
+    await User.deleteOne({ _id: user._id, verifyPending: true });
+    return res.status(410).json({ error: req.t('server.auth.verifyExpired', { n: VERIFY_TTL_MIN }) });
+  }
+  const emailErr = validateEmail(email);
+  if (emailErr) return res.status(400).json({ error: req.t(emailErr) });
+  if (email !== user.email) {
+    const other = await User.findOne({ email, _id: { $ne: user._id } }).select('verifyPending verifyExpires').lean();
+    if (other && isExpiredPending(other)) await User.deleteOne({ _id: other._id, verifyPending: true });
+    else if (other) return res.status(409).json({ error: req.t('server.auth.emailTaken') });
+  }
+  if (user.verifySentAt && Date.now() - new Date(user.verifySentAt).getTime() < VERIFY_RESEND_MS) {
+    return res.status(429).json({ error: req.t('server.auth.forgotWait') });
+  }
+  const token = crypto.randomBytes(32).toString('base64url');
+  user.email = email;
+  await User.updateOne({ _id: user._id }, {
+    $set: { email, verifyTokenHash: hashResetToken(token), verifySentAt: new Date(), verifyExpires: new Date(Date.now() + VERIFY_TTL_MIN * 60000) },
+  });
+  try {
+    await sendVerify(user, token, req.lang);
+  } catch (e) {
+    console.error('[auth/verify/change-email] письмо не отправлено:', e.message);
+    return res.status(502).json({ error: req.t('server.sendFailed') });
+  }
+  res.json({ ok: true, message: req.t('server.auth.verifySent', { email: maskEmail(email), n: VERIFY_TTL_MIN }) });
+});
+
 // «Аккаунт заблокирован до 14.10.2026, 18:00. Причина: …» — дата в часовом поясе UTC (у сервера нет зоны человека)
 function banText(req, until, reason) {
   const base = until

@@ -48,7 +48,20 @@
     "notFound": "No request with this number",
     "mailSent": "Status changed, email sent",
     "mailNotSent": "Status changed, but the email was not sent (check SMTP)",
-    "savedNoMail": "Status changed (no email — nothing was sent)"
+    "savedNoMail": "Status changed (no email — nothing was sent)",
+    "streamTab": "🚩 Streams",
+    "fromStream": "🚩 stream report",
+    "reportLive": "was live",
+    "reportOffline": "was offline",
+    "reasons": {
+      "violence": "Violence, cruelty, dangerous stunts",
+      "sexual": "Sexual content",
+      "minors": "Danger to children / minors",
+      "hate": "Harassment, hate, extremism",
+      "copyright": "Someone else’s content (films, sports, TV)",
+      "spam": "Spam, ads, fraud, gambling",
+      "other": "Other"
+    }
   },
   "thread": {
     "title": "Request #{n}",
@@ -75,7 +88,8 @@
     "users": "👥 Accounts",
     "bans": "🛡️ IP & device bans",
     "update": "🔄 Site update",
-    "support": "💬 Support requests"
+    "support": "💬 Support requests",
+    "detect": "🕵️ Detection"
   },
   "stats": {
     "period": "Period",
@@ -281,7 +295,9 @@
     "ownTitle": "Entered by the user",
     "saved": "Saved",
     "editHint": "Changing the username ends all of the person’s sessions — they will need to sign in again (with the new username or email). The channel name is not changed here.",
-    "renameConfirm": "Change the username to “{name}”? The person will be signed out and will need to sign in again."
+    "renameConfirm": "Change the username to “{name}”? The person will be signed out and will need to sign in again.",
+    "pending": "Waiting for email confirmation (until {d})",
+    "friend": "Admin’s friend"
   },
   "bans": {
     "title": "IP & device bans",
@@ -299,5 +315,25 @@
     },
     "remove": "Lift",
     "removed": "Ban lifted"
+  },
+  "detect": {
+    "title": "🕵️ Detection",
+    "hint": "Different accounts that used the same IP, browser or computer/phone in the last 30 days. It may be an alt account to evade a ban or inflate numbers — or a family, shared Wi-Fi or mobile internet. “Ignore” hides the match until a new account joins it.",
+    "kind": {
+      "ip": "🌐 Same IP",
+      "did": "🧭 Same browser",
+      "hw": "🖥️ Same hardware"
+    },
+    "alreadyBanned": "already banned",
+    "accounts": {
+      "one": "{n} account",
+      "other": "{n} accounts"
+    },
+    "last": "last seen {d}",
+    "open": "Open",
+    "check": "🔍 Check",
+    "hide": "Collapse",
+    "ignore": "Ignore",
+    "empty": "No matches 👍"
   }
 }

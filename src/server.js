@@ -50,11 +50,14 @@ const securityHeaders = require('./middleware/securityHeaders');
 const cspRoutes = require('./routes/csp.routes');
 const i18n = require('./services/i18n');
 const pages = require('./services/pages');
+const roles = require('./services/roles');
+const authMw = require('./middleware/auth');
 const perf = require('./services/perf');
 const bans = require('./services/bans');
 const analytics = require('./services/analytics');
 const adminStatsRoutes = require('./routes/adminStats.routes');
 const adminUsersRoutes = require('./routes/adminUsers.routes');
+const adminDetectRoutes = require('./routes/adminDetect.routes');
 
 async function start() {
   await connectDB();
@@ -112,7 +115,7 @@ async function start() {
     res.redirect(301, '/' + qs);
   });
 
-  const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin(-stats|-users)?\.js|css\/admin(-stats)?\.css)\/?$/i;
+  const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin(-stats|-users|-detect)?\.js|css\/admin(-stats)?\.css)\/?$/i;
   app.use((req, res, next) => {
     if (!ADMIN_PATHS.test(req.path)) return next();
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -145,23 +148,34 @@ async function start() {
   if (!config.imprint.name || !config.imprint.street || !config.imprint.city) {
     console.warn('[imprint] не заполнены IMPRINT_NAME / IMPRINT_STREET / IMPRINT_CITY в .env — /impressum без данных владельца');
   }
-  app.get(['/impressum', '/impressum.html', '/imprint'], (req, res, next) => {
+  const imprintOpts = (req) => {
     const im = config.imprint;
     const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const filled = im.name && im.street && im.city;
-    pages.send(req, res, 'impressum.html', {
+    return {
       vars: { 'imprint.name': im.name || '—', 'imprint.street': im.street, 'imprint.city': im.city, 'imprint.country': im.country, 'imprint.email': im.email },
       raw: {
         'imprint.phoneRow': im.phone ? `<br />${esc(i18n.t(req.lang, 'imprint.phone'))}: ${esc(im.phone)}` : '',
         'imprint.missing': filled ? '' : `<p class="auth-error">${esc(i18n.t(req.lang, 'imprint.missing'))}</p>`,
       },
-    }).catch(next);
+    };
+  };
+  app.get(['/impressum', '/impressum.html', '/imprint'], (req, res, next) => {
+    pages.send(req, res, 'impressum.html', imprintOpts(req)).catch(next);
+  });
+  // политика конфиденциальности (текст — src/locales/<язык>/privacy.json), ответственный — те же IMPRINT_*
+  app.get(['/datenschutz', '/datenschutz.html', '/privacy'], (req, res, next) => {
+    pages.send(req, res, 'datenschutz.html', imprintOpts(req)).catch(next);
   });
 
   app.use(pages.middleware); // HTML-страницы: версии файлов, словарь, перевод и данные входа сразу в разметке
   app.use(express.static(path.join(__dirname, 'public'), { setHeaders: pages.staticHeaders }));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
-  app.use('/media/yt-cache', express.static(YT_CACHE_DIR));
+  // скачанные видео YouTube 18+ — только админу и друзьям (как и сами комнаты с ними)
+  app.use('/media/yt-cache', authMw.optional, async (req, res, next) => {
+    if (req.user && (await roles.isTrusted(req.user.id))) return next();
+    res.status(403).end();
+  }, express.static(YT_CACHE_DIR));
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
   // клипы не меняются (у каждого свой id) — кэш на неделю
   app.use('/media/clips', express.static(path.join(process.cwd(), 'media', 'clips'), { maxAge: '7d', index: false }));
@@ -190,6 +204,7 @@ async function start() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin', adminStatsRoutes);
   app.use('/api/admin', adminUsersRoutes);
+  app.use('/api/admin', adminDetectRoutes);
   app.use('/api/drive', driveRoutes);
   app.use('/api/player-capture', playerCaptureRoutes);
   app.use('/api/stream', streamProxyRoutes);

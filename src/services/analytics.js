@@ -4,7 +4,8 @@
 //    Visitor: когда посетитель пришёл впервые (новые/вернувшиеся);
 //  - UserSeen и User.lastSeenAt/lastIp: с каких IP и устройств заходил аккаунт (бан IP/устройства);
 //  - ServerLive: текущая нагрузка и последние 6 часов по минутам.
-// Статика, сокеты, /media и упреждающая загрузка страниц не считаются.
+// Статика, сокеты, /media и упреждающая загрузка страниц не считаются. Посетители (VisitDay/Visitor) — только
+// с согласием на статистику (cookie pw_consent=stats); общие счётчики запросов и нагрузки — всегда (они обезличены).
 const os = require('os');
 const ServerStat = require('../models/ServerStat');
 const ServerLive = require('../models/ServerLive');
@@ -58,6 +59,7 @@ function pagePath(p) {
 }
 const encKey = (s) => s.replace(/\./g, '．').replace(/^\$/, '＄'); // точки и $ нельзя в ключах Mongo
 
+const CONSENT_RE = /(?:^|;\s*)pw_consent=stats(?:;|$)/;
 const isPrefetch = (req) => /prefetch|prerender/i.test(String(req.headers['sec-purpose'] || req.headers.purpose || ''));
 
 function record(req, res, t0) {
@@ -88,6 +90,25 @@ function record(req, res, t0) {
   const ua = uaInfo(req.headers);
   const now = Date.now();
   const userId = req.user && req.user.id ? String(req.user.id) : '';
+  const country = String(req.headers['cf-ipcountry'] || '').slice(0, 2);
+
+  // защита аккаунта (бан IP/устройства, 🕵️ Обнаружение) — законный интерес безопасности, без согласия
+  if (userId) {
+    const sk = userId + '|' + ip + '|' + ids.did;
+    const s = seen.get(sk) || { userId, ip, did: ids.did, hits: 0 };
+    s.hw = ids.hw;
+    s.name = ua.name;
+    s.country = country;
+    s.hits++;
+    s.last = now;
+    if (seen.size < MAX_KEYS) seen.set(sk, s);
+    users.set(userId, { ip, at: now });
+  }
+
+  // статистика посещений (устройство, браузер, страна в «Посетителях») — только с согласия из баннера
+  // (cookie pw_consent=stats, js/consent.js). Боты — не люди, их считаем всегда
+  if (!CONSENT_RE.test(req.headers.cookie || '') && ua.type !== 'bot') return;
+
   const vk = visitorKeys(ip, ids, req.headers['user-agent'] || '', userId);
   // этот браузер/IP сегодня уже узнали как конкретного человека — считаем к нему
   const key = aliasTo.get(vk.key) || vk.key;
@@ -105,22 +126,13 @@ function record(req, res, t0) {
   if (isPage) v.pages++;
   else v.api++;
   v.ip = ip;
-  v.country = String(req.headers['cf-ipcountry'] || '').slice(0, 2);
+  v.country = country;
   v.did = ids.did;
   v.hw = ids.hw;
   v.ua = ua;
   if (userId) {
     v.userId = userId;
     v.username = req.user.username || '';
-    const sk = userId + '|' + ip + '|' + ids.did;
-    const s = seen.get(sk) || { userId, ip, did: ids.did, hits: 0 };
-    s.hw = ids.hw;
-    s.name = ua.name;
-    s.country = v.country;
-    s.hits++;
-    s.last = now;
-    if (seen.size < MAX_KEYS) seen.set(sk, s);
-    users.set(userId, { ip, at: now });
   }
 }
 

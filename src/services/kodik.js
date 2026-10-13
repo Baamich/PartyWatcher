@@ -211,4 +211,51 @@ async function linkForTranslation(link, translationId) {
   return found;
 }
 
-module.exports = { normalizeLink, hasToken, search, isKnownPoster, isAdultLink, linkForTranslation, posInt };
+// 18+ у ссылки, которую человек вставил сам (не из нашего поиска): берём название со страницы плеера,
+// ищем его через API (тот же search) и смотрим рейтинг совпавшего материала. Не получилось узнать — не 18+
+// (в лог), результат держим 6 часов. Нужен KODIK_TOKEN
+const ADULT_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
+const adultChecked = new Map(); // ссылка → { adult, at }
+const normTitle = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, '');
+
+function titleFromPage(html) {
+  const pick = (re) => {
+    const m = html.match(re);
+    return m ? m[1].replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').trim() : '';
+  };
+  const raw = pick(/<meta[^>]+property="og:title"[^>]+content="([^"]{2,200})"/i)
+    || pick(/\bdata-title="([^"]{2,200})"/i)
+    || pick(/<title>([^<]{2,200})<\/title>/i);
+  // «Название / Original - Kodik», «Название | Kodik» → «Название»
+  return raw.replace(/\s*[|–—-]\s*kodik.*$/i, '').split(' / ')[0].trim().slice(0, 100);
+}
+
+async function checkAdultLink(url) {
+  const link = normalizeLink(url);
+  if (!link) return false;
+  if (adultLinks.has(link)) return true;
+  if (!hasToken()) return false;
+  const hit = adultChecked.get(link);
+  if (hit && Date.now() - hit.at < ADULT_CHECK_TTL_MS) return hit.adult;
+
+  let adult = false;
+  try {
+    const res = await fetch(link, { headers: { 'User-Agent': UA, Referer: config.publicUrl + '/' }, signal: AbortSignal.timeout(8000) });
+    const html = res.ok ? (await res.text()).slice(0, MAX_PAGE_BYTES) : '';
+    const title = html ? titleFromPage(html) : '';
+    if (title.length >= 2) {
+      const items = await search(title);
+      const want = normTitle(title);
+      adult = adultLinks.has(link) || items.some((g) => g.adult && (normTitle(g.title) === want || normTitle(g.titleOrig) === want));
+    } else {
+      console.warn('[kodik] 18+: не нашёл название на странице плеера', res.status);
+    }
+  } catch (e) {
+    console.warn('[kodik] 18+: проверка не удалась:', e.i18nKey || e.cause?.code || e.name);
+  }
+  remember(adultChecked, link, { adult, at: Date.now() }, TR_CACHE_MAX);
+  if (adult) remember(adultLinks, link, Date.now(), ADULT_MAX);
+  return adult;
+}
+
+module.exports = { normalizeLink, hasToken, search, isKnownPoster, isAdultLink, checkAdultLink, linkForTranslation, posInt };

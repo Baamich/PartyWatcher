@@ -22,7 +22,7 @@
     <button class="icon-btn" data-href="/" data-i18n="admin.back">← Назад</button>
         <button class="icon-btn support-admin-btn" id="supportAdminBtn" type="button">
       <span data-i18n="admin.tickets">Жалобы</span>
-      <span class="support-badge" id="supportBadge">0</span>
+      <span class="support-badge hidden" id="supportBadge">0</span>
     </button>
   </div>
 
@@ -33,9 +33,10 @@
     <nav id="wbNavFixed" class="wb-nav">
       <button type="button" class="wb-nav-btn active" data-click="adScrollTop" data-i18n="admin.nav.stats">📊 Статистика</button>
       <button type="button" class="wb-nav-btn" data-click="openUsers" data-i18n="admin.nav.users">👥 Аккаунты</button>
+      <button type="button" class="wb-nav-btn pwa-nav-detect" data-click="openDetect"><span data-i18n="admin.nav.detect">🕵️ Обнаружение</span><span class="support-badge hidden" id="detectBadge">0</span></button>
       <button type="button" class="wb-nav-btn" data-click="openBans" data-i18n="admin.nav.bans">🛡️ Баны IP и устройств</button>
       <button type="button" class="wb-nav-btn" data-click="openUpdate" data-i18n="admin.nav.update">🔄 Обновление сайта</button>
-      <button type="button" class="wb-nav-btn" data-click="openSupport" data-i18n="admin.nav.support">💬 Обращения</button>
+      <button type="button" class="wb-nav-btn pwa-nav-detect" data-click="openSupport"><span data-i18n="admin.nav.support">💬 Обращения</span><span class="support-badge hidden" id="supportNavBadge">0</span></button>
     </nav>
 
     <div id="pwaTop" class="cw-topbar">
@@ -133,6 +134,16 @@
     </div>
   </div>
 
+  <!-- обнаружение: разные аккаунты с одного IP / браузера / железа -->
+  <div id="detectModal" class="modal hidden">
+    <div class="modal-content pwa-wide-modal">
+      <button type="button" class="modal-close" data-close="detectModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 data-i18n="admin.detect.title">🕵️ Обнаружение</h3>
+      <p class="pwa-hint" data-i18n="admin.detect.hint">Разные аккаунты, которые за 30 дней заходили с одного IP, браузера или компьютера/телефона. Это может быть твинк для обхода бана или накрутки — а может быть семья, общий Wi-Fi или мобильный интернет. «Игнорировать» скрывает совпадение, пока к нему не добавится новый аккаунт.</p>
+      <div id="detectList" class="pwa-detect-list" data-no-i18n></div>
+    </div>
+  </div>
+
   <!-- баны IP и устройств -->
   <div id="bansModal" class="modal hidden">
     <div class="modal-content pwa-wide-modal">
@@ -168,6 +179,7 @@
         <button type="button" class="support-tab" data-status="accepted" data-i18n="admin.support.acceptedTab">Приняты</button>
         <button type="button" class="support-tab" data-status="trivial" data-i18n="admin.support.trivial">Пустяк</button>
         <button type="button" class="support-tab" data-status="answered" data-i18n="admin.support.answeredTab">Отвечено</button>
+        <button type="button" class="support-tab support-tab-stream" data-status="stream"><span data-i18n="admin.support.streamTab">🚩 Эфиры</span> <span class="support-tab-count hidden" id="streamReportCount">0</span></button>
       </div>
       <div id="supportTicketsList" class="support-tickets-list"></div>
     </div>
@@ -211,5 +223,6 @@
   <script src="/js/admin.js"></script>
   <script src="/js/admin-stats.js"></script>
   <script src="/js/admin-users.js"></script>
+  <script src="/js/admin-detect.js"></script>
 </body>
 </html>

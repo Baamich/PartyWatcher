@@ -816,3 +816,9 @@ html.pw-authed #appBox.hidden { display: block !important; }
 .auth-terms { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 4px; font-size: 13px; line-height: 1.4; cursor: pointer; color: var(--text-muted); }
 .auth-terms input { width: auto; margin: 2px 0 0; flex-shrink: 0; }
 .auth-terms a { color: var(--accent-text); }
+
+/* аккаунт ждёт подтверждения почты: письмо ещё раз / другая почта */
+.verify-box { margin: 4px 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.verify-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+.verify-email-row { display: flex; flex-direction: column; gap: 6px; }
+.verify-email-row input { margin: 0; }

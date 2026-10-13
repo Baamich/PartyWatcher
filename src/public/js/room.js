@@ -692,6 +692,11 @@ function isAgeConfirmedLocally() {
       ageGateHandling = false;
       return;
     }
+    if (!myTrusted) {
+      setOverlay(t('room.ageGate.friendsOnly'), false);
+      ageGateHandling = false;
+      return;
+    }
 
     const confirmed = await askAgeGate();
     if (!confirmed) {
@@ -1864,10 +1869,13 @@ function ensureAdult() {
   return adultAsking;
 }
 
+let myTrusted = false;
+
 async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/');
   myUsername = me.username || me.user?.username || null;
+  myTrusted = me.role === 'admin' || me.role === 'friend'; // друзья администратора: YouTube 18+, «Просмотр фильма»
   myAdult = !!me.adultConfirmed;
 
   document.getElementById('roomCodeValue').textContent = code;
@@ -2058,6 +2066,11 @@ window.__onCapturePlayerReload = (player) => {
 
   socket.on('room:kicked', () => {
     PW.alert(t('room.kicked.text'), { title: t('room.kicked.title') })
+      .then(() => { location.href = '/'; });
+  });
+
+  socket.on('room:denied', () => {
+    PW.alert(t('room.denied.text'), { title: t('room.denied.title') })
       .then(() => { location.href = '/'; });
   });
 

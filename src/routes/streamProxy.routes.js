@@ -530,6 +530,10 @@ async function relayRanged(req, res, targetUrl) {
 }
 
 router.get('/relay', auth, async (req, res) => {
+  // relay нужен только «Просмотру фильма» — он доступен лишь админу и друзьям (services/roles.js, кэш 60 с)
+  if (!(await require('../services/roles').isTrusted(req.user.id))) {
+    return res.status(403).json({ error: req.t('server.room.captureFriendsOnly') });
+  }
   const targetUrl = req.query.url;
   if (typeof targetUrl !== 'string' || targetUrl.length > 4000 || !targetUrl.startsWith('http')) {
     return res.status(400).json({ error: req.t('server.relay.badUrl') });

@@ -1,12 +1,12 @@
 {
   "meta": {
-    "title": "PartyWatcher — watch movies and videos together online",
-    "description": "PartyWatcher is a free watch-party service. Create a room, send the link to your friends and watch YouTube, Twitch and other videos in sync, with chat and voice.",
-    "ogDescription": "Create a room, send the link to your friends and watch videos in sync with chat and voice."
+    "title": "PartyWatcher — watch YouTube together and stream with friends",
+    "description": "PartyWatcher is a free service for watch parties and live streams. Create a room and watch YouTube, Twitch and VK Video in sync with chat and voice, or start your own stream with rewards, clips and alerts.",
+    "ogDescription": "Watch YouTube, Twitch and VK Video together with friends — in sync, with chat and voice. Or start your own stream with rewards and clips."
   },
   "intro": {
-    "title": "Watch movies and videos together with friends",
-    "text": "PartyWatcher is an online watch-party service. Create a room, share the link, and everyone watches the same video in sync: YouTube, Twitch, Google Drive and other sources. Rooms have text chat and voice."
+    "title": "Watch videos together with friends — and stream yourself",
+    "text": "PartyWatcher is a service for watch parties and live streams. Create a room, share the link — and everyone watches the same video in sync: YouTube, Twitch, VK Video, Google Drive. Rooms have text chat and voice. You can also go live through OBS — with channel-point rewards, clips, alerts and moderation."
   },
   "login": {
     "title": "Sign in",
@@ -90,7 +90,8 @@
     "drive": "(not tested)<br>In Google Drive: right-click the video → \"Share\" → \"Anyone with the link\" → copy the link and paste it here. Otherwise the server cannot read the file.",
     "player_capture": "Paste a link to a page where the video (a movie or series) already plays — that page’s player will be shown to everyone in the room in sync.<br>Not every site works: if no video is found, try another page. <br>⚠️ my.mail.ru is not supported. <br>Some sites let you pick the season/episode/player. <br>Whoever creates the room is responsible for its links and videos (see the <a href=\"/terms#s3\" target=\"_blank\" rel=\"noopener\">terms</a>).",
     "direct": "Paste a READY direct video link — a regular site page address will NOT work here (e.g. a my.mail.ru watch page), only:<br>• a link to the video file itself: .mp4, .m3u8<br>• a link to an embed player that the site ITSELF allows to embed (not all sites allow it, e.g. my.mail.ru).<br>Such a link usually has to be found in the page source — the server does not look for it, unlike “Movie / series viewing”.",
-    "kodik": "Search an anime, drama or series by title and pick a voice-over — the video plays in the Kodik player right at each viewer (fast). The Kodik catalog has anime, dramas, Turkish, Indian and other Eastern movies and series; there are no Hollywood, European or Russian movies — use “Movie / series viewing” for those.<br>You can also paste a ready Kodik player link (kodikplayer.com/video/…).<br>The host switches season, episode and voice-over right in the player — viewers switch along."
+    "kodik": "Paste a Kodik player link — the video plays right at each viewer (fast). Kodik mostly has anime, dramas, Turkish, Indian and other Eastern series and films.<br><br><b>What the link looks like:</b> <code>https://kodikplayer.com/serial/12345/abc…/720p</code> (or <code>/video/…</code>, <code>/season/…</code>).<br><br><b>How to get it</b> from a page with an embedded Kodik player:<br>• <b>Firefox:</b> right-click the player → “This Frame” → “Open Frame in New Tab” → copy the address from the new tab.<br>• <b>Chrome, Edge, Yandex Browser:</b> press F12 → Ctrl+F → type <code>kodik</code> → copy the link from <code>src=\"…\"</code> of the <code>iframe</code> tag.<br><br>The host switches season, episode and voice-over right in the player — viewers switch along.<br>Whoever creates the room is responsible for its links and videos (see the <a href=\"/terms#s3\" target=\"_blank\" rel=\"noopener\">terms</a>).",
+    "kodikSearch": "🔎 You have Kodik catalog search: start typing the title of an anime, drama or series and pick a voice-over."
   },
   "privacy": {
     "public": "🔓 Public — the room will appear in \"Public rooms\" for all users.",
@@ -163,5 +164,11 @@
       "other": "{n} voice-overs"
     },
     "episodes": "{n} ep."
+  },
+  "verify": {
+    "resend": "📨 Send the email again",
+    "change": "✏️ Change email",
+    "send": "Send to the new email",
+    "sent": "Email sent — check your inbox."
   }
 }

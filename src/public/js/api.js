@@ -43,6 +43,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (pwBoot && pwBoot.data && pwBoot.data.me) pwWatchMe(pwBoot.data.me);
 });
 
+// баннер согласия на статистику (js/consent.js) — пока человек не выбрал; на /datenschutz он сам решает, когда показать
+document.addEventListener('DOMContentLoaded', () => {
+  if (/(?:^|;\s*)pw_consent=/.test(document.cookie) || /^\/datenschutz/.test(location.pathname)) return;
+  const s = document.createElement('script');
+  s.src = '/js/consent.js?v=1';
+  s.async = true;
+  document.head.appendChild(s);
+});
+
 // id устройства (cookie pw_dev) для статистики и банов: считается один раз, в простое — загрузку не тормозит
 (function () {
   if (/(?:^|;\s*)pw_dev=1\./.test(document.cookie)) return;

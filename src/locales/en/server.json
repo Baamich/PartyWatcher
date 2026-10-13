@@ -47,7 +47,8 @@
     "unverified": "Your account is not activated yet: open the link from the email sent to {email}.",
     "verifyExpired": "The email was not confirmed in time ({n} min) — the sign-up was cancelled. Please sign up again.",
     "verifyBadLink": "The link is invalid or has already been used.",
-    "pendingExists": "This username or email is waiting for confirmation — open the link from the email (valid for {n} min)."
+    "pendingExists": "This username or email is waiting for confirmation — open the link from the email (valid for {n} min).",
+    "alreadyVerified": "The account is already activated — just sign in."
   },
   "chatApi": {
     "needKey": "An API key is required (Authorization: Bearer <key>)",
@@ -92,7 +93,10 @@
     "changeFailed": "Could not change the video",
     "badKodik": "A Kodik player link is required (kodik.info/… or kodikplayer.com/…)",
     "badVk": "A VK Video link is required (vk.com/video-123_456, vkvideo.ru/… or the embed code)",
-    "badName": "This name won’t do — it contains profanity. Come up with something nicer 🙂"
+    "badName": "This name won’t do — it contains profanity. Come up with something nicer 🙂",
+    "captureFriendsOnly": "“Movie / series viewing” rooms are available only to the administrator’s friends.",
+    "adultFriendsOnly": "18+ videos in rooms are available only to the administrator’s friends.",
+    "ytFriendsOnly": "18+ YouTube videos in rooms are available only to the administrator’s friends."
   },
   "relay": {
     "badUrl": "A valid url is required",
@@ -182,7 +186,17 @@
     "mailFailed": "The email was not sent: check the SMTP settings on the server",
     "attachments": "[attachments: {n} — see the mailbox]",
     "emptyMail": "(empty email)",
-    "closed": "This request has already been processed — it can only be viewed"
+    "closed": "This request has already been processed — it can only be viewed",
+    "reportReason": "Choose a reason for the report",
+    "reasons": {
+      "violence": "Violence, cruelty, dangerous stunts",
+      "sexual": "Sexual content",
+      "minors": "Danger to children / minors",
+      "hate": "Harassment, hate, extremism",
+      "copyright": "Someone else’s content (films, sports, TV)",
+      "spam": "Spam, ads, fraud, gambling",
+      "other": "Other"
+    }
   },
   "yt": {
     "hostOnly": "Only the host can switch the source",
@@ -271,7 +285,8 @@
     "noToken": "Kodik search is not configured on the server — paste a Kodik player link",
     "badQuery": "Enter a title (at least 2 characters)",
     "apiFailed": "Kodik did not respond, try again later",
-    "tooMany": "Too many searches, wait a minute"
+    "tooMany": "Too many searches, wait a minute",
+    "searchFriendsOnly": "Kodik catalog search is available only to the administrator’s friends — paste a Kodik player link instead."
   },
   "adult": {
     "notConfirmed": "Confirm that you are 18 or older first"

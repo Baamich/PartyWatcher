@@ -10,12 +10,12 @@
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
   <link rel="stylesheet" href="/css/index.css?v=7" />
-  <title data-i18n="index.meta.title">PartyWatcher — смотреть фильмы и видео вместе онлайн</title>
+  <title data-i18n="index.meta.title">PartyWatcher — смотри YouTube вместе и стримь с друзьями</title>
   <meta name="description" data-i18n-content="index.meta.description" content="PartyWatcher — бесплатный сервис для совместного просмотра. Создай комнату, отправь ссылку друзьям и смотри YouTube, Twitch и другие видео синхронно, с чатом и голосом.">
   <link rel="canonical" href="https://partywatcher.de/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="PartyWatcher" />
-  <meta property="og:title" data-i18n-content="index.meta.title" content="PartyWatcher — смотреть фильмы и видео вместе онлайн" />
+  <meta property="og:title" data-i18n-content="index.meta.title" content="PartyWatcher — смотри YouTube вместе и стримь с друзьями" />
   <meta property="og:description" data-i18n-content="index.meta.ogDescription" content="Создай комнату, отправь ссылку друзьям и смотри видео синхронно с чатом и голосом." />
   <meta property="og:url" content="https://partywatcher.de/" />
 </head>
@@ -33,7 +33,7 @@
       </div>
       <div data-lang-switch></div>
       </div>
-      <h1 data-i18n="index.intro.title">Смотри фильмы и видео вместе с друзьями</h1>
+      <h1 data-i18n="index.intro.title">Смотри видео вместе с друзьями — и стримь сам</h1>
       <p data-i18n="index.intro.text">PartyWatcher — сервис для совместного просмотра онлайн. Создай комнату, отправь ссылку, и все будут смотреть одно и то же видео синхронно: YouTube, Twitch, Google Диск и другие источники. В комнате есть чат и голосовая связь.</p>
     </section>
     <div class="auth-card">
@@ -41,6 +41,18 @@
       <div id="loginPanel">
         <h2 class="auth-title" data-i18n="index.login.title">Вход</h2>
         <div id="loginError" class="auth-error hidden"></div>
+        <!-- аккаунт не подтверждён: письмо ещё раз или другая почта (ошибся при регистрации) -->
+        <div id="verifyBox" class="verify-box hidden">
+          <div class="verify-actions">
+            <button type="button" class="auth-link" data-click="resendVerify" data-i18n="index.verify.resend">📨 Отправить письмо ещё раз</button>
+            <button type="button" class="auth-link" data-click="toggleVerifyEmail" data-i18n="index.verify.change">✏️ Сменить почту</button>
+          </div>
+          <div id="verifyEmailRow" class="verify-email-row hidden">
+            <input id="verifyEmailInput" type="email" autocomplete="email" maxlength="100" placeholder="email@example.com" />
+            <button type="button" class="auth-submit" data-click="changeVerifyEmail" data-i18n="index.verify.send">Отправить на новую почту</button>
+          </div>
+          <div id="verifyOk" class="support-ok hidden"></div>
+        </div>
 
         <label class="auth-label" for="loginInput" data-i18n="index.login.login">Логин или email</label>
         <input id="loginInput" autocomplete="username" placeholder="Логин или email" data-i18n-placeholder="index.login.login" />
@@ -168,10 +180,10 @@
         <input id="roomName" placeholder="Название комнаты" data-i18n-placeholder="index.create.name" autocomplete="off" />
         <div class="type-row">
           <select id="videoType" data-change="onVideoTypeChange">
-            <option value="kodik" data-i18n="index.type.kodik" selected>Kodik (фильмы, сериалы, аниме)</option>
+            <option value="kodik" data-i18n="index.type.kodik" selected>Kodik (аниме, дорамы, азиатские и турецкие сериалы)</option>
             <option value="youtube_twitch" data-i18n="index.type.youtube_twitch">YouTube / Twitch / VK Видео</option>
             <option value="drive" data-i18n="index.type.drive">Google Диск</option>
-            <option value="player_capture" data-i18n="index.type.player_capture">Захват плеера (фильм / сериал)</option>
+            <option value="player_capture" class="hidden" hidden data-i18n="index.type.player_capture">Просмотр фильма / сериала</option>
             <option value="direct" data-i18n="index.type.direct">Прямая ссылка на видео</option>
           </select>
           <button type="button" class="info-btn" data-click="toggleInfoPopup" data-i18n-title="index.create.info" data-i18n-aria-label="index.create.info">i</button>
@@ -229,6 +241,8 @@
   <!-- юридические ссылки: видны и гостю, и вошедшему (Impressum — обязателен для сайта из Германии) -->
   <footer class="site-legal" data-nosnippet>
     <a href="/terms" data-i18n="common.legal.terms">Условия пользования</a>
+    <span aria-hidden="true">·</span>
+    <a href="/datenschutz" data-i18n="common.legal.privacy">Конфиденциальность</a>
     <span aria-hidden="true">·</span>
     <a href="/impressum">Impressum</a>
   </footer>

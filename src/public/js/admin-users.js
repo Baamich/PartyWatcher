@@ -33,9 +33,11 @@
     return b;
   }
   function statusOf(u) {
+    if (u.verifyPending) return { cls: 'pwa-badge-block', text: t('admin.users.pending', { d: fmt(u.verifyExpires) }) };
     if (u.banPerm) return { cls: 'pwa-badge-ban', text: t('admin.users.banned') };
     if (u.banUntil) return { cls: 'pwa-badge-block', text: t('admin.users.blockedUntil', { d: fmt(u.banUntil) }) };
     if (u.role === 'admin') return { cls: 'pwa-badge-admin', text: t('admin.users.admin') };
+    if (u.role === 'friend') return { cls: 'pwa-badge-admin', text: t('admin.users.friend') };
     if (!u.termsOk) return { cls: 'pwa-badge-muted', text: t('admin.users.noTerms') };
     return { cls: 'pwa-badge-ok', text: t('admin.users.active') };
   }
@@ -356,6 +358,8 @@
     }
   }
 
+  window.openUserCard = (id) => openUser(id); // для 🕵️ Обнаружения
+
   window.openBans = () => {
     bansModal.classList.remove('hidden');
     loadBans();
@@ -364,12 +368,12 @@
   window.openSupport = () => $('supportAdminBtn')?.click();
 
   // клик по фону и Esc закрывают окна (карточка — поверх списка)
-  for (const m of [usersModal, userModal, bansModal, $('updateModal')]) {
+  for (const m of [usersModal, userModal, bansModal, $('updateModal'), $('detectModal')]) {
     m?.addEventListener('click', (e) => { if (e.target === m) m.classList.add('hidden'); });
   }
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const top = [userModal, usersModal, bansModal, $('updateModal')].find((m) => m && !m.classList.contains('hidden'));
+    const top = [userModal, usersModal, $('detectModal'), bansModal, $('updateModal')].find((m) => m && !m.classList.contains('hidden'));
     top?.classList.add('hidden');
   });
   window.addEventListener('pw:langchange', () => {

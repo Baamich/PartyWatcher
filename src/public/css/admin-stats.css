@@ -118,3 +118,12 @@ body > .pw-dialog-overlay { z-index: 4100; } /* подтверждения — �
 .pwa-edit { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
 .pwa-edit input, .pwa-edit textarea { margin: 0 0 6px; }
 .pwa-edit .pwa-actions-row { margin-top: 6px; }
+
+/* 🕵️ Обнаружение */
+.pwa-nav-detect { position: relative; }
+.pwa-detect-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.pwa-detect { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.pwa-detect-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pwa-detect-kind { font-weight: 700; }
+.pwa-detect-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pwa-detect-details .pwa-table td { white-space: nowrap; }

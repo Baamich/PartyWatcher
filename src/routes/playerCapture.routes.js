@@ -569,6 +569,10 @@ async function clickPlayerAndWaitFrame(page, adapter, logLabel, maxAttempts = 5)
 }
 
 router.post('/extract', auth, async (req, res) => {
+  // захват — только админ и друзья (services/roles.js); у остальных старые комнаты этого типа не запускаются
+  if (!(await require('../services/roles').isTrusted(req.user.id))) {
+    return res.status(403).json({ error: req.t('server.room.captureFriendsOnly') });
+  }
   if (!puppeteer) {
     return res.json({
       success: false,

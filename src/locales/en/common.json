@@ -234,6 +234,14 @@
     "thanks": "Thank you! Terms accepted"
   },
   "legal": {
-    "terms": "Terms of Service"
+    "terms": "Terms of Service",
+    "privacy": "Privacy",
+    "privacyIcon": "🔒 Privacy"
+  },
+  "consent": {
+    "text": "The site only uses necessary cookies (sign-in, language, protection from hacking). We collect visit statistics (device, browser, country) only with your consent.",
+    "more": "Learn more",
+    "accept": "Accept statistics",
+    "essential": "Necessary only"
   }
 }

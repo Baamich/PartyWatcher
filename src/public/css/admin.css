@@ -383,3 +383,7 @@ button {
   user-select: text;
   cursor: not-allowed;
 }
+
+/* вкладка «🚩 Эфиры»: число непрочитанных жалоб на эфиры */
+.support-tab-count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.support-card-subject a { color: var(--accent-text); }

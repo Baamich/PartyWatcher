@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');
 const adminStatsRoutes = require('./routes/adminStats.routes');
 const adminUsersRoutes = require('./routes/adminUsers.routes');
+const adminDetectRoutes = require('./routes/adminDetect.routes');
 const bans = require('./services/bans');
 const supportRoutes = require('./routes/support.routes');
 const cspRoutes = require('./routes/csp.routes');
@@ -38,6 +39,7 @@ async function start() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin', adminStatsRoutes);
   app.use('/api/admin', adminUsersRoutes);
+  app.use('/api/admin', adminDetectRoutes);
   bans.start(); // для отметок «забанен» в карточке аккаунта (сам сайт банит в своём процессе)
   app.use('/api/csp-report', cspRoutes);
   

@@ -1,6 +1,7 @@
 // kodik.routes.js — /api/kodik: поиск фильмов/сериалов для комнаты с плеером Kodik
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { isTrusted } = require('../services/roles');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const i18n = require('../services/i18n');
@@ -17,11 +18,14 @@ const searchLimiter = rateLimit({
 });
 
 // есть ли на сервере ключ API (без него — только ссылка на плеер)
-router.get('/config', auth, (req, res) => {
-  res.json({ search: kodik.hasToken() });
+// поиск по каталогу (с постерами) — только админу и друзьям (services/roles.js): сайт сам не подаёт каталог
+// всем подряд. Вставить готовую ссылку на плеер Kodik может любой — за ссылку отвечает тот, кто её принёс
+router.get('/config', auth, async (req, res) => {
+  res.json({ search: kodik.hasToken() && (await isTrusted(req.user.id)) });
 });
 
 router.get('/search', auth, searchLimiter, async (req, res) => {
+  if (!(await isTrusted(req.user.id))) return res.status(403).json({ error: req.t('server.kodik.searchFriendsOnly') });
   try {
     const items = await kodik.search(req.query.q);
     res.json({ items });

@@ -1,4 +1,5 @@
 // roomSocket.js 
+const roles = require('../services/roles');
 const fs = require('fs');
 const path = require('path');
 const { verifyToken } = require('../middleware/auth');
@@ -147,6 +148,8 @@ function registerRoomSocket(io) {
 
       const isBanned = room.bannedUsers.some((id) => String(id) === String(socket.user.id));
       if (isBanned) return socket.emit('room:banned');
+      // «Просмотр фильма» и 18+ — только админ и друзья (services/roles.js); остальным — «нет доступа»
+      if (roles.isRestrictedVideo(room.video) && !(await roles.isTrusted(socket.user.id))) return socket.emit('room:denied');
 
       // тот же сокет зашёл в другую комнату — выходим из прежней (иначе висел в её звонке и списке до отключения)
       const prev = socket.data.roomCode;
@@ -285,6 +288,10 @@ function registerRoomSocket(io) {
       socket.on('player_capture:streams', async ({ code, season, episode, voice, streams, playerIframes, meta }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
       if (!streams?.length) return;
+      // только комната «Просмотр фильма» и только хост-админ/друг: иначе любой хост (например, YouTube-комнаты)
+      // мог разослать зрителям свои ссылки на потоки в обход проверок
+      const own = await Room.findOne({ code }).select('video.type').lean();
+      if (own?.video?.type !== 'player_capture' || !(await roles.isTrusted(socket.user.id))) return;
 
       const seasonNum = Number(season) || 1;
       const episodeNum = Number(episode) || 1;

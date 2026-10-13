@@ -14,7 +14,16 @@ const { hasProfanity } = require('../services/profanity');
 const User = require('../models/User');
 
 // 18+: порно-сайт по адресу или материал Kodik с рейтингом RX из нашей выдачи (решает только сервер)
-const isAdultVideo = (type, url) => (type === 'kodik' ? kodik.isAdultLink(url) : isAdultUrl(url));
+// Kodik: и ссылки из нашего поиска, и вставленные вручную (рейтинг через API — kodik.checkAdultLink)
+const isAdultVideo = async (type, url) => (type === 'kodik' ? kodik.checkAdultLink(url) : isAdultUrl(url));
+const { isTrusted, isRestrictedVideo, dropUntrusted } = require('../services/roles');
+
+// «Просмотр фильма / сериала» и 18+ — только админ и друзья (юридический риск): ключ ошибки или null
+async function riskyDenied(userId, type, adult) {
+  if (type !== 'player_capture' && !adult) return null;
+  if (await isTrusted(userId)) return null;
+  return type === 'player_capture' ? 'server.room.captureFriendsOnly' : 'server.room.adultFriendsOnly';
+}
 
 const fs = require('fs');
 const path = require('path');
@@ -91,7 +100,9 @@ router.post('/', auth, async (req, res) => {
       if (kodik.isKnownPoster(video.poster)) thumbnailUrl = video.poster;
     }
     if (video.type === 'vk') roomVideo.url = normalizeVkLink(roomVideo.url);
-    roomVideo.adult = isAdultVideo(roomVideo.type, roomVideo.url);
+    roomVideo.adult = await isAdultVideo(roomVideo.type, roomVideo.url);
+    const denied = await riskyDenied(req.user.id, roomVideo.type, roomVideo.adult);
+    if (denied) return res.status(403).json({ error: req.t(denied) });
     const room = await Room.create({
       name: String(name).trim().slice(0, 100),
       code,
@@ -139,6 +150,8 @@ router.get('/public', auth, async (req, res) => {
 
   // комнаты 18+ в публичный список не попадают никогда — только по ссылке (и после подтверждения возраста в комнате)
   filter['video.adult'] = { $ne: true };
+  // «Просмотр фильма» — только админ и друзья: остальным такие комнаты в списке не показываем
+  if (!(await isTrusted(req.user.id))) filter['video.type'] = { $ne: 'player_capture' };
 
   if (q) {
     filter.name = { $regex: escapeRegex(q), $options: 'i' };
@@ -258,8 +271,12 @@ router.post('/:code/change-video', auth, async (req, res) => {
       return res.status(400).json({ error: req.t('server.room.changeUnsupported') });
     }
 
+    const adult = await isAdultVideo(type, url);
+    const denied = await riskyDenied(req.user.id, type, adult);
+    if (denied) return res.status(403).json({ error: req.t(denied) });
     room.video.url = url;
-    room.video.adult = isAdultVideo(type, url);
+    room.video.adult = adult;
+    if (isRestrictedVideo(room.video)) await dropUntrusted(req.app.get('io'), room.code);
     room.video.title = undefined;
     room.video.ageRestricted = false;
     room.video.directUrl = null;

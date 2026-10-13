@@ -19,6 +19,13 @@ async function checkAuth() {
     }
 
     window.__pwAuthed = true;
+    // «Просмотр фильма / сериала» — только админу и друзьям (сервер проверяет сам)
+    const capOpt = document.querySelector('option[value="player_capture"]');
+    if (capOpt) {
+      const can = me.role === 'admin' || me.role === 'friend';
+      capOpt.hidden = !can;
+      capOpt.classList.toggle('hidden', !can);
+    }
     try { localStorage.setItem('pw_authed', '1'); } catch {}
     if (authBox) authBox.classList.add('hidden');
     if (appBox) appBox.classList.remove('hidden');
@@ -241,6 +248,44 @@ async function login() {
     await checkAuth();
   } catch (err) {
     showAuthError('loginError', err.message || t('index.login.failed'));
+    document.getElementById('verifyBox')?.classList.toggle('hidden', err.code !== 'unverified');
+  }
+}
+
+// ---- неподтверждённая почта: письмо ещё раз или другая почта (логин и пароль — из формы входа) ----
+function verifyCreds() {
+  return { login: document.getElementById('loginInput').value.trim(), password: document.getElementById('passwordInput').value };
+}
+function showVerifyOk(text) {
+  const el = document.getElementById('verifyOk');
+  el.textContent = text;
+  el.classList.remove('hidden');
+}
+async function resendVerify() {
+  hideAuthError('loginError');
+  try {
+    const r = await api('/auth/verify/resend', { method: 'POST', body: verifyCreds() });
+    showVerifyOk(r.message || t('index.verify.sent'));
+  } catch (e) {
+    showAuthError('loginError', e.message);
+  }
+}
+function toggleVerifyEmail() {
+  const row = document.getElementById('verifyEmailRow');
+  row.classList.toggle('hidden');
+  if (!row.classList.contains('hidden')) document.getElementById('verifyEmailInput').focus();
+}
+async function changeVerifyEmail() {
+  hideAuthError('loginError');
+  const email = document.getElementById('verifyEmailInput').value.trim();
+  const err = getEmailError(email);
+  if (err) return showAuthError('loginError', err);
+  try {
+    const r = await api('/auth/verify/change-email', { method: 'POST', body: { ...verifyCreds(), email } });
+    document.getElementById('verifyEmailRow').classList.add('hidden');
+    showVerifyOk(r.message || t('index.verify.sent'));
+  } catch (e) {
+    showAuthError('loginError', e.message);
   }
 }
 
@@ -325,7 +370,9 @@ function lockStatusText() {
 
 function renderInfoPopup() {
   const type = document.getElementById('videoType').value;
-  document.getElementById('infoPopup').innerHTML = `${t('index.info.' + type)}<hr>${escapeHtml(lockStatusText())}`;
+  // у Kodik для админа и друзей есть ещё поиск по названию (kodikSearchEnabled — ответ /kodik/config)
+  const extra = type === 'kodik' && kodikSearchEnabled ? t('index.info.kodikSearch') + '<br><br>' : '';
+  document.getElementById('infoPopup').innerHTML = `${extra}${t('index.info.' + type)}<hr>${escapeHtml(lockStatusText())}`;
 }
 
 function toggleInfoPopup() {

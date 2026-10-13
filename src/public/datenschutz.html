@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- имя и адрес владельца: на сайте видны всем (закон), но в поиск Google/Яндекса не попадают -->
+  <meta name="robots" content="noindex, nofollow" />
+  <script src="/js/i18n.js" data-ns="privacy"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/favicon.js"></script>
+  <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/css/terms.css" />
+  <title data-i18n="privacy.pageTitle">Политика конфиденциальности — PartyWatcher</title>
+</head>
+<body>
+  <!-- данные ответственного подставляет сервер из .env (IMPRINT_*), см. /datenschutz в server.js -->
+  <main class="terms-page">
+    <div class="terms-top">
+      <a class="icon-btn terms-back" href="/" data-i18n="privacy.back">← На главную</a>
+      <div class="terms-top-right">
+        <div data-lang-switch></div>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
+      </div>
+    </div>
+
+    <h1 data-i18n="privacy.title">Политика конфиденциальности</h1>
+    <p class="terms-updated" data-i18n="privacy.updated">Редакция</p>
+    <p class="terms-intro" data-i18n="privacy.intro"></p>
+
+    <section id="s1">
+      <h2 data-i18n="privacy.controllerH">1. Кто отвечает за данные</h2>
+      <p data-i18n="privacy.controllerText">Ответственный за обработку данных:</p>
+      <p data-no-i18n>{{imprint.name}}<br />{{imprint.street}}<br />{{imprint.city}}<br />{{imprint.country}}<br />E-Mail: <a href="mailto:{{imprint.email}}">{{imprint.email}}</a></p>
+    </section>
+    <section id="s2"><h2 data-i18n="privacy.s2.h">2.</h2><div data-i18n-html="privacy.s2.body"></div></section>
+    <section id="s3"><h2 data-i18n="privacy.s3.h">3.</h2><div data-i18n-html="privacy.s3.body"></div></section>
+    <section id="s4"><h2 data-i18n="privacy.s4.h">4.</h2><div data-i18n-html="privacy.s4.body"></div></section>
+    <section id="s5"><h2 data-i18n="privacy.s5.h">5.</h2><div data-i18n-html="privacy.s5.body"></div></section>
+    <section id="s6"><h2 data-i18n="privacy.s6.h">6.</h2><div data-i18n-html="privacy.s6.body"></div></section>
+    <section id="s7"><h2 data-i18n="privacy.s7.h">7.</h2><div data-i18n-html="privacy.s7.body"></div></section>
+
+    <section id="consent" class="terms-toc">
+      <div class="terms-toc-title" data-i18n="privacy.consentH">Ваш выбор по статистике</div>
+      <p id="consentState"></p>
+      <button type="button" class="icon-btn" id="consentChangeBtn" data-i18n="privacy.consentChange">Изменить выбор</button>
+    </section>
+
+    <p class="terms-updated"><a href="/terms" data-i18n="privacy.terms">📄 Условия пользования</a> · <a href="/impressum">Impressum</a></p>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/actions.js"></script>
+  <script src="/js/consent.js"></script>
+  <script src="/js/datenschutz.js"></script>
+</body>
+</html>

@@ -42,11 +42,16 @@ async function finalizeRoom(code, videoUrl, url, io) {
   await room.save();
 
   if (room.isPublic) io.to('lobby').emit('rooms:public-updated');
+  await require('../services/roles').dropUntrusted(io, code); // YouTube 18+ — только админ и друзья
   io.to(code).emit('youtube:age-restricted-stream', { url });
 }
 
 // POST /youtube-capture/age-restricted-extract — запустить скачивание (отвечает сразу)
 router.post('/age-restricted-extract', auth, async (req, res) => {
+  // скачивание YouTube 18+ на сервер — только админ и друзья (services/roles.js)
+  if (!(await require('../services/roles').isTrusted(req.user.id))) {
+    return res.status(403).json({ error: req.t('server.room.ytFriendsOnly') });
+  }
   try {
     const room = await loadOwnedYoutubeRoom(req, res);
     if (!room) return;
@@ -82,6 +87,10 @@ router.post('/age-restricted-extract', auth, async (req, res) => {
 
 // GET /youtube-capture/age-restricted-status?code=... — как идёт скачивание
 router.get('/age-restricted-status', auth, async (req, res) => {
+  // скачивание YouTube 18+ на сервер — только админ и друзья (services/roles.js)
+  if (!(await require('../services/roles').isTrusted(req.user.id))) {
+    return res.status(403).json({ error: req.t('server.room.ytFriendsOnly') });
+  }
   try {
     const room = await loadOwnedYoutubeRoom(req, res);
     if (!room) return;

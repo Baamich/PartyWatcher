@@ -30,9 +30,10 @@ function view(u) {
     banPerm: !!u.banPerm, banUntil: u.banUntil && new Date(u.banUntil) > new Date() ? u.banUntil : null,
     banReason: u.banReason || '', banBy: u.banBy || '', banAt: u.banAt || null,
     termsOk: u.termsVersion === TERMS_VERSION, isLive: !!u.isLive,
+    verifyPending: !!u.verifyPending, verifyExpires: u.verifyPending ? u.verifyExpires || null : null,
   };
 }
-const FIELDS = 'username email role streamerName createdAt lastSeenAt lastIp regIp regDevice banPerm banUntil banReason banBy banAt termsVersion isLive';
+const FIELDS = 'username email role streamerName createdAt lastSeenAt lastIp regIp regDevice banPerm banUntil banReason banBy banAt termsVersion isLive verifyPending verifyExpires';
 
 // GET /admin/users?sort=new|old|name|seen&q=&filter=all|banned|online&page=1
 router.get('/users', auth, adminOnly, async (req, res) => {

@@ -114,6 +114,7 @@
             </div>
             <button type="button" id="liveFollowBtn" class="follow-btn"></button>
             <button type="button" class="icon-btn live-clip-btn hidden" title="Клип: последние 30 секунд эфира" data-i18n-title="streamer.clips.makeTitle">✂ <span data-i18n="streamer.clips.make">Клип</span></button>
+            <button type="button" id="liveReportBtn" class="icon-btn live-report-btn" title="Пожаловаться на эфир" data-i18n-title="streamer.report.btn" data-i18n-aria-label="streamer.report.btn" aria-label="Пожаловаться на эфир">🚩</button>
           </div>
           <!-- награды за стрим-поинты (по кнопке с балансом) -->
           <div id="livePointsPopup" class="live-points-popup hidden" data-no-i18n></div>
@@ -238,6 +239,29 @@
         <button type="button" id="liveAuthLoginBtn" data-i18n="streamer.auth.login">Войти</button>
         <button type="button" id="liveAuthRegisterBtn" class="icon-btn" data-i18n="streamer.auth.register">Зарегистрироваться</button>
       </div>
+    </div>
+  </div>
+
+    <!-- 🚩 жалоба на эфир: уходит в поддержку (админка → Обращения → 🚩 Эфиры) -->
+  <div id="reportModal" class="modal hidden">
+    <div class="modal-content report-modal">
+      <button type="button" class="modal-close" data-click="closeReport" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 data-i18n="streamer.report.title">Пожаловаться на эфир</h3>
+      <p class="report-hint" data-i18n="streamer.report.hint">Жалобу увидит администрация сайта. Обычно мы рассматриваем её в течение 1–2 дней.</p>
+      <label class="auth-label" for="reportReason" data-i18n="streamer.report.reason">Причина</label>
+      <select id="reportReason">
+        <option value="violence" data-i18n="streamer.report.reasons.violence">Насилие, жестокость, опасные трюки</option>
+        <option value="sexual" data-i18n="streamer.report.reasons.sexual">Сексуальный контент</option>
+        <option value="minors" data-i18n="streamer.report.reasons.minors">Угроза детям / несовершеннолетние</option>
+        <option value="hate" data-i18n="streamer.report.reasons.hate">Травля, ненависть, экстремизм</option>
+        <option value="copyright" data-i18n="streamer.report.reasons.copyright">Чужой контент (фильмы, спорт, ТВ)</option>
+        <option value="spam" data-i18n="streamer.report.reasons.spam">Спам, реклама, мошенничество, казино</option>
+        <option value="other" data-i18n="streamer.report.reasons.other">Другое</option>
+      </select>
+      <label class="auth-label" for="reportText" data-i18n="streamer.report.text">Что случилось (необязательно)</label>
+      <textarea id="reportText" rows="4" maxlength="1000" placeholder="Например: на 1:20:00 показывали…" data-i18n-placeholder="streamer.report.textPh"></textarea>
+      <div id="reportError" class="auth-error hidden"></div>
+      <button type="button" id="reportSendBtn" class="auth-submit" data-click="sendReport" data-i18n="streamer.report.send">Отправить жалобу</button>
     </div>
   </div>
 

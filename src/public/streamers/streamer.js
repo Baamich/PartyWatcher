@@ -1894,3 +1894,39 @@ setInterval(() => {
 
 loadProfile();
 startStreamerLivePolling();
+
+// ---------- 🚩 жалоба на эфир (POST /support/stream-report → админка: Обращения → 🚩 Эфиры) ----------
+function openReport() {
+  if (!liveIsAuthed) {
+    PW.toast(t('streamer.report.needLogin'), 'info');
+    return;
+  }
+  document.getElementById('reportError').classList.add('hidden');
+  document.getElementById('reportText').value = '';
+  document.getElementById('reportModal').classList.remove('hidden');
+}
+function closeReport() {
+  document.getElementById('reportModal').classList.add('hidden');
+}
+async function sendReport() {
+  const btn = document.getElementById('reportSendBtn');
+  const err = document.getElementById('reportError');
+  err.classList.add('hidden');
+  btn.disabled = true;
+  try {
+    await api('/support/stream-report', {
+      method: 'POST',
+      body: { streamer: getNameFromUrl(), reason: document.getElementById('reportReason').value, description: document.getElementById('reportText').value },
+    });
+    closeReport();
+    PW.toast(t('streamer.report.sent'), 'success');
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById('liveReportBtn')?.addEventListener('click', openReport);
+document.getElementById('reportModal')?.addEventListener('click', (e) => { if (e.target.id === 'reportModal') closeReport(); });
+

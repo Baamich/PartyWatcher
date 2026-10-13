@@ -67,6 +67,47 @@ router.post('/', auth.optional, guestLimiter, async (req, res) => {
   }
 });
 
+// POST /support/stream-report { streamer, reason, description? } — 🚩 жалоба на эфир (только вошедшим:
+// у аккаунта есть почта для ответа). Идёт в те же обращения, в админке — отдельная вкладка «🚩 Эфиры»
+const REPORT_REASONS = ['violence', 'sexual', 'minors', 'hate', 'copyright', 'spam', 'other'];
+const reportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  keyGenerator: (req) => 'u:' + req.user.id, // маршрут только для вошедших — считаем по аккаунту
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: (req) => ({ error: req.t('server.support.tooMany') }),
+});
+router.post('/stream-report', auth, reportLimiter, async (req, res) => {
+  try {
+    const nameLower = String(req.body?.streamer || '').trim().toLowerCase().slice(0, 40);
+    const reason = String(req.body?.reason || '');
+    const text = String(req.body?.description || '').trim().slice(0, 1000);
+    if (!REPORT_REASONS.includes(reason)) return res.status(400).json({ error: req.t('server.support.reportReason') });
+    const streamer = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('streamerName isLive streamTitle').lean());
+    if (!streamer) return res.status(404).json({ error: req.t('server.notFound') });
+    const me = await User.findById(req.user.id).select('username email').lean();
+    const reasonText = i18n.t(req.lang, 'server.support.reasons.' + reason);
+    const ticket = await SupportTicket.create({
+      number: await nextNumber(),
+      name: String(me?.username || '').slice(0, 12),
+      email: me?.email || '',
+      description: `🚩 ${streamer.streamerName} — ${reasonText}${text ? '\n\n' + text : ''}`,
+      lang: req.lang,
+      userId: req.user.id,
+      username: me?.username || '',
+      source: 'stream',
+      subject: `🚩 ${streamer.streamerName}`,
+      report: { streamer: streamer.streamerName, reason, title: streamer.streamTitle || '', live: !!streamer.isLive },
+    });
+    await notifyAdmins(req, ticket);
+    res.status(201).json({ ok: true, number: ticket.number });
+  } catch (err) {
+    console.error('[support/stream-report]', err);
+    res.status(500).json({ error: req.t('server.sendFailed') });
+  }
+});
+
 async function notifyAdmins(req, ticket) {
   const io = req.app.get('io');
   if (!io) return;
@@ -225,7 +266,7 @@ function briefOf(t) {
   return {
     _id: o._id, number: o.number, name: o.name, email: o.email, source: o.source, subject: o.subject,
     description: o.description, status: o.status, hasNewReply: !!o.hasNewReply, username: o.username,
-    lang: o.lang, createdAt: o.createdAt, updatedAt: o.updatedAt,
+    lang: o.lang, createdAt: o.createdAt, updatedAt: o.updatedAt, report: o.report && o.report.streamer ? o.report : null,
     messagesCount: (o.messages || []).length, lastMessage: last ? { from: last.from, kind: last.kind, at: last.at } : null,
   };
 }
@@ -267,8 +308,12 @@ router.get('/', auth, adminOnly, async (req, res) => {
       filter = { number: Number(q) };
     } else {
       const status = req.query.status || 'unread';
-      if (!STATUSES.includes(status)) return res.status(400).json({ error: req.t('server.badStatus') });
-      filter = { status };
+      if (req.query.source === 'stream') {
+        filter = { source: 'stream' }; // вкладка «🚩 Эфиры»: все жалобы на эфиры, свежие сверху
+      } else {
+        if (!STATUSES.includes(status)) return res.status(400).json({ error: req.t('server.badStatus') });
+        filter = { status, source: { $ne: 'stream' } };
+      }
     }
     const tickets = await SupportTicket.find(filter)
       .sort({ updatedAt: -1 })
@@ -285,8 +330,11 @@ router.get('/', auth, adminOnly, async (req, res) => {
 // админ: счётчик непрочитанных
 router.get('/count', auth, adminOnly, async (req, res) => {
   try {
-    const unreadCount = await SupportTicket.countDocuments({ status: 'unread' });
-    res.json({ unreadCount });
+    const [unreadCount, streamUnread] = await Promise.all([
+      SupportTicket.countDocuments({ status: 'unread' }),
+      SupportTicket.countDocuments({ status: 'unread', source: 'stream' }),
+    ]);
+    res.json({ unreadCount, streamUnread });
   } catch (err) {
     res.status(500).json({ error: req.t('server.serverError') });
   }
