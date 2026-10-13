@@ -21,12 +21,6 @@ module.exports = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
 
-  upload: {
-    dir: process.env.UPLOAD_DIR || 'uploads',
-    maxSizeMb: parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10240', 10),
-    ttlDays: parseInt(process.env.UPLOAD_TTL_DAYS || '30', 10),
-  },
-
   turn: {
     // Вариант 1 — свой coturn (HMAC-креды по времени, безопаснее и без лимитов)
     turnUrl: process.env.TURN_URL || null,           // например "turn.mydomain.com:3478"

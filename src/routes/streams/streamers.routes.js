@@ -18,12 +18,16 @@ const rateLimit = require('express-rate-limit');
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
 
-// адрес аватара для списков; v = profileRev — новая картинка получает новый адрес, старую браузер держит в кэше
-const avatarUrl = (nameLower, rev) => `/api/streamers/${encodeURIComponent(nameLower)}/avatar?v=${Number(rev) || 0}`;
+// адрес аватара/баннера картинкой; v = profileRev — новая картинка получает новый адрес, старую браузер держит в кэше.
+// В базе они остаются base64, но в ответах профиля — только адреса: bundle не тащит мегабайты на каждое открытие
+const imageUrl = (kind) => (nameLower, rev) => `/api/streamers/${encodeURIComponent(nameLower)}/${kind}?v=${Number(rev) || 0}`;
+const avatarUrl = imageUrl('avatar');
+const bannerUrl = imageUrl('banner');
+const IMAGE_FIELDS = { avatar: 'streamerAvatarUrl', banner: 'streamerBannerUrl' };
 
-// раскодированные аватары в памяти: повторный запрос не тянет из базы строку base64 (до ~30 МБ на всё)
+// раскодированные аватары и баннеры в памяти: повторный запрос не тянет из базы строку base64 (до ~30 МБ на всё)
 const AVATAR_CACHE_MAX = 30 * 1024 * 1024;
-const avatarCache = new Map(); // nameLower → { rev, type, buf }
+const avatarCache = new Map(); // 'avatar:'|'banner:' + nameLower → { rev, type, buf }
 let avatarCacheBytes = 0;
 function avatarCachePut(key, entry) {
   const old = avatarCache.get(key);
@@ -37,6 +41,16 @@ function avatarCachePut(key, entry) {
     avatarCacheBytes -= v.buf.length;
   }
 }
+
+// есть ли аватар/баннер — без чтения самих строк base64 из базы (для $project)
+const hasImages = {
+  hasAvatar: { $gt: [{ $strLenBytes: { $ifNull: ['$streamerAvatarUrl', ''] } }, 0] },
+  hasBanner: { $gt: [{ $strLenBytes: { $ifNull: ['$streamerBannerUrl', ''] } }, 0] },
+};
+const imageUrls = (nameLower, rev, h) => ({
+  streamerAvatarUrl: h?.hasAvatar ? avatarUrl(nameLower, rev) : null,
+  streamerBannerUrl: h?.hasBanner ? bannerUrl(nameLower, rev) : null,
+});
 
 // подписка/отписка: по аккаунту, 30 в минуту
 const followLimiter = rateLimit({
@@ -245,15 +259,15 @@ router.get('/:name/bundle', async (req, res) => {
     const clientRev = req.query.rev === undefined ? NaN : Number(req.query.rev);
     if (clientRev === rev) return res.json({ ...light, unchanged: true });
 
-    const heavy = await User.findById(s._id)
-      .select('streamerBio streamerAvatarUrl streamerBannerUrl profileLayout -_id')
-      .lean();
+    const [heavy] = await User.aggregate([
+      { $match: { _id: s._id } },
+      { $project: { _id: 0, streamerBio: 1, profileLayout: 1, ...hasImages } },
+    ]);
 
     res.json({
       ...light,
       streamerBio: heavy?.streamerBio || '',
-      streamerAvatarUrl: heavy?.streamerAvatarUrl || null,
-      streamerBannerUrl: heavy?.streamerBannerUrl || null,
+      ...imageUrls(nameLower, rev, heavy),
       layout: heavy?.profileLayout || null,
     });
   } catch (err) {
@@ -303,28 +317,31 @@ router.get('/:name/vods', async (req, res) => {
   }
 });
 
-// GET /streamers/:name/avatar?v=rev — аватар картинкой (для списков). С актуальным v кэшируется в браузере на год
-router.get('/:name/avatar', async (req, res) => {
+// GET /streamers/:name/avatar|banner?v=rev — аватар или баннер картинкой. С актуальным v кэшируется в браузере на год
+router.get('/:name/:kind(avatar|banner)', async (req, res) => {
+  const kind = req.params.kind;
   try {
     const nameLower = String(req.params.name || '').trim().toLowerCase();
     const s = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('profileRev -_id').lean());
     if (!s) return res.status(404).set('Cache-Control', 'no-store').end();
     const rev = Number(s.profileRev) || 0;
 
-    let entry = avatarCache.get(nameLower);
+    const key = kind + ':' + nameLower;
+    let entry = avatarCache.get(key);
     if (!entry || entry.rev !== rev) {
-      const a = await User.findOne({ streamerNameLower: nameLower }).select('streamerAvatarUrl -_id').lean();
-      const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(a?.streamerAvatarUrl || '');
+      const field = IMAGE_FIELDS[kind];
+      const a = await User.findOne({ streamerNameLower: nameLower }).select(field + ' -_id').lean();
+      const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(a?.[field] || '');
       if (!m) return res.status(404).set('Cache-Control', 'no-store').end();
       entry = { rev, type: m[1], buf: Buffer.from(m[2], 'base64') };
     }
-    avatarCachePut(nameLower, entry); // и для свежего, и чтобы поднять в конец очереди
+    avatarCachePut(key, entry); // и для свежего, и чтобы поднять в конец очереди
 
     res.set('Content-Type', entry.type);
     res.set('Cache-Control', String(req.query.v) === String(rev) ? 'public, max-age=31536000, immutable' : 'no-store');
     res.send(entry.buf);
   } catch (err) {
-    console.error('[GET /streamers/:name/avatar]', err);
+    console.error('[GET /streamers/:name/' + kind + ']', err);
     res.status(500).set('Cache-Control', 'no-store').end();
   }
 });
@@ -455,17 +472,24 @@ router.get('/:name', async (req, res) => {
     const nameLower = String(req.params.name || '').trim().toLowerCase();
     if (!nameLower) return res.status(400).json({ error: req.t('server.streamers.noName') });
 
-    const streamer = await User.findOneAndUpdate(
+    const s = await User.findOneAndUpdate(
       { streamerNameLower: nameLower },
       { $inc: { profileViews: 1 } },
       { new: true }
     )
-      .select('streamerName isLive streamerBio streamerAvatarUrl streamerBannerUrl streamPlaybackId -_id')
+      .select('streamerName isLive streamerBio streamPlaybackId profileRev')
       .lean();
 
-    if (!streamer) return res.status(404).json({ error: req.t('server.streamers.notFound') });
+    if (!s) return res.status(404).json({ error: req.t('server.streamers.notFound') });
 
-    res.json(streamer);
+    const [img] = await User.aggregate([{ $match: { _id: s._id } }, { $project: { _id: 0, ...hasImages } }]);
+    res.json({
+      streamerName: s.streamerName,
+      isLive: s.isLive,
+      streamerBio: s.streamerBio,
+      streamPlaybackId: s.streamPlaybackId,
+      ...imageUrls(nameLower, s.profileRev, img),
+    });
   } catch (err) {
     console.error('[GET /streamers/:name]', err);
     res.status(500).json({ error: req.t('server.streamers.profileFailed') });

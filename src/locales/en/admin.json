@@ -49,7 +49,7 @@
     "mailSent": "Status changed, email sent",
     "mailNotSent": "Status changed, but the email was not sent (check SMTP)",
     "savedNoMail": "Status changed (no email — nothing was sent)",
-    "streamTab": "🚩 Streams",
+    "streamTab": "🚩 Reports",
     "fromStream": "🚩 stream report",
     "reportLive": "was live",
     "reportOffline": "was offline",
@@ -67,7 +67,20 @@
       "one": "Stream recording, {n} second",
       "other": "Stream recording, {n} seconds"
     },
-    "clipFailed": "The stream recording was not saved"
+    "clipFailed": "The stream recording was not saved",
+    "fromPreset": "🚩 preset report",
+    "presetBy": "by {name}",
+    "presetTypes": {
+      "style": "chat style",
+      "command": "command",
+      "reward": "reward"
+    },
+    "presetDeleted": "preset deleted",
+    "deletePreset": "🗑 Delete preset",
+    "deletePresetText": "Delete the preset “{name}” for everyone? Likes and adds will be gone; commands and rewards people already created from it will stay.",
+    "deletePresetOk": "Delete",
+    "presetRemoved": "Preset deleted",
+    "presetGone": "The preset is already gone — the author deleted it"
   },
   "thread": {
     "title": "Request #{n}",

@@ -140,6 +140,10 @@ function pollStatus(log) {
     const noMail = !tk.email;
     let html = '';
     if (withView) html += `<button type="button" class="btn-trivial" data-act="view" data-id="${id}">${t('admin.support.view')}</button>`;
+    // жалоба на пре-сет: удалить его прямо отсюда (в окне просмотра, пока не удалён)
+    if (!withView && tk.report?.preset?.id && !tk.report.preset.deleted) {
+      html += `<button type="button" class="btn-danger" data-act="delPreset" data-id="${id}">${t('admin.support.deletePreset')}</button>`;
+    }
     if (tk.status !== 'unread') return html;
     html += `<button type="button" data-act="reply" data-id="${id}"${noMail ? ' disabled' : ''} title="${escapeHtml(noMail ? t('admin.support.noEmailHint') : t('admin.support.reply'))}">${t('admin.support.reply')}</button>`;
     html += `<button type="button" data-act="accepted" data-id="${id}">${t('admin.support.accept')}</button>`;
@@ -148,7 +152,8 @@ function pollStatus(log) {
   }
 
   function metaHtml(tk) {
-    const src = tk.source === 'email' ? t('admin.support.fromEmail') : tk.source === 'stream' ? t('admin.support.fromStream') : t('admin.support.fromSite');
+    const src = tk.source === 'email' ? t('admin.support.fromEmail') : tk.source === 'stream' ? t('admin.support.fromStream')
+      : tk.source === 'preset' ? t('admin.support.fromPreset') : t('admin.support.fromSite');
     const fresh = tk.hasNewReply ? ` <span class="support-new">${t('admin.support.newReply')}</span>` : '';
     return `<b class="support-num">#${escapeHtml(tk.number ?? '—')}</b> · ${src} · ${formatDate(tk.createdAt)} · @${escapeHtml(tk.username || '—')}${fresh}`;
   }
@@ -175,6 +180,14 @@ function pollStatus(log) {
 
   // 🚩 жалоба на эфир: на кого (ссылка на канал), причина, название эфира и шёл ли он в момент жалобы
   function reportHtml(r, status) {
+    if (r.preset && r.preset.id) {
+      const p = r.preset;
+      const reason = I18N.has('admin.support.reasons.' + r.reason) ? t('admin.support.reasons.' + r.reason) : r.reason;
+      const type = I18N.has('admin.support.presetTypes.' + p.type) ? t('admin.support.presetTypes.' + p.type) : p.type;
+      return `<div class="support-card-subject" data-no-i18n>🚩 «${escapeHtml(p.name)}» · ${escapeHtml(type)} · ${escapeHtml(t('admin.support.presetBy', { name: p.author || '—' }))}` +
+        ` · <b>${escapeHtml(reason)}</b>${p.deleted ? ' · ' + escapeHtml(t('admin.support.presetDeleted')) : ''}` +
+        `${status === 'unread' ? '' : ' · ' + escapeHtml(status)}</div>`;
+    }
     const href = '/streamers/' + encodeURIComponent(String(r.streamer).toLowerCase());
     const reason = I18N.has('admin.support.reasons.' + r.reason) ? t('admin.support.reasons.' + r.reason) : r.reason;
     const live = r.live ? t('admin.support.reportLive') : t('admin.support.reportOffline');
@@ -329,12 +342,29 @@ function pollStatus(log) {
     }
   }
 
+  async function deletePreset(id) {
+    const name = openTicket?.ticket?.report?.preset?.name || '';
+    const ok = await PW.confirm(t('admin.support.deletePresetText', { name }), {
+      title: t('admin.support.deletePreset'), okText: t('admin.support.deletePresetOk'), danger: true,
+    });
+    if (!ok) return;
+    try {
+      const data = await api('/support/' + encodeURIComponent(id) + '/preset', { method: 'DELETE' });
+      PW.toast(data.existed ? t('admin.support.presetRemoved') : t('admin.support.presetGone'), 'success');
+      await openView(id);
+      loadTickets();
+    } catch (e) {
+      PW.toast(e.message || t('admin.error'), 'error');
+    }
+  }
+
   function onAction(e) {
     const b = e.target.closest('button[data-act]');
     if (!b || b.disabled) return;
     const { act, id } = b.dataset;
     if (act === 'view') openView(id);
     else if (act === 'reply') openReply(id);
+    else if (act === 'delPreset') deletePreset(id);
     else setStatus(id, act);
   }
 

@@ -8,6 +8,9 @@ const { simpleParser } = require('mailparser');
 const mongoose = require('mongoose');
 const SupportTicket = require('../models/SupportTicket');
 const SupportFile = require('../models/SupportFile');
+const Preset = require('../models/Preset');
+const PresetLike = require('../models/PresetLike');
+const PresetAdd = require('../models/PresetAdd');
 const Counter = require('../models/Counter');
 const User = require('../models/User');
 const rateLimit = require('express-rate-limit');
@@ -19,6 +22,8 @@ const STATUSES = ['unread', 'accepted', 'trivial', 'answered'];
 const MAX_MESSAGES = 100; // переписка по одному обращению
 
 const nextNumber = () => Counter.next('supportTicket');
+const isId = (v) => /^[a-f0-9]{24}$/i.test(String(v || ''));
+const REPORT_SOURCES = ['stream', 'preset']; // вкладка «🚩 Жалобы» в админке
 
 // ---- скриншоты к обращению: до 5 картинок data:URL (браузер уже пережал), тип — по первым байтам ----
 const MAX_FILES = 5;
@@ -156,6 +161,41 @@ router.post('/stream-report', auth, reportLimiter, async (req, res) => {
     res.status(201).json({ ok: true, number: ticket.number });
   } catch (err) {
     console.error('[support/stream-report]', err);
+    res.status(500).json({ error: req.t('server.sendFailed') });
+  }
+});
+
+// POST /support/preset-report { presetId, reason, description? } — 🚩 жалоба на пре-сет (только вошедшим, тот же лимит,
+// что у жалоб на эфир). В админке — во вкладке «🚩 Жалобы» вместе с эфирами; оттуда пре-сет можно удалить
+const PRESET_REASONS = ['sexual', 'hate', 'copyright', 'spam', 'other'];
+router.post('/preset-report', auth, reportLimiter, async (req, res) => {
+  try {
+    const reason = String(req.body?.reason || '');
+    const text = String(req.body?.description || '').trim().slice(0, 1000);
+    if (!PRESET_REASONS.includes(reason)) return res.status(400).json({ error: req.t('server.support.reportReason') });
+    const presetId = String(req.body?.presetId || '');
+    const preset = isId(presetId) && (await Preset.findById(presetId).select('name type authorId authorName').lean());
+    if (!preset) return res.status(404).json({ error: req.t('server.presets.notFound') });
+    if (String(preset.authorId) === String(req.user.id)) return res.status(400).json({ error: req.t('server.support.reportOwn') });
+
+    const me = await User.findById(req.user.id).select('username email').lean();
+    const reasonText = i18n.t(req.lang, 'server.support.reasons.' + reason);
+    const ticket = await SupportTicket.create({
+      number: await nextNumber(),
+      name: String(me?.username || '').slice(0, 12),
+      email: me?.email || '',
+      description: `🚩 «${preset.name}» (${preset.authorName}) — ${reasonText}${text ? '\n\n' + text : ''}`.slice(0, 5000),
+      lang: req.lang,
+      userId: req.user.id,
+      username: me?.username || '',
+      source: 'preset',
+      subject: `🚩 «${String(preset.name).slice(0, 150)}»`,
+      report: { reason, preset: { id: presetId, name: preset.name, type: preset.type, author: preset.authorName } },
+    });
+    await notifyAdmins(req, ticket);
+    res.status(201).json({ ok: true, number: ticket.number });
+  } catch (err) {
+    console.error('[support/preset-report]', err);
     res.status(500).json({ error: req.t('server.sendFailed') });
   }
 });
@@ -333,7 +373,8 @@ function briefOf(t) {
   return {
     _id: o._id, number: o.number, name: o.name, email: o.email, source: o.source, subject: o.subject,
     description: o.description, status: o.status, hasNewReply: !!o.hasNewReply, username: o.username,
-    lang: o.lang, createdAt: o.createdAt, updatedAt: o.updatedAt, report: o.report && o.report.streamer ? o.report : null,
+    lang: o.lang, createdAt: o.createdAt, updatedAt: o.updatedAt,
+    report: o.report && (o.report.streamer || o.report.preset?.id) ? o.report : null,
     files: (o.files || []).map(String), messagesCount: (o.messages || []).length, lastMessage: last ? { from: last.from, kind: last.kind, at: last.at } : null,
   };
 }
@@ -362,7 +403,6 @@ async function broadcast(req, ticket) {
   return unreadCount;
 }
 
-const isId = (v) => /^[a-f0-9]{24}$/i.test(String(v || ''));
 
 // список: ?status=unread|accepted|trivial|answered или поиск по номеру ?q=123 (во всех статусах)
 router.get('/', auth, adminOnly, async (req, res) => {
@@ -376,10 +416,10 @@ router.get('/', auth, adminOnly, async (req, res) => {
     } else {
       const status = req.query.status || 'unread';
       if (req.query.source === 'stream') {
-        filter = { source: 'stream' }; // вкладка «🚩 Эфиры»: все жалобы на эфиры, свежие сверху
+        filter = { source: { $in: REPORT_SOURCES } }; // вкладка «🚩 Жалобы»: на эфиры и пре-сеты, свежие сверху
       } else {
         if (!STATUSES.includes(status)) return res.status(400).json({ error: req.t('server.badStatus') });
-        filter = { status, source: { $ne: 'stream' } };
+        filter = { status, source: { $nin: REPORT_SOURCES } };
       }
     }
     const tickets = await SupportTicket.find(filter)
@@ -399,10 +439,32 @@ router.get('/count', auth, adminOnly, async (req, res) => {
   try {
     const [unreadCount, streamUnread] = await Promise.all([
       SupportTicket.countDocuments({ status: 'unread' }),
-      SupportTicket.countDocuments({ status: 'unread', source: 'stream' }),
+      SupportTicket.countDocuments({ status: 'unread', source: { $in: REPORT_SOURCES } }),
     ]);
     res.json({ unreadCount, streamUnread });
   } catch (err) {
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// админ: удалить пре-сет, на который пожаловались (как «Удалить» админом на странице пре-сетов: лайки и добавления
+// уходят вместе с ним, уже созданные у людей команды/награды остаются). Обращение помечается report.preset.deleted
+router.delete('/:id/preset', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+    const ticket = await SupportTicket.findById(req.params.id).select('-mailIds');
+    const pid = ticket?.report?.preset?.id;
+    if (!pid) return res.status(404).json({ error: req.t('server.notFound') });
+    const p = isId(pid) && (await Preset.findById(pid).select('_id'));
+    if (p) {
+      await Promise.all([PresetLike.deleteMany({ presetId: p._id }), PresetAdd.deleteMany({ presetId: p._id }), p.deleteOne()]);
+    }
+    ticket.report.preset.deleted = true;
+    await ticket.save();
+    await broadcast(req, ticket);
+    res.json({ ok: true, existed: !!p, ticket: briefOf(ticket) });
+  } catch (err) {
+    console.error('[support/preset-delete]', err.message);
     res.status(500).json({ error: req.t('server.serverError') });
   }
 });

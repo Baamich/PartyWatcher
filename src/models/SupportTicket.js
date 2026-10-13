@@ -20,13 +20,21 @@ const supportTicketSchema = new mongoose.Schema(
     email: { type: String, trim: true, maxlength: 100, default: '' },
     // письма бывают длиннее формы на сайте (форма сама режет до 1000)
     description: { type: String, required: true, trim: true, maxlength: 5000 },
-    source: { type: String, enum: ['site', 'email', 'stream'], default: 'site' }, // stream — 🚩 жалоба на эфир
+    source: { type: String, enum: ['site', 'email', 'stream', 'preset'], default: 'site' }, // stream|preset — 🚩 жалоба на эфир|пре-сет
     // жалоба на эфир: на кого, причина, название эфира и шёл ли эфир в момент жалобы
     report: {
       streamer: { type: String, default: undefined },
       reason: { type: String, default: undefined },
       title: { type: String, default: undefined },
       live: { type: Boolean, default: undefined },
+      // жалоба на пре-сет: какой (снимок на момент жалобы) и удалил ли его админ из обращения
+      preset: {
+        id: { type: String, default: undefined },
+        name: { type: String, default: undefined },
+        type: { type: String, default: undefined },
+        author: { type: String, default: undefined },
+        deleted: { type: Boolean, default: undefined },
+      },
       // запись последних ~30 с эфира (services/clips.js createEvidence): pending → ready (id файла, секунды) | failed
       clip: {
         id: { type: String, default: undefined },

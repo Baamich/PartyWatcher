@@ -199,7 +199,8 @@
     },
     "badFile": "Could not accept the image: PNG, JPG or WebP up to 1 MB",
     "tooManyFiles": "No more than 5 images",
-    "noFilesMinors": "Images are not attached to a “danger to children” report — describe it in words"
+    "noFilesMinors": "Images are not attached to a “danger to children” report — describe it in words",
+    "reportOwn": "You cannot report your own preset"
   },
   "yt": {
     "hostOnly": "Only the host can switch the source",

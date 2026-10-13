@@ -90,5 +90,22 @@
     "title": "Add the reward?",
     "text": "The “{name}” reward (cost {cost}) will appear in your “Rewards” — you can edit it later.",
     "done": "The “{name}” reward is added to “Rewards”"
+  },
+  "report": {
+    "btn": "Report preset",
+    "title": "Report preset",
+    "hint": "The site administration will see the report. We usually review reports within 1–2 days.",
+    "reason": "Reason",
+    "reasons": {
+      "sexual": "Sexual content, 18+",
+      "hate": "Insults, harassment, hate",
+      "copyright": "Someone else’s work (stolen from the author)",
+      "spam": "Spam, advertising, scams",
+      "other": "Other"
+    },
+    "text": "What is wrong (optional)",
+    "textPh": "For example: the bot reply links to a casino",
+    "send": "Send report",
+    "sent": "Report sent — thank you!"
   }
 }

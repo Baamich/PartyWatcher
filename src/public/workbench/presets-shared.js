@@ -122,9 +122,74 @@
       like.addEventListener('click', () => o.onLike && o.onLike(item));
 
       foot.append(add, adds, like);
+      if (!item.mine) {
+        const rep = el('button', 'pst-report', '🚩');
+        rep.type = 'button';
+        rep.title = tr('presets.report.btn');
+        rep.setAttribute('aria-label', rep.title);
+        rep.addEventListener('click', () => reportItem(item));
+        foot.appendChild(rep);
+      }
     }
     card.appendChild(foot);
     return card;
+  }
+
+  // ---------- 🚩 жалоба на пре-сет (POST /support/preset-report → админка: Обращения → 🚩 Жалобы) ----------
+  const REPORT_REASONS = ['sexual', 'hate', 'copyright', 'spam', 'other'];
+  let reportModal = null;
+  let reportTarget = null;
+  function reportItem(item) {
+    if (!reportModal) {
+      reportModal = el('div', 'modal hidden');
+      const box = el('div', 'modal-content pst-report-modal');
+      const close = el('button', 'modal-close', '×');
+      close.type = 'button';
+      close.setAttribute('aria-label', tr('common.close'));
+      const select = el('select', 'pst-report-reason');
+      for (const r of REPORT_REASONS) {
+        const opt = el('option', null, tr('presets.report.reasons.' + r));
+        opt.value = r;
+        select.appendChild(opt);
+      }
+      const text = el('textarea', 'pst-report-text');
+      text.rows = 4;
+      text.maxLength = 1000;
+      text.placeholder = tr('presets.report.textPh');
+      const err = el('div', 'auth-error hidden');
+      const send = el('button', 'auth-submit', tr('presets.report.send'));
+      send.type = 'button';
+      const name = el('p', 'pst-report-name');
+      name.setAttribute('data-no-i18n', '');
+      box.append(close, el('h3', null, tr('presets.report.title')), name, el('p', 'pst-report-hint', tr('presets.report.hint')),
+        el('label', 'auth-label', tr('presets.report.reason')), select,
+        el('label', 'auth-label', tr('presets.report.text')), text, err, send);
+      reportModal.appendChild(box);
+      document.body.appendChild(reportModal);
+
+      const hide = () => reportModal.classList.add('hidden');
+      close.addEventListener('click', hide);
+      reportModal.addEventListener('click', (e) => { if (e.target === reportModal) hide(); });
+      send.addEventListener('click', async () => {
+        err.classList.add('hidden');
+        send.disabled = true;
+        try {
+          await api('/support/preset-report', { method: 'POST', body: { presetId: reportTarget.id, reason: select.value, description: text.value } });
+          hide();
+          PW.toast(tr('presets.report.sent'), 'success');
+        } catch (e) {
+          err.textContent = e.message;
+          err.classList.remove('hidden');
+        } finally {
+          send.disabled = false;
+        }
+      });
+    }
+    reportTarget = item;
+    reportModal.querySelector('.pst-report-name').textContent = '«' + item.name + '» · ' + tr('presets.by', { name: item.authorName });
+    reportModal.querySelector('.pst-report-text').value = '';
+    reportModal.querySelector('.auth-error').classList.add('hidden');
+    reportModal.classList.remove('hidden');
   }
 
   // ---------- удаление / убрать у себя ----------

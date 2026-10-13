@@ -453,6 +453,76 @@ async function closeBrowser(browser) {
   }
 }
 
+// ---- тёплый Chromium ----
+// Один браузер на все захваты, у каждого захвата — свой изолированный контекст (cookie, кэш и прокси свои,
+// как у отдельного браузера). Запуск Chromium (~1–2 с) — только на первый захват, смена серии идёт сразу.
+// Без захватов WARM_IDLE_MS — браузер закрывается, чтобы не держать память. Без --single-process:
+// несколько контекстов в одном процессе нестабильны, а падение одной вкладки не должно ронять соседний захват
+const WARM_IDLE_MS = 3 * 60 * 1000;
+let warmBrowser = null; // Promise<Browser>
+let warmUsers = 0;
+let warmIdleTimer = null;
+
+function launchWarm() {
+  const p = puppeteer.launch({
+    headless: 'new',
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+  });
+  const forget = () => { if (warmBrowser === p) warmBrowser = null; };
+  p.then((b) => b.on('disconnected', forget), forget);
+  return p;
+}
+
+function dropWarm(reason) {
+  const p = warmBrowser;
+  warmBrowser = null;
+  if (p) {
+    if (reason) console.warn('[player-capture] Chromium закрыт:', reason);
+    p.then(closeBrowser, () => {});
+  }
+}
+
+function releaseWarmUser() {
+  warmUsers = Math.max(0, warmUsers - 1);
+  if (warmUsers) return;
+  clearTimeout(warmIdleTimer);
+  warmIdleTimer = setTimeout(() => { if (!warmUsers) dropWarm(); }, WARM_IDLE_MS);
+  warmIdleTimer.unref?.();
+}
+
+// контекст для одного захвата (proxyServer — свой прокси только у этого контекста). Упал браузер — перезапуск один раз
+async function openCaptureContext(proxyServer) {
+  clearTimeout(warmIdleTimer);
+  warmUsers += 1;
+  try {
+    for (let attempt = 0; ; attempt++) {
+      if (!warmBrowser) warmBrowser = launchWarm();
+      const p = warmBrowser;
+      try {
+        const b = await p;
+        return await b.createBrowserContext(proxyServer ? { proxyServer } : {});
+      } catch (e) {
+        if (warmBrowser === p) dropWarm('не открылся контекст: ' + e.message);
+        if (attempt) throw e;
+      }
+    }
+  } catch (e) {
+    releaseWarmUser();
+    throw e;
+  }
+}
+
+// закрыть контекст захвата; завис на 5 с — браузер нездоров, закрываем целиком (следующий захват запустит новый)
+async function closeCaptureContext(ctx) {
+  const ok = await Promise.race([
+    ctx.close().then(() => true, () => true),
+    new Promise((r) => setTimeout(() => r(false), 5000)),
+  ]);
+  if (!ok) dropWarm('контекст не закрылся за 5 с');
+  releaseWarmUser();
+}
+
 function releaseBrowserSlot() {
   const next = browserWaitQueue.shift();
   if (next) {
@@ -698,26 +768,10 @@ router.post('/extract', auth, async (req, res) => {
    * Бросает исключение при ошибке — решение "пробовать ли прокси" принимает вызывающий код.
    */
   async function attemptExtract(useProxy) {
-    let browser = null;
+    let browser = null; // контекст тёплого Chromium (у BrowserContext тот же newPage)
     await acquireBrowserSlot();
     try {
-      const launchArgs = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-      ];
-
-      if (useProxy) {
-        launchArgs.push(`--proxy-server=${PROXY_SERVER}`);
-      }
-
-      browser = await puppeteer.launch({
-        headless: 'new',
-        executablePath: '/usr/bin/chromium-browser',
-        args: launchArgs,
-      });
+      browser = await openCaptureContext(useProxy ? PROXY_SERVER : null);
 
       const page = await browser.newPage();
       await enableLightMode(page);
@@ -2880,7 +2934,7 @@ router.post('/extract', auth, async (req, res) => {
 
       return responseData;
     } finally {
-      if (browser) await closeBrowser(browser);
+      if (browser) await closeCaptureContext(browser);
       releaseBrowserSlot();
     }
   }

@@ -113,3 +113,15 @@
 .pst-rw-tag { font-size: 12px; color: #8b949e; }
 .pst-rw-desc { margin: 0; font-size: 13px; color: #c9d1d9; overflow-wrap: anywhere; }
 .pst-modal .pst-rw { min-height: 0; margin-top: 8px; }
+
+/* ---- 🚩 жалоба на пре-сет ---- */
+.pst-report {
+  width: auto; margin: 0 0 0 auto; padding: 6px 9px; font-size: 13px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: none; opacity: 0.6;
+}
+.pst-report:hover { opacity: 1; background: var(--surface); box-shadow: none; }
+.pst-report-modal { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 4px; }
+.pst-report-modal h3 { margin: 0 0 4px; }
+.pst-report-name { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.pst-report-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; }
+.pst-report-modal select, .pst-report-modal textarea { margin: 0 0 8px; }
