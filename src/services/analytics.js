@@ -13,7 +13,7 @@ const Visitor = require('../models/Visitor');
 const UserSeen = require('../models/UserSeen');
 const User = require('../models/User');
 const perf = require('./perf');
-const { clientIp, deviceIds, parseUA, visitorKey } = require('./clientInfo');
+const { clientIp, deviceIds, parseUA, visitorKeys } = require('./clientInfo');
 
 const FLUSH_MS = 60 * 1000;
 const SAMPLE_MS = 10 * 1000;
@@ -31,6 +31,9 @@ let cur = emptyBucket();
 let visits = new Map(); // key → данные посетителя за минуту
 let seen = new Map(); // userId|ip|did → данные
 let users = new Map(); // userId → { ip, at }
+// склейка за сутки: менее точный ключ → ключ человека (аноним до cookie → устройство → аккаунт)
+const aliasTo = new Map();
+const mergedAliases = new Set(); // чьи записи в базе уже перенесены к человеку
 
 // разбор User-Agent — дорогой из всего, кэшируем по строке
 const uaCache = new Map();
@@ -83,16 +86,20 @@ function record(req, res, t0) {
   const ip = clientIp(req);
   const ids = deviceIds(req);
   const ua = uaInfo(req.headers);
-  const key = visitorKey(ip, ids, req.headers['user-agent'] || '');
   const now = Date.now();
   const userId = req.user && req.user.id ? String(req.user.id) : '';
+  const vk = visitorKeys(ip, ids, req.headers['user-agent'] || '', userId);
+  // этот браузер/IP сегодня уже узнали как конкретного человека — считаем к нему
+  const key = aliasTo.get(vk.key) || vk.key;
+  if (aliasTo.size < 100000) for (const a of vk.aliases) if (a !== key) aliasTo.set(a, key);
 
   let v = visits.get(key);
   if (!v) {
     if (visits.size >= MAX_KEYS) return;
-    v = { first: now, hits: 0, pages: 0, api: 0 };
+    v = { first: now, hits: 0, pages: 0, api: 0, aliases: new Set() };
     visits.set(key, v);
   }
+  for (const a of vk.aliases) if (a !== key) v.aliases.add(a);
   v.last = now;
   v.hits++;
   if (isPage) v.pages++;
@@ -220,6 +227,48 @@ async function flush() {
   if (dayOf(now) !== knownDay) {
     knownDay = dayOf(now);
     knownVisitors.clear();
+    aliasTo.clear();
+    mergedAliases.clear();
+  }
+
+  // один человек — одна запись: анонимные/«устройственные» записи этой же минуты и уже сохранённые
+  // сегодня переносим к его самому точному ключу (счётчики складываем, «впервые» — самое раннее)
+  for (const [key, x] of v) {
+    for (const a of x.aliases) {
+      const y = v.get(a);
+      if (!y || a === key) continue;
+      x.first = Math.min(x.first, y.first);
+      x.hits += y.hits; x.pages += y.pages; x.api += y.api;
+      v.delete(a);
+    }
+  }
+  const aliasMap = new Map(); // псевдоним → ключ человека
+  for (const [key, x] of v) for (const a of x.aliases) if (!mergedAliases.has(a)) aliasMap.set(a, key);
+  if (aliasMap.size) {
+    try {
+      const keys = [...aliasMap.keys()];
+      const [days, visitorsOld] = await Promise.all([
+        VisitDay.find({ day: knownDay, key: { $in: keys } }).select('key firstAt hits pages api').lean(),
+        Visitor.find({ key: { $in: keys } }).select('key firstAt').lean(),
+      ]);
+      for (const d of days) {
+        const x = v.get(aliasMap.get(d.key));
+        if (!x) continue;
+        x.first = Math.min(x.first, new Date(d.firstAt).getTime() || x.first);
+        x.hits += d.hits || 0; x.pages += d.pages || 0; x.api += d.api || 0;
+      }
+      for (const d of visitorsOld) {
+        const x = v.get(aliasMap.get(d.key));
+        if (x) x.firstSeen = Math.min(x.firstSeen || Infinity, new Date(d.firstAt).getTime() || Infinity);
+      }
+      await Promise.all([
+        days.length && VisitDay.deleteMany({ _id: { $in: days.map((d) => d._id) } }),
+        visitorsOld.length && Visitor.deleteMany({ _id: { $in: visitorsOld.map((d) => d._id) } }),
+      ]);
+      for (const a of keys) if (mergedAliases.size < 100000) mergedAliases.add(a);
+    } catch (e) {
+      console.warn('[analytics] склейка посетителей:', e.message);
+    }
   }
 
   if (v.size) {
@@ -238,12 +287,13 @@ async function flush() {
           upsert: true,
         },
       });
-      if (!knownVisitors.has(key)) {
+      if (!knownVisitors.has(key) || x.firstSeen) {
         if (knownVisitors.size < 200000) knownVisitors.add(key);
         visitorOps.push({
           updateOne: {
             filter: { key },
-            update: { $setOnInsert: { firstAt: new Date(x.first), bot: x.ua.type === 'bot' }, $set: { lastAt: new Date(x.last) } },
+            // $min: впервые = самое раннее из своего и склеенных записей (у новой записи — просто это значение)
+            update: { $min: { firstAt: new Date(Math.min(x.first, x.firstSeen || Infinity)) }, $setOnInsert: { bot: x.ua.type === 'bot' }, $set: { lastAt: new Date(x.last) } },
             upsert: true,
           },
         });
@@ -286,4 +336,4 @@ async function start(ioServer) {
 }
 const now = () => Date.now();
 
-module.exports = { middleware, start };
+module.exports = { middleware, start, _test: { record, flush } }; // _test — для проверок без базы

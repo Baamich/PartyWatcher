@@ -91,10 +91,14 @@ function parseUA(headers) {
   return { type, os: osName.slice(0, 40), browser: browser.slice(0, 40), name };
 }
 
-// ключ посетителя: устройство, если есть cookie, иначе хэш IP + браузера (первый заход до device.js)
-function visitorKey(ip, ids, ua) {
-  if (ids.did) return 'd:' + ids.did;
-  return 'a:' + crypto.createHash('sha1').update(ip + '|' + ua).digest('hex').slice(0, 16);
+// ключ посетителя — самый точный из известных: аккаунт → устройство (cookie pw_dev) → хэш IP + браузера.
+// aliases — менее точные ключи того же запроса: первый заход идёт ещё без cookie устройства и без входа,
+// analytics.js склеивает такие записи с человеком, чтобы он не считался дважды
+function visitorKeys(ip, ids, ua, userId) {
+  const anon = 'a:' + crypto.createHash('sha1').update(ip + '|' + ua).digest('hex').slice(0, 16);
+  const dev = ids.did ? 'd:' + ids.did : '';
+  const key = userId ? 'u:' + userId : dev || anon;
+  return { key, aliases: [dev, anon].filter((k) => k && k !== key) };
 }
 
-module.exports = { clientIp, deviceIds, parseUA, visitorKey, BOT_RE };
+module.exports = { clientIp, deviceIds, parseUA, visitorKeys, BOT_RE };
