@@ -932,6 +932,37 @@ document.getElementById('wbRaidBtn')?.addEventListener('click', () => {
 let wbChatPerms = [];
 window.PWChatSlash?.attach(document.getElementById('chatInput'), () => wbChatPerms);
 
+// ---- 🎁 у поля чата: свои награды — стример проверяет их бесплатно (поинты у владельца бесконечные) ----
+// окно — общий модуль js/rewards-popup.js; награда срабатывает по-настоящему (чат, OBS, бот), в «Покупках» — с пометкой «проверка»
+let wbPoints = null;
+const wbRewardsPop = (function initWbRewards() {
+  const btn = document.getElementById('wbRewardsBtn');
+  const box = document.getElementById('wbRewardsPopup');
+  if (!btn || !box || !window.PWRewardsPopup) return null;
+  const pop = PWRewardsPopup.create(box, {
+    state: () => ({ rewards: wbPoints?.rewards || [], balance: 0, owner: true }),
+    label: () => wbPoints?.pointsName || t('common.points.default'),
+    redeem: (r, message) => api('/points/' + encodeURIComponent(myStreamerNameLower) + '/redeem', { method: 'POST', body: { rewardId: r.id, message } }),
+  });
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!box.classList.toggle('hidden')) {
+      pop.reset();
+      pop.render();
+      try {
+        wbPoints = await api('/points/' + encodeURIComponent(myStreamerNameLower));
+        pop.render();
+      } catch (err) {
+        showToast('error', err.message);
+      }
+    }
+  });
+  box.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => box.classList.add('hidden'));
+  window.addEventListener('pw:langchange', () => { if (!box.classList.contains('hidden')) pop.render(); });
+  return pop;
+})();
+
 // ---- меню ⚙ у чата: «только подписчики», медленный режим, фильтр слов (js/chat-mode.js) ----
 // режим хранит сервер, сюда он приходит событием chat:mode
 let chatModeUi = null;

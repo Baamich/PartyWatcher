@@ -275,94 +275,25 @@ document.getElementById('livePointsBonus')?.addEventListener('click', async () =
   }
 });
 
-let lpSelected = null; // id награды, открытой в окне (описание и «Купить»)
-
-function rewardTileHtml(r) {
-  return `<span class="lp-tile" style="background:${liveEscapeHtml(r.color)}">${r.image ? `<img src="${liveEscapeHtml(r.image)}" alt="" />` : liveEscapeHtml(r.title.trim().charAt(0).toUpperCase())}</span>`;
-}
-
-function renderPointsPopup() {
-  const box = document.getElementById('livePointsPopup');
-  const s = pointsState || { rewards: [], balance: 0 };
-  const sel = lpSelected && s.rewards.find((r) => r.id === lpSelected);
-  if (sel) return renderRewardDetail(box, sel, s);
-  lpSelected = null;
-  box.innerHTML = `<div class="lp-head"><span class="lp-name"></span><b class="lp-bal"></b></div><div class="lp-grid"></div>`;
-  box.querySelector('.lp-name').textContent = pointsLabel();
-  box.querySelector('.lp-bal').textContent = fmtPoints(s.balance);
-  const grid = box.querySelector('.lp-grid');
-  if (!s.rewards.length) {
-    const p = document.createElement('p');
-    p.className = 'lp-empty';
-    p.textContent = t('streamer.points.noRewards');
-    grid.appendChild(p);
-  }
-  for (const r of s.rewards) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'lp-reward' + (s.balance < r.cost ? ' poor' : '');
-    b.title = r.description || r.title;
-    b.innerHTML = `${rewardTileHtml(r)}<span class="lp-title">${liveEscapeHtml(r.title)}</span><span class="lp-cost">${fmtPoints(r.cost)}</span>`;
-    b.addEventListener('click', () => { lpSelected = r.id; renderPointsPopup(); });
-    grid.appendChild(b);
-  }
-}
-
-// выбранная награда: описание, поле текста (если нужно) и «Купить»
-function renderRewardDetail(box, r, s) {
-  const short = Math.max(0, r.cost - (s.balance || 0));
-  box.innerHTML = `<div class="lp-head"><button type="button" class="lp-back">← <span></span></button><b class="lp-bal"></b></div>
-    <div class="lp-detail">${rewardTileHtml(r)}<div class="lp-d-main"><div class="lp-d-title"></div><div class="lp-cost"></div></div></div>
-    <p class="lp-desc"></p>
-    ${r.needInput ? '<textarea class="lp-input" rows="2" maxlength="200"></textarea>' : ''}
-    <button type="button" class="lp-buy"></button>
-    <p class="lp-short"></p>`;
-  box.querySelector('.lp-back span').textContent = t('streamer.points.back');
-  box.querySelector('.lp-bal').textContent = fmtPoints(s.balance);
-  box.querySelector('.lp-d-title').textContent = r.title;
-  box.querySelector('.lp-detail .lp-cost').textContent = fmtPoints(r.cost) + ' ' + pointsLabel();
-  const desc = box.querySelector('.lp-desc');
-  desc.textContent = r.description || t('streamer.points.noDesc');
-  desc.classList.toggle('muted', !r.description);
-  const input = box.querySelector('.lp-input');
-  if (input) input.placeholder = t('streamer.points.inputPh');
-  const buy = box.querySelector('.lp-buy');
-  buy.textContent = t('streamer.points.buyFor', { cost: fmtPoints(r.cost) });
-  buy.disabled = short > 0;
-  box.querySelector('.lp-short').textContent = short > 0 ? t('streamer.points.notEnough', { n: fmtPoints(short) }) : '';
-  box.querySelector('.lp-back').addEventListener('click', () => { lpSelected = null; renderPointsPopup(); });
-  buy.addEventListener('click', () => redeemReward(r, input, buy));
-  (input || buy).focus();
-}
-
-async function redeemReward(r, input, btn) {
-  if (!liveIsAuthed) return openLiveAuthModal('points');
-  if ((pointsState?.balance || 0) < r.cost) return PW.toast(t('streamer.points.notEnough', { n: fmtPoints(r.cost - (pointsState?.balance || 0)) }), 'info');
-  const message = input ? input.value.trim() : '';
-  if (r.needInput && !message) {
-    input.focus();
-    return PW.toast(t('streamer.points.needText'), 'info');
-  }
-  btn.disabled = true; // двойной клик не купит дважды
-  try {
+// окно наград — общий модуль js/rewards-popup.js (тот же, что в студии)
+const lpPopup = PWRewardsPopup.create(document.getElementById('livePointsPopup'), {
+  state: () => ({ rewards: pointsState?.rewards || [], balance: pointsState?.balance || 0, owner: false }),
+  label: pointsLabel,
+  beforeBuy: () => { if (!liveIsAuthed) { openLiveAuthModal('points'); return false; } return true; },
+  redeem: async (r, message) => {
     const res = await api('/points/' + encodeURIComponent(getNameFromUrl()) + '/redeem', { method: 'POST', body: { rewardId: r.id, message } });
     pointsState.balance = res.balance;
-    lpSelected = null;
     renderPointsBtn();
-    renderPointsPopup();
-    PW.toast(t('streamer.points.bought', { title: r.title }), 'success');
-  } catch (err) {
-    btn.disabled = false;
-    PW.toast(err.message, 'error');
-  }
-}
+  },
+});
+const renderPointsPopup = () => lpPopup.render();
 
 document.getElementById('livePointsBtn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!liveIsAuthed) return openLiveAuthModal('points');
   const box = document.getElementById('livePointsPopup');
   const open = box.classList.toggle('hidden') === false;
-  if (open) { lpSelected = null; renderPointsPopup(); loadPoints(); }
+  if (open) { lpPopup.reset(); renderPointsPopup(); loadPoints(); }
 });
 document.getElementById('livePointsPopup')?.addEventListener('click', (e) => e.stopPropagation());
 document.addEventListener('click', () => document.getElementById('livePointsPopup')?.classList.add('hidden'));

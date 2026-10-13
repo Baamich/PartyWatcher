@@ -262,6 +262,7 @@ body > .modal { z-index: 4000; }
 .rw-q-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border-radius: var(--radius-sm); background: var(--surface-alt); font-size: 13px; }
 .rw-q-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .rw-q-cost { color: #f59e0b; font-weight: 700; }
+.rw-q-test { font-size: 11px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
 .rw-q-msg { margin-top: 3px; font-style: italic; }
 .rw-q-at { margin-top: 3px; font-size: 11px; color: var(--text-muted); }
 .rw-q-btns { display: flex; flex-direction: column; gap: 4px; }

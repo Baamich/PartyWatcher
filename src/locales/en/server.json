@@ -286,7 +286,8 @@
     "self": "You can't assign yourself — you already own the channel",
     "tooMany": "There can be at most {n} moderators",
     "notMod": "This person is not a channel moderator",
-    "forbidden": "Not enough permissions"
+    "forbidden": "Not enough permissions",
+    "searchTooOften": "Too often, wait a moment"
   },
   "raid": {
     "badTarget": "Pick another stream",

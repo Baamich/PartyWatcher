@@ -15,9 +15,9 @@ Authorization: Bearer YOUR_KEY</code></pre>
   <tr><td><code>after</code></td><td>ISO time, for example <code>2026-10-13T18:00:00Z</code>: only purchases after it.</td></tr>
 </table>
 </div>
-<p>The response is up to 100 purchases, newest first:</p>
+<p>The response is up to 100 purchases, newest first. <code>test: true</code> — the streamer tested the reward (the 🎁 button in the studio), no points were spent:</p>
 <pre><code>[{ "id": "…", "reward": "coinflip", "user": "viewer123", "userId": "…",
-   "cost": 50, "message": "", "status": "new", "createdAt": "…" }]</code></pre>
+   "cost": 50, "message": "", "status": "new", "createdAt": "…", "test": false }]</code></pre>
 
 <h2>Mark a purchase</h2>
 <pre><code>POST https://partywatcher.de/api/rewards/&lt;channel&gt;/&lt;reward&gt;/&lt;id&gt;/done

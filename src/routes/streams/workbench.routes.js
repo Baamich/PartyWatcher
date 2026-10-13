@@ -18,6 +18,7 @@ const auth = require('../../middleware/auth');
 const streamKeyCache = require('../../services/streamKeyCache');
 const StreamVod = require('../../models/StreamVod');
 const chatBus = require('../../services/chatBus');
+const rateLimit = require('express-rate-limit');
 
 // Проверяем реальность по диску: обновляется ли index.m3u8 прямо сейчас,
 // а не полагаемся только на флаг isLive в базе (который мог не долететь/не записаться).
@@ -264,6 +265,45 @@ router.get('/mods', auth, requireStreamer, async (req, res) => {
     perms: mods.cleanPerms(me.modPerms),
     catalog: { chat: mods.CHAT_PERMS, stream: mods.STREAM_PERMS },
     max: mods.MAX_MODS,
+  });
+});
+
+// GET /workbench/mods/search?q= — подсказка при назначении: аккаунты, у которых логин или имя стримера
+// начинается с q (от 2 символов), до 8. Поиск по началу строки идёт по уникальным индексам usernameLower / streamerNameLower
+const modSearchLimit = rateLimit({
+  windowMs: 60 * 1000, limit: 60, keyGenerator: (req) => String(req.user.id), standardHeaders: true, legacyHeaders: false,
+  message: (req) => ({ error: req.t('server.mods.searchTooOften') }),
+});
+router.get('/mods/search', auth, modSearchLimit, requireStreamer, async (req, res) => {
+  const me = req.streamerUser;
+  const q = String(req.query.q || '').trim().replace(/^@/, '').toLowerCase().slice(0, 40);
+  if (q.length < 2) return res.json({ users: [] });
+  const re = new RegExp('^' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const rows = await User.aggregate([
+    { $match: { $or: [{ usernameLower: re }, { streamerNameLower: re }], _id: { $ne: me._id } } },
+    { $limit: 30 },
+    { $project: { username: 1, usernameLower: 1, streamerName: 1, streamerNameLower: 1, profileRev: 1, hasAvatar: { $gt: ['$streamerAvatarUrl', null] } } },
+  ]);
+  // точное совпадение — первым, дальше короче и по алфавиту
+  const rank = (u) => (u.usernameLower === q || u.streamerNameLower === q ? 0 : 1);
+  rows.sort((a, b) => rank(a) - rank(b) || a.usernameLower.length - b.usernameLower.length || a.usernameLower.localeCompare(b.usernameLower));
+  const top = rows.slice(0, 8);
+  const ids = top.map((u) => u._id);
+  const [modRows, follows] = await Promise.all([
+    ChannelMod.find({ streamerNameLower: me.streamerNameLower, userId: { $in: ids } }).select('userId level').lean(),
+    Follow.find({ streamerId: me._id, followerId: { $in: ids } }).select('followerId').lean(),
+  ]);
+  const level = new Map(modRows.map((m) => [String(m.userId), m.level]));
+  const fol = new Set(follows.map((f) => String(f.followerId)));
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    users: top.map((u) => ({
+      username: u.username,
+      streamerName: u.streamerName || null,
+      avatarUrl: u.hasAvatar && u.streamerNameLower ? `/api/streamers/${encodeURIComponent(u.streamerNameLower)}/avatar?v=${Number(u.profileRev) || 0}` : null,
+      level: level.get(String(u._id)) || null,
+      follower: fol.has(String(u._id)),
+    })),
   });
 });
 

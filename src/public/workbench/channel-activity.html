@@ -9,7 +9,7 @@
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
   <link rel="stylesheet" href="/workbench/workbench.css?v=4" />
-  <link rel="stylesheet" href="/workbench/activity.css?v=2" />
+  <link rel="stylesheet" href="/workbench/activity.css?v=3" />
   <title data-i18n="activity.pageTitle">PartyWatcher — Актив канала</title>
 </head>
 <body>
@@ -64,13 +64,18 @@
               <span id="modsCount" class="act-count" data-no-i18n></span>
             </header>
             <form id="modAddForm" class="act-add" autocomplete="off">
-              <input id="modAddName" maxlength="40" placeholder="Логин аккаунта" data-i18n-placeholder="activity.mods.namePh" />
+              <!-- подсказка при вводе (от 2 букв) и «кого назначаешь» — channel-activity.js -->
+              <div class="act-find">
+                <input id="modAddName" maxlength="40" placeholder="Логин или имя стримера" data-i18n-placeholder="activity.mods.namePh" role="combobox" aria-autocomplete="list" aria-expanded="false" />
+                <div id="modFindList" class="act-find-list" role="listbox" data-no-i18n hidden></div>
+              </div>
               <select id="modAddLevel">
                 <option value="mod" data-i18n="activity.mods.levelMod">Модератор</option>
                 <option value="senior" data-i18n="activity.mods.levelSenior">Высший модератор</option>
               </select>
               <button type="submit" data-i18n="activity.mods.add">Назначить</button>
             </form>
+            <div id="modPicked" class="act-picked" data-no-i18n hidden></div>
             <div id="modsList" class="act-list" data-no-i18n></div>
           </section>
           <section class="act-card">
@@ -107,7 +112,7 @@
   <script src="/js/api.js?v=2"></script>
   <script src="/js/actions.js?v=3"></script>
   <script src="/js/chat-badges.js?v=1"></script>
-  <script src="/workbench/channel-activity.js?v=5"></script>
+  <script src="/workbench/channel-activity.js?v=6"></script>
   <script src="/js/minipip.js?v=2"></script>
   <script src="/js/live-notify.js?v=1"></script>
 </body>

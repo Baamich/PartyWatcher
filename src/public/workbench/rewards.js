@@ -295,13 +295,13 @@ function renderQueue() {
   for (const x of st.redemptions) {
     const row = document.createElement('div');
     row.className = 'rw-q-row rw-q-' + x.status;
-    row.innerHTML = `<div class="rw-q-main"><b>${esc(x.username)}</b> · ${esc(x.title)} <span class="rw-q-cost">${esc(x.cost)}</span>
+    row.innerHTML = `<div class="rw-q-main"><b>${esc(x.username)}</b> · ${esc(x.title)} <span class="rw-q-cost">${esc(x.cost)}</span>${x.test ? ` <span class="rw-q-test">${esc(t('rewards.queue.test'))}</span>` : ''}
       ${x.message ? `<div class="rw-q-msg">${esc(x.message)}</div>` : ''}
       <div class="rw-q-at">${esc(new Date(x.at).toLocaleString(I18N.locale, { dateStyle: 'short', timeStyle: 'short' }))}</div></div>`;
     if (x.status === 'new') {
       const btns = document.createElement('div');
       btns.className = 'rw-q-btns';
-      for (const [status, key] of [['done', 'rewards.queue.done'], ['refunded', 'rewards.queue.refund']]) {
+      for (const [status, key] of x.test ? [['done', 'rewards.queue.done']] : [['done', 'rewards.queue.done'], ['refunded', 'rewards.queue.refund']]) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'icon-btn';

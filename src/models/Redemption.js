@@ -12,6 +12,7 @@ const redemptionSchema = new mongoose.Schema(
     cost: { type: Number, required: true },
     message: { type: String, default: '' },
     status: { type: String, enum: ['new', 'done', 'refunded'], default: 'new' },
+    test: { type: Boolean, default: false }, // проверка стримером на своём канале: поинты не списывались, «вернуть» ничего не возвращает
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

@@ -57,7 +57,8 @@
     "empty": "No purchases yet",
     "done": "✓ Done",
     "refund": "↩ Refund points",
-    "refunded": "points refunded"
+    "refunded": "points refunded",
+    "test": "test"
   },
   "limit": "You can have up to {n} rewards",
   "edit": {

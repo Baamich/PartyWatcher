@@ -15,9 +15,9 @@ Authorization: Bearer ТВОЙ_КЛЮЧ</code></pre>
   <tr><td><code>after</code></td><td>Время ISO, например <code>2026-10-13T18:00:00Z</code>: только покупки после него.</td></tr>
 </table>
 </div>
-<p>Ответ — до 100 покупок, новые сверху:</p>
+<p>Ответ — до 100 покупок, новые сверху. <code>test: true</code> — стример проверял награду сам (кнопка 🎁 в студии), поинты не тратились:</p>
 <pre><code>[{ "id": "…", "reward": "coinflip", "user": "viewer123", "userId": "…",
-   "cost": 50, "message": "", "status": "new", "createdAt": "…" }]</code></pre>
+   "cost": 50, "message": "", "status": "new", "createdAt": "…", "test": false }]</code></pre>
 
 <h2>Отметить покупку</h2>
 <pre><code>POST https://partywatcher.de/api/rewards/&lt;канал&gt;/&lt;награда&gt;/&lt;id&gt;/done

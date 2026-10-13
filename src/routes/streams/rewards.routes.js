@@ -104,7 +104,8 @@ async function chatPost(s, doc) {
   });
 }
 
-// POST /points/:name/redeem { rewardId, message } — купить награду
+// POST /points/:name/redeem { rewardId, message } — купить награду.
+// Владелец канала покупает бесплатно (поинты у него бесконечные) — это проверка: награда срабатывает по-настоящему
 pointsRouter.post('/:name/redeem', auth, limiter(20, 60 * 1000), async (req, res) => {
   const s = await channelOf(req, res);
   if (!s) return;
@@ -114,19 +115,23 @@ pointsRouter.post('/:name/redeem', auth, limiter(20, 60 * 1000), async (req, res
   if (!reward) return res.status(404).json({ error: req.t('server.rewards.notFound') });
   const message = String(req.body?.message || '').trim().replace(/\s+/g, ' ').slice(0, 200);
   if (reward.needInput && !message) return res.status(400).json({ error: req.t('server.rewards.needText') });
-  // забаненный или в таймауте ничего не покупает (иначе «Выделить сообщение» — обход бана)
-  const [ban, to] = await Promise.all([
-    ChannelBan.exists({ streamerNameLower: s.streamerNameLower, userId: req.user.id }),
-    ChannelTimeout.exists({ streamerNameLower: s.streamerNameLower, userId: req.user.id, until: { $gt: new Date() } }),
-  ]);
-  if (ban || to) return res.status(403).json({ error: req.t('server.rewards.banned') });
+  const own = String(s._id) === String(req.user.id);
 
-  const acc = await points.spend(s._id, req.user.id, reward.cost);
-  if (!acc) return res.status(400).json({ error: req.t('server.rewards.notEnough') });
+  let acc = null;
+  if (!own) {
+    // забаненный или в таймауте ничего не покупает (иначе «Выделить сообщение» — обход бана)
+    const [ban, to] = await Promise.all([
+      ChannelBan.exists({ streamerNameLower: s.streamerNameLower, userId: req.user.id }),
+      ChannelTimeout.exists({ streamerNameLower: s.streamerNameLower, userId: req.user.id, until: { $gt: new Date() } }),
+    ]);
+    if (ban || to) return res.status(403).json({ error: req.t('server.rewards.banned') });
+    acc = await points.spend(s._id, req.user.id, reward.cost);
+    if (!acc) return res.status(400).json({ error: req.t('server.rewards.notEnough') });
+  }
 
   const red = await Redemption.create({
     streamerId: s._id, rewardId: reward._id, rewardSlug: reward.slug, rewardTitle: reward.title,
-    userId: req.user.id, username: req.user.username, cost: reward.cost, message,
+    userId: req.user.id, username: req.user.username, cost: reward.cost, message, test: own,
   });
 
   // действие стартовых наград
@@ -139,15 +144,15 @@ pointsRouter.post('/:name/redeem', auth, limiter(20, 60 * 1000), async (req, res
   // свой ответ бота в чат (маску фильтра слов накладывает chatPost)
   const reply = fillReply(reward.reply, {
     user: req.user.username, reward: reward.title, cost: reward.cost, message,
-    points: s.pointsName || i18n.t(req.lang, 'server.rewards.pointsDefault'), balance: acc.balance,
+    points: s.pointsName || i18n.t(req.lang, 'server.rewards.pointsDefault'), balance: acc ? acc.balance : '∞',
   }).trim().slice(0, 500);
   if (reply) await chatPost(s, { senderId: null, senderUsername: 'Бот', text: reply, external: true, source: 'bot' });
   // в OBS и ботам: текст зрителя на экран — с маской фильтра слов канала
   alerts.fire(s.streamerNameLower, 'reward', {
     name: req.user.username, reward: reward.title, cost: reward.cost, message: chatFilter.mask(message, s.chatFilter || 0) || message,
-    rewardSlug: reward.slug, redemptionId: String(red._id),
+    rewardSlug: reward.slug, redemptionId: String(red._id), ...(own && { test: true }),
   }).catch(() => {});
-  res.json({ balance: acc.balance, redemptionId: String(red._id) });
+  res.json({ balance: acc ? acc.balance : null, redemptionId: String(red._id), test: own });
 });
 
 // ================= студия: награды канала =================
@@ -227,7 +232,7 @@ rewardsRouter.get('/studio', auth, requireStreamer, async (req, res) => {
     points: { name: me.pointsName || null, nextRenameAt: at && at + RENAME_MS > Date.now() ? new Date(at + RENAME_MS) : null, icon: iconUrl(me.pointsIcon), iconRef: me.pointsIcon || null, claimEvery: points.CLAIM_MS / 60000, amount: points.AMOUNT },
     keyMasked: settings?.key ? '••••••••' + settings.key.slice(-4) : null,
     layout: settings?.rewardsLayout || null,
-    redemptions: reds.map((r) => ({ id: String(r._id), slug: r.rewardSlug, title: r.rewardTitle, username: r.username, cost: r.cost, message: r.message, status: r.status, at: r.createdAt })),
+    redemptions: reds.map((r) => ({ id: String(r._id), slug: r.rewardSlug, title: r.rewardTitle, username: r.username, cost: r.cost, message: r.message, status: r.status, at: r.createdAt, test: !!r.test })),
   });
 });
 
@@ -312,7 +317,7 @@ async function setStatus(streamerId, rid, status, slug) {
   // slug — только для API ботов: покупка должна быть именно этой награды
   const q = { _id: rid, streamerId, status: 'new', ...(slug && { rewardSlug: slug }) };
   const red = await Redemption.findOneAndUpdate(q, { $set: { status } }, { new: true }).lean();
-  if (red && status === 'refunded') await points.refund(streamerId, red.userId, red.cost);
+  if (red && status === 'refunded' && !red.test) await points.refund(streamerId, red.userId, red.cost);
   return red;
 }
 rewardsRouter.patch('/studio-redemptions/:id', auth, requireStreamer, async (req, res) => {
@@ -343,7 +348,7 @@ rewardsRouter.get('/:channel/:slug', botAuth, async (req, res) => {
   if (after && !isNaN(after)) q.createdAt = { $gt: after };
   const list = await Redemption.find(q).sort({ createdAt: -1 }).limit(100).lean();
   res.set('Cache-Control', 'no-store');
-  res.json(list.map((r) => ({ id: String(r._id), reward: r.rewardSlug, user: r.username, userId: String(r.userId), cost: r.cost, message: r.message, status: r.status, createdAt: r.createdAt })));
+  res.json(list.map((r) => ({ id: String(r._id), reward: r.rewardSlug, user: r.username, userId: String(r.userId), cost: r.cost, message: r.message, status: r.status, createdAt: r.createdAt, test: !!r.test })));
 });
 
 // POST /rewards/:channel/:slug/:id/done | /refund — бот отметил покупку

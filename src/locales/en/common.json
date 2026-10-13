@@ -206,5 +206,20 @@
       "use": "/unraid",
       "desc": "Cancel the raid"
     }
+  },
+  "points": {
+    "default": "Stream points",
+    "noRewards": "No rewards yet",
+    "notEnough": "{n} short",
+    "inputPh": "Your text",
+    "back": "Rewards",
+    "noDesc": "No description",
+    "buyFor": "Buy for {cost}",
+    "needText": "Write a text for this reward",
+    "bought": "“{title}” bought!",
+    "testFor": "Test — free",
+    "testHint": "You own the channel: no points are spent, the reward runs for real",
+    "tested": "“{title}” — test started",
+    "studioBtn": "Test rewards (free)"
   }
 }

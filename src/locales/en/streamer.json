@@ -108,16 +108,6 @@
     "title": "Stream points and rewards",
     "default": "Stream points",
     "short": "SP",
-    "bonus": "Claim bonus",
-    "noRewards": "The streamer has not added rewards yet",
-    "notEnough": "{n} short",
-    "buy": "Buy",
-    "buyText": "Buy “{title}” for {cost} ({name})?",
-    "inputPh": "Your text",
-    "bought": "“{title}” bought!",
-    "back": "Rewards",
-    "noDesc": "No description",
-    "buyFor": "Buy for {cost}",
-    "needText": "Write a text for this reward"
+    "bonus": "Claim bonus"
   }
 }
