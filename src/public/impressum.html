@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="/js/i18n.js" data-ns="imprint"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/favicon.js"></script>
+  <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
+  <link rel="stylesheet" href="/css/common.css" />
+  <link rel="stylesheet" href="/css/terms.css" />
+  <title data-i18n="imprint.pageTitle">Impressum — PartyWatcher</title>
+</head>
+<body>
+  <!-- данные владельца подставляет сервер из .env (IMPRINT_*), см. /impressum в server.js -->
+  <main class="terms-page">
+    <div class="terms-top">
+      <a class="icon-btn terms-back" href="/" data-i18n="imprint.back">← На главную</a>
+      <div class="terms-top-right">
+        <div data-lang-switch></div>
+        <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
+      </div>
+    </div>
+
+    <h1>Impressum</h1>
+    <p class="terms-updated" data-i18n="imprint.intro">Сведения о владельце сайта — обязательны по закону Германии.</p>
+    {{imprint.missing}}
+
+    <section>
+      <h2 data-i18n="imprint.provider">Angaben gemäß § 18 Abs. 1 MStV</h2>
+      <p data-no-i18n>{{imprint.name}}<br />{{imprint.street}}<br />{{imprint.city}}<br />{{imprint.country}}</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="imprint.contact">Kontakt</h2>
+      <p data-no-i18n>E-Mail: <a href="mailto:{{imprint.email}}">{{imprint.email}}</a>{{imprint.phoneRow}}</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="imprint.responsible">Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
+      <p data-no-i18n>{{imprint.name}}<br />{{imprint.street}}<br />{{imprint.city}}</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="imprint.userContent">Inhalte der Nutzer</h2>
+      <p data-i18n="imprint.userContentText">Эфиры, чаты, комнаты и профили наполняют пользователи. Нарушение закона или наших условий — напишите на почту выше: обычно отвечаем в течение 1–2 дней, при большой загрузке — до 7 дней.</p>
+    </section>
+
+    <p><a href="/terms" data-i18n="imprint.terms">📄 Условия пользования</a></p>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/actions.js"></script>
+</body>
+</html>

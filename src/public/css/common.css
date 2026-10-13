@@ -781,3 +781,8 @@ button:active {
   left: auto;
   right: 0;
 }
+
+/* ссылки «Условия пользования · Impressum» внизу страницы */
+.site-legal { display: flex; justify-content: center; gap: 8px; padding: 24px 16px 32px; font-size: 12px; color: var(--text-muted); }
+.site-legal a { color: var(--text-muted); text-decoration: none; }
+.site-legal a:hover { color: var(--text); text-decoration: underline; }

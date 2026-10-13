@@ -137,13 +137,8 @@ router.get('/public', auth, async (req, res) => {
     filter.viewerCount = { $gt: 0 };
   }
 
-  // комнаты 18+ — только тем, кто подтвердил возраст и включил галочку «18+» (adult=1 проверяем по аккаунту)
-  let showAdult = false;
-  if (req.query.adult === '1') {
-    const me = await User.findById(req.user.id).select('adultConfirmed').lean();
-    showAdult = !!me?.adultConfirmed;
-  }
-  if (!showAdult) filter['video.adult'] = { $ne: true };
+  // комнаты 18+ в публичный список не попадают никогда — только по ссылке (и после подтверждения возраста в комнате)
+  filter['video.adult'] = { $ne: true };
 
   if (q) {
     filter.name = { $regex: escapeRegex(q), $options: 'i' };

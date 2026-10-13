@@ -217,10 +217,6 @@
               <span data-i18n="index.public.withPeople">С людьми</span>
             </label>
             <!-- появляется только у тех, кто хоть раз подтвердил возраст 18+ -->
-            <label class="filter-check hidden" id="adultFilterWrap">
-              <input type="checkbox" id="adultFilter" data-change="onAdultFilterChange" />
-              <span data-i18n="index.public.adult">18+</span>
-            </label>
           </div>
         </div>
 
@@ -230,6 +226,13 @@
     </div><!-- /appBox -->
 
     <!-- Служба поддержки FAB -->
+  <!-- юридические ссылки: видны и гостю, и вошедшему (Impressum — обязателен для сайта из Германии) -->
+  <footer class="site-legal" data-nosnippet>
+    <a href="/terms" data-i18n="common.legal.terms">Условия пользования</a>
+    <span aria-hidden="true">·</span>
+    <a href="/impressum">Impressum</a>
+  </footer>
+
   <button type="button" id="supportFab" class="support-fab" title="Служба поддержки" aria-label="Служба поддержки" data-i18n-title="index.support.title" data-i18n-aria-label="index.support.title">
     <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M4 14v-2a8 8 0 0 1 16 0v2"/>

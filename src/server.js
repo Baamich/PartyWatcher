@@ -140,6 +140,24 @@ async function start() {
   // клиент Socket.IO — минифицированный файл из npm с версией по хэшу (вместо /socket.io/socket.io.js: 156 КБ без кэша)
   app.get('/vendor/socket.io.min.js', pages.sendVendor('/vendor/socket.io.min.js'));
 
+  // Impressum: данные владельца — из .env (IMPRINT_*), подставляются в public/impressum.html.
+  // Раньше pages.middleware, иначе /impressum.html отдался бы без подстановок
+  if (!config.imprint.name || !config.imprint.street || !config.imprint.city) {
+    console.warn('[imprint] не заполнены IMPRINT_NAME / IMPRINT_STREET / IMPRINT_CITY в .env — /impressum без данных владельца');
+  }
+  app.get(['/impressum', '/impressum.html', '/imprint'], (req, res, next) => {
+    const im = config.imprint;
+    const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const filled = im.name && im.street && im.city;
+    pages.send(req, res, 'impressum.html', {
+      vars: { 'imprint.name': im.name || '—', 'imprint.street': im.street, 'imprint.city': im.city, 'imprint.country': im.country, 'imprint.email': im.email },
+      raw: {
+        'imprint.phoneRow': im.phone ? `<br />${esc(i18n.t(req.lang, 'imprint.phone'))}: ${esc(im.phone)}` : '',
+        'imprint.missing': filled ? '' : `<p class="auth-error">${esc(i18n.t(req.lang, 'imprint.missing'))}</p>`,
+      },
+    }).catch(next);
+  });
+
   app.use(pages.middleware); // HTML-страницы: версии файлов, словарь, перевод и данные входа сразу в разметке
   app.use(express.static(path.join(__dirname, 'public'), { setHeaders: pages.staticHeaders }));
   app.use('/media/thumbnails', express.static(THUMB_DIR));

@@ -61,4 +61,15 @@ module.exports = {
     clientId: process.env.TWITCH_CLIENT_ID || null,
     clientSecret: process.env.TWITCH_CLIENT_SECRET || null,
   },
+
+  // Impressum (§ 18 Abs. 1 MStV — сайт бесплатный, некоммерческий): страница /impressum — имя и адрес, по которому
+  // можно вручить письмо (не абонентский ящик; можно адрес сервиса «Impressum-Adresse»/c/o). В репозиторий не кладём
+  imprint: {
+    name: (process.env.IMPRINT_NAME || '').trim(),
+    street: (process.env.IMPRINT_STREET || '').trim(),
+    city: (process.env.IMPRINT_CITY || '').trim(), // «70173 Stuttgart»
+    country: (process.env.IMPRINT_COUNTRY || 'Deutschland').trim(),
+    email: (process.env.IMPRINT_EMAIL || process.env.SUPPORT_EMAIL || 'support@partywatcher.de').trim(),
+    phone: (process.env.IMPRINT_PHONE || '').trim(), // необязательно: второй быстрый способ связи — сама почта + форма поддержки
+  },
 };

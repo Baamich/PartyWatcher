@@ -23,7 +23,6 @@ async function checkAuth() {
     if (authBox) authBox.classList.add('hidden');
     if (appBox) appBox.classList.remove('hidden');
     document.documentElement.classList.remove('pw-authed');
-    setupAdultFilter(me);
 
     const meName = document.getElementById('meName');
     if (meName) meName.textContent = me.username || '';
@@ -713,32 +712,9 @@ let publicState = {
   page: 1,
   sort: 'newest',
   onlyWithPeople: false,
-  adult: false, // комнаты 18+ (галочка видна только после подтверждения возраста)
   query: '',
   totalPages: 1,
 };
-
-// ---- 18+ ----
-function setupAdultFilter(me) {
-  const wrap = document.getElementById('adultFilterWrap');
-  const box = document.getElementById('adultFilter');
-  if (!wrap || !box) return;
-  wrap.classList.toggle('hidden', !me.adultConfirmed);
-  box.checked = !!me.showAdult;
-  publicState.adult = !!me.adultConfirmed && !!me.showAdult;
-}
-
-async function onAdultFilterChange() {
-  const box = document.getElementById('adultFilter');
-  publicState.adult = box.checked;
-  publicState.page = 1;
-  loadPublicRooms();
-  try {
-    await api('/auth/adult', { method: 'PATCH', body: { showAdult: box.checked } });
-  } catch (err) {
-    PW.toast(err.message || t('index.public.adultFailed'), 'error');
-  }
-}
 
 function onPublicFilterChange() {
   publicState.page = 1;
@@ -766,7 +742,6 @@ async function loadPublicRooms() {
     onlyWithPeople: publicState.onlyWithPeople ? '1' : '0',
   });
   if (publicState.query) params.set('q', publicState.query);
-  if (publicState.adult) params.set('adult', '1');
 
   try {
     const data = await api('/rooms/public?' + params.toString());

@@ -1858,10 +1858,6 @@ function ensureAdult() {
       localStorage.setItem('pw_age18', '1');
       await api('/auth/adult', { method: 'PATCH', body: { confirmed: true } }).catch(() => {});
       myAdult = true;
-      const show = await PW.confirm(t('room.adult.showText'), {
-        title: t('room.adult.showTitle'), okText: t('room.adult.showYes'), cancelText: t('room.adult.showNo'),
-      });
-      await api('/auth/adult', { method: 'PATCH', body: { showAdult: !!show } }).catch(() => {});
       return true;
     })().finally(() => { adultAsking = null; });
   }

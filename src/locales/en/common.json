@@ -228,9 +228,12 @@
     "changedTitle": "The Terms of Service have changed",
     "changedText": "We have updated our Terms of Service. Please read the new version and confirm your agreement to continue.",
     "open": "📄 Open the Terms of Service",
-    "agree": "I have read and accept the Terms of Service",
+    "agree": "I am 18 or older and accept the Terms of Service",
     "accept": "Accept",
     "decline": "I don’t accept — sign out",
     "thanks": "Thank you! Terms accepted"
+  },
+  "legal": {
+    "terms": "Terms of Service"
   }
 }

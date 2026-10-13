@@ -198,7 +198,8 @@ async function bootJson(req) {
 }
 
 // ---------- отдача ----------
-async function send(req, res, rel) {
+// opts.vars — подстановки {{ключ}} в готовую страницу (экранируются), opts.raw — уже готовый HTML (без экранирования)
+async function send(req, res, rel, opts = {}) {
   const abs = typeof rel === 'string' && path.isAbsolute(rel) ? rel : path.join(PUBLIC, rel);
   let st;
   try { st = fs.statSync(abs); } catch { st = null; }
@@ -207,7 +208,14 @@ async function send(req, res, rel) {
   const lang = req.lang || i18n.langFromHeaders(req.headers);
   const boot = await bootJson(req);
   const tpl = template(abs, st, lang);
-  const html = tpl.html.replace(BOOT, boot ? `<script type="application/json" id="pw-boot">${boot}</script>` : '');
+  let html = tpl.html.replace(BOOT, boot ? `<script type="application/json" id="pw-boot">${boot}</script>` : '');
+  if (opts.vars || opts.raw) {
+    html = html.replace(/\{\{([\w.]+)\}\}/g, (all, k) => {
+      if (opts.raw && Object.prototype.hasOwnProperty.call(opts.raw, k)) return String(opts.raw[k]);
+      if (opts.vars && Object.prototype.hasOwnProperty.call(opts.vars, k)) return escText(opts.vars[k]);
+      return all;
+    });
+  }
 
   const etag = 'W/"' + crypto.createHash('sha1').update(html).digest('base64').slice(0, 22) + '"';
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

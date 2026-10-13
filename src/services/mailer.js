@@ -35,20 +35,33 @@ async function sendMail({ to, subject, text, html, replyTo, messageId, inReplyTo
     console.warn('[mailer] SMTP не настроен (SMTP_HOST / MAIL_FROM) — письмо не отправлено');
     return false;
   }
-  await t.sendMail({
-    from: process.env.MAIL_FROM, // например: "PartyWatcher <noreply@partywatcher.de>"
-    to,
-    subject,
-    text,
-    html,
-    replyTo,
-    messageId,
-    inReplyTo,
-    references,
-    // автоответчики не будут отвечать на служебное письмо; живой ответ поддержки так не помечаем
-    headers: autoSubmitted ? { 'Auto-Submitted': 'auto-generated' } : {},
-  });
+  try {
+    await t.sendMail({
+      from: process.env.MAIL_FROM, // например: "PartyWatcher <noreply@partywatcher.de>"
+      to,
+      subject,
+      text,
+      html,
+      replyTo,
+      messageId,
+      inReplyTo,
+      references,
+      // автоответчики не будут отвечать на служебное письмо; живой ответ поддержки так не помечаем
+      headers: autoSubmitted ? { 'Auto-Submitted': 'auto-generated' } : {},
+    });
+  } catch (e) {
+    // код и ответ SMTP-сервера (535 — неверный ключ, ETIMEDOUT — порт закрыт); адрес — замаскированный
+    console.error(`[mailer] НЕ отправлено → ${maskEmail(to)}: ${e.code || ''} ${e.responseCode || ''} ${(e.response || e.message || '').slice(0, 200)}`);
+    throw e;
+  }
+  console.log(`[mailer] отправлено → ${maskEmail(to)}`);
   return true;
+}
+
+// «b***@gmail.com» — в лог не пишем адреса целиком
+function maskEmail(addr) {
+  const m = String(addr || '').match(/^(.)[^@]*(@.*)$/);
+  return m ? m[1] + '***' + m[2] : '?';
 }
 
 function escapeHtml(s) {
