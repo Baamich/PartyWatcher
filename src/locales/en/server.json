@@ -16,7 +16,8 @@
   "badStatus": "Invalid status",
   "admin": {
     "updateRunning": "An update is already running",
-    "badHash": "Invalid commit hash"
+    "badHash": "Invalid commit hash",
+    "noRights": "You have no rights over this account"
   },
   "auth": {
     "tooManyResets": "Too many reset requests, try again in an hour",
@@ -443,10 +444,11 @@
     "accountUntil": "Your account is blocked until {until}.",
     "accountPerm": "Your account is permanently banned.",
     "reason": "Reason: {reason}",
-    "notAdmin": "You can’t block administrators or yourself"
+    "notAdmin": "You can’t block yourself"
   },
   "terms": {
     "required": "Please accept the Terms of Service first",
     "mustAccept": "You need to accept the Terms of Service"
-  }
+  },
+  "ownerOnly": "Site owner only"
 }

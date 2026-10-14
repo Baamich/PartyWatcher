@@ -1881,7 +1881,7 @@ async function init() {
   const me = await api('/auth/me').catch(() => null);
   if (!me) return (location.href = '/');
   myUsername = me.username || me.user?.username || null;
-  myTrusted = me.role === 'admin' || me.role === 'friend'; // друзья администратора: YouTube 18+, «Просмотр фильма»
+  myTrusted = ['friend', 'admin', 'owner'].includes(me.role); // друзья владельца и админы: YouTube 18+, «Просмотр фильма»
   myAdult = !!me.adultConfirmed;
 
   document.getElementById('roomCodeValue').textContent = code;

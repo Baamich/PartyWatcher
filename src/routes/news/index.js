@@ -40,7 +40,7 @@ async function isAdminRequest(req) {
     if (!token) return false;
     const payload = jwt.verify(token, config.jwt.secret);
     const user = await User.findById(payload.id).select('role').lean();
-    return !!user && user.role === 'admin';
+    return !!user && require('../../services/roles').isAdminRole(user.role);
   } catch (_) {
     return false;
   }

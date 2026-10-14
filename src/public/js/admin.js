@@ -453,4 +453,9 @@ document.getElementById('commitList').addEventListener('change', (e) => {
   if (e.target.name === 'commit') selectCommit(e.target.value);
 });
 
-loadCommits();
+// обновление сайта — только владельцу (сервер тоже отвечает 403 остальным)
+api('/auth/me').then((me) => {
+  if (me?.role !== 'owner') return;
+  document.getElementById('updateNavBtn')?.classList.remove('hidden');
+  loadCommits();
+}).catch(() => {});

@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const Ban = require('../models/Ban');
 const i18n = require('./i18n');
+const { isAdminRole } = require('./roles');
 const { clientIp, deviceIds } = require('./clientInfo');
 
 let map = new Map(); // `${kind}:${value}` → { until }
@@ -54,7 +55,7 @@ function isAdminReq(req) {
   const m = String(req.headers.cookie || '').match(/(?:^|;\s*)token=([^;]+)/);
   if (!m) return false;
   try {
-    return jwt.verify(decodeURIComponent(m[1]), config.jwt.secret).role === 'admin';
+    return isAdminRole(jwt.verify(decodeURIComponent(m[1]), config.jwt.secret).role);
   } catch {
     return false;
   }

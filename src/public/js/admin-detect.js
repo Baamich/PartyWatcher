@@ -47,7 +47,7 @@
 
     const chips = node('div', 'pwa-detect-chips');
     for (const u of x.users) {
-      const chip = node('span', 'pwa-badge ' + (u.banned ? 'pwa-badge-ban' : u.role === 'admin' ? 'pwa-badge-admin' : 'pwa-badge-ok'), u.username);
+      const chip = node('span', 'pwa-badge ' + (u.banned ? 'pwa-badge-ban' : u.role === 'admin' || u.role === 'owner' ? 'pwa-badge-admin' : 'pwa-badge-ok'), u.username);
       chips.appendChild(chip);
     }
     box.appendChild(chips);

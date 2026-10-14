@@ -6,8 +6,9 @@ const userSchema = new mongoose.Schema(
     usernameLower: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
-    // friend — друг администратора: ему открыты «Просмотр фильма» и комнаты 18+ (services/roles.js); ставится в базе
-    role: { type: String, enum: ['user', 'friend', 'admin'], default: 'user' },
+    // friend — друг владельца: ему открыты «Просмотр фильма» и комнаты 18+; owner — владелец сайта (всё, что admin,
+    // плюс обновление и назначение ролей). Роли — services/roles.js; friend/admin выдаёт владелец в админке, owner — только в базе
+    role: { type: String, enum: ['user', 'friend', 'admin', 'owner'], default: 'user' },
     createdAt: { type: Date, default: Date.now },
 
     // ---- сброс пароля ----

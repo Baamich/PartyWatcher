@@ -133,14 +133,15 @@ async function start() {
   });
 
   const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin(-stats|-users|-detect|-logs)?\.js|css\/admin(-stats)?\.css)\/?$/i;
-  app.use((req, res, next) => {
+  app.use(async (req, res, next) => {
     if (!ADMIN_PATHS.test(req.path)) return next();
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     res.setHeader('Cache-Control', 'no-store');
+    // verifyToken сверяет tokenVersion: снятый с роли админ (tokenVersion + 1) со старым токеном страницу не получит
     let isAdmin = false;
     try {
       const t = req.cookies && req.cookies.token;
-      isAdmin = !!t && jwt.verify(t, config.jwt.secret).role === 'admin';
+      isAdmin = !!t && roles.isAdminRole((await authMw.verifyToken(t)).role);
     } catch (_) {}
     if (!isAdmin) return res.status(404).send('Not found');
     if (/^\/admin(\.html)?\/?$/i.test(req.path)) {

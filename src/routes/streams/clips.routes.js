@@ -44,7 +44,7 @@ async function publicClip(c) {
 async function canManage(req, c) {
   if (!req.user) return false;
   if (String(c.creatorId) === String(req.user.id) || String(c.streamerId) === String(req.user.id)) return true;
-  if (req.user.role === 'admin') return true;
+  if (require('../../services/roles').isAdminRole(req.user.role)) return true;
   try {
     const mods = require('../../services/channelMods');
     return await mods.can(c.streamerNameLower, req.user.id, 'deleteMsg');

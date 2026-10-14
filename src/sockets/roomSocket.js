@@ -96,7 +96,7 @@ function registerRoomSocket(io) {
     socket.on('lang:set', (l) => { socket.data.lang = i18n.normLang(l) || socket.data.lang; });
 
     // админы сразу в комнату support-событий
-    if (socket.user?.role === 'admin') {
+    if (roles.isAdminRole(socket.user?.role)) {
       socket.join('admins');
       SupportTicket.countDocuments({ status: 'unread' })
         .then((unreadCount) => {

@@ -22,7 +22,7 @@ async function checkAuth() {
     // «Просмотр фильма / сериала» — только админу и друзьям (сервер проверяет сам)
     const capOpt = document.querySelector('option[value="player_capture"]');
     if (capOpt) {
-      const can = me.role === 'admin' || me.role === 'friend';
+      const can = ['friend', 'admin', 'owner'].includes(me.role);
       capOpt.hidden = !can;
       capOpt.classList.toggle('hidden', !can);
     }
@@ -36,7 +36,7 @@ async function checkAuth() {
 
     const adminLink = document.getElementById('adminLink');
     if (adminLink) {
-      adminLink.classList.toggle('hidden', me.role !== 'admin');
+      adminLink.classList.toggle('hidden', me.role !== 'admin' && me.role !== 'owner');
     }
 
     // Kodik выбран по умолчанию: после входа спрашиваем, есть ли поиск (до входа /kodik/config недоступен)

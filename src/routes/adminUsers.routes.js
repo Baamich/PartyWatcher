@@ -1,6 +1,8 @@
 // /api/admin/users и /api/admin/bans — аккаунты в админке: список (поиск, сортировка), карточка
 // (IP и устройства, с которых заходил), блокировка на время, бан навсегда, бан IP и устройства.
-// Админов и самого себя забанить нельзя. Бан аккаунта убивает его сессии (tokenVersion + 1)
+// Права: владелец (owner) — над всеми, кроме владельцев; администратор — только над обычными пользователями
+// (друзей, админов и владельца не правит и не блокирует). Себя заблокировать нельзя. Бан аккаунта убивает его
+// сессии (tokenVersion + 1). Назначение ролей (friend/admin/user) — только владелец
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
@@ -8,6 +10,8 @@ const crypto = require('crypto');
 const config = require('../config');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/adminOnly');
+const ownerOnly = adminOnly.owner;
+const roles = require('../services/roles');
 const User = require('../models/User');
 const UserSeen = require('../models/UserSeen');
 const Ban = require('../models/Ban');
@@ -89,8 +93,22 @@ router.get('/users/:id', auth, adminOnly, async (req, res) => {
       banned: { ip: bans.active('ip', s.ip), did: bans.active('did', s.did), hw: bans.active('hw', s.hw) },
     })),
     blockHours: BLOCK_HOURS,
+    // что текущему админу можно с этим аккаунтом (сервер проверяет то же самое в каждом действии)
+    can: rightsOver(req, u),
   });
 });
+
+const isSelf = (req, u) => String(u._id) === String(req.user.id);
+function rightsOver(req, u) {
+  const manage = roles.canManage(req.adminRole, u.role);
+  return {
+    edit: manage || isSelf(req, u), // свои тексты админ править может
+    ban: manage && !isSelf(req, u),
+    loginLink: manage && !isSelf(req, u),
+    setRole: req.adminRole === 'owner' && u.role !== 'owner' && !isSelf(req, u),
+    roles: req.adminRole === 'owner' ? roles.ASSIGNABLE : [],
+  };
+}
 
 async function target(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) {
@@ -102,8 +120,12 @@ async function target(req, res) {
     res.status(404).json({ error: req.t('server.notFound') });
     return null;
   }
-  if (u.role === 'admin' || String(u._id) === String(req.user.id)) {
+  if (isSelf(req, u)) {
     res.status(400).json({ error: req.t('server.ban.notAdmin') });
+    return null;
+  }
+  if (!roles.canManage(req.adminRole, u.role)) {
+    res.status(403).json({ error: req.t('server.admin.noRights') });
     return null;
   }
   return u;
@@ -124,8 +146,9 @@ async function setAccountBan(req, res, set) {
 const TEXT_LIMITS = { streamerBio: [2000, 'server.streamers.bioLong'], streamTitle: [140, 'server.wb.titleLong'], streamDescription: [2000, 'server.streamers.bioLong'], liveNotice: [140, 'server.wb.noticeLong'] };
 router.patch('/users/:id', auth, adminOnly, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: req.t('server.notFound') });
-  const u = await User.findById(req.params.id).select('username email').lean();
+  const u = await User.findById(req.params.id).select('username email role').lean();
   if (!u) return res.status(404).json({ error: req.t('server.notFound') });
+  if (!rightsOver(req, u).edit) return res.status(403).json({ error: req.t('server.admin.noRights') });
   const b = req.body || {};
   const set = {};
 
@@ -186,8 +209,9 @@ router.patch('/users/:id', auth, adminOnly, async (req, res) => {
 const LOGIN_LINK_H = 24;
 router.post('/users/:id/login-link', auth, adminOnly, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: req.t('server.notFound') });
-  const u = await User.findById(req.params.id).select('username email verifyPending').lean();
+  const u = await User.findById(req.params.id).select('username email verifyPending role').lean();
   if (!u) return res.status(404).json({ error: req.t('server.notFound') });
+  if (!rightsOver(req, u).loginLink) return res.status(403).json({ error: req.t('server.admin.noRights') });
   const token = crypto.randomBytes(32).toString('base64url');
   const hash = crypto.createHash('sha256').update(token).digest('hex');
   const now = Date.now();
@@ -209,6 +233,24 @@ router.post('/users/:id/login-link', auth, adminOnly, async (req, res) => {
     kind, email: u.email, expiresAt,
     link: `${base}/${kind === 'verify' ? 'verify-email.html' : 'reset-password.html'}#t=${token}`,
   });
+});
+
+// POST /admin/users/:id/role { role: user|friend|admin } — только владелец; владельца и себя не меняет.
+// Стал или перестал быть админом — сессии заканчиваются (роль зашита в токен, админка проверяет её по токену)
+router.post('/users/:id/role', auth, ownerOnly, async (req, res) => {
+  const role = String(req.body?.role || '');
+  if (!roles.ASSIGNABLE.includes(role)) return res.status(400).json({ error: req.t('server.error') });
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: req.t('server.notFound') });
+  const u = await User.findById(req.params.id).select('username role').lean();
+  if (!u) return res.status(404).json({ error: req.t('server.notFound') });
+  if (!rightsOver(req, u).setRole) return res.status(403).json({ error: req.t('server.admin.noRights') });
+  if ((u.role || 'user') === role) return res.json({ ok: true });
+  const adminChanged = roles.isAdminRole(u.role) !== roles.isAdminRole(role);
+  await User.updateOne({ _id: u._id, role: u.role }, { $set: { role }, ...(adminChanged ? { $inc: { tokenVersion: 1 } } : {}) });
+  auth.forgetUser(u._id);
+  roles.forget(u._id);
+  console.log(`[admin] ${req.user.username}: роль ${u.username} ${u.role || 'user'} → ${role}`);
+  res.json({ ok: true, relogin: adminChanged });
 });
 
 // POST /admin/users/:id/block { hours, reason } — временная блокировка

@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const adminOnly = require('../middleware/adminOnly');
+// обновление сайта — только владелец (owner)
+const ownerOnly = require('../middleware/adminOnly').owner;
 const updateService = require('../services/updateService');
 
 const HASH_RE = /^[0-9a-f]{7,40}$/i;
 
-router.get('/commits', auth, adminOnly, async (req, res) => {
+router.get('/commits', auth, ownerOnly, async (req, res) => {
   try {
     const commits = await updateService.getCommits(100);
     res.json({ commits });
@@ -15,7 +16,7 @@ router.get('/commits', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.post('/update', auth, adminOnly, (req, res) => {
+router.post('/update', auth, ownerOnly, (req, res) => {
   if (updateService.getStatus().state === 'running') {
     return res.status(409).json({ error: req.t('server.admin.updateRunning') });
   }
@@ -29,7 +30,7 @@ router.post('/update', auth, adminOnly, (req, res) => {
   res.status(202).json({ status: 'started' });
 });
 
-router.get('/update/status', auth, adminOnly, (req, res) => {
+router.get('/update/status', auth, ownerOnly, (req, res) => {
   const s = updateService.getStatus();
   // служебные строки журнала хранятся ключами — переводим на язык админа
   res.json({ ...s, log: s.log.map((x) => (typeof x === 'string' ? x : req.t(x.k, x.v))) });

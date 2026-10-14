@@ -129,7 +129,7 @@ async function decorate(rows, me, lang) {
   ]);
   const liked = new Set(likes.map((x) => String(x.presetId)));
   const added = new Set(adds.map((x) => String(x.presetId)));
-  const isAdmin = me.role === 'admin';
+  const isAdmin = require('../../services/roles').isAdminRole(me.role);
 
   return rows.map((p) => {
     const id = String(p._id);
@@ -217,7 +217,7 @@ router.delete('/:id', auth, requireStreamer, rate, async (req, res) => {
   if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
   const p = await Preset.findById(req.params.id).select('authorId');
   if (!p) return res.status(404).json({ error: req.t('server.presets.notFound') });
-  if (String(p.authorId) !== String(req.me._id) && req.me.role !== 'admin') {
+  if (String(p.authorId) !== String(req.me._id) && !require('../../services/roles').isAdminRole(req.me.role)) {
     return res.status(403).json({ error: req.t('server.presets.notYours') });
   }
   await Promise.all([

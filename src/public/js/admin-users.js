@@ -1,6 +1,8 @@
 // Админка → 👥 Аккаунты (список: новые сверху, сортировка, поиск по логину/почте/каналу/IP, фильтр),
 // карточка аккаунта (IP и устройства, с которых заходил) и действия: заблокировать на срок, забанить навсегда,
-// бан IP, бан устройства (браузер + отпечаток железа). 🛡️ Баны — список банов IP/устройств со снятием
+// бан IP, бан устройства (браузер + отпечаток железа). 🛡️ Баны — список банов IP/устройств со снятием.
+// Что можно с аккаунтом, говорит сервер (r.can): админ — только обычных пользователей, владелец — всех, кроме
+// владельцев, и ещё назначает роли
 (function () {
   const $ = (id) => document.getElementById(id);
   const usersModal = $('usersModal');
@@ -10,6 +12,8 @@
 
   const st = { q: '', sort: 'new', filter: 'all', page: 1, pages: 1, loading: false };
   let openId = null;
+  let myId = null;
+  api('/auth/me').then((me) => { myId = me?.id || null; }).catch(() => {});
 
   const fmt = (d) => (d ? new Date(d).toLocaleString(I18N.locale, { dateStyle: 'short', timeStyle: 'short' }) : '—');
   function ago(d) {
@@ -37,6 +41,7 @@
     if (u.verifyPending) return { cls: 'pwa-badge-block', text: t('admin.users.pending', { d: fmt(u.verifyExpires) }) };
     if (u.banPerm) return { cls: 'pwa-badge-ban', text: t('admin.users.banned') };
     if (u.banUntil) return { cls: 'pwa-badge-block', text: t('admin.users.blockedUntil', { d: fmt(u.banUntil) }) };
+    if (u.role === 'owner') return { cls: 'pwa-badge-admin', text: t('admin.users.owner') };
     if (u.role === 'admin') return { cls: 'pwa-badge-admin', text: t('admin.users.admin') };
     if (u.role === 'friend') return { cls: 'pwa-badge-admin', text: t('admin.users.friend') };
     if (!u.termsOk) return { cls: 'pwa-badge-muted', text: t('admin.users.noTerms') };
@@ -159,7 +164,8 @@
     for (const f of EDIT_FIELDS) addOwn(f.k, u[f.k]);
     const ownBox = node('div', 'pwa-own');
     const ownHead = node('div', 'pwa-own-head');
-    ownHead.append(node('div', 'pwa-sub', t('admin.users.ownTitle')), btn(t('admin.users.edit'), 'pwa-small', () => editOwn(ownBox, u)));
+    ownHead.appendChild(node('div', 'pwa-sub', t('admin.users.ownTitle')));
+    if (r.can.edit) ownHead.appendChild(btn(t('admin.users.edit'), 'pwa-small', () => editOwn(ownBox, u)));
     ownBox.append(ownHead, own);
     card.appendChild(ownBox);
     add('channel', u.streamerName ? u.streamerName + (u.isLive ? ' · 🔴' : '') : '');
@@ -182,8 +188,11 @@
       card.appendChild(a);
     }
 
-    // действия (админов не трогаем — сервер тоже не даст)
-    if (u.role !== 'admin') {
+    // роль — только у владельца
+    if (r.can.setRole) card.appendChild(roleBox(u, r.can.roles));
+
+    // действия (на что нет прав — сервер тоже не даст)
+    if (r.can.ban) {
       const box = node('div', 'pwa-actions');
       const reason = node('input');
       reason.type = 'text';
@@ -245,7 +254,7 @@
       box.append(node('div', 'pwa-sub', t('admin.users.actions')), row0, reason, row1, row2, node('p', 'pwa-hint', t('admin.users.banHint')));
       card.appendChild(box);
     } else {
-      card.appendChild(node('p', 'pwa-hint', t('admin.users.adminHint')));
+      card.appendChild(node('p', 'pwa-hint', t(String(u.id) === String(myId) ? 'admin.users.selfHint' : 'admin.users.adminHint')));
     }
 
     // откуда заходил
@@ -266,7 +275,7 @@
       const dev = node('td', 'pwa-td-wide', x.name || '—');
       if (x.hw) dev.title = 'did ' + (x.did || '—') + ' · hw ' + x.hw;
       const ops = node('td', 'pwa-td-ops');
-      if (u.role !== 'admin') {
+      if (r.can.ban) {
         if (x.ip) {
           ops.appendChild(x.banned.ip
             ? node('span', 'pwa-badge pwa-badge-ban', t('admin.users.ipBanned'))
@@ -284,6 +293,34 @@
     table.append(thead, tbody);
     wrap.appendChild(table);
     card.appendChild(wrap);
+  }
+
+  // «Роль»: user / friend / admin (владельца назначают только в базе)
+  function roleBox(u, list) {
+    const box = node('div', 'pwa-actions');
+    const sel = node('select');
+    for (const k of list) {
+      const o = node('option', '', t('admin.users.role.' + k));
+      o.value = k;
+      if ((u.role || 'user') === k) o.selected = true;
+      sel.appendChild(o);
+    }
+    const row = node('div', 'pwa-actions-row');
+    row.append(sel, btn(t('admin.users.roleSet'), '', async () => {
+      const role = sel.value;
+      if (role === (u.role || 'user')) return;
+      if (!(await PW.confirm(t('admin.users.roleConfirm', { name: u.username, role: t('admin.users.role.' + role) }), { title: t('admin.users.roleTitle') }))) return;
+      try {
+        const r2 = await api('/admin/users/' + encodeURIComponent(u.id) + '/role', { method: 'POST', body: { role } });
+        PW.toast(t(r2.relogin ? 'admin.users.roleDoneRelogin' : 'admin.users.roleDone'), 'success');
+        openUser(u.id);
+        if (!usersModal.classList.contains('hidden')) loadUsers(false);
+      } catch (e) {
+        PW.toast(e.message, 'error');
+      }
+    }));
+    box.append(node('div', 'pwa-sub', t('admin.users.roleTitle')), row, node('p', 'pwa-hint', t('admin.users.roleHint')));
+    return box;
   }
 
   // поля, которые вводил сам человек (ограничения — как на сервере, PATCH /admin/users/:id)
@@ -380,7 +417,7 @@
     bansModal.classList.remove('hidden');
     loadBans();
   };
-  window.openUpdate = () => $('updateModal')?.classList.remove('hidden');
+  window.openUpdate = () => { if (!$('updateNavBtn')?.classList.contains('hidden')) $('updateModal')?.classList.remove('hidden'); };
   window.openSupport = () => $('supportAdminBtn')?.click();
 
   // клик по фону и Esc закрывают окна (карточка — поверх списка)

@@ -152,7 +152,7 @@ async function accountsPart(since, chartDays, now) {
     User.countDocuments({ createdAt: { $gte: since } }),
     User.countDocuments({ lastSeenAt: { $gte: since } }),
     User.countDocuments({ $or: [{ banPerm: true }, { banUntil: { $gt: new Date(now) } }] }),
-    User.countDocuments({ role: 'admin' }),
+    User.countDocuments({ role: { $in: ['admin', 'owner'] } }),
     User.aggregate([
       { $match: { createdAt: { $gte: regSince } } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, n: { $sum: 1 } } },
