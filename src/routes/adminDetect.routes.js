@@ -33,27 +33,30 @@ async function build() {
   const raw = [];
   for (const kind of KINDS) {
     for (const g of agg[0]?.[kind] || []) {
-      const users = g.users.map(String).sort();
-      if (ignored.get(kind + ':' + g._id) === users.join(',')) continue;
-      raw.push({ kind, value: g._id, users, lastAt: g.lastAt, name: g.name || '', country: g.country || '' });
+      raw.push({ kind, value: g._id, users: g.users.map(String).sort(), lastAt: g.lastAt, name: g.name || '', country: g.country || '' });
     }
   }
-  const ids = [...new Set(raw.flatMap((x) => x.users))];
+  const ids = [...new Set(raw.flatMap((x) => x.users))].filter((id) => mongoose.isValidObjectId(id));
   const docs = ids.length ? await User.find({ _id: { $in: ids } }).select('username role banPerm banUntil lastSeenAt').lean() : [];
   const byId = new Map(docs.map((u) => [String(u._id), u]));
   const items = raw
+    // Набор сравниваем по существующим аккаунтам — так же, как его сохраняет «Игнорировать» (удалённые выпадают).
+    // Совпадения с владельцем не показываем: это его собственные тестовые аккаунты
+    .map((x) => ({ ...x, users: x.users.filter((id) => byId.has(id)) }))
+    .filter((x) => x.users.length > 1
+      && !x.users.some((id) => byId.get(id).role === 'owner')
+      && ignored.get(x.kind + ':' + x.value) !== x.users.join(','))
     .map((x) => ({
       ...x,
       banned: bans.active(x.kind, x.value),
-      users: x.users.filter((id) => byId.has(id)).map((id) => {
+      users: x.users.map((id) => {
         const u = byId.get(id);
         return {
           id, username: u.username, role: u.role, lastSeenAt: u.lastSeenAt || null,
           banned: !!u.banPerm || (!!u.banUntil && new Date(u.banUntil) > new Date()),
         };
       }),
-    }))
-    .filter((x) => x.users.length > 1);
+    }));
   items.sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
   return items;
 }
