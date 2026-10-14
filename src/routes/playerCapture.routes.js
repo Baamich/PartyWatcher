@@ -468,10 +468,16 @@ let warmIdleTimer = null;
 const os = require('os');
 function findChromium() {
   const list = [process.env.CHROMIUM_PATH, '/usr/bin/chromium-browser', '/usr/bin/chromium', '/snap/bin/chromium', '/usr/bin/google-chrome'];
+  // Chromium от Playwright: папки chromium-<версия> (полный) и chromium_headless_shell-<версия>, внутри chrome-linux,
+  // chrome-linux64 или chrome-linux-arm64 (зависит от версии и процессора) — перебираем всё, полный браузер раньше
   try {
-    const base = path.join(os.homedir(), '.cache', 'ms-playwright');
-    for (const d of fs.readdirSync(base).filter((n) => /^chromium-\d+$/.test(n)).sort().reverse()) {
-      list.push(path.join(base, d, 'chrome-linux', 'chrome'));
+    const base = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(os.homedir(), '.cache', 'ms-playwright');
+    const dirs = fs.readdirSync(base).filter((n) => /^chromium(_headless_shell)?-\d+$/.test(n))
+      .sort((x, y) => (x.includes('headless') - y.includes('headless')) || y.localeCompare(x, 'en', { numeric: true }));
+    for (const d of dirs) {
+      for (const sub of fs.readdirSync(path.join(base, d)).filter((n) => n.startsWith('chrome'))) {
+        for (const exe of ['chrome', 'headless_shell', 'chrome-headless-shell']) list.push(path.join(base, d, sub, exe));
+      }
     }
   } catch (_) {}
   return list.find((p) => p && fs.existsSync(p)) || null;
@@ -526,6 +532,7 @@ async function openCaptureContext(proxyServer) {
         const b = await p;
         return await b.createBrowserContext(proxyServer ? { proxyServer } : {});
       } catch (e) {
+        if (e.i18nKey === 'server.capture.noBrowser') throw e; // Chromium не установлен — повтор не поможет
         if (warmBrowser === p) dropWarm('не открылся контекст: ' + e.message);
         if (attempt) throw e;
       }
@@ -2991,6 +2998,7 @@ router.post('/extract', auth, async (req, res) => {
           usedProxy = true;
         }
       } catch (e) {
+        if (e.i18nKey === 'server.capture.noBrowser') throw e; // без браузера прокси не поможет
         console.warn('[player-capture] без прокси упало с ошибкой — пробую с прокси:', e.message);
         responseData = await attemptExtract(true);
         usedProxy = true;
@@ -3018,7 +3026,7 @@ router.post('/extract', auth, async (req, res) => {
     res.json(responseData);
     if (inFlightKey) resolveInFlight(responseData);
   } catch (err) {
-    console.error('[player-capture puppeteer]', err.message);
+    if (err.i18nKey !== 'server.capture.noBrowser') console.error('[player-capture puppeteer]', err.message); // «нет браузера» уже в логе одной строкой
     // ошибки сервера (нет браузера, не запустился) — человеку понятным текстом на его языке, подробности — в лог
     const noBrowser = err.i18nKey === 'server.capture.noBrowser' || /executablePath|Failed to launch|Browser was not found/i.test(err.message);
     const errorData = {
