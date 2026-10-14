@@ -10,13 +10,27 @@ const auth = require('../middleware/auth');
 const { meOf } = require('../services/me');
 const { TERMS_VERSION } = require('../services/terms');
 const { clientIp, parseUA } = require('../services/clientInfo');
-const { sendPasswordReset, sendVerifyEmail, isMailConfigured, maskEmail } = require('../services/mailer');
+const { sendPasswordReset, isMailConfigured, maskEmail } = require('../services/mailer');
 const rateLimit = require('express-rate-limit');
+const mailQuota = require('../services/mailQuota');
+const regQueue = require('../services/regQueue');
+
+// защита дневного лимита писем от спама регистрациями: с одного IP — не больше 3 регистраций за сутки
+// и не больше 2 аккаунтов одновременно в очереди
+const REG_PER_IP_DAY = 3;
+const QUEUED_PER_IP = 2;
+// ответ «ты в очереди №N»
+async function queuedAnswer(req, user, key) {
+  const n = await regQueue.position(user);
+  return { pending: true, queued: true, position: n, message: req.t(key, { n, h: regQueue.QUEUED_TTL_H, d: regQueue.QUEUE_HOLD_DAYS }) };
+}
 
 const RESET_TTL_MIN = 30;
 const VERIFY_TTL_MIN = 30; // столько живёт неподтверждённая регистрация (потом её удаляет TTL-индекс User)
 const VERIFY_RESEND_MS = 2 * 60 * 1000;
 const RESET_RESEND_MS = 2 * 60 * 1000; // одно письмо на аккаунт раз в 2 минуты
+// сколько секунд до следующего письма (кнопки «Отправить ещё раз» показывают отсчёт)
+const retryIn = (sentAt, gapMs) => (sentAt ? Math.max(0, Math.ceil((new Date(sentAt).getTime() + gapMs - Date.now()) / 1000)) : 0);
 
 // cookie на весь домен (сайт + live. + админка); на localhost домен не ставим, иначе браузер её не примет
 const COOKIE_DOMAIN = (() => {
@@ -164,25 +178,53 @@ router.post('/register', registerLimiter, async (req, res) => {
       return res.status(409).json({ error: req.t('server.auth.emailTaken') });
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
     // без настроенной почты (локальная разработка) подтверждать нечем — аккаунт сразу активен
     const needVerify = isMailConfigured();
-    const verifyToken = needVerify ? crypto.randomBytes(32).toString('base64url') : null;
-    // streamerName не передаём — pre('validate') скопирует username
-    const user = await User.create({
-      username, email, passwordHash,
-      termsVersion: TERMS_VERSION, termsAt: new Date(),
-      regIp: clientIp(req), regDevice: parseUA(req.headers).name,
-      ...(needVerify
-        ? { verifyPending: true, verifyTokenHash: hashResetToken(verifyToken), verifyExpires: new Date(Date.now() + VERIFY_TTL_MIN * 60000), verifySentAt: new Date() }
-        : {}),
-    });
+    const ip = clientIp(req);
+    if (needVerify && ip && (await User.countDocuments({ regIp: ip, createdAt: { $gt: new Date(Date.now() - 86400000) } })) >= REG_PER_IP_DAY) {
+      return res.status(429).json({ error: req.t('server.auth.tooManyRegs') });
+    }
+    // дневной лимит писем регистрации исчерпан — аккаунт встаёт в очередь (письмо уйдёт, когда лимит откроется)
+    const canSend = needVerify && (await mailQuota.take('reg'));
+    if (needVerify && !canSend && ip && (await User.countDocuments({ regIp: ip, verifyPending: true, verifyQueued: true })) >= QUEUED_PER_IP) {
+      return res.status(429).json({ error: req.t('server.auth.queueIpLimit') });
+    }
 
+    const passwordHash = await bcrypt.hash(password, 12);
+    const verifyToken = canSend ? crypto.randomBytes(32).toString('base64url') : null;
+    // streamerName не передаём — pre('validate') скопирует username
+    let user;
+    try {
+      user = await User.create({
+        username, email, passwordHash,
+        termsVersion: TERMS_VERSION, termsAt: new Date(),
+        regIp: ip, regDevice: parseUA(req.headers).name,
+        ...(needVerify ? { verifyPending: true, verifyLang: req.lang } : {}),
+        ...(canSend
+          ? { verifyTokenHash: hashResetToken(verifyToken), verifyExpires: new Date(Date.now() + VERIFY_TTL_MIN * 60000), verifySentAt: new Date() }
+          : needVerify ? regQueue.queueFields() : {}),
+      });
+    } catch (e) {
+      if (canSend) await mailQuota.giveBack('reg');
+      throw e;
+    }
+
+    if (needVerify && !canSend) {
+      const answer = await queuedAnswer(req, user, 'server.auth.regQueued');
+      console.log(`[auth/register] лимит писем на сегодня — ${maskEmail(email)} в очереди №${answer.position}`);
+      return res.status(201).json(answer);
+    }
     if (needVerify) {
-      sendVerify(user, verifyToken, req.lang).catch((e) => console.error('[auth/register] письмо подтверждения не отправлено:', e.message));
+      sendVerify(user, verifyToken, req.lang).catch(async (e) => {
+        console.error('[auth/register] письмо подтверждения не отправлено:', e.message);
+        // лимит почтового сервиса — в очередь (письмо уйдёт завтра), иначе место в лимите возвращаем
+        if (mailQuota.isQuotaError(e)) await regQueue.requeue(user._id);
+        else await mailQuota.giveBack('reg');
+      });
       // входа нет, пока не подтвердит почту: cookie не ставим
       return res.status(201).json({
         pending: true,
+        retryIn: VERIFY_RESEND_MS / 1000,
         message: req.t('server.auth.verifySent', { email: maskEmail(email), n: VERIFY_TTL_MIN }),
       });
     }
@@ -215,7 +257,14 @@ router.post('/login', loginLimiter, async (req, res) => {
         await User.deleteOne({ _id: user._id, verifyPending: true });
         return res.status(410).json({ error: req.t('server.auth.verifyExpired', { n: VERIFY_TTL_MIN }), code: 'verifyExpired' });
       }
-      return res.status(403).json({ error: req.t('server.auth.unverified', { email: maskEmail(user.email) }), code: 'unverified' });
+      if (user.verifyQueued) {
+        const n = await regQueue.position(user);
+        return res.status(403).json({ error: req.t('server.auth.queued', { n }), code: 'queued', position: n });
+      }
+      return res.status(403).json({
+        error: req.t('server.auth.unverified', { email: maskEmail(user.email) }), code: 'unverified',
+        retryIn: retryIn(user.verifySentAt, VERIFY_RESEND_MS),
+      });
     }
     // про бан говорим только тому, кто знает пароль
     if (user.banPerm) {
@@ -240,8 +289,7 @@ function isExpiredPending(u) {
 
 // ссылка подтверждения: токен во фрагменте (#t=), как у сброса пароля — в логи и Referer не попадает
 function sendVerify(user, token, lang) {
-  const link = `${config.publicUrl.replace(/\/$/, '')}/verify-email.html#t=${token}`;
-  return sendVerifyEmail(user.email, user.username, link, VERIFY_TTL_MIN, lang);
+  return regQueue.sendVerification(user, token, lang, VERIFY_TTL_MIN);
 }
 
 // POST /auth/verify { token } — подтвердить почту по ссылке из письма: аккаунт активен, сразу входим
@@ -272,8 +320,14 @@ router.post('/verify/resend', resendLimiter, async (req, res) => {
     await User.deleteOne({ _id: user._id, verifyPending: true });
     return res.status(410).json({ error: req.t('server.auth.verifyExpired', { n: VERIFY_TTL_MIN }) });
   }
+  if (user.verifyQueued) return res.json(await queuedAnswer(req, user, 'server.auth.queued'));
   if (user.verifySentAt && Date.now() - new Date(user.verifySentAt).getTime() < VERIFY_RESEND_MS) {
-    return res.status(429).json({ error: req.t('server.auth.forgotWait') });
+    return res.status(429).json({ error: req.t('server.auth.forgotWait'), retryIn: retryIn(user.verifySentAt, VERIFY_RESEND_MS) });
+  }
+  // лимит писем исчерпан — в очередь: письмо уйдёт, когда откроется (ссылка из прошлого письма пока работает)
+  if (!(await mailQuota.take('reg'))) {
+    Object.assign(user, await regQueue.requeue(user._id));
+    return res.json(await queuedAnswer(req, user, 'server.auth.regQueued'));
   }
   const token = crypto.randomBytes(32).toString('base64url');
   await User.updateOne({ _id: user._id }, { $set: { verifyTokenHash: hashResetToken(token), verifySentAt: new Date() } });
@@ -281,10 +335,15 @@ router.post('/verify/resend', resendLimiter, async (req, res) => {
     await sendVerify(user, token, req.lang);
   } catch (e) {
     console.error('[auth/verify/resend] письмо не отправлено:', e.message);
+    if (mailQuota.isQuotaError(e)) {
+      Object.assign(user, await regQueue.requeue(user._id));
+      return res.json(await queuedAnswer(req, user, 'server.auth.regQueued'));
+    }
+    await mailQuota.giveBack('reg');
     return res.status(502).json({ error: req.t('server.sendFailed') });
   }
   const left = Math.max(1, Math.ceil((new Date(user.verifyExpires).getTime() - Date.now()) / 60000));
-  res.json({ ok: true, message: req.t('server.auth.verifySent', { email: maskEmail(user.email), n: left }) });
+  res.json({ ok: true, retryIn: VERIFY_RESEND_MS / 1000, message: req.t('server.auth.verifySent', { email: maskEmail(user.email), n: left }) });
 });
 
 // POST /auth/verify/change-email { login, password, email } — ошибся в почте при регистрации: новая почта, новое
@@ -308,8 +367,18 @@ router.post('/verify/change-email', resendLimiter, async (req, res) => {
     if (other && isExpiredPending(other)) await User.deleteOne({ _id: other._id, verifyPending: true });
     else if (other) return res.status(409).json({ error: req.t('server.auth.emailTaken') });
   }
+  // в очереди или лимит исчерпан — меняем только адрес, письмо уйдёт из очереди уже на новый
+  if (user.verifyQueued) {
+    await User.updateOne({ _id: user._id }, { $set: { email } });
+    return res.json(await queuedAnswer(req, user, 'server.auth.queued'));
+  }
   if (user.verifySentAt && Date.now() - new Date(user.verifySentAt).getTime() < VERIFY_RESEND_MS) {
-    return res.status(429).json({ error: req.t('server.auth.forgotWait') });
+    return res.status(429).json({ error: req.t('server.auth.forgotWait'), retryIn: retryIn(user.verifySentAt, VERIFY_RESEND_MS) });
+  }
+  if (!(await mailQuota.take('reg'))) {
+    await User.updateOne({ _id: user._id }, { $set: { email } });
+    Object.assign(user, await regQueue.requeue(user._id));
+    return res.json(await queuedAnswer(req, user, 'server.auth.regQueued'));
   }
   const token = crypto.randomBytes(32).toString('base64url');
   user.email = email;
@@ -320,9 +389,14 @@ router.post('/verify/change-email', resendLimiter, async (req, res) => {
     await sendVerify(user, token, req.lang);
   } catch (e) {
     console.error('[auth/verify/change-email] письмо не отправлено:', e.message);
+    if (mailQuota.isQuotaError(e)) {
+      Object.assign(user, await regQueue.requeue(user._id));
+      return res.json(await queuedAnswer(req, user, 'server.auth.regQueued'));
+    }
+    await mailQuota.giveBack('reg');
     return res.status(502).json({ error: req.t('server.sendFailed') });
   }
-  res.json({ ok: true, message: req.t('server.auth.verifySent', { email: maskEmail(email), n: VERIFY_TTL_MIN }) });
+  res.json({ ok: true, retryIn: VERIFY_RESEND_MS / 1000, message: req.t('server.auth.verifySent', { email: maskEmail(email), n: VERIFY_TTL_MIN }) });
 });
 
 // «Аккаунт заблокирован до 14.10.2026, 18:00. Причина: …» — дата в часовом поясе UTC (у сервера нет зоны человека)
@@ -356,13 +430,14 @@ router.post('/forgot', forgotLimiter, async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   if (validateEmail(email)) return res.status(400).json({ error: req.t('server.badEmail') });
 
-  const okAnswer = { status: 'ok', message: req.t('server.auth.forgotSent') };
+  const okAnswer = { status: 'ok', retryIn: RESET_RESEND_MS / 1000, message: req.t('server.auth.forgotSent') };
   try {
-    const user = await User.findOne({ email }).select('username email resetTokenExpires verifyPending').lean();
-    // повторный запрос раньше чем через 2 минуты молча игнорируем (защита ящика от флуда)
-    const sentRecently =
-      user?.resetTokenExpires &&
-      user.resetTokenExpires.getTime() - RESET_TTL_MIN * 60 * 1000 > Date.now() - RESET_RESEND_MS;
+    const user = await User.findOne({ email }).select('username email resetTokenExpires resetSentAt verifyPending').lean();
+    // когда ушла прошлая ссылка: resetSentAt, у старых записей — по сроку ссылки (письмо живёт RESET_TTL_MIN)
+    const resetSentAt = user?.resetSentAt ? new Date(user.resetSentAt).getTime()
+      : user?.resetTokenExpires ? user.resetTokenExpires.getTime() - RESET_TTL_MIN * 60 * 1000 : 0;
+    // повторный запрос раньше чем через 2 минуты не принимаем (защита ящика от флуда)
+    const sentRecently = resetSentAt > Date.now() - RESET_RESEND_MS;
     if (!user) {
       console.log(`[auth/forgot] аккаунта с почтой ${maskEmail(email)} нет — письмо не отправлялось`);
       return res.status(404).json({ error: req.t('server.auth.forgotNoAccount') });
@@ -372,20 +447,26 @@ router.post('/forgot', forgotLimiter, async (req, res) => {
     }
     if (sentRecently) {
       console.log(`[auth/forgot] ${maskEmail(email)}: письмо уже уходило меньше 2 мин назад — повтор пропущен`);
-      return res.status(429).json({ error: req.t('server.auth.forgotWait') });
+      return res.status(429).json({ error: req.t('server.auth.forgotWait'), retryIn: retryIn(resetSentAt, RESET_RESEND_MS) });
     }
 
+    // дневной лимит писем сервера исчерпан (регистрации его не съедают — им оставлен свой остаток)
+    if (!(await mailQuota.take('other'))) {
+      console.warn(`[auth/forgot] ${maskEmail(email)}: дневной лимит писем исчерпан — письмо не отправлено`);
+      return res.status(503).json({ error: req.t('server.auth.mailLimitReset') });
+    }
     const token = crypto.randomBytes(32).toString('base64url');
     // updateOne, а не save(): документ загружен не целиком, и pre('validate') стёр бы streamerNameLower
     await User.updateOne(
       { _id: user._id },
-      { $set: { resetTokenHash: hashResetToken(token), resetTokenExpires: new Date(Date.now() + RESET_TTL_MIN * 60 * 1000) } }
+      { $set: { resetTokenHash: hashResetToken(token), resetTokenExpires: new Date(Date.now() + RESET_TTL_MIN * 60 * 1000), resetSentAt: new Date() } }
     );
 
     // токен во фрагменте (#): браузер не отправляет его на сервер, в логи Cloudflare/nginx и в Referer он не попадёт
     const link = `${config.publicUrl.replace(/\/$/, '')}/reset-password.html#t=${token}`;
-    sendPasswordReset(user.email, user.username, link, RESET_TTL_MIN, req.lang).catch((e) => {
+    sendPasswordReset(user.email, user.username, link, RESET_TTL_MIN, req.lang).catch(async (e) => {
       console.error('[auth/forgot] письмо не отправлено:', e.message);
+      if (!mailQuota.isQuotaError(e)) await mailQuota.giveBack('other');
     });
     res.json(okAnswer);
   } catch (err) {

@@ -102,10 +102,10 @@
   },
   "ageGate": {
     "title": "Age confirmation",
-    "text": "This video cannot be embedded without age confirmation (YouTube age restriction). By confirming, you agree that you are 18 or older.",
+    "text": "YouTube does not allow this video in an embedded player. This happens because of an 18+ restriction, the owner disabling embedding or a YouTube “not a bot” check. If it is an age restriction, confirm that you are 18 or older.",
     "confirm": "I'm 18+, continue",
-    "waitHost": "YouTube blocked the video — waiting for the host to confirm 18+",
-    "declined": "This video is unavailable without age confirmation",
+    "waitHost": "YouTube does not allow this video in an embedded player — waiting for the host",
+    "declined": "YouTube does not allow this video in an embedded player",
     "downloading": "Downloading the video…",
     "downloadFailed": "Could not download the video",
     "jobLost": "The task was lost, try again",
@@ -114,7 +114,7 @@
     "progress": "Downloading the video…{pct} ({sec} s)",
     "getFailed": "Could not get the video:",
     "hostEnabled": "The host enabled 18+ content. Reload the page if you are ready to confirm your age.",
-    "friendsOnly": "This YouTube video is age-restricted (18+) — in rooms it is available only to the administrator’s friends. Pick another video."
+    "friendsOnly": "YouTube does not allow this video in an embedded player (18+ restriction, embedding disabled by the owner or a “not a bot” check). Pick another video."
   },
   "copy": {
     "linkOk": "Room link copied",
@@ -203,6 +203,6 @@
   },
   "denied": {
     "title": "No access",
-    "text": "This room is available only to the administrator’s friends."
+    "text": "You do not have access to this room."
   }
 }

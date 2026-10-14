@@ -822,3 +822,7 @@ html.pw-authed #appBox.hidden { display: block !important; }
 .verify-actions { display: flex; gap: 14px; flex-wrap: wrap; }
 .verify-email-row { display: flex; flex-direction: column; gap: 6px; }
 .verify-email-row input { margin: 0; }
+
+/* «Забыли пароль»: подсказка после отправки; кнопки писем во время отсчёта */
+.forgot-hint { margin: 0 0 10px; font-size: 13px; color: var(--text-muted); }
+.verify-actions .auth-link:disabled { opacity: 0.6; cursor: default; }

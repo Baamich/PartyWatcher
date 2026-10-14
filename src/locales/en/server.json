@@ -48,7 +48,11 @@
     "verifyExpired": "The email was not confirmed in time ({n} min) — the sign-up was cancelled. Please sign up again.",
     "verifyBadLink": "The link is invalid or has already been used.",
     "pendingExists": "This username or email is waiting for confirmation — open the link from the email (valid for {n} min).",
-    "alreadyVerified": "The account is already activated — just sign in."
+    "alreadyVerified": "The account is already activated — just sign in.",
+    "regQueued": "Your account is created, but today’s email limit for sign-ups is used up. You are in the queue: #{n}. The activation email will arrive by itself as soon as the limit opens (usually the next day), and its link will work for {h} h. If the email does not arrive within {d} days or you do not activate the account, the sign-up is cancelled. Need access urgently? Write to support (button at the bottom right) and we will help manually.",
+    "queued": "Your account is waiting for the activation email: you are #{n} in the queue. It will arrive when the daily email limit opens (usually the next day). Wrong email — click “Change email”. Need access urgently? Write to support (button at the bottom right) and we will help manually.",
+    "queueIpLimit": "There are already sign-ups from this address in the queue — wait for their emails.",
+    "mailLimitReset": "The server’s email limit for today is used up — you cannot reset your password right now. Please try again tomorrow. Need access urgently? Write to support (button at the bottom right) and we will help manually."
   },
   "chatApi": {
     "needKey": "An API key is required (Authorization: Bearer <key>)",
@@ -94,9 +98,10 @@
     "badKodik": "A Kodik player link is required (kodik.info/… or kodikplayer.com/…)",
     "badVk": "A VK Video link is required (vk.com/video-123_456, vkvideo.ru/… or the embed code)",
     "badName": "This name won’t do — it contains profanity. Come up with something nicer 🙂",
-    "captureFriendsOnly": "“Movie / series viewing” rooms are available only to the administrator’s friends.",
-    "adultFriendsOnly": "18+ videos in rooms are available only to the administrator’s friends.",
-    "ytFriendsOnly": "18+ YouTube videos in rooms are available only to the administrator’s friends."
+    "captureFriendsOnly": "This room type is not available.",
+    "adultFriendsOnly": "18+ videos are not available in rooms.",
+    "ytFriendsOnly": "This YouTube video cannot be watched in a room — pick another one.",
+    "needYtTwitchVk": "Use a YouTube video, a Twitch recording (twitch.tv/videos/…) or a VK Video link"
   },
   "relay": {
     "badUrl": "A valid url is required",
@@ -109,7 +114,8 @@
     "openFailed": "Could not open the page (the site is unreachable via the proxy or the link is broken). Check the proxy/URL.",
     "found": "Streams found: {streams}, iframes: {iframes}",
     "nothing": "Nothing found",
-    "foundStreams": "Streams found: {n}"
+    "foundStreams": "Streams found: {n}",
+    "noBrowser": "Video search is not working right now: the capture browser did not start on the server. We can see it in the logs — please try later."
   },
   "ssrf": {
     "private": "Addresses in the internal network are not allowed",
@@ -201,7 +207,8 @@
     "badFile": "Could not accept the image: PNG, JPG or WebP up to 1 MB",
     "tooManyFiles": "No more than 5 images",
     "noFilesMinors": "Images are not attached to a “danger to children” report — describe it in words",
-    "reportOwn": "You cannot report your own preset"
+    "reportOwn": "You cannot report your own preset",
+    "mailLimit": "The daily email limit is used up — the email was not sent, the request stays unread. Try again tomorrow."
   },
   "yt": {
     "hostOnly": "Only the host can switch the source",
@@ -283,7 +290,9 @@
       "button": "Activate account",
       "linkHint": "If the button does not work, open this link:",
       "footer": "The link is valid for {n} minutes. If the account is not activated, the sign-up is cancelled.",
-      "ignore": "If this wasn’t you, just ignore this email."
+      "ignore": "If this wasn’t you, just ignore this email.",
+      "openLinkH": "Open the link within {n} h:",
+      "footerH": "The link works for {n} h. If you do not activate the account, the sign-up is cancelled."
     }
   },
   "kodik": {
@@ -291,7 +300,7 @@
     "badQuery": "Enter a title (at least 2 characters)",
     "apiFailed": "Kodik did not respond, try again later",
     "tooMany": "Too many searches, wait a minute",
-    "searchFriendsOnly": "Kodik catalog search is available only to the administrator’s friends — paste a Kodik player link instead."
+    "searchFriendsOnly": "Catalog search is not available — paste a Kodik player link instead."
   },
   "adult": {
     "notConfirmed": "Confirm that you are 18 or older first"

@@ -463,10 +463,33 @@ let warmBrowser = null; // Promise<Browser>
 let warmUsers = 0;
 let warmIdleTimer = null;
 
+// где Chromium: CHROMIUM_PATH из .env, иначе первый найденный из обычных мест (deb, snap, Chromium от Playwright).
+// Не нашёлся — понятная ошибка человеку и одна строка в логе с подсказкой, как поставить
+const os = require('os');
+function findChromium() {
+  const list = [process.env.CHROMIUM_PATH, '/usr/bin/chromium-browser', '/usr/bin/chromium', '/snap/bin/chromium', '/usr/bin/google-chrome'];
+  try {
+    const base = path.join(os.homedir(), '.cache', 'ms-playwright');
+    for (const d of fs.readdirSync(base).filter((n) => /^chromium-\d+$/.test(n)).sort().reverse()) {
+      list.push(path.join(base, d, 'chrome-linux', 'chrome'));
+    }
+  } catch (_) {}
+  return list.find((p) => p && fs.existsSync(p)) || null;
+}
+let chromiumMissingLogged = 0;
+
 function launchWarm() {
+  const executablePath = findChromium();
+  if (!executablePath) {
+    if (Date.now() - chromiumMissingLogged > 600000) {
+      chromiumMissingLogged = Date.now();
+      console.error('[player-capture] Chromium не найден (CHROMIUM_PATH, /usr/bin/chromium-browser, /usr/bin/chromium, /snap/bin/chromium, ~/.cache/ms-playwright) — «Просмотр фильма» не работает. Установить: npx playwright install --with-deps chromium');
+    }
+    return Promise.reject(i18n.err('server.capture.noBrowser'));
+  }
   const p = puppeteer.launch({
     headless: 'new',
-    executablePath: '/usr/bin/chromium-browser',
+    executablePath,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   });
   const forget = () => { if (warmBrowser === p) warmBrowser = null; };
@@ -2996,9 +3019,11 @@ router.post('/extract', auth, async (req, res) => {
     if (inFlightKey) resolveInFlight(responseData);
   } catch (err) {
     console.error('[player-capture puppeteer]', err.message);
+    // ошибки сервера (нет браузера, не запустился) — человеку понятным текстом на его языке, подробности — в лог
+    const noBrowser = err.i18nKey === 'server.capture.noBrowser' || /executablePath|Failed to launch|Browser was not found/i.test(err.message);
     const errorData = {
       success: false,
-      error: err.message,
+      error: noBrowser ? req.t('server.capture.noBrowser') : err.i18nKey ? i18n.errText(req, err) : err.message,
       streams: [],
       playerIframes: [],
       meta: null,
@@ -3008,6 +3033,27 @@ router.post('/extract', auth, async (req, res) => {
   } finally {
     if (inFlightKey) inFlightExtracts.delete(inFlightKey);
   }
+});
+
+// POST /player-capture/client-log { roomCode, kind, details } — плеер «Просмотра фильма» у человека сообщает о сбое
+// (фатальная ошибка hls.js, пересборка, не поддерживается браузером): без этого «у друга не играет» в логах не видно.
+// Только вошедшим admin/friend, не больше 30 записей за 10 мин на аккаунт
+const clientLogHits = new Map(); // userId → [время]
+router.post('/client-log', auth, async (req, res) => {
+  res.status(204).end();
+  if (!(await require('../services/roles').isTrusted(req.user.id))) return;
+  const k = String(req.user.id);
+  const now = Date.now();
+  const hits = (clientLogHits.get(k) || []).filter((x) => now - x < 600000);
+  if (hits.length >= 30) return;
+  hits.push(now);
+  if (clientLogHits.size > 2000) clientLogHits.clear();
+  clientLogHits.set(k, hits);
+  const kind = /^[a-z-]{2,24}$/.test(String(req.body?.kind)) ? req.body.kind : 'other';
+  const details = String(req.body?.details || '').replace(/[\u0000-\u001f]+/g, ' ').slice(0, 300);
+  const code = /^[\w-]{1,32}$/.test(String(req.body?.roomCode)) ? req.body.roomCode : '?';
+  const ua = require('../services/clientInfo').parseUA(req.headers).name;
+  console.warn(`[capture-client] ${req.user.username || k} · комната ${code} · ${kind}: ${details} · ${ua}`);
 });
 
 module.exports = router;

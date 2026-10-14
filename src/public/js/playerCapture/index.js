@@ -53,6 +53,20 @@ function pickBestStream(streams) {
   return byQ(720) || byQ(1080) || byQ(480) || byQ(360) || clean[0];
 }
 
+// сбой плеера у этого человека — в лог сервера ([capture-client]): иначе «у друга не играет» не увидеть.
+// Не больше 15 сообщений за открытие страницы
+let reportsLeft = 15;
+function reportProblem(kind, details) {
+  if (reportsLeft-- <= 0) return;
+  fetch('/api/player-capture/client-log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    keepalive: true,
+    body: JSON.stringify({ roomCode: window.code, kind, details: String(details || '').slice(0, 300) }),
+  }).catch(() => {});
+}
+
 async function requestExtract(body) {
   const res = await fetch('/api/player-capture/extract', {
     method: 'POST',
@@ -345,6 +359,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
         return;
       }
       console.error('[capture] hls fatal:', data.type, data.details, data.response?.code || '');
+      reportProblem('hls-fatal', [data.type, data.details, data.response?.code || '', isOwner ? 'хост' : 'зритель'].join(' '));
 
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
         consecutiveNetworkErrors++;
@@ -414,6 +429,7 @@ function renderNativePlayer(stream, meta, { isOwner, container, videoUrl, allStr
     const pos = videoEl.currentTime || 0;
     const wasPlaying = !videoEl.paused;
     console.warn('[capture] пересобираю плеер:', reason, '— позиция', Math.round(pos), 'с');
+    reportProblem('rebuild', `${reason} · позиция ${Math.round(pos)} с · ${isOwner ? 'хост' : 'зритель'}`);
     await setupSource(currentStream);
     resumeAt(pos, wasPlaying);
   }
@@ -647,6 +663,7 @@ function renderFallback(url, meta, { isOwner, container, errorMessage, videoUrl 
 
   const player = {
     type: 'player_capture',
+    failed: true, // room.js не показывает поверх ошибки «Готово к просмотру ▶»
     meta,
     getCurrentPosition: () => 0,
     getIsPlayingNow: () => false,

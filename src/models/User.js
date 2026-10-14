@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema(
     // храним только sha256 от токена: утечка базы не даёт готовых ссылок сброса
     resetTokenHash: { type: String, default: undefined, index: { sparse: true } },
     resetTokenExpires: { type: Date, default: undefined },
+    resetSentAt: { type: Date, default: undefined }, // когда ушло письмо или выдана ссылка — «повторить через 2 мин»
     // растёт при смене пароля — все старые JWT с меньшей версией перестают действовать
     tokenVersion: { type: Number, default: 0 },
 
@@ -23,6 +24,10 @@ const userSchema = new mongoose.Schema(
     verifyTokenHash: { type: String, default: undefined, index: { sparse: true } }, // sha256 токена из письма
     verifyExpires: { type: Date, default: undefined },
     verifySentAt: { type: Date, default: undefined },
+    // дневной лимит писем исчерпан — ждёт письма в очереди (services/regQueue.js), язык письма — verifyLang
+    verifyQueued: { type: Boolean, default: undefined },
+    verifyQueuedAt: { type: Date, default: undefined },
+    verifyLang: { type: String, default: undefined },
 
     // ---- условия пользования (services/terms.js) ----
     termsVersion: { type: String, default: null }, // какую версию принял; не текущая — окно «условия изменились»
@@ -96,6 +101,7 @@ userSchema.pre('validate', function (next) {
 });
 
 userSchema.index({ createdAt: -1 }); // админка: новые аккаунты сверху
+userSchema.index({ verifyQueuedAt: 1 }, { partialFilterExpression: { verifyQueued: true } }); // очередь регистраций
 // неподтверждённая регистрация живёт до verifyExpires, потом MongoDB сама удаляет её (проверка раз в минуту).
 // partialFilter — страховка: подтверждённый аккаунт этот индекс не тронет, даже если поле где-то осталось
 userSchema.index({ verifyExpires: 1 }, { expireAfterSeconds: 0, partialFilterExpression: { verifyPending: true } });

@@ -44,7 +44,7 @@
         <!-- аккаунт не подтверждён: письмо ещё раз или другая почта (ошибся при регистрации) -->
         <div id="verifyBox" class="verify-box hidden">
           <div class="verify-actions">
-            <button type="button" class="auth-link" data-click="resendVerify" data-i18n="index.verify.resend">📨 Отправить письмо ещё раз</button>
+            <button type="button" id="verifyResendBtn" class="auth-link" data-click="resendVerify" data-i18n="index.verify.resend">📨 Отправить письмо ещё раз</button>
             <button type="button" class="auth-link" data-click="toggleVerifyEmail" data-i18n="index.verify.change">✏️ Сменить почту</button>
           </div>
           <div id="verifyEmailRow" class="verify-email-row hidden">
@@ -79,6 +79,7 @@
         <h2 class="auth-title" data-i18n="index.forgot.title">Сброс пароля</h2>
         <div id="forgotError" class="auth-error hidden"></div>
         <div id="forgotOk" class="support-ok hidden"></div>
+        <p id="forgotHint" class="forgot-hint hidden" data-i18n="index.forgot.notArrived">Письма нет? Загляни в «Спам». Ошибся адресом — исправь его ниже и отправь снова.</p>
 
         <label class="auth-label" for="forgotEmail" data-i18n="index.forgot.email">Почта аккаунта</label>
         <input id="forgotEmail" type="email" autocomplete="email" placeholder="email@example.com" />

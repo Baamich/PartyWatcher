@@ -28,7 +28,9 @@
     "email": "Account email",
     "submit": "Send link",
     "back": "Back to sign in",
-    "checkMail": "Check your inbox"
+    "checkMail": "Check your inbox",
+    "again": "Send again",
+    "notArrived": "No email? Check your spam folder. Wrong address — fix it below and send again."
   },
   "register": {
     "title": "Sign up",
@@ -170,5 +172,8 @@
     "change": "✏️ Change email",
     "send": "Send to the new email",
     "sent": "Email sent — check your inbox."
+  },
+  "mail": {
+    "wait": "{label} ({time})"
   }
 }

@@ -449,7 +449,7 @@ function teardownMicGraph() {
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 // один и тот же URL везде: разные ?t=... создавали бы новый экземпляр модуля при каждой смене серии
-const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=6';
+const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=7';
 const KODIK_MODULE_URL = '/js/kodik/player.js?v=3';
 const KODIK_SEARCH_URL = '/js/kodik/search.js?v=1';
 const VK_MODULE_URL = '/js/vk/player.js?v=1';
@@ -595,8 +595,18 @@ function hideOverlay() {
   document.getElementById('overlay').classList.add('hidden');
 }
 
+// захват не нашёл видео («Не удалось встроить плеер»): «Готово к просмотру ▶» поверх ошибки только путает — прячем
+function captureFailed() {
+  return currentVideoType === 'player_capture' && !!capturePlayer?.failed;
+}
+function showReadyOverlay(text = t('room.overlay.ready')) {
+  if (captureFailed()) return document.getElementById('overlay').classList.add('hidden');
+  setOverlay(text, true);
+}
+
 function updateWaitingOverlayText() {
   if (started || isOwner) return;
+  if (captureFailed()) return document.getElementById('overlay').classList.add('hidden');
   setOverlay(lastState.isPlaying ? t('room.overlay.hostWatching') : t('room.overlay.hostPaused'), true);
 }
 
@@ -1779,11 +1789,7 @@ async function applyNewVideo(video, playback) {
   await renderPlayer(video);
   setTimeout(refreshCcButton, 800);
 
-  if (isOwner) {
-    setOverlay(t('room.overlay.ready'), true);
-  } else {
-    setOverlay(t('room.overlay.videoChanged'), true);
-  }
+  showReadyOverlay(isOwner ? t('room.overlay.ready') : t('room.overlay.videoChanged'));
 }
 
 async function changeVideoUrl() {
@@ -1990,7 +1996,7 @@ async function init() {
     setTimeout(refreshCcButton, 800);
 
     if (isOwner) {
-      setOverlay(t('room.overlay.ready'), true);
+      showReadyOverlay();
     } else {
       updateWaitingOverlayText();
       showLocalSystemMessage(t('room.sys.viewerHelp', { n: DRIFT_THRESHOLD_SECONDS }));

@@ -90,6 +90,7 @@ async function api(path, options = {}) {
     const err = new Error(data.error || (window.t ? t('common.requestFailed') : 'Request failed'));
     err.status = res.status; // текст ошибки переведён, поэтому проверяем код, а не слова
     err.code = data.code;
+    err.retryIn = data.retryIn; // секунды до повтора (письма: «Отправить ещё раз» с отсчётом)
     throw err;
   }
   if (path === '/auth/me') pwWatchMe(data);

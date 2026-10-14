@@ -86,6 +86,27 @@ function showForgotPanel() {
   if (emailInput && !emailInput.value && loginVal.includes('@')) emailInput.value = loginVal;
 }
 
+// ---- кнопки писем с отсчётом: «Отправить ещё раз (1:59)», пока сервер не разрешит повтор ----
+const cooldowns = new Map(); // кнопка → таймер
+function startCooldown(btn, sec, labelKey) {
+  if (!btn) return;
+  clearInterval(cooldowns.get(btn));
+  cooldowns.delete(btn);
+  let left = Math.max(0, Math.round(Number(sec) || 0));
+  const draw = () => {
+    const label = t(labelKey);
+    btn.textContent = left > 0 ? t('index.mail.wait', { label, time: Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') }) : label;
+    btn.disabled = left > 0;
+  };
+  draw();
+  if (!left) return;
+  cooldowns.set(btn, setInterval(() => {
+    left -= 1;
+    draw();
+    if (left <= 0) { clearInterval(cooldowns.get(btn)); cooldowns.delete(btn); }
+  }, 1000));
+}
+
 async function sendForgot() {
   hideAuthError('forgotError');
   const okEl = document.getElementById('forgotOk');
@@ -102,13 +123,20 @@ async function sendForgot() {
       okEl.textContent = data.message || t('index.forgot.checkMail');
       okEl.classList.remove('hidden');
     }
-    // после успеха не даём жать сразу снова: сервер всё равно примет одно письмо раз в 2 минуты
-    setTimeout(() => { if (btn) btn.disabled = false; }, 30000);
+    document.getElementById('forgotHint')?.classList.remove('hidden');
+    // повтор на этот же адрес — через 2 минуты (раньше сервер не примет); исправил адрес — можно сразу
+    startCooldown(btn, data.retryIn || 120, 'index.forgot.again');
   } catch (e) {
     showAuthError('forgotError', e.message || t('index.sendFailed'));
-    if (btn) btn.disabled = false;
+    if (e.retryIn) startCooldown(btn, e.retryIn, 'index.forgot.again');
+    else if (btn) btn.disabled = false;
   }
 }
+// исправил почту — на новый адрес можно отправить сразу (лимит у сервера — на аккаунт)
+document.getElementById('forgotEmail')?.addEventListener('input', () => {
+  const btn = document.getElementById('forgotBtn');
+  if (btn && cooldowns.has(btn)) startCooldown(btn, 0, 'index.forgot.again');
+});
 
 function showAuthError(id, message) {
   const el = document.getElementById(id);
@@ -249,12 +277,19 @@ async function login() {
   } catch (err) {
     showAuthError('loginError', err.message || t('index.login.failed'));
     document.getElementById('verifyBox')?.classList.toggle('hidden', err.code !== 'unverified');
+    if (err.code === 'queued') document.getElementById('verifyBox')?.classList.remove('hidden');
+    setQueued(err.code === 'queued');
+    if (err.code === 'unverified') startCooldown(document.getElementById('verifyResendBtn'), err.retryIn, 'index.verify.resend');
   }
 }
 
 // ---- неподтверждённая почта: письмо ещё раз или другая почта (логин и пароль — из формы входа) ----
 function verifyCreds() {
   return { login: document.getElementById('loginInput').value.trim(), password: document.getElementById('passwordInput').value };
+}
+// в очереди на письмо (дневной лимит писем исчерпан): «отправить ещё раз» не нужно, почту сменить можно
+function setQueued(on) {
+  document.getElementById('verifyResendBtn')?.classList.toggle('hidden', !!on);
 }
 function showVerifyOk(text) {
   const el = document.getElementById('verifyOk');
@@ -263,11 +298,15 @@ function showVerifyOk(text) {
 }
 async function resendVerify() {
   hideAuthError('loginError');
+  const btn = document.getElementById('verifyResendBtn');
   try {
     const r = await api('/auth/verify/resend', { method: 'POST', body: verifyCreds() });
     showVerifyOk(r.message || t('index.verify.sent'));
+    setQueued(r.queued);
+    if (!r.queued) startCooldown(btn, r.retryIn || 120, 'index.verify.resend');
   } catch (e) {
     showAuthError('loginError', e.message);
+    if (e.retryIn) startCooldown(btn, e.retryIn, 'index.verify.resend');
   }
 }
 function toggleVerifyEmail() {
@@ -284,8 +323,11 @@ async function changeVerifyEmail() {
     const r = await api('/auth/verify/change-email', { method: 'POST', body: { ...verifyCreds(), email } });
     document.getElementById('verifyEmailRow').classList.add('hidden');
     showVerifyOk(r.message || t('index.verify.sent'));
+    setQueued(r.queued);
+    if (!r.queued) startCooldown(document.getElementById('verifyResendBtn'), r.retryIn || 120, 'index.verify.resend');
   } catch (e) {
     showAuthError('loginError', e.message);
+    if (e.retryIn) startCooldown(document.getElementById('verifyResendBtn'), e.retryIn, 'index.verify.resend');
   }
 }
 
@@ -325,9 +367,17 @@ async function register() {
       body: { username, email, password, acceptTerms: true },
     });
     if (reg.pending) {
-      // вход только после подтверждения почты: показываем, куда ушло письмо, и экран входа
-      await PW.alert(reg.message, { title: t('index.register.title') });
+      // вход только после подтверждения почты: экран входа с уже вписанными логином и паролем, куда ушло письмо,
+      // «Отправить ещё раз» (с отсчётом) и «Сменить почту» (ошибся адресом — исправил и отправил)
       showLoginPanel();
+      document.getElementById('loginInput').value = username;
+      document.getElementById('passwordInput').value = password;
+      document.getElementById('verifyBox')?.classList.remove('hidden');
+      const emailInput = document.getElementById('verifyEmailInput');
+      if (emailInput) emailInput.value = email;
+      showVerifyOk(reg.message);
+      setQueued(reg.queued); // в очереди — письмо придёт само, когда откроется дневной лимит
+      if (!reg.queued) startCooldown(document.getElementById('verifyResendBtn'), reg.retryIn || 120, 'index.verify.resend');
       return;
     }
     const returnTo = getReturnTo();

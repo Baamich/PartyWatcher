@@ -1,3 +1,4 @@
+require('./services/logTime'); // время и уровень в начале каждой строки лога (раздел «📜 Логи» админки)
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -83,6 +84,10 @@ async function start() {
   const app = express();
   app.set('trust proxy', 1);
   const server = http.createServer(app);
+  // cloudflared держит соединения к сайту открытыми и переиспользует их: у Node по умолчанию 5 с простоя —
+  // туннель иногда попадал в уже закрытое соединение (лишняя попытка и задержка). Держим дольше, чем он
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
   const siteOrigin = (() => { try { return new URL(config.publicUrl).origin; } catch { return null; } })();
   const io = new Server(server, {
     cors: { origin: siteOrigin ? [siteOrigin] : false },
@@ -127,7 +132,7 @@ async function start() {
     res.redirect(301, '/' + qs);
   });
 
-  const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin(-stats|-users|-detect)?\.js|css\/admin(-stats)?\.css)\/?$/i;
+  const ADMIN_PATHS = /^\/(admin(\.html)?|js\/admin(-stats|-users|-detect|-logs)?\.js|css\/admin(-stats)?\.css)\/?$/i;
   app.use((req, res, next) => {
     if (!ADMIN_PATHS.test(req.path)) return next();
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -220,6 +225,7 @@ async function start() {
   app.use('/api/admin', adminStatsRoutes);
   app.use('/api/admin', adminUsersRoutes);
   app.use('/api/admin', adminDetectRoutes);
+  app.use('/api/admin', require('./routes/adminLogs.routes'));
   app.use('/api/drive', driveRoutes);
   app.use('/api/player-capture', playerCaptureRoutes);
   app.use('/api/stream', streamProxyRoutes);
@@ -276,6 +282,7 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
 
   bans.start(); // список банов IP/устройств — в память, перечитывается раз в 30 с
   analytics.start(io); // CPU, память, сокеты и посещения — раз в минуту в базу
+  require('./services/regQueue').start(); // очередь регистраций: письма, не влезшие в дневной лимит, — когда он откроется
 
   await streamKeyCache.loadAll(); // заполняем кэш ключей ДО старта RTMP-сервера
   rtmpServer.run();

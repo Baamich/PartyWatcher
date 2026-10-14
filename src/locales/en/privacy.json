@@ -20,7 +20,7 @@
   },
   "s5": {
     "h": "5. How long data is kept",
-    "body": "<ul><li>Visit statistics — 120 days.</li><li>An account's IP addresses and devices (security) — 1 year after the last visit.</li><li>An unconfirmed sign-up — 30 minutes, then deleted.</li><li>Account data and published content — as long as the account exists (clips and stream recordings — for a limited time).</li><li>Support requests — as long as needed to answer and resolve them; attached screenshots and stream recordings attached to reports — 90 days.</li><li>Database backups (encrypted) — 7 days, then deleted.</li></ul>"
+    "body": "<ul><li>Visit statistics — 120 days.</li><li>An account's IP addresses and devices (security) — 1 year after the last visit.</li><li>An unconfirmed sign-up — 30 minutes, then deleted. If the daily email limit is used up, the sign-up waits in a queue for up to 3 days, and the link in an email from the queue works for 8 hours.</li><li>Account data and published content — as long as the account exists (clips and stream recordings — for a limited time).</li><li>Support requests — as long as needed to answer and resolve them; attached screenshots and stream recordings attached to reports — 90 days.</li><li>Database backups (encrypted) — 7 days, then deleted.</li></ul>"
   },
   "s6": {
     "h": "6. Your rights",

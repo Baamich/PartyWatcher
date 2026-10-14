@@ -1,3 +1,4 @@
+require('./services/logTime'); // время и уровень в начале каждой строки лога
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
@@ -43,6 +44,7 @@ async function start() {
   app.use('/api/admin', adminStatsRoutes);
   app.use('/api/admin', adminUsersRoutes);
   app.use('/api/admin', adminDetectRoutes);
+  app.use('/api/admin', require('./routes/adminLogs.routes')); // 📜 Логи сервера
   bans.start(); // для отметок «забанен» в карточке аккаунта (сам сайт банит в своём процессе)
   app.use('/api/csp-report', cspRoutes);
   

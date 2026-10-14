@@ -32,6 +32,7 @@
   <div id="pwaCanvas" class="wb-canvas cw-canvas pwa-canvas">
     <nav id="wbNavFixed" class="wb-nav">
       <button type="button" class="wb-nav-btn active" data-click="adScrollTop" data-i18n="admin.nav.stats">📊 Статистика</button>
+      <button type="button" class="wb-nav-btn" data-click="openLogs" data-i18n="admin.nav.logs">📜 Логи сервера</button>
       <button type="button" class="wb-nav-btn" data-click="openUsers" data-i18n="admin.nav.users">👥 Аккаунты</button>
       <button type="button" class="wb-nav-btn pwa-nav-detect" data-click="openDetect"><span data-i18n="admin.nav.detect">🕵️ Обнаружение</span><span class="support-badge hidden" id="detectBadge">0</span></button>
       <button type="button" class="wb-nav-btn" data-click="openBans" data-i18n="admin.nav.bans">🛡️ Баны IP и устройств</button>
@@ -134,6 +135,52 @@
     </div>
   </div>
 
+  <!-- логи сервера: быстрые группы, фильтры и поиск (js/admin-logs.js) -->
+  <div id="logsModal" class="modal hidden">
+    <div class="modal-content pwa-wide-modal pwa-logs-modal">
+      <button type="button" class="modal-close" data-close="logsModal" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
+      <h3 data-i18n="admin.logs.title">📜 Логи сервера</h3>
+      <div id="logsGroups" class="pwa-logs-groups">
+        <button type="button" class="pwa-chip on" data-group="" data-i18n="admin.logs.groups.all">Все</button>
+        <button type="button" class="pwa-chip" data-group="live" data-i18n="admin.logs.groups.live">📡 Эфиры</button>
+        <button type="button" class="pwa-chip" data-group="capture" data-i18n="admin.logs.groups.capture">🎬 Плеер и захват</button>
+        <button type="button" class="pwa-chip" data-group="mail" data-i18n="admin.logs.groups.mail">✉️ Почта и вход</button>
+        <button type="button" class="pwa-chip" data-group="security" data-i18n="admin.logs.groups.security">🔒 Безопасность</button>
+        <button type="button" class="pwa-chip" data-group="server" data-i18n="admin.logs.groups.server">⚙️ Сервер</button>
+      </div>
+      <div class="pwa-logs-bar">
+        <select id="logsLevel">
+          <option value="all" data-i18n="admin.logs.level.all">Все уровни</option>
+          <option value="warn" data-i18n="admin.logs.level.warn">Предупреждения и ошибки</option>
+          <option value="error" data-i18n="admin.logs.level.error">Только ошибки</option>
+        </select>
+        <select id="logsSince">
+          <option value="15" data-i18n="admin.logs.since.15">15 минут</option>
+          <option value="60" selected data-i18n="admin.logs.since.60">Час</option>
+          <option value="360" data-i18n="admin.logs.since.360">6 часов</option>
+          <option value="1440" data-i18n="admin.logs.since.1440">Сутки</option>
+          <option value="10080" data-i18n="admin.logs.since.10080">Неделя</option>
+          <option value="0" data-i18n="admin.logs.since.0">Всё в файле</option>
+        </select>
+        <select id="logsProc">
+          <option value="all" data-i18n="admin.logs.proc.all">Оба процесса</option>
+          <option value="site" data-i18n="admin.logs.proc.site">Сайт</option>
+          <option value="admin" data-i18n="admin.logs.proc.admin">Админка</option>
+        </select>
+        <select id="logsTag"></select>
+        <select id="logsOrder">
+          <option value="desc" data-i18n="admin.logs.order.desc">Сначала новые</option>
+          <option value="asc" data-i18n="admin.logs.order.asc">Сначала старые</option>
+        </select>
+        <input id="logsQ" type="search" autocomplete="off" placeholder="Поиск в тексте" data-i18n-placeholder="admin.logs.search" />
+        <label class="pwa-logs-auto"><input type="checkbox" id="logsAuto" /> <span data-i18n="admin.logs.auto">авто 10 с</span></label>
+        <button type="button" class="icon-btn" id="logsReload" title="Обновить" data-i18n-title="admin.stats.refresh">⟳</button>
+      </div>
+      <div id="logsInfo" class="pwa-hint"></div>
+      <div id="logsList" class="pwa-logs-list" data-no-i18n></div>
+    </div>
+  </div>
+
   <!-- обнаружение: разные аккаунты с одного IP / браузера / железа -->
   <div id="detectModal" class="modal hidden">
     <div class="modal-content pwa-wide-modal">
@@ -224,5 +271,6 @@
   <script src="/js/admin-stats.js"></script>
   <script src="/js/admin-users.js"></script>
   <script src="/js/admin-detect.js"></script>
+  <script src="/js/admin-logs.js"></script>
 </body>
 </html>

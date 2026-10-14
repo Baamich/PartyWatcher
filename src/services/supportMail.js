@@ -5,6 +5,7 @@
 const crypto = require('crypto');
 const i18n = require('./i18n');
 const { sendMail, escapeHtml } = require('./mailer');
+const mailQuota = require('./mailQuota');
 
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@partywatcher.de'; // сюда человек отвечает (Reply-To)
 const MAIL_DOMAIN = SUPPORT_EMAIL.split('@')[1] || 'partywatcher.de';
@@ -94,6 +95,12 @@ function toHtml(main, foot) {
 // kind: reply | accepted | trivial. Возвращает { emailed, messageId }. Тикет не меняет — это делает роут.
 async function sendSupportEmail(ticket, kind, { text = '', author = '' } = {}) {
   if (!ticket.email) return { emailed: false, messageId: null };
+  // общий дневной лимит писем (регистрации его не съедают — см. mailQuota)
+  if (!(await mailQuota.take('other'))) {
+    const e = new Error('mail limit');
+    e.code = 'MAIL_LIMIT';
+    throw e;
+  }
   const main = mainText(ticket, kind, text);
   const foot = footer(ticket, kind === 'reply' ? author : '');
   const messageId = newMessageId(ticket._id);
@@ -108,6 +115,9 @@ async function sendSupportEmail(ticket, kind, { text = '', author = '' } = {}) {
     inReplyTo: ids.length ? ids[ids.length - 1] : undefined,
     references: ids.length ? ids.join(' ') : undefined,
     autoSubmitted: kind !== 'reply',
+  }).catch(async (e) => {
+    if (!mailQuota.isQuotaError(e)) await mailQuota.giveBack('other'); // не ушло не из-за лимита — место возвращаем
+    throw e;
   });
   return { emailed, messageId: emailed ? messageId : null };
 }

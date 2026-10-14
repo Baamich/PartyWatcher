@@ -33,6 +33,7 @@
     return b;
   }
   function statusOf(u) {
+    if (u.verifyPending && u.verifyQueued) return { cls: 'pwa-badge-block', text: t('admin.users.queued', { d: fmt(u.verifyExpires) }) };
     if (u.verifyPending) return { cls: 'pwa-badge-block', text: t('admin.users.pending', { d: fmt(u.verifyExpires) }) };
     if (u.banPerm) return { cls: 'pwa-badge-ban', text: t('admin.users.banned') };
     if (u.banUntil) return { cls: 'pwa-badge-block', text: t('admin.users.blockedUntil', { d: fmt(u.banUntil) }) };
@@ -226,7 +227,22 @@
           }
         }),
       );
-      box.append(node('div', 'pwa-sub', t('admin.users.actions')), reason, row1, row2, node('p', 'pwa-hint', t('admin.users.banHint')));
+      // срочный вход: ссылка активации или нового пароля, которую админ сам отправляет со своей почты
+      const row0 = node('div', 'pwa-actions-row');
+      row0.append(btn(t('admin.users.loginLink'), '', async () => {
+        if (!(await PW.confirm(t('admin.users.loginLinkConfirm', { name: u.username, email: u.email }), { title: t('admin.users.loginLink') }))) return;
+        try {
+          const r2 = await api('/admin/users/' + encodeURIComponent(openId) + '/login-link', { method: 'POST', body: {} });
+          try { await navigator.clipboard.writeText(r2.link); } catch (_) {}
+          await PW.prompt(t(r2.kind === 'verify' ? 'admin.users.loginLinkVerify' : 'admin.users.loginLinkReset', { email: r2.email }), {
+            title: t('admin.users.loginLink'), defaultValue: r2.link,
+          });
+          openUser(openId);
+        } catch (e) {
+          PW.toast(e.message, 'error');
+        }
+      }));
+      box.append(node('div', 'pwa-sub', t('admin.users.actions')), row0, reason, row1, row2, node('p', 'pwa-hint', t('admin.users.banHint')));
       card.appendChild(box);
     } else {
       card.appendChild(node('p', 'pwa-hint', t('admin.users.adminHint')));

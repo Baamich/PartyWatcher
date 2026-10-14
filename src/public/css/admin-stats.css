@@ -127,3 +127,23 @@ body > .pw-dialog-overlay { z-index: 4100; } /* подтверждения — �
 .pwa-detect-kind { font-weight: 700; }
 .pwa-detect-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .pwa-detect-details .pwa-table td { white-space: nowrap; }
+
+/* 📜 логи сервера */
+.pwa-logs-modal { width: min(1200px, 96vw); }
+.pwa-logs-groups { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
+[data-theme] .pwa-chip { width: auto; margin: 0; padding: 5px 12px; font-size: 13px; border-radius: 999px; background: var(--surface-alt); color: var(--text); border: 1px solid var(--border); box-shadow: none; }
+[data-theme] .pwa-chip.on { border-color: var(--accent-text); color: var(--accent-text); }
+.pwa-logs-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.pwa-logs-bar select, .pwa-logs-bar input[type='search'] { width: auto; margin: 0; padding: 5px 8px; font-size: 13px; }
+.pwa-logs-bar input[type='search'] { flex: 1 1 180px; }
+.pwa-logs-auto { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-muted); }
+.pwa-logs-list { max-height: 62vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.pwa-log { border-left: 3px solid var(--border); padding: 4px 8px; background: var(--surface-alt); border-radius: 4px; }
+.pwa-log-wrn { border-left-color: #f59e0b; }
+.pwa-log-err { border-left-color: var(--danger); }
+.pwa-log-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--text-muted); font-size: 11px; }
+.pwa-log-lv { font-weight: 700; }
+.pwa-log-wrn .pwa-log-lv { color: #f59e0b; }
+.pwa-log-err .pwa-log-lv { color: var(--danger); }
+[data-theme] .pwa-log-tag { width: auto; margin: 0; padding: 0 6px; font-size: 11px; background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--accent-text); box-shadow: none; }
+.pwa-log-msg { margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--text); }

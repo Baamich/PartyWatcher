@@ -564,16 +564,18 @@ router.post('/:id/reply', auth, adminOnly, async (req, res) => {
     if (!(await claimUnread(ticket, 'answered'))) return res.status(409).json({ error: req.t('server.support.closed') });
 
     let r;
+    let limit = false;
     try {
       r = await sendSupportEmail(ticket, 'reply', { text, author: req.user.username || '' });
     } catch (e) {
-      console.error('[support/reply] письмо не отправлено:', e.message);
+      limit = e.code === 'MAIL_LIMIT';
+      console.error('[support/reply] письмо не отправлено:', limit ? 'дневной лимит писем исчерпан' : e.message);
       r = { emailed: false };
     }
     if (!r.emailed) {
       // письмо не ушло — возвращаем «непрочитанное», чтобы админ мог отправить ещё раз
       await SupportTicket.updateOne({ _id: ticket._id, status: 'answered' }, { $set: { status: 'unread' } });
-      return res.status(502).json({ error: req.t('server.support.mailFailed') });
+      return res.status(limit ? 503 : 502).json({ error: req.t(limit ? 'server.support.mailLimit' : 'server.support.mailFailed') });
     }
 
     ticket.mailIds.push(r.messageId);

@@ -148,6 +148,11 @@ function preloadLinks(html) {
   for (const m of html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="(\/[^"]+\?v=[0-9a-f]+)"/g)) links.push(`<${m[1]}>; rel=preload; as=style`);
   const dict = html.match(/<script src="(\/locales\/[^"]+)"><\/script>/);
   if (dict) links.push(`<${dict[1]}>; rel=preload; as=script`);
+  // и свои скрипты страницы (с хэшем — они в кэше Cloudflare): пока HTML едет из Мумбаи, браузер уже их качает
+  for (const m of html.matchAll(/<script\s[^>]*?src="(\/[^"]+\?v=[0-9a-f]+)"/g)) {
+    if (links.length >= 30) break;
+    links.push(`<${m[1]}>; rel=preload; as=script`);
+  }
   return links.join(', ');
 }
 

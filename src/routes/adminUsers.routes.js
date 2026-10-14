@@ -4,6 +4,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
+const crypto = require('crypto');
+const config = require('../config');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/adminOnly');
 const User = require('../models/User');
@@ -30,10 +32,10 @@ function view(u) {
     banPerm: !!u.banPerm, banUntil: u.banUntil && new Date(u.banUntil) > new Date() ? u.banUntil : null,
     banReason: u.banReason || '', banBy: u.banBy || '', banAt: u.banAt || null,
     termsOk: u.termsVersion === TERMS_VERSION, isLive: !!u.isLive,
-    verifyPending: !!u.verifyPending, verifyExpires: u.verifyPending ? u.verifyExpires || null : null,
+    verifyPending: !!u.verifyPending, verifyExpires: u.verifyPending ? u.verifyExpires || null : null, verifyQueued: !!u.verifyQueued,
   };
 }
-const FIELDS = 'username email role streamerName createdAt lastSeenAt lastIp regIp regDevice banPerm banUntil banReason banBy banAt termsVersion isLive verifyPending verifyExpires';
+const FIELDS = 'username email role streamerName createdAt lastSeenAt lastIp regIp regDevice banPerm banUntil banReason banBy banAt termsVersion isLive verifyPending verifyExpires verifyQueued';
 
 // GET /admin/users?sort=new|old|name|seen&q=&filter=all|banned|online&page=1
 router.get('/users', auth, adminOnly, async (req, res) => {
@@ -176,6 +178,37 @@ router.patch('/users/:id', auth, adminOnly, async (req, res) => {
   }
   console.log(`[admin] ${req.user.username}: аккаунт ${u._id} изменён (${Object.keys(set).filter((k) => k !== 'usernameLower').join(', ')})`);
   res.json({ ok: true, renamed });
+});
+
+// POST /admin/users/:id/login-link — срочный вход без письма сайта (лимит писем исчерпан, письмо не доходит):
+// неподтверждённый аккаунт — ссылка активации (вход сразу, из очереди выходит), обычный — ссылка нового пароля.
+// Одноразовая, живёт 24 ч. Админ сам отправляет её со своей почты — только на почту аккаунта
+const LOGIN_LINK_H = 24;
+router.post('/users/:id/login-link', auth, adminOnly, async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: req.t('server.notFound') });
+  const u = await User.findById(req.params.id).select('username email verifyPending').lean();
+  if (!u) return res.status(404).json({ error: req.t('server.notFound') });
+  const token = crypto.randomBytes(32).toString('base64url');
+  const hash = crypto.createHash('sha256').update(token).digest('hex');
+  const now = Date.now();
+  const expiresAt = new Date(now + LOGIN_LINK_H * 3600000);
+  const base = config.publicUrl.replace(/\/$/, '');
+  let kind;
+  if (u.verifyPending) {
+    kind = 'verify';
+    await User.updateOne({ _id: u._id }, {
+      $set: { verifyTokenHash: hash, verifySentAt: new Date(now), verifyExpires: expiresAt },
+      $unset: { verifyQueued: 1, verifyQueuedAt: 1 },
+    });
+  } else {
+    kind = 'reset';
+    await User.updateOne({ _id: u._id }, { $set: { resetTokenHash: hash, resetTokenExpires: expiresAt, resetSentAt: new Date(now) } });
+  }
+  console.log(`[admin] ссылка для входа (${kind === 'verify' ? 'активация' : 'новый пароль'}) → ${u.username}, выдал ${req.user.username || '?'}`);
+  res.json({
+    kind, email: u.email, expiresAt,
+    link: `${base}/${kind === 'verify' ? 'verify-email.html' : 'reset-password.html'}#t=${token}`,
+  });
 });
 
 // POST /admin/users/:id/block { hours, reason } — временная блокировка

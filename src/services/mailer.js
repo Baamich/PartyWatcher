@@ -52,6 +52,9 @@ async function sendMail({ to, subject, text, html, replyTo, messageId, inReplyTo
   } catch (e) {
     // код и ответ SMTP-сервера (535 — неверный ключ, ETIMEDOUT — порт закрыт); адрес — замаскированный
     console.error(`[mailer] НЕ отправлено → ${maskEmail(to)}: ${e.code || ''} ${e.responseCode || ''} ${(e.response || e.message || '').slice(0, 200)}`);
+    // почтовый сервис сказал «лимит» раньше нашего счёта — до конца суток больше не пробуем (services/mailQuota.js)
+    const quota = require('./mailQuota');
+    if (quota.isQuotaError(e)) await quota.markFull().catch(() => {});
     throw e;
   }
   console.log(`[mailer] отправлено → ${maskEmail(to)}`);
@@ -91,7 +94,10 @@ async function sendPasswordReset(to, username, link, ttlMinutes, lang) {
 
 // Письмо подтверждения почты после регистрации: кнопка и та же ссылка обычным текстом (если кнопка не нажимается)
 async function sendVerifyEmail(to, username, link, ttlMinutes, lang) {
-  const tr = (key, vars) => i18n.t(lang, 'server.mail.verify.' + key, vars);
+  // письмо из очереди регистраций — ссылка на часы («в течение 8 часов»), обычное — на минуты
+  const hours = ttlMinutes >= 120 && ttlMinutes % 60 === 0;
+  const tr = (key, vars) => i18n.t(lang, 'server.mail.verify.' + (hours && (key === 'openLink' || key === 'footer') ? key + 'H' : key),
+    hours && vars && vars.n ? { ...vars, n: vars.n / 60 } : vars);
   const subject = tr('subject');
   const text =
     `${tr('hello', { name: username })}\n\n` +

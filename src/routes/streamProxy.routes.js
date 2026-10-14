@@ -529,9 +529,17 @@ async function relayRanged(req, res, targetUrl) {
     .pipe(res);
 }
 
+const relayDenied = new Map(); // userId → когда последний раз писали в лог об отказе
 router.get('/relay', auth, async (req, res) => {
   // relay нужен только «Просмотру фильма» — он доступен лишь админу и друзьям (services/roles.js, кэш 60 с)
   if (!(await require('../services/roles').isTrusted(req.user.id))) {
+    // раньше молча: «у друга не играет», а в логе пусто. Роль проверяется с кэшем 60 с — после выдачи «друга» подождать минуту
+    const k = String(req.user.id);
+    if (!relayDenied.has(k) || Date.now() - relayDenied.get(k) > 300000) {
+      if (relayDenied.size > 1000) relayDenied.clear();
+      relayDenied.set(k, Date.now());
+      console.warn(`[stream-relay] нет доступа: ${req.user.username || k} — не админ и не друг (роль из базы, кэш 60 с)`);
+    }
     return res.status(403).json({ error: req.t('server.room.captureFriendsOnly') });
   }
   const targetUrl = req.query.url;

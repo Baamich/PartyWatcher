@@ -240,8 +240,16 @@ router.post('/:code/change-video', auth, async (req, res) => {
     let rawUrl = String(req.body?.url || '').trim();
     if (!rawUrl) return res.status(400).json({ error: req.t('server.room.needUrl') });
 
-    const type = room.video.type;
+    let type = room.video.type;
     let url = rawUrl;
+    // YouTube, Twitch и VK — один пункт на главной: в такой комнате можно поставить ссылку любого из трёх, тип — по ссылке
+    const family = ['youtube', 'twitch', 'vk'].includes(type);
+    if (family) {
+      if (extractYoutubeId(rawUrl)) type = 'youtube';
+      else if (/twitch\.tv\//i.test(rawUrl)) type = 'twitch';
+      else if (normalizeVkLink(rawUrl)) type = 'vk';
+      else return res.status(400).json({ error: req.t('server.room.needYtTwitchVk') });
+    }
 
     if (type === 'youtube') {
       if (!extractYoutubeId(rawUrl)) {
@@ -274,6 +282,7 @@ router.post('/:code/change-video', auth, async (req, res) => {
     const adult = await isAdultVideo(type, url);
     const denied = await riskyDenied(req.user.id, type, adult);
     if (denied) return res.status(403).json({ error: req.t(denied) });
+    room.video.type = type; // внутри «YouTube / Twitch / VK» мог смениться сервис
     room.video.url = url;
     room.video.adult = adult;
     if (isRestrictedVideo(room.video)) await dropUntrusted(req.app.get('io'), room.code);
