@@ -14,7 +14,21 @@ const $ = (id) => document.getElementById(id);
 if (/^\/news\/?$/.test(location.pathname)) {
   $('siteNav').classList.remove('hidden');
   $('studioNav').classList.add('hidden');
-  document.querySelector('.brand')?.setAttribute('href', '/');
+  // логотип — по тому, откуда пришли: из трансляций (каталог, профиль стримера, клип) — «LIVE» и к трансляциям,
+  // из комнат (главная, комната) — без «LIVE» и на главную. Раздел помним на вкладку: обновление и фильтры не сбивают
+  let from = '';
+  try {
+    const ref = new URL(document.referrer);
+    if (ref.origin === location.origin) from = ref.pathname;
+  } catch (_) {}
+  let section = /^\/(streams|streamers|clips)\b/.test(from) ? 'live' : /^\/($|index\.html|room)/.test(from) ? 'rooms' : null;
+  try {
+    if (section) sessionStorage.setItem('pw-news-from', section);
+    else section = sessionStorage.getItem('pw-news-from');
+  } catch (_) {}
+  const live = section === 'live';
+  document.querySelector('.brand')?.setAttribute('href', live ? '/streams.html' : '/');
+  document.querySelector('.brand-live-tag')?.classList.toggle('hidden', !live);
 }
 
 function fmtDate(d) {
