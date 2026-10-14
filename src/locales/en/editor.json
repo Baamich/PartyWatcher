@@ -159,7 +159,10 @@
     "resetPlace": "↺ Reset size and position",
     "playerHint": "The player can be scaled up or down by at most 10%. The chat height follows.",
     "chatHint": "The chat can be widened, its height equals the player height.",
-    "delete": "🗑 Delete block"
+    "delete": "🗑 Delete block",
+    "editBio": "✏️ Edit description",
+    "style": "🎨 Change style",
+    "aboveBanner": "This block is always above the banner and avatar"
   },
   "fit": {
     "title": "🎯 How to show the photo",
@@ -258,5 +261,84 @@
     "byBlocks": "By blocks",
     "full": "{w} — full screen",
     "widthHint": "The profile is {w} wide now. “By blocks” — up to the right edge of the rightmost block; a number — that width right away, even if the right part is still empty. The wider the profile, the narrower the sides."
+  },
+  "bioEdit": {
+    "title": "Channel description",
+    "hint": "The channel name cannot be changed — only its style. The description is saved together with the layout."
+  },
+  "style": {
+    "titleInfo": "🎨 Style: name and description",
+    "titleFollow": "🎨 Style: “Follow” button",
+    "play": "▶ Play",
+    "presets": "Presets:",
+    "tabs": {
+      "n": "Name",
+      "d": "Description",
+      "x": "Background & frame",
+      "a": "Follow",
+      "b": "Following",
+      "anim": "✨ Animation"
+    },
+    "ip": {
+      "classic": "Default",
+      "card": "Card",
+      "neon": "Neon",
+      "gradient": "Gradient",
+      "elegant": "Elegant",
+      "sunset": "Sunset"
+    },
+    "fp": {
+      "classic": "Classic",
+      "neon": "Neon",
+      "pastel": "Pastel",
+      "fire": "Fire",
+      "minimal": "Minimal",
+      "ocean": "Ocean"
+    },
+    "text": "Label",
+    "icon": "Icon",
+    "icons": {
+      "none": "no icon",
+      "heart": "heart",
+      "heart2": "purple heart",
+      "star": "star",
+      "bell": "bell",
+      "plus": "plus",
+      "check": "check mark",
+      "fire": "fire",
+      "spark": "sparkles"
+    },
+    "upper": "CAPS",
+    "bg": "Background",
+    "gradient": "Background gradient",
+    "textGradient": "Text gradient",
+    "radiusHint": "0 — sharp corners, 50 — pill",
+    "shadow": "Shadow",
+    "shadows": {
+      "none": "none",
+      "soft": "soft",
+      "glow": "glow"
+    },
+    "copyFrom": "Copy the look from the “{tab}” tab",
+    "anims": {
+      "none": "No animation",
+      "pop": "Bounce",
+      "slideL": "Right to left",
+      "slideR": "Left to right",
+      "fill": "Fill from center",
+      "wave": "Letter wave",
+      "flip": "Flip",
+      "hearts": "Flying icons",
+      "shake": "Wobble",
+      "glow": "Flash"
+    },
+    "animHint": "The animation plays when a viewer presses the button. Clicking the buttons in the preview plays it too.",
+    "lines": "Visible lines",
+    "showCount": "Follower count next to the name",
+    "nameHint": "The channel name does not change — only how it looks.",
+    "sampleCount": "1,234 followers",
+    "reset": "Reset",
+    "done": "Done",
+    "liveHint": "This style also applies to the “Follow” button under the live chat — with the same animation, but the regular text size."
   }
 }

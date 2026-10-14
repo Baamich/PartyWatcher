@@ -113,13 +113,22 @@
     else blocks.unshift(clone(d));
   }
 
-  // аватар всегда выше баннера: если он в списке раньше, ставим сразу за баннером
+  // аватар всегда выше баннера: если он в списке раньше, ставим сразу за баннером.
+  // «Имя и описание» и «Подписаться» — всегда выше и баннера, и аватара (кнопок слоёв у них нет)
   function fixOrder(blocks) {
     const bi = blocks.findIndex((b) => b.type === 'banner');
     const ai = blocks.findIndex((b) => b.type === 'avatar');
     if (bi >= 0 && ai >= 0 && ai < bi) {
       const [a] = blocks.splice(ai, 1);
       blocks.splice(bi, 0, a);
+    }
+    for (const t of ['info', 'follow']) {
+      const i = blocks.findIndex((b) => b.type === t);
+      const top = Math.max(blocks.findIndex((b) => b.type === 'banner'), blocks.findIndex((b) => b.type === 'avatar'));
+      if (i >= 0 && i < top) {
+        const [x] = blocks.splice(i, 1);
+        blocks.splice(top, 0, x);
+      }
     }
   }
 
@@ -226,6 +235,65 @@
     };
   }
 
+  // ---- стиль блока «Имя и описание» (ist: n — ник, d — описание, x — фон и рамка) и кнопки «Подписаться»
+  // (fst: a — «Подписаться», b — «Вы подписаны», anim — анимация при нажатии). Нет поля — обычный вид сайта
+  const SHADOWS = ['none', 'soft', 'glow'];
+  // значки кнопки: только эмодзи до Unicode 13 (новые на Windows 10 — пустые квадраты)
+  const FOLLOW_ICONS = { none: '', heart: '❤', heart2: '💜', star: '★', bell: '🔔', plus: '+', check: '✓', fire: '🔥', spark: '✨' };
+  const FOLLOW_ANIMS = ['none', 'pop', 'slideL', 'slideR', 'fill', 'wave', 'flip', 'hearts', 'shake', 'glow'];
+  const FOLLOW_DEF = {
+    a: { t: '', ic: 'heart', bg: '#7c5cff', bg2: '#c084fc', c: '#ffffff', font: 'system', fs: 16, b: true, i: false, up: false, r: 10, bw: 0, bc: '#ffffff', sh: 'soft' },
+    b: { t: '', ic: 'heart2', bg: '#2a2633', bg2: '', c: '#ffffff', font: 'system', fs: 16, b: true, i: false, up: false, r: 10, bw: 1, bc: '#7c5cff', sh: 'none' },
+  };
+  const colOr = (v, d) => (COLOR_RE.test(v) ? v : d);
+  const pickOr = (v, list, d) => (list.includes(v) ? v : d);
+  const fontOr = (v) => (FONTS[v] ? v : 'system');
+  const ALIGNS = ['left', 'center', 'right'];
+  const VALIGNS = ['top', 'center', 'bottom'];
+
+  function cleanInfoStyle(s) {
+    if (!s || typeof s !== 'object') return null;
+    const n = s.n || {}, d = s.d || {}, x = s.x || {};
+    return {
+      n: {
+        font: fontOr(n.font), fs: Math.round(num(n.fs, 12, 96, 28)), c: colOr(n.c, '#ffffff'), c2: colOr(n.c2, ''),
+        b: n.b !== false, i: !!n.i, up: !!n.up, ls: Math.round(num(n.ls, -2, 20, 0) * 2) / 2, sh: pickOr(n.sh, SHADOWS, 'none'),
+      },
+      d: {
+        font: fontOr(d.font), fs: Math.round(num(d.fs, 10, 40, 14)), c: colOr(d.c, '#b8b8c8'), i: !!d.i,
+        lines: Math.round(num(d.lines, 1, 8, 2)), sh: pickOr(d.sh, SHADOWS, 'none'),
+      },
+      x: {
+        bg: colOr(x.bg, '#000000'), op: Math.round(num(x.op, 0, 1, 0) * 100) / 100, r: Math.round(num(x.r, 0, 60, 0)),
+        pad: Math.round(num(x.pad, 0, 40, 0)), bc: colOr(x.bc, '#ffffff'), bw: Math.round(num(x.bw, 0, 8, 0)),
+        al: pickOr(x.al, ALIGNS, 'left'), va: pickOr(x.va, VALIGNS, 'top'), cnt: x.cnt !== false,
+      },
+    };
+  }
+
+  function cleanFollowState(s, d) {
+    s = s && typeof s === 'object' ? s : {};
+    return {
+      t: String(s.t || '').replace(/\s+/g, ' ').trim().slice(0, 24),
+      ic: Object.prototype.hasOwnProperty.call(FOLLOW_ICONS, s.ic) ? s.ic : d.ic,
+      bg: colOr(s.bg, d.bg), bg2: s.bg2 === undefined ? d.bg2 : colOr(s.bg2, ''), c: colOr(s.c, d.c),
+      font: fontOr(s.font), fs: Math.round(num(s.fs, 10, 40, d.fs)), b: s.b === undefined ? d.b : !!s.b, i: !!s.i, up: !!s.up,
+      r: Math.round(num(s.r, 0, 50, d.r)), bw: Math.round(num(s.bw, 0, 6, d.bw)), bc: colOr(s.bc, d.bc), sh: pickOr(s.sh, SHADOWS, d.sh),
+    };
+  }
+
+  function cleanFollowStyle(s) {
+    if (!s || typeof s !== 'object') return null;
+    return { a: cleanFollowState(s.a, FOLLOW_DEF.a), b: cleanFollowState(s.b, FOLLOW_DEF.b), anim: pickOr(s.anim, FOLLOW_ANIMS, 'pop') };
+  }
+
+  // свои надписи кнопки «Подписаться» (сервер проверяет их на мат)
+  function styleTexts(L) {
+    const out = [];
+    for (const b of L?.profile?.blocks || []) if (b.fst) for (const k of ['a', 'b']) if (b.fst[k]?.t) out.push(b.fst[k].t);
+    return out;
+  }
+
   const FIT_TYPES = ['banner', 'avatar', 'shape', 'image', 'link'];
   const FIT0 = { m: 'cover', z: 1, x: 50, y: 50 };
 
@@ -256,6 +324,8 @@
 
     if (type === 'avatar') o.shape = SIMPLE_SHAPES.includes(b.shape) ? b.shape : 'circle';
     if (type === 'vods') o.o = b.o === 'v' ? 'v' : 'h'; // вертикальный или горизонтальный список записей
+    if (type === 'info') { const st = cleanInfoStyle(b.ist); if (st) o.ist = st; }
+    if (type === 'follow') { const st = cleanFollowStyle(b.fst); if (st) o.fst = st; }
 
     if (type === 'shape') {
       if (b.shape === 'poly') {
@@ -333,7 +403,11 @@
     return out;
   }
 
-  const api = { fixOrder, W, WM, MIN_W, MAX_H, PAGE_WIDTHS, GIF_MAX, isGif, gifCount, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, BG_FX, BG_FITS, defOf, minSize, clampBlock, syncChat, counts, canvasWidth, cleanBg, cleanSides, withDefaults, sanitize, clone };
+  const api = {
+    fixOrder, W, WM, MIN_W, MAX_H, PAGE_WIDTHS, GIF_MAX, isGif, gifCount, DEFAULTS, LIMITS, FONTS, CUSTOM_TYPES, BG_FX, BG_FITS,
+    FOLLOW_ICONS, FOLLOW_ANIMS, SHADOWS, cleanInfoStyle, cleanFollowStyle, styleTexts,
+    defOf, minSize, clampBlock, syncChat, counts, canvasWidth, cleanBg, cleanSides, withDefaults, sanitize, clone,
+  };
   if (typeof document === 'undefined') return api;
 
   // ---------- только браузер ----------
@@ -564,6 +638,141 @@
         f.style.color = b.lc || '#ffffff';
         if ((b.shape || 'rect') === 'rect' && b.rd) f.style.borderRadius = `calc(${b.rd} * var(--s, 1) * 1px)`;
       }
+    }
+  };
+
+  // ---- «Имя и описание»: стиль через CSS-переменные контейнера (правила — в blocks.css: .pw-ist .pw-i-name / .pw-i-desc).
+  // el — .profile-info у зрителя или заливка блока в редакторе. Размеры — в единицах холста (× --s)
+  const INFO_VARS = ['--in-font', '--in-fs', '--in-c', '--in-c2', '--in-w', '--in-i', '--in-up', '--in-ls', '--in-sh', '--in-f',
+    '--id-font', '--id-fs', '--id-c', '--id-i', '--id-lines', '--id-sh', '--ib-bg', '--ib-r', '--ib-pad', '--ib-bw', '--ib-bc',
+    '--ib-al', '--ib-jc', '--ib-va'];
+  const textShadow = (sh, c) => (sh === 'glow' ? `0 0 calc(10px * var(--s, 1)) ${c}` : sh === 'soft' ? '0 2px 6px rgba(0,0,0,.6)' : 'none');
+
+  api.paintInfo = (el, b) => {
+    const s = b && b.ist;
+    el.classList.toggle('pw-ist', !!s);
+    el.classList.toggle('pw-i-grad', !!(s && s.n.c2));
+    el.classList.toggle('pw-i-nocnt', !!(s && !s.x.cnt));
+    if (!s) { INFO_VARS.forEach((k) => el.style.removeProperty(k)); return; }
+    const { n, d, x } = s;
+    const set = (k, v) => el.style.setProperty(k, String(v));
+    set('--in-font', FONTS[n.font]); set('--in-fs', n.fs); set('--in-c', n.c); set('--in-c2', n.c2 || n.c);
+    set('--in-w', n.b ? 800 : 400); set('--in-i', n.i ? 'italic' : 'normal'); set('--in-up', n.up ? 'uppercase' : 'none');
+    set('--in-ls', n.ls);
+    // у градиентного ника буквы прозрачные: тень рисуем фильтром, иначе она проступает сквозь буквы
+    const nsh = textShadow(n.sh, n.c2 || n.c);
+    set('--in-sh', n.c2 ? 'none' : nsh);
+    set('--in-f', n.c2 && n.sh !== 'none' ? `drop-shadow(${nsh})` : 'none');
+    set('--id-font', FONTS[d.font]); set('--id-fs', d.fs); set('--id-c', d.c); set('--id-i', d.i ? 'italic' : 'normal');
+    set('--id-lines', d.lines); set('--id-sh', textShadow(d.sh, d.c));
+    set('--ib-bg', hexToRgba(x.bg, x.op)); set('--ib-r', x.r); set('--ib-pad', x.pad); set('--ib-bw', x.bw); set('--ib-bc', x.bc);
+    set('--ib-al', x.al); set('--ib-jc', { left: 'flex-start', center: 'center', right: 'flex-end' }[x.al]);
+    set('--ib-va', { top: 'flex-start', center: 'center', bottom: 'flex-end' }[x.va]);
+  };
+
+  // ---- кнопка «Подписаться»: два состояния и анимация перехода ----
+  const FOLLOW_PROPS = ['background', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'borderRadius', 'border', 'boxShadow'];
+  const FOLLOW_TEXT = { a: 'layout.follow.follow', b: 'layout.follow.following' };
+  api.followLabel = (st, which) => {
+    const ic = FOLLOW_ICONS[st.ic] || '';
+    const txt = st.t || (typeof window !== 'undefined' && window.t ? window.t(FOLLOW_TEXT[which]) : '');
+    return (ic ? ic + ' ' : '') + txt;
+  };
+  function paintFollowState(el, st) {
+    Object.assign(el.style, {
+      background: st.bg2 ? `linear-gradient(135deg, ${st.bg}, ${st.bg2})` : st.bg,
+      color: st.c,
+      fontFamily: FONTS[st.font],
+      fontSize: `calc(${st.fs} * var(--s, 1) * 1px)`,
+      fontWeight: st.b ? '700' : '400',
+      fontStyle: st.i ? 'italic' : 'normal',
+      textTransform: st.up ? 'uppercase' : 'none',
+      borderRadius: st.r >= 50 ? '999px' : `calc(${st.r} * var(--s, 1) * 1px)`,
+      border: st.bw ? `calc(${st.bw} * var(--s, 1) * 1px) solid ${st.bc}` : 'none',
+      boxShadow: st.sh === 'glow' ? `0 0 calc(16px * var(--s, 1)) ${st.bg2 || st.bg}` : st.sh === 'soft' ? '0 4px 14px rgba(0,0,0,.35)' : 'none',
+    });
+  }
+  // false — стиля нет (у кнопки обычный вид и подпись сайта)
+  api.paintFollow = (el, fst, following) => {
+    const which = following ? 'b' : 'a';
+    const st = fst && fst[which];
+    el.classList.toggle('pw-fs', !!st);
+    if (!st) { FOLLOW_PROPS.forEach((k) => { el.style[k] = ''; }); return false; }
+    paintFollowState(el, st);
+    el.textContent = api.followLabel(st, which);
+    return true;
+  };
+
+  // анимация при нажатии: swap() перерисовывает кнопку в новом состоянии (вызывается в нужный момент)
+  api.playFollowAnim = (el, fst, toFollowing, swap) => {
+    let anim = (fst && fst.anim) || 'none';
+    if (anim === 'hearts' && !toFollowing) anim = 'pop'; // сердечки — только на подписку
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) anim = 'none';
+    const once = (cls, ms, after) => {
+      el.classList.remove(cls);
+      void el.offsetWidth; // перезапуск, если класс уже был
+      el.classList.add(cls);
+      setTimeout(() => { el.classList.remove(cls); if (after) after(); }, ms);
+    };
+    switch (anim) {
+      case 'pop': case 'shake': case 'glow':
+        swap();
+        once('pw-fa-' + anim, 650);
+        break;
+      case 'flip':
+        once('pw-fa-flip-out', 170, () => { swap(); once('pw-fa-flip-in', 230); });
+        break;
+      case 'slideL': case 'slideR': case 'fill': {
+        // новое состояние «наезжает» поверх старого слоем, потом кнопка перерисовывается
+        const which = toFollowing ? 'b' : 'a';
+        const ov = document.createElement('span');
+        ov.className = 'pw-fa-sweep pw-fa-' + anim;
+        paintFollowState(ov, fst[which]);
+        Object.assign(ov.style, { border: 'none', boxShadow: 'none', borderRadius: 'inherit' });
+        ov.textContent = api.followLabel(fst[which], which);
+        el.classList.add('pw-fa-host');
+        el.appendChild(ov);
+        setTimeout(() => { swap(); ov.remove(); el.classList.remove('pw-fa-host'); }, 460);
+        break;
+      }
+      case 'wave': { // буквы новой надписи подпрыгивают по очереди
+        swap();
+        const txt = el.textContent;
+        el.textContent = '';
+        [...txt].forEach((ch, i) => {
+          const s = document.createElement('span');
+          s.className = 'pw-fa-ch';
+          s.style.animationDelay = i * 35 + 'ms';
+          s.textContent = ch === ' ' ? '\u00a0' : ch;
+          el.appendChild(s);
+        });
+        setTimeout(() => { if (el.querySelector('.pw-fa-ch')) el.textContent = txt; }, 560 + txt.length * 35);
+        break;
+      }
+      case 'hearts': { // значки вылетают из кнопки вверх
+        swap();
+        once('pw-fa-pop', 650);
+        const r = el.getBoundingClientRect();
+        const ic = FOLLOW_ICONS[fst.b.ic] || '❤';
+        for (let i = 0; i < 8; i++) {
+          const p = document.createElement('span');
+          p.className = 'pw-fa-heart';
+          p.textContent = ic;
+          Object.assign(p.style, {
+            left: r.left + r.width * (0.15 + Math.random() * 0.7) + 'px',
+            top: r.top + r.height * 0.4 + 'px',
+            fontSize: Math.max(12, r.height * 0.45) + 'px',
+            color: fst.b.c,
+            animationDelay: i * 45 + 'ms',
+          });
+          p.style.setProperty('--dx', (Math.random() * 60 - 30).toFixed(0) + 'px');
+          document.body.appendChild(p);
+          setTimeout(() => p.remove(), 1300);
+        }
+        break;
+      }
+      default:
+        swap();
     }
   };
 

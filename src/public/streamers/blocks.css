@@ -123,3 +123,73 @@ a.pw-link:hover .pw-fill { filter: brightness(1.12); }
   text-overflow: ellipsis;
   font-size: calc(min(var(--h) * 0.4, 22) * var(--s) * 1px);
 }
+
+/* ---- стиль «Имя и описание» (PWLayout.paintInfo ставит переменные на контейнер) ---- */
+.pw-ist {
+  display: flex; flex-direction: column; justify-content: var(--ib-va, flex-start); gap: calc(4px * var(--s, 1));
+  box-sizing: border-box; text-align: var(--ib-al, left);
+  background: var(--ib-bg, transparent);
+  border-radius: calc(var(--ib-r, 0) * var(--s, 1) * 1px);
+  padding: calc(var(--ib-pad, 0) * var(--s, 1) * 1px);
+  border: calc(var(--ib-bw, 0) * var(--s, 1) * 1px) solid var(--ib-bc, transparent);
+}
+.pw-ist .profile-name-row { justify-content: var(--ib-jc, flex-start); }
+.pw-ist .pw-i-name {
+  margin: 0; line-height: 1.15; overflow-wrap: anywhere;
+  font-family: var(--in-font); font-size: calc(var(--in-fs) * var(--s, 1) * 1px); color: var(--in-c);
+  font-weight: var(--in-w); font-style: var(--in-i); text-transform: var(--in-up);
+  letter-spacing: calc(var(--in-ls) * 1px); text-shadow: var(--in-sh); filter: var(--in-f);
+}
+.pw-ist.pw-i-grad .pw-i-name {
+  background: linear-gradient(90deg, var(--in-c), var(--in-c2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.pw-ist .pw-i-desc {
+  margin: 0; max-width: none; text-align: inherit;
+  font-family: var(--id-font); font-size: calc(var(--id-fs) * var(--s, 1) * 1px); color: var(--id-c);
+  font-style: var(--id-i); text-shadow: var(--id-sh);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--id-lines); overflow: hidden;
+}
+.pw-ist .pw-i-cnt { font-size: calc(13px * var(--s, 1)); color: var(--text-muted); white-space: nowrap; }
+.pw-i-nocnt .profile-followers, .pw-i-nocnt .pw-i-cnt { display: none; }
+
+/* ---- кнопка «Подписаться» со своим стилем и анимации перехода (PWLayout.playFollowAnim) ---- */
+.pw-fs { transition: filter 0.15s ease; white-space: nowrap; }
+.pw-fs:hover:not(:disabled) { filter: brightness(1.1); }
+.pw-fa-host { position: relative; overflow: hidden; }
+.pw-fa-sweep {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  white-space: nowrap; pointer-events: none; animation: 0.45s ease-out both;
+}
+.pw-fa-sweep.pw-fa-slideL { animation-name: pwFaSlideL; }
+.pw-fa-sweep.pw-fa-slideR { animation-name: pwFaSlideR; }
+.pw-fa-sweep.pw-fa-fill { animation-name: pwFaFill; }
+@keyframes pwFaSlideL { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
+@keyframes pwFaSlideR { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes pwFaFill { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+.pw-fa-pop { animation: pwFaPop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes pwFaPop { 0% { transform: scale(1); } 40% { transform: scale(1.14); } 70% { transform: scale(0.96); } 100% { transform: scale(1); } }
+.pw-fa-shake { animation: pwFaShake 0.55s ease; }
+@keyframes pwFaShake {
+  0%, 100% { transform: rotate(0); } 20% { transform: rotate(-6deg) scale(1.05); } 40% { transform: rotate(5deg); }
+  60% { transform: rotate(-3deg); } 80% { transform: rotate(2deg); }
+}
+.pw-fa-glow { animation: pwFaGlow 0.65s ease-out; }
+@keyframes pwFaGlow {
+  from { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.75); }
+  to { box-shadow: 0 0 0 calc(16px * var(--s, 1)) rgba(255, 255, 255, 0); }
+}
+.pw-fa-flip-out { animation: pwFaFlipOut 0.17s ease-in forwards; }
+.pw-fa-flip-in { animation: pwFaFlipIn 0.23s ease-out; }
+@keyframes pwFaFlipOut { from { transform: perspective(400px) rotateX(0); } to { transform: perspective(400px) rotateX(90deg); } }
+@keyframes pwFaFlipIn { from { transform: perspective(400px) rotateX(-90deg); } to { transform: perspective(400px) rotateX(0); } }
+.pw-fa-ch { display: inline-block; animation: pwFaWave 0.5s ease both; }
+@keyframes pwFaWave { 0% { transform: translateY(0); } 40% { transform: translateY(-35%); } 100% { transform: translateY(0); } }
+.pw-fa-heart {
+  position: fixed; z-index: 5000; pointer-events: none; line-height: 1;
+  animation: pwFaHeart 1s ease-out both;
+}
+@keyframes pwFaHeart {
+  from { transform: translate(-50%, 0) scale(0.6); opacity: 1; }
+  to { transform: translate(calc(-50% + var(--dx, 0px)), -80px) scale(1.2); opacity: 0; }
+}

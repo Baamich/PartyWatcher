@@ -162,7 +162,8 @@
     "notFound": "Streamer not found",
     "profileFailed": "Could not load the streamer profile",
     "vodsFailed": "Could not load recordings",
-    "nameBad": "This channel name isn’t allowed — it contains profanity. Come up with another one"
+    "nameBad": "This channel name isn’t allowed — it contains profanity. Come up with another one",
+    "layoutProfanity": "The button label contains words that are not allowed"
   },
   "wb": {
     "noKey": "The key has not been created yet",

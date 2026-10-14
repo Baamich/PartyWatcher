@@ -200,3 +200,26 @@
 .pm-side-prev-wrap .pm-hint { margin: 0; }
 .pm-side-hidden { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.62) 0 6px, rgba(0, 0, 0, 0.45) 6px 12px); }
 
+
+/* окна «Изменить описание» и «Сменить стиль» */
+.pro-bio { width: 460px; }
+.pro-style { width: 470px; max-height: calc(100vh - 32px); overflow: hidden; }
+.psw-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.psw-head .pm-title { margin: 0; }
+.pm-btn.psw-play { width: auto; padding: 5px 12px; }
+.psw-prev {
+  display: flex; align-items: center; justify-content: center; gap: 12px; flex-shrink: 0;
+  min-height: 110px; padding: 16px; overflow: hidden; border-radius: var(--radius-sm);
+  background: repeating-conic-gradient(#262626 0 25%, #2f2f2f 0 50%) 0 0 / 16px 16px;
+}
+.psw-sep { color: #8a8a8a; font-size: 22px; }
+[data-theme] .psw-fbtn { flex: none; display: flex; align-items: center; justify-content: center; margin: 0; padding: 0 6px; min-width: 0; overflow: hidden; }
+.psw-info { flex: none; }
+.psw-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.psw-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pm-btn.psw-preset { width: auto; padding: 5px 10px; font-size: 12px; }
+.psw-tabs { display: flex; gap: 6px; }
+.pm-btn.psw-tab { flex: 1; }
+.psw-body { overflow-y: auto; min-height: 0; flex: 1 1 auto; padding-right: 4px; }
+.psw-anims { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.pm-inline { display: inline-flex; align-items: center; gap: 6px; }

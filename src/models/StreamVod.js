@@ -22,4 +22,7 @@ const streamVodSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
+// записи канала на странице стримера: свежие сверху (GET /streamers/:name/vods)
+streamVodSchema.index({ streamerNameLower: 1, createdAt: -1 });
+
 module.exports = mongoose.model('StreamVod', streamVodSchema);

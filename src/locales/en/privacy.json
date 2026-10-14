@@ -1,7 +1,7 @@
 {
   "pageTitle": "Privacy Policy — PartyWatcher",
   "title": "Privacy Policy (Datenschutzerklärung)",
-  "updated": "Version of 13 October 2026",
+  "updated": "Version of 14 October 2026",
   "back": "← Home",
   "intro": "This page explains in plain words what data PartyWatcher collects, why, on which legal basis (GDPR / DSGVO), who receives it and what rights you have. The Russian version prevails.",
   "controllerH": "1. Who is responsible for the data",
@@ -16,11 +16,11 @@
   },
   "s4": {
     "h": "4. Who receives the data",
-    "body": "<p>We use processors (Auftragsverarbeiter) — only to the extent needed for the site to work:</p><ul><li><b>Cloudflare</b> — site delivery and attack protection (all traffic, including your IP address, passes through their network).</li><li><b>Oracle Cloud</b> — the site server and database (data centre in India, Mumbai).</li><li><b>Resend</b> — sending emails (recipient address and email text).</li><li><b>DeepL</b> — machine translation of news (only the news text is sent).</li><li><b>Twitch</b> — list of stream categories (your data is not sent).</li></ul><p>Some recipients are outside the EU (USA, India). Transfers are based on EU Standard Contractual Clauses (Art. 46 GDPR) and, where applicable, the EU-US Data Privacy Framework (Art. 45 GDPR).</p><p>When you open a room with a YouTube, Twitch, VK Video or Kodik video, the player loads directly from their servers: they receive your IP address and browser data and process it under their own policies.</p>"
+    "body": "<p>We use processors (Auftragsverarbeiter) — only to the extent needed for the site to work:</p><ul><li><b>Cloudflare</b> — site delivery and attack protection (all traffic, including your IP address, passes through their network).</li><li><b>Oracle Cloud</b> — the site server and database (data centre in India, Mumbai).</li><li><b>GitHub</b> — storage of database backups. Backups are <b>encrypted</b> before upload (AES-256) and only we hold the key: GitHub cannot read them.</li><li><b>Resend</b> — sending emails (recipient address and email text).</li><li><b>DeepL</b> — machine translation of news (only the news text is sent).</li><li><b>Twitch</b> — list of stream categories (your data is not sent).</li></ul><p>Some recipients are outside the EU (USA, India). Transfers are based on EU Standard Contractual Clauses (Art. 46 GDPR) and, where applicable, the EU-US Data Privacy Framework (Art. 45 GDPR).</p><p>When you open a room with a YouTube, Twitch, VK Video or Kodik video, the player loads directly from their servers: they receive your IP address and browser data and process it under their own policies.</p>"
   },
   "s5": {
     "h": "5. How long data is kept",
-    "body": "<ul><li>Visit statistics — 120 days.</li><li>An account's IP addresses and devices (security) — 1 year after the last visit.</li><li>An unconfirmed sign-up — 30 minutes, then deleted.</li><li>Account data and published content — as long as the account exists (clips and stream recordings — for a limited time).</li><li>Support requests — as long as needed to answer and resolve them; attached screenshots and stream recordings attached to reports — 90 days.</li></ul>"
+    "body": "<ul><li>Visit statistics — 120 days.</li><li>An account's IP addresses and devices (security) — 1 year after the last visit.</li><li>An unconfirmed sign-up — 30 minutes, then deleted.</li><li>Account data and published content — as long as the account exists (clips and stream recordings — for a limited time).</li><li>Support requests — as long as needed to answer and resolve them; attached screenshots and stream recordings attached to reports — 90 days.</li><li>Database backups (encrypted) — 7 days, then deleted.</li></ul>"
   },
   "s6": {
     "h": "6. Your rights",

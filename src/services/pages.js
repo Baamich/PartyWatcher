@@ -242,4 +242,4 @@ function middleware(req, res, next) {
   send(req, res, abs).catch(next);
 }
 
-module.exports = { middleware, send, staticHeaders, sendVendor, hashFile, PUBLIC };
+module.exports = { middleware, send, staticHeaders, sendVendor, hashFile, absOf, PUBLIC, VENDOR };

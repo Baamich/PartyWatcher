@@ -209,6 +209,10 @@ router.put('/me/layout', auth, async (req, res) => {
     } catch (e) {
       return res.status(400).json({ error: i18n.errText(req, e) });
     }
+    // свои надписи кнопки «Подписаться» — без мата, как имя канала
+    if (layout && PWLayout.styleTexts(layout).some((s) => hasProfanity(s))) {
+      return res.status(400).json({ error: req.t('server.streamers.layoutProfanity') });
+    }
     await User.updateOne({ _id: me._id }, { $set: { profileLayout: layout, profileRev: Date.now() } });
     res.json({ ok: true });
   } catch (err) {
@@ -317,23 +321,71 @@ router.get('/:name/vods', async (req, res) => {
   }
 });
 
-// GET /streamers/:name/avatar|banner?v=rev — аватар или баннер картинкой. С актуальным v кэшируется в браузере на год
+// старые аватары и баннеры (загружены до пережатия в браузере) бывают по 0,5–4 МБ, а в списках аватар — кружок 40 px.
+// Такие один раз ужимаем ffmpeg'ом в webp (аватар до 512 px, баннер до 1600) — в базе остаётся как было, результат
+// в памяти, а с актуальным ?v= его год держат Cloudflare и браузер. Нет ffmpeg или ошибка — отдаём оригинал
+const SHRINK = { avatar: { over: 120 * 1024, side: 512 }, banner: { over: 400 * 1024, side: 1600 } };
+const FFMPEG = '/usr/bin/ffmpeg';
+let shrinkChain = Promise.resolve(); // по одному ffmpeg за раз
+function shrinkImage(buf, side) {
+  const run = () => new Promise((resolve) => {
+    const p = require('child_process').spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-frames:v', '1',
+      '-vf', `scale='min(${side},iw)':-2`, '-c:v', 'libwebp', '-quality', '82', '-f', 'webp', 'pipe:1'], { stdio: ['pipe', 'pipe', 'ignore'] });
+    const out = [];
+    const timer = setTimeout(() => p.kill('SIGKILL'), 10000);
+    p.stdout.on('data', (c) => out.push(c));
+    p.stdin.on('error', () => {});
+    p.on('error', () => { clearTimeout(timer); resolve(null); });
+    p.on('close', (code) => {
+      clearTimeout(timer);
+      const b = Buffer.concat(out);
+      resolve(code === 0 && b.length && b.length < buf.length ? b : null);
+    });
+    p.stdin.end(buf);
+  });
+  const r = shrinkChain.then(run, run);
+  shrinkChain = r.catch(() => {});
+  return r;
+}
+const imageLoading = new Map(); // key → Promise<entry | null> (одновременные запросы ждут одну загрузку)
+
+async function loadImage(kind, nameLower, rev) {
+  const field = IMAGE_FIELDS[kind];
+  const a = await User.findOne({ streamerNameLower: nameLower }).select(field + ' -_id').lean();
+  const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(a?.[field] || '');
+  if (!m) return null;
+  let buf = Buffer.from(m[2], 'base64');
+  let type = m[1];
+  if (buf.length > SHRINK[kind].over) {
+    const small = await shrinkImage(buf, SHRINK[kind].side);
+    if (small) {
+      console.log(`[streamers] ${kind} ${nameLower}: ${Math.round(buf.length / 1024)} → ${Math.round(small.length / 1024)} КБ`);
+      buf = small;
+      type = 'image/webp';
+    }
+  }
+  return { rev, type, buf };
+}
+
+// GET /streamers/:name/avatar|banner?v=rev — аватар или баннер картинкой. С актуальным v кэшируется в браузере на год.
+// Есть в памяти с тем же v — отдаём без запроса к базе (адрес с версией: новая картинка — другой v)
 router.get('/:name/:kind(avatar|banner)', async (req, res) => {
   const kind = req.params.kind;
   try {
     const nameLower = String(req.params.name || '').trim().toLowerCase();
-    const s = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('profileRev -_id').lean());
-    if (!s) return res.status(404).set('Cache-Control', 'no-store').end();
-    const rev = Number(s.profileRev) || 0;
-
     const key = kind + ':' + nameLower;
     let entry = avatarCache.get(key);
-    if (!entry || entry.rev !== rev) {
-      const field = IMAGE_FIELDS[kind];
-      const a = await User.findOne({ streamerNameLower: nameLower }).select(field + ' -_id').lean();
-      const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(a?.[field] || '');
-      if (!m) return res.status(404).set('Cache-Control', 'no-store').end();
-      entry = { rev, type: m[1], buf: Buffer.from(m[2], 'base64') };
+    let rev = entry && req.query.v !== undefined && String(entry.rev) === String(req.query.v) ? entry.rev : null;
+    if (rev === null) {
+      const s = nameLower && (await User.findOne({ streamerNameLower: nameLower }).select('profileRev -_id').lean());
+      if (!s) return res.status(404).set('Cache-Control', 'no-store').end();
+      rev = Number(s.profileRev) || 0;
+      if (!entry || entry.rev !== rev) {
+        const lk = key + ':' + rev;
+        if (!imageLoading.has(lk)) imageLoading.set(lk, loadImage(kind, nameLower, rev).finally(() => imageLoading.delete(lk)));
+        entry = await imageLoading.get(lk);
+        if (!entry) return res.status(404).set('Cache-Control', 'no-store').end();
+      }
     }
     avatarCachePut(key, entry); // и для свежего, и чтобы поднять в конец очереди
 
@@ -448,18 +500,27 @@ router.get('/:name/clips', async (req, res) => {
   }
 });
 
-// GET /streamers/:name/live-status — только isLive + playbackId, без +1 просмотра
+// GET /streamers/:name/live-status — только isLive + playbackId, без +1 просмотра.
+// Его опрашивает каждый зритель канала раз в 5 с: ответ держим в памяти 3 с — 100 зрителей ≈ 1 запрос к базе за 3 с
+const LIVE_STATUS_TTL_MS = 3000;
+const liveStatusCache = new Map(); // nameLower → { at, data | null }
 router.get('/:name/live-status', async (req, res) => {
   try {
     const nameLower = String(req.params.name || '').trim().toLowerCase();
     if (!nameLower) return res.status(400).json({ error: req.t('server.streamers.noName') });
 
-    const streamer = await User.findOne({ streamerNameLower: nameLower })
-      .select('isLive streamPlaybackId streamTitle streamCategoryId -_id')
-      .lean();
-
-    if (!streamer) return res.status(404).json({ error: req.t('server.streamers.notFound') });
-    res.json({ isLive: !!streamer.isLive, streamPlaybackId: streamer.streamPlaybackId || null, ...(await liveInfo(streamer)) });
+    let hit = liveStatusCache.get(nameLower);
+    if (!hit || Date.now() - hit.at > LIVE_STATUS_TTL_MS) {
+      const streamer = await User.findOne({ streamerNameLower: nameLower })
+        .select('isLive streamPlaybackId streamTitle streamCategoryId -_id')
+        .lean();
+      const data = streamer && { isLive: !!streamer.isLive, streamPlaybackId: streamer.streamPlaybackId || null, ...(await liveInfo(streamer)) };
+      if (liveStatusCache.size > 3000) liveStatusCache.clear();
+      hit = { at: Date.now(), data };
+      liveStatusCache.set(nameLower, hit);
+    }
+    if (!hit.data) return res.status(404).json({ error: req.t('server.streamers.notFound') });
+    res.json(hit.data);
   } catch (err) {
     console.error('[GET /streamers/:name/live-status]', err);
     res.status(500).json({ error: req.t('server.error') });

@@ -27,7 +27,7 @@
 </div>
 
 <h2>Layers: what's on top of what</h2>
-<p>Each block's three-dot menu has <b>⬆ Bring to front</b> and <b>⬇ Send to back</b>. <b>The avatar has no layer buttons: it always stays above the banner.</b> Photo blocks added to the live page earlier stay in the background.</p>
+<p>Each block's three-dot menu has <b>⬆ Bring to front</b> and <b>⬇ Send to back</b>. <b>The avatar has no layer buttons: it always stays above the banner.</b> The <b>“Name and description”</b> and <b>“Follow”</b> blocks have none either: they are always above the banner and avatar, so the banner never covers them. Photo blocks added to the live page earlier stay in the background.</p>
 
 <h2>Tools</h2>
 <h3>✂️ Scissors: your own shapes</h3>
@@ -109,6 +109,20 @@
   <li>If the proportions match, the window says there is no cropping.</li>
 </ul>
 
+<h2>Name and description: style</h2>
+<p>The three-dot menu of the “Name and description” block has two items:</p>
+<ul>
+  <li><b>✏️ Edit description</b> — a window with the current channel description: edit the text and click “Done”. The description is saved together with the layout when you click <b>💾 Save</b>. <b>The channel name can't be changed</b> — only how it looks.</li>
+  <li><b>🎨 Change style</b> — the style window. The preview on top shows how the block will look on the page. Below are presets (Default, Card, Neon, Gradient, Elegant, Sunset) and three tabs:
+    <ul>
+      <li><b>Name</b>: font, size, color, <b>text gradient</b> (a second color), bold, italic, CAPS, letter spacing, shadow (soft or glow).</li>
+      <li><b>Description</b>: font, size, color, italic, how many lines are visible (1–8), shadow. The “Edit description” button is here too.</li>
+      <li><b>Background & frame</b>: background color and opacity, corner radius, inner padding, border width and color, horizontal and vertical alignment, whether to show the follower count next to the name.</li>
+    </ul>
+  </li>
+</ul>
+<p><b>Done</b> applies the style, <b>Cancel</b> (or Esc) closes the window without changes, <b>Reset</b> brings back the site's default look. Like everything in the editor, viewers see it after <b>💾 Save</b>; you can undo with ↶.</p>
+
 <h2>“Follow” button</h2>
 <p>This is a built-in profile block: move and resize it like any other, and the text grows with the button. It can't be deleted. If your layout was saved before the button appeared on the site, it will sit on the right under the banner, on top of the other blocks. Move it wherever you like and save.</p>
 <ul>
@@ -117,6 +131,27 @@
   <li>Viewers see the same button under the live chat, and in its place you see “Stream settings”.</li>
   <li>The follower count is shown next to your name, and the list of recent followers is in the studio under <b>🛡️ Channel activity</b>.</li>
 </ul>
+<h3>🎨 Button style and animation</h3>
+<p>Three dots → <b>🎨 Change style</b>. The preview on top shows both states at once: <b>“Follow” | “Following”</b>. Click either button in the preview or <b>▶ Play</b> to see the animation. Presets: Classic, Neon, Pastel, Fire, Minimal, Ocean (your own labels are kept when you switch presets).</p>
+<ul>
+  <li>The <b>Follow</b> and <b>Following</b> tabs — each state has its own look: label (empty — the standard one in the viewer's language; up to 24 characters, no profanity), icon (❤ 💜 ★ 🔔 + ✓ 🔥 ✨ or none), font, size, bold / italic / CAPS, text color, background and <b>background gradient</b>, corner radius (50 — pill), border, shadow or glow. “Copy the look from the … tab” copies the other state's look.</li>
+  <li>The <b>✨ Animation</b> tab — what happens when a viewer presses the button:</li>
+</ul>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Animation</th><th>What it looks like</th></tr>
+  <tr><td>Bounce</td><td>The button springs in its new look.</td></tr>
+  <tr><td>Right to left / Left to right</td><td>The new state slides over the old one from one side.</td></tr>
+  <tr><td>Fill from center</td><td>The new look spreads in a circle from the middle of the button.</td></tr>
+  <tr><td>Letter wave</td><td>The letters of the new label jump one after another.</td></tr>
+  <tr><td>Flip</td><td>The button flips over, with the new state on the back.</td></tr>
+  <tr><td>Flying icons</td><td>Icons fly out of the button (on unfollow — just a bounce).</td></tr>
+  <tr><td>Wobble</td><td>The button wobbles.</td></tr>
+  <tr><td>Flash</td><td>A light ring spreads out from the button.</td></tr>
+  <tr><td>No animation</td><td>The look changes instantly.</td></tr>
+</table>
+</div>
+<p>The style applies to the button on the profile <b>and to the “Follow” button under the live chat</b>. Under the chat it has the same animation but the regular text size, so it fits next to the points and “✂ Clip”. Viewers with “reduce motion” turned on in their system see no animation.</p>
 
 <h2>Recordings: horizontal or vertical</h2>
 <p>The “Recordings” block's three dots have a <b>↕ Show vertically</b> button (and <b>↔ Show horizontally</b> to go back). Vertically the recordings go in one column, horizontally in a grid.</p>
@@ -164,6 +199,7 @@
   <tr><td>“The layout is too heavy”</td><td>Remove a photo or two, or insert smaller ones.</td></tr>
   <tr><td>“Max GIFs: 2”</td><td>Replace one of the GIFs with a regular image or remove it. The “GIF” counter above the stage helps you find them.</td></tr>
   <tr><td>“The GIF is too heavy”</td><td>Compress the GIF (for example on ezgif.com: fewer frames or a smaller size) to 1.2 MB.</td></tr>
+  <tr><td>“The button label contains words that are not allowed”</td><td>Change your own label in the “Follow” button style or leave it empty (the standard one will be used).</td></tr>
   <tr><td>The profile shows the old look</td><td>You didn't click “Save”, or reload the page (<code>Ctrl+F5</code>).</td></tr>
 </table>
 </div>

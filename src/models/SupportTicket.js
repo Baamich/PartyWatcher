@@ -60,4 +60,8 @@ const supportTicketSchema = new mongoose.Schema(
   { versionKey: false, timestamps: true }
 );
 
+// админка: вкладки по статусу и «🚩 Жалобы» по источнику, свежие сверху
+supportTicketSchema.index({ status: 1, updatedAt: -1 });
+supportTicketSchema.index({ source: 1, updatedAt: -1 });
+
 module.exports = mongoose.model('SupportTicket', supportTicketSchema);

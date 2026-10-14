@@ -306,18 +306,23 @@ renderPointsBtn();
 let followState = { followers: 0, following: false, self: false };
 let followBusy = false;
 
-function renderFollow() {
+const FOLLOW_BTNS = ['followBtn', 'liveFollowBtn'];
+
+// only — перерисовать одну кнопку (конец её анимации не должен сбивать анимацию второй)
+function renderFollow(only) {
   const s = followState;
-  for (const id of ['followBtn', 'liveFollowBtn']) {
+  for (const id of typeof only === 'string' ? [only] : FOLLOW_BTNS) {
     const b = document.getElementById(id);
     if (!b) continue;
-    b.textContent = s.following ? t('streamer.follow.following') : t('streamer.follow.follow');
+    // стиль из PRO-редактора (если задан) — у обеих кнопок: в профиле и под чатом эфира
+    const fst = window.PWProView?.followStyle || null;
+    if (!window.PWLayout?.paintFollow(b, fst, s.following)) b.textContent = s.following ? t('streamer.follow.following') : t('streamer.follow.follow');
     b.classList.toggle('on', s.following);
     b.disabled = s.self || followBusy;
     b.title = s.self ? t('streamer.follow.selfHint') : s.following ? t('streamer.follow.unfollowHint') : '';
   }
   const c = document.getElementById('profileFollowers');
-  if (c) c.textContent = t('streamer.follow.count', { n: s.followers });
+  if (c && typeof only !== 'string') c.textContent = t('streamer.follow.count', { n: s.followers });
 }
 
 async function loadFollowState() {
@@ -340,8 +345,10 @@ async function toggleFollow() {
   }
   followBusy = true;
   renderFollow();
+  let changed = false;
   try {
     followState = await api('/streamers/' + encodeURIComponent(getNameFromUrl()) + '/follow', { method: unfollow ? 'DELETE' : 'POST' });
+    changed = true;
     if (!unfollow) PW.toast(t('streamer.follow.done', { name }), 'success');
     liveSocket?.emit('chat:check'); // режим «только подписчики»: открыть или закрыть поле ввода
   } catch (err) {
@@ -349,7 +356,18 @@ async function toggleFollow() {
     else PW.toast(err.message || t('streamer.follow.failed'), 'error');
   } finally {
     followBusy = false;
+    // анимация из стиля кнопки (PRO-редактор): переход в новое состояние, потом обычная перерисовка
+    // анимация из стиля кнопки (PRO-редактор) — у видимых кнопок; каждая в конце перерисовывает только себя
+    const fst = window.PWProView?.followStyle;
     renderFollow();
+    if (changed && fst) {
+      for (const id of FOLLOW_BTNS) {
+        const btn = document.getElementById(id);
+        if (!btn || !btn.offsetParent) continue;
+        window.PWLayout.paintFollow(btn, fst, !followState.following); // старый вид — анимация переводит в новый
+        window.PWLayout.playFollowAnim(btn, fst, followState.following, () => renderFollow(id));
+      }
+    }
   }
 }
 
@@ -509,6 +527,23 @@ function closeLiveStrip() {
   stopLiveSession();
 }
 
+// hls.js (~600 КБ) грузим только когда нужен плеер эфира: профиль без эфира открывается без него.
+// Эфир идёт — loadHls() зовётся сразу после ответа профиля, к открытию полосы файл уже скачан
+let hlsLoading = null;
+function loadHls() {
+  if (window.Hls) return Promise.resolve(window.Hls);
+  if (!hlsLoading) {
+    hlsLoading = new Promise((resolve) => {
+      const s = document.createElement('script');
+      s.src = '/vendor/hls.min.js';
+      s.onload = () => resolve(window.Hls || null);
+      s.onerror = () => { hlsLoading = null; resolve(null); }; // следующая попытка — заново
+      document.head.appendChild(s);
+    });
+  }
+  return hlsLoading;
+}
+
 function startLiveSession() {
   const video = document.getElementById('liveVideo');
   const offline = document.getElementById('liveOffline');
@@ -526,15 +561,17 @@ function startLiveSession() {
       applyVolumeToLive(getSavedVolume());
       overlay.classList.add('hidden');
     };
-    try {
-      if (typeof Hls === 'undefined') throw new Error('hls.js не загрузился');
-      attachLiveHls(currentStreamer.streamPlaybackId);
-    } catch (e) {
+    const playbackId = currentStreamer.streamPlaybackId;
+    loadHls().then((H) => {
+      if (!liveOpen || liveHls || currentStreamer?.streamPlaybackId !== playbackId) return; // закрыли или сменилось, пока грузился
+      if (!H) throw new Error('hls.js не загрузился');
+      attachLiveHls(playbackId);
+    }).catch((e) => {
       console.error('[live] не удалось запустить плеер:', e.message);
       overlay.classList.add('hidden');
       offline.classList.remove('hidden');
       offline.textContent = t('streamer.live.playerFailed');
-    }
+    });
   } else {
     video.classList.add('hidden');
     offline.classList.remove('hidden');
@@ -1596,7 +1633,8 @@ async function loadProfile() {
     showPage();
   }
 
-  // 3) эфир открываем, когда уже известен владелец (нужно для кнопок модерации)
+  // 3) эфир открываем, когда уже известен владелец (нужно для кнопок модерации); плеер качаем уже сейчас
+  if (live.isLive) loadHls();
   await ownerP;
   if (live.isLive && live.streamPlaybackId && !liveOpen) setTimeout(openLiveStrip, 120);
 

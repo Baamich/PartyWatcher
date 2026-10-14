@@ -876,3 +876,7 @@
 .report-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; }
 .report-modal select, .report-modal textarea { margin: 0 0 8px; }
 
+
+/* кнопка «Подписаться» под чатом в стиле из PRO-редактора: размер текста — как у соседних кнопок, полоска не разъезжается */
+#liveFollowBar .follow-btn.pw-fs,
+#liveFollowBar .follow-btn .pw-fa-sweep { font-size: 14px !important; overflow: hidden; text-overflow: ellipsis; }

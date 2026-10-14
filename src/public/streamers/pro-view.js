@@ -2,7 +2,8 @@
   const P = window.PWLayout;
   if (!P) return;
 
-  const view = { active: false, apply };
+  // followStyle — стиль кнопки «Подписаться» из макета (streamer.js renderFollow рисует по нему)
+  const view = { active: false, apply, followStyle: null };
   window.PWProView = view;
 
   const watched = new WeakSet();
@@ -175,7 +176,10 @@
       }
       if (b.type === 'banner') P.applyFit(native.banner, b);
       if (b.type === 'vods') native.vods.classList.toggle('vod-v', b.o === 'v');
+      if (b.type === 'info') P.paintInfo(native.info, b); // стиль ника и описания (ник не меняется)
+      if (b.type === 'follow') view.followStyle = b.fst || null;
     });
+    if (typeof window.renderFollow === 'function') window.renderFollow(); // кнопка — в новом стиле
     document.getElementById('vodSection').classList.toggle('hidden', !hasVods);
     const cw = P.canvasWidth(blocks, 'profile', width), ch = P.canvasHeight(blocks);
     canvas.style.setProperty('--ch', ch);

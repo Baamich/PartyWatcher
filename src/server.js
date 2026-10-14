@@ -50,6 +50,16 @@ const securityHeaders = require('./middleware/securityHeaders');
 const cspRoutes = require('./routes/csp.routes');
 const i18n = require('./services/i18n');
 const pages = require('./services/pages');
+const assets = require('./services/assets');
+const compression = require('compression');
+
+// сжатие ответов, которые собираются на лету (HTML, JSON API, словари): свои js/css уже сжаты заранее (assets.js).
+// Видео, relay потоков и сокеты не трогаем — там сжатие только задерживало бы поток
+function compressFilter(req, res) {
+  if (/^\/(media|api\/stream|socket\.io)\//.test(req.path)) return false;
+  return compression.filter(req, res);
+}
+
 const roles = require('./services/roles');
 const authMw = require('./middleware/auth');
 const perf = require('./services/perf');
@@ -86,6 +96,7 @@ async function start() {
   
   app.use(perf.serverTiming); // Server-Timing: сколько запрос считался на сервере
   app.use(securityHeaders()); // CSP и остальные заголовки безопасности (режим — CSP_MODE в .env)
+  app.use(compression({ threshold: 1024, filter: compressFilter }));
   // браузеры с чужих сайтов к API не пускаем; запросы без Origin (бот, curl) CORS не касается
   app.use(cors({ origin: siteOrigin ? [siteOrigin] : false, credentials: true }));
   app.use('/api/streamers', express.json({ limit: '15mb' })); // аватар, баннер, макет
@@ -136,13 +147,14 @@ async function start() {
   // hls.js берём из npm: файла в репозитории нет, а так он есть после любого npm install, версия — в package-lock
   try {
     const hlsFile = require.resolve('hls.js/dist/hls.min.js');
-    app.get('/vendor/hls.min.js', (req, res) => res.sendFile(hlsFile, { maxAge: '7d' }));
+    // сжатый заранее (brotli/gzip — assets.js), кэш 7 дней
+    app.get('/vendor/hls.min.js', assets.middleware(() => hlsFile, (res) => res.setHeader('Cache-Control', 'public, max-age=604800')));
   } catch (_) {
     console.warn('[server] hls.js не установлен — /vendor/hls.min.js будет только из public/vendor');
   }
 
   // клиент Socket.IO — минифицированный файл из npm с версией по хэшу (вместо /socket.io/socket.io.js: 156 КБ без кэша)
-  app.get('/vendor/socket.io.min.js', pages.sendVendor('/vendor/socket.io.min.js'));
+  app.get('/vendor/socket.io.min.js', assets.middleware(pages.absOf, pages.staticHeaders));
 
   // Impressum: данные владельца — из .env (IMPRINT_*), подставляются в public/impressum.html.
   // Раньше pages.middleware, иначе /impressum.html отдался бы без подстановок
@@ -170,6 +182,8 @@ async function start() {
   });
 
   app.use(pages.middleware); // HTML-страницы: версии файлов, словарь, перевод и данные входа сразу в разметке
+  app.use(assets.middleware(pages.absOf, pages.staticHeaders)); // свои js/css: минифицированы и сжаты заранее
+  assets.warm([pages.PUBLIC, ...Object.values(pages.VENDOR), ...(() => { try { return [require.resolve('hls.js/dist/hls.min.js')]; } catch { return []; } })()]);
   app.use(express.static(path.join(__dirname, 'public'), { setHeaders: pages.staticHeaders }));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   // скачанные видео YouTube 18+ — только админу и друзьям (как и сами комнаты с ними)

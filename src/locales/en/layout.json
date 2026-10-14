@@ -10,5 +10,9 @@
     "tooManyGifs": "Too many GIFs (max {n})",
     "gifTooHeavy": "The GIF is too heavy (max {mb} MB)",
     "notImage": "Please choose an image"
+  },
+  "follow": {
+    "follow": "Follow",
+    "following": "Following"
   }
 }

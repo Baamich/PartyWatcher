@@ -56,6 +56,7 @@
     layout: cloneLayout(layout),
     banner: typeof pendingBannerBase64 === 'string' ? pendingBannerBase64 : undefined,
     avatar: typeof pendingAvatarBase64 === 'string' ? pendingAvatarBase64 : undefined,
+    bio: $('bioInput').value,
   });
 
   function updateHistBtns() {
@@ -113,6 +114,7 @@
     pendingAvatarBase64 = s.avatar;
     if (typeof s.banner === 'string') setPreview('banner', s.banner);
     if (typeof s.avatar === 'string') setPreview('avatar', s.avatar);
+    if (typeof s.bio === 'string') $('bioInput').value = s.bio;
     if (selId && !find(selId)) selId = null;
     lastT = 0;
     lastInputT = 0;
@@ -193,11 +195,13 @@
       P.paintShape(f, b);
       P.applyFit(f, b);
     } else if (b.type === 'info') {
-      f.append(E('b', { textContent: sd.streamerName || '' }), E('span', { textContent: ($('bioInput').value || tr('editor.bioStub')).slice(0, 120) }));
+      f.append(E('b', { className: 'pw-i-name', textContent: sd.streamerName || '' }),
+        E('span', { className: 'pw-i-desc', textContent: ($('bioInput').value || tr('editor.bioStub')).slice(0, 400) }));
+      P.paintInfo(f, b);
     } else if (b.type === 'vods') {
       f.append(E('div', { textContent: tr('editor.block.vods') }), E('div', { className: 'ph-grid' + (b.o === 'v' ? ' ph-grid-v' : '') }, ...Array.from({ length: b.o === 'v' ? 4 : 6 }, () => E('i'))));
     } else if (b.type === 'follow') {
-      f.append(E('span', { textContent: tr('editor.stub.follow') }));
+      if (!P.paintFollow(f, b.fst, false)) f.append(E('span', { textContent: tr('editor.stub.follow') }));
     } else if (b.type === 'player') {
       f.append(E('span', { textContent: tr('editor.stub.player') }));
     } else if (b.type === 'chat') {
@@ -715,11 +719,18 @@
       add(row(tr('editor.m.opacity'), range(st.opacity, 0.1, 1, 0.05, set((v) => (st.opacity = v)))));
     }
 
+    if (t === 'info') add(button(tr('editor.m.editBio'), openBioEdit));
+    if (t === 'info' || t === 'follow') {
+      add(button(tr('editor.m.style'), () => openStyle(b)));
+      add(E('div', { className: 'pm-hint', textContent: tr('editor.m.aboveBanner') }));
+    }
+
     if (t === 'banner' || t === 'avatar' || b.img) add(button(tr('editor.fit.title'), () => openFit(b), 'pm-flat'));
     if (t === 'vods') add(button(b.o === 'v' ? tr('editor.m.horizontal') : tr('editor.m.vertical'), () => { b.o = b.o === 'v' ? 'h' : 'v'; touch(); renderStage(); }, 'pm-flat'));
     if (t === 'shape' || t === 'image' || t === 'text') add(button(tr('editor.m.toLink'), () => toLink(b), 'pm-flat'));
     if (t === 'link') add(button(tr('editor.m.fromLink'), () => fromLink(b), 'pm-flat'));
-    if (t !== 'avatar' && t !== 'banner' && !(t === 'image' && mode === 'live')) {
+    // у имени/описания и «Подписаться» слоёв нет: они всегда выше баннера и аватара (P.fixOrder)
+    if (!['avatar', 'banner', 'info', 'follow'].includes(t) && !(t === 'image' && mode === 'live')) {
       add(button(tr('editor.m.front'), () => moveLayer(b, 1), 'pm-flat'));
       add(button(tr('editor.m.back'), () => moveLayer(b, -1), 'pm-flat'));
     }
@@ -895,6 +906,246 @@
 
     menu.replaceChildren(E('div', { className: 'pm-title', textContent: tr(isProfile ? 'editor.bg.title' : 'editor.bg.liveTitle') }), body);
     menu.classList.remove('hidden');
+  }
+
+  // ---------- окна поверх редактора (описание, стили) ----------
+  // Esc и клик по фону — как «Отмена»; пока окно открыто, Ctrl+Z и Delete редактора не срабатывают (fitOpen)
+  function openPanel(panel) {
+    closeMenu();
+    const back = E('div', { className: 'pro-fit-back' }, panel);
+    const close = () => { back.remove(); window.removeEventListener('keydown', onKey, true); fitOpen = false; };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    back.addEventListener('pointerdown', (e) => { if (e.target === back) close(); });
+    fitOpen = true;
+    window.addEventListener('keydown', onKey, true);
+    root.appendChild(back);
+    return close;
+  }
+
+  // описание канала (ник не меняется — только стиль); сохраняется вместе с макетом
+  function openBioEdit() {
+    const area = E('textarea', { className: 'pm-area', value: $('bioInput').value, maxLength: 2000, rows: 8 });
+    let close = null;
+    const panel = E('div', { className: 'pro-fit pro-bio' },
+      E('div', { className: 'pm-title', textContent: tr('editor.bioEdit.title') }),
+      E('div', { className: 'pm-hint', textContent: tr('editor.bioEdit.hint') }),
+      area,
+      E('div', { className: 'pm-seg' },
+        button(tr('common.dialog.cancel'), () => close(), 'pm-flat'),
+        button(tr('editor.style.done'), () => {
+          if (area.value !== $('bioInput').value) {
+            $('bioInput').value = area.value;
+            touch();
+            renderStage();
+          }
+          close();
+        })));
+    close = openPanel(panel);
+    area.focus();
+  }
+
+  // готовые стили: недостающее дополняют P.cleanInfoStyle / P.cleanFollowStyle
+  const INFO_PRESETS = {
+    classic: {},
+    card: { n: { fs: 26 }, d: { c: '#d4d4dc' }, x: { bg: '#0d0d14', op: 0.6, r: 14, pad: 14 } },
+    neon: { n: { font: 'mono', c: '#39ff14', sh: 'glow', up: true, ls: 2 }, d: { font: 'mono', c: '#a7f3a0' }, x: { bg: '#05070a', op: 0.7, r: 6, pad: 12, bw: 1, bc: '#39ff14' } },
+    gradient: { n: { font: 'display', fs: 34, c: '#ff5fa2', c2: '#8b5cf6', sh: 'soft' }, d: { c: '#e9d5ff' } },
+    elegant: { n: { font: 'serif', fs: 30, b: false, i: true, ls: 1 }, d: { font: 'serif', i: true, c: '#e5e0d8' }, x: { al: 'center' } },
+    sunset: { n: { fs: 30, c: '#ffd166', c2: '#ef476f', sh: 'glow' }, d: { c: '#ffe8cc' }, x: { bg: '#2b0f1f', op: 0.55, r: 18, pad: 14 } },
+  };
+  const FOLLOW_PRESETS = {
+    classic: { anim: 'pop' },
+    neon: { a: { bg: '#0b0b12', bg2: '', c: '#39ff14', bw: 2, bc: '#39ff14', sh: 'glow', up: true, font: 'mono', ic: 'spark', r: 6 }, b: { bg: '#39ff14', bg2: '', c: '#0b0b12', bw: 0, sh: 'glow', ic: 'check', font: 'mono', up: true, r: 6 }, anim: 'glow' },
+    pastel: { a: { bg: '#ffb3c7', bg2: '#ffd6a5', c: '#5a2a3a', r: 50, sh: 'soft', ic: 'heart' }, b: { bg: '#fff1f5', bg2: '', c: '#c2185b', bw: 1, bc: '#ffb3c7', r: 50, ic: 'heart', sh: 'none' }, anim: 'hearts' },
+    fire: { a: { bg: '#ff512f', bg2: '#f09819', c: '#ffffff', r: 8, sh: 'glow', ic: 'fire', up: true }, b: { bg: '#3a1d10', bg2: '', c: '#ffb36b', bw: 1, bc: '#f09819', r: 8, ic: 'fire', up: true }, anim: 'shake' },
+    minimal: { a: { bg: '#ffffff', bg2: '', c: '#111111', r: 6, sh: 'none', ic: 'plus' }, b: { bg: '#1f1f1f', bg2: '', c: '#bdbdbd', bw: 1, bc: '#3a3a3a', r: 6, ic: 'check' }, anim: 'slideL' },
+    ocean: { a: { bg: '#00c6ff', bg2: '#0072ff', r: 50, sh: 'soft', ic: 'star' }, b: { bg: '#0b2540', bg2: '', c: '#7fd3ff', bw: 1, bc: '#00c6ff', r: 50, ic: 'star' }, anim: 'fill' },
+  };
+  const SHADOW_OPTS = () => P.SHADOWS.map((k) => [k, tr('editor.style.shadows.' + k)]);
+  const ICON_OPTS = () => Object.keys(P.FOLLOW_ICONS).map((k) => [k, (P.FOLLOW_ICONS[k] ? P.FOLLOW_ICONS[k] + '  ' : '') + tr('editor.style.icons.' + k)]);
+  const ALIGN_OPTS = () => [['left', tr('editor.m.left')], ['center', tr('editor.m.center')], ['right', tr('editor.m.right')]];
+  const VALIGN_OPTS = () => [['top', tr('editor.m.top')], ['center', tr('editor.m.center')], ['bottom', tr('editor.m.bottom')]];
+  const toggleBtn = (label, on, fn) => button(label, (e) => {
+    const v = !e.currentTarget.classList.contains('on');
+    e.currentTarget.classList.toggle('on', v);
+    fn(v);
+  }, 'pm-flat' + (on ? ' on' : ''));
+  // необязательный второй цвет (градиент): галочка включает, пусто — без градиента
+  function color2(v, base, fn) {
+    const c = color(v || base, (x) => fn(x));
+    c.disabled = !v;
+    const cb = E('input', { type: 'checkbox', checked: !!v, onchange: (e) => { c.disabled = !e.target.checked; fn(e.target.checked ? c.value : ''); } });
+    return E('span', { className: 'pm-inline' }, cb, c);
+  }
+
+  // «🎨 Сменить стиль»: сверху превью, ниже вкладки (ник / описание / фон — или «Подписаться» / «Вы подписаны» / анимация)
+  function openStyle(b) {
+    const isFollow = b.type === 'follow';
+    let work = P.clone(isFollow ? b.fst || P.cleanFollowStyle({}) : b.ist || P.cleanInfoStyle({}));
+    const tabs = isFollow ? ['a', 'b', 'anim'] : ['n', 'd', 'x'];
+    let tab = tabs[0];
+    const prev = E('div', { className: 'psw-prev' });
+    const tabBar = E('div', { className: 'psw-tabs' });
+    const body = E('div', { className: 'pm-body psw-body' });
+    const ps = Math.min(1.3, 380 / b.w, (isFollow ? 70 : 170) / b.h); // блок в своих пропорциях, влезает в окно
+    let replayTimer = 0;
+
+    function drawPreview() {
+      clearTimeout(replayTimer);
+      prev.replaceChildren();
+      prev.style.setProperty('--s', ps);
+      if (isFollow) {
+        // слева «Подписаться», справа «Вы подписаны»; клик по любой — переключить с анимацией
+        const mk = (following) => {
+          const el = E('button', { type: 'button', className: 'psw-fbtn' });
+          Object.assign(el.style, { width: b.w * ps + 'px', height: b.h * ps + 'px' });
+          el.dataset.on = following ? '1' : '';
+          P.paintFollow(el, work, following);
+          el.addEventListener('click', () => {
+            const to = !el.dataset.on;
+            P.playFollowAnim(el, work, to, () => { el.dataset.on = to ? '1' : ''; P.paintFollow(el, work, to); });
+          });
+          return el;
+        };
+        prev.append(mk(false), E('span', { className: 'psw-sep', textContent: '|' }), mk(true));
+      } else {
+        const f = E('div', { className: 'pw-fill ph-info psw-info' },
+          E('div', { className: 'profile-name-row psw-row' },
+            E('b', { className: 'pw-i-name', textContent: sd.streamerName || '' }),
+            E('span', { className: 'pw-i-cnt', textContent: tr('editor.style.sampleCount') })),
+          E('span', { className: 'pw-i-desc', textContent: $('bioInput').value || tr('editor.bioStub') }));
+        Object.assign(f.style, { width: b.w * ps + 'px', height: b.h * ps + 'px' });
+        P.paintInfo(f, { ist: work });
+        prev.append(f);
+      }
+    }
+    // показать анимацию на левой кнопке и вернуть её обратно
+    function playPreview() {
+      const el = prev.querySelector('.psw-fbtn');
+      if (!el) return;
+      el.dataset.on = '';
+      P.paintFollow(el, work, false);
+      el.click();
+      clearTimeout(replayTimer);
+      replayTimer = setTimeout(() => { el.dataset.on = ''; P.paintFollow(el, work, false); }, 1700);
+    }
+
+    function drawTabs() {
+      tabBar.replaceChildren(...tabs.map((k) => button(tr('editor.style.tabs.' + k), () => { tab = k; drawTabs(); drawBody(); }, 'pm-flat psw-tab' + (k === tab ? ' on' : ''))));
+    }
+
+    function drawBody() {
+      const up = drawPreview;
+      const add = (...n) => body.append(...n);
+      body.replaceChildren();
+      if (isFollow && tab !== 'anim') {
+        const s = work[tab];
+        add(row(tr('editor.style.text'), E('input', {
+          type: 'text', value: s.t, maxLength: 24,
+          placeholder: tr(tab === 'a' ? 'layout.follow.follow' : 'layout.follow.following'),
+          oninput: (e) => { s.t = e.target.value; up(); },
+        })));
+        add(row(tr('editor.style.icon'), select(ICON_OPTS(), s.ic, (v) => { s.ic = v; up(); })));
+        add(row(tr('editor.m.font'), select(FONT_OPTS, s.font, (v) => { s.font = v; up(); })));
+        add(row(tr('editor.m.size'), numInput(s.fs, 10, 40, (v) => { s.fs = v; up(); })));
+        add(E('div', { className: 'pm-seg' },
+          toggleBtn(tr('editor.m.bold'), s.b, (v) => { s.b = v; up(); }),
+          toggleBtn(tr('editor.m.italic'), s.i, (v) => { s.i = v; up(); }),
+          toggleBtn(tr('editor.style.upper'), s.up, (v) => { s.up = v; up(); })));
+        add(row(tr('editor.m.textColor'), color(s.c, (v) => { s.c = v; up(); })));
+        add(row(tr('editor.style.bg'), color(s.bg, (v) => { s.bg = v; up(); })));
+        add(row(tr('editor.style.gradient'), color2(s.bg2, s.bg, (v) => { s.bg2 = v; up(); })));
+        add(row(tr('editor.m.radius'), range(s.r, 0, 50, 1, (v) => { s.r = v; up(); })));
+        add(E('div', { className: 'pm-hint', textContent: tr('editor.style.radiusHint') }));
+        add(row(tr('editor.m.borderWidth'), numInput(s.bw, 0, 6, (v) => { s.bw = v; up(); })));
+        add(row(tr('editor.m.borderColor'), color(s.bc, (v) => { s.bc = v; up(); })));
+        add(row(tr('editor.style.shadow'), select(SHADOW_OPTS(), s.sh, (v) => { s.sh = v; up(); })));
+        const other = tab === 'a' ? 'b' : 'a';
+        add(button(tr('editor.style.copyFrom', { tab: tr('editor.style.tabs.' + other) }), () => {
+          work[tab] = { ...work[other], t: s.t, ic: s.ic };
+          drawBody();
+          up();
+        }, 'pm-flat'));
+      } else if (isFollow) {
+        add(E('div', { className: 'psw-anims' }, ...P.FOLLOW_ANIMS.map((k) =>
+          button(tr('editor.style.anims.' + k), () => { work.anim = k; drawBody(); playPreview(); }, 'pm-flat' + (work.anim === k ? ' on' : '')))));
+        add(E('div', { className: 'pm-hint', textContent: tr('editor.style.animHint') }));
+      } else if (tab === 'n') {
+        const n = work.n;
+        add(row(tr('editor.m.font'), select(FONT_OPTS, n.font, (v) => { n.font = v; up(); })));
+        add(row(tr('editor.m.size'), numInput(n.fs, 12, 96, (v) => { n.fs = v; up(); })));
+        add(row(tr('editor.m.textColor'), color(n.c, (v) => { n.c = v; up(); })));
+        add(row(tr('editor.style.textGradient'), color2(n.c2, n.c, (v) => { n.c2 = v; up(); })));
+        add(E('div', { className: 'pm-seg' },
+          toggleBtn(tr('editor.m.bold'), n.b, (v) => { n.b = v; up(); }),
+          toggleBtn(tr('editor.m.italic'), n.i, (v) => { n.i = v; up(); }),
+          toggleBtn(tr('editor.style.upper'), n.up, (v) => { n.up = v; up(); })));
+        add(row(tr('editor.m.letterSpacing'), numInput(n.ls, -2, 20, (v) => { n.ls = v; up(); }, 0.5)));
+        add(row(tr('editor.style.shadow'), select(SHADOW_OPTS(), n.sh, (v) => { n.sh = v; up(); })));
+        add(E('div', { className: 'pm-hint', textContent: tr('editor.style.nameHint') }));
+      } else if (tab === 'd') {
+        const d = work.d;
+        add(row(tr('editor.m.font'), select(FONT_OPTS, d.font, (v) => { d.font = v; up(); })));
+        add(row(tr('editor.m.size'), numInput(d.fs, 10, 40, (v) => { d.fs = v; up(); })));
+        add(row(tr('editor.m.textColor'), color(d.c, (v) => { d.c = v; up(); })));
+        add(E('div', { className: 'pm-seg' }, toggleBtn(tr('editor.m.italic'), d.i, (v) => { d.i = v; up(); })));
+        add(row(tr('editor.style.lines'), numInput(d.lines, 1, 8, (v) => { d.lines = v; up(); })));
+        add(row(tr('editor.style.shadow'), select(SHADOW_OPTS(), d.sh, (v) => { d.sh = v; up(); })));
+        add(button(tr('editor.m.editBio'), () => { close(); openBioEdit(); }, 'pm-flat'));
+      } else {
+        const x = work.x;
+        add(row(tr('editor.style.bg'), color(x.bg, (v) => { x.bg = v; up(); })));
+        add(row(tr('editor.m.bgOpacity'), range(x.op, 0, 1, 0.05, (v) => { x.op = v; up(); })));
+        add(row(tr('editor.m.radius'), numInput(x.r, 0, 60, (v) => { x.r = v; up(); })));
+        add(row(tr('editor.m.pad'), numInput(x.pad, 0, 40, (v) => { x.pad = v; up(); })));
+        add(row(tr('editor.m.borderWidth'), numInput(x.bw, 0, 8, (v) => { x.bw = v; up(); })));
+        add(row(tr('editor.m.borderColor'), color(x.bc, (v) => { x.bc = v; up(); })));
+        add(row(tr('editor.m.hAlign'), select(ALIGN_OPTS(), x.al, (v) => { x.al = v; up(); })));
+        add(row(tr('editor.m.vAlign'), select(VALIGN_OPTS(), x.va, (v) => { x.va = v; up(); })));
+        add(row(tr('editor.style.showCount'), E('input', { type: 'checkbox', checked: x.cnt, onchange: (e) => { x.cnt = e.target.checked; up(); } })));
+      }
+    }
+
+    const PRE = isFollow ? FOLLOW_PRESETS : INFO_PRESETS;
+    const presets = E('div', { className: 'psw-presets' },
+      E('span', { className: 'pm-hint', textContent: tr('editor.style.presets') }),
+      ...Object.keys(PRE).map((k) => button(tr(`editor.style.${isFollow ? 'fp' : 'ip'}.${k}`), () => {
+        const p = PRE[k];
+        // свои надписи кнопки при смене готового стиля не теряются
+        work = isFollow
+          ? P.cleanFollowStyle({ ...p, a: { ...(p.a || {}), t: work.a.t }, b: { ...(p.b || {}), t: work.b.t } })
+          : P.cleanInfoStyle(p);
+        drawBody();
+        drawPreview();
+        if (isFollow) playPreview();
+      }, 'pm-flat psw-preset')));
+
+    const head = E('div', { className: 'psw-head' }, E('div', { className: 'pm-title', textContent: tr(isFollow ? 'editor.style.titleFollow' : 'editor.style.titleInfo') }));
+    const liveHint = isFollow ? E('div', { className: 'pm-hint', textContent: tr('editor.style.liveHint') }) : '';
+    if (isFollow) head.append(button(tr('editor.style.play'), playPreview, 'pm-flat psw-play'));
+
+    let close = null;
+    const panel = E('div', { className: 'pro-fit pro-style' },
+      head, prev, liveHint, presets, tabBar, body,
+      E('div', { className: 'pm-seg' },
+        button(tr('editor.style.reset'), () => {
+          if (isFollow) delete b.fst; else delete b.ist;
+          touch();
+          renderStage();
+          close();
+        }, 'pm-flat'),
+        button(tr('common.dialog.cancel'), () => close(), 'pm-flat'),
+        button(tr('editor.style.done'), () => {
+          if (isFollow) b.fst = P.cleanFollowStyle(work); else b.ist = P.cleanInfoStyle(work);
+          touch();
+          renderStage();
+          close();
+        })));
+    const closePanel = openPanel(panel);
+    close = () => { clearTimeout(replayTimer); closePanel(); };
+    drawTabs();
+    drawBody();
+    drawPreview();
   }
 
   // ---------- подгон фото ----------
@@ -1109,7 +1360,10 @@
       const patch = {};
       if (typeof pendingAvatarBase64 === 'string') patch.streamerAvatarUrl = pendingAvatarBase64;
       if (typeof pendingBannerBase64 === 'string') patch.streamerBannerUrl = pendingBannerBase64;
+      const bio = $('bioInput').value;
+      if (bio !== (sd.streamerBio || '')) patch.streamerBio = bio; // описание правится в «⋯ → Изменить описание»
       if (Object.keys(patch).length) await api('/streamers/me', { method: 'PATCH', body: patch });
+      sd.streamerBio = bio;
       savedHi = hi;
       dirty = false;
       toast(tr('editor.layoutSaved'), 'success');

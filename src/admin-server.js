@@ -15,6 +15,8 @@ const cspRoutes = require('./routes/csp.routes');
 const securityHeaders = require('./middleware/securityHeaders');
 const i18n = require('./services/i18n');
 const pages = require('./services/pages');
+const assets = require('./services/assets');
+const compression = require('compression');
 
 async function start() {
   await connectDB();
@@ -24,6 +26,7 @@ async function start() {
 
   // cors() не нужен: админка ходит в API только со своего же домена
   app.use(securityHeaders());
+  app.use(compression({ threshold: 1024 })); // HTML и JSON админки (свои js/css уже сжаты — assets.js)
   app.use((req, res, next) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     next();
@@ -45,7 +48,8 @@ async function start() {
   
 
   // Статика БЕЗ автоматической отдачи index.html
-  app.get('/vendor/socket.io.min.js', pages.sendVendor('/vendor/socket.io.min.js'));
+  app.get('/vendor/socket.io.min.js', assets.middleware(pages.absOf, pages.staticHeaders));
+  app.use(assets.middleware(pages.absOf, pages.staticHeaders)); // js/css админки: минифицированы и сжаты заранее
   app.use(express.static(path.join(__dirname, 'public'), {
     index: false,   // ← важно!
     setHeaders: pages.staticHeaders, // файлы с ?v=<хэш> — кэш на год (версии ставит pages.js)

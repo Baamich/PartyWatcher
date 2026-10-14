@@ -161,12 +161,12 @@
           <div class="profile-info">
             <div class="profile-name-row">
               <button type="button" id="profileNameBtn" class="profile-name-btn">
-                <h1 id="profileName" class="profile-name"></h1>
+                <h1 id="profileName" class="profile-name pw-i-name"></h1>
               </button>
               <span id="profileFollowers" class="profile-followers"></span>
             </div>
             <div id="profileLiveLine" class="profile-live-line hidden" data-no-i18n></div>
-            <p id="profileBioShort" class="profile-bio-short"></p>
+            <p id="profileBioShort" class="profile-bio-short pw-i-desc"></p>
             <button type="button" id="bioExpandBtn" class="bio-expand-btn hidden" data-click="openBioModal" data-i18n="streamer.more">…ещё</button>
           </div>
 
@@ -267,7 +267,6 @@
     </div>
   </div>
 
-  <script src="/vendor/hls.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/reconnect-schedule.js"></script>
   <script src="/js/api.js?v=2"></script>
