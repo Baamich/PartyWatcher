@@ -287,15 +287,25 @@ async function loadViaCdp(page, frame, url) {
 // прямо в данных плеера на странице. Берём их оттуда — без кликов по плееру, где на этих сайтах реклама.
 // Возвращает [{ type: 'hls'|'mp4', url, quality, referer, src: 'tube' }], лучшие первыми.
 async function extractTubeStreams(page) {
-  // окна «мне есть 18» и cookie: часть сайтов без подтверждения не подставляет плеер
+  // окна «мне есть 18» и cookie: часть сайтов без подтверждения не подставляет плеер.
+  // ⚠️ В окне две кнопки: «мне 18 — войти» и «мне нет 18 — выйти». Раньше нажимались все кнопки окна —
+  // pornhub после «выйти» уводил на /mi_deterrence (страница для несовершеннолетних) и потоков не было
   await page
     .evaluate(() => {
-      const sels = [
-        '#modalWrapMTubes button', '.age-verification-container button', '#ageDisclaimerMainBG button',
-        '.disclaimer-enter-btn', '#disclaimer_message button', '#disclaimer-block button', '[data-role="age-check-confirm"]',
-        '.age-check button', '.age-gate button', '#age-verification button',
+      const direct = ['.disclaimer-enter-btn', '[data-role="age-check-confirm"]'];
+      for (const s of direct) document.querySelectorAll(s).forEach((b) => { try { b.click(); } catch (_) {} });
+      const modals = [
+        '#modalWrapMTubes', '.age-verification-container', '#ageDisclaimerMainBG', '#disclaimer_message',
+        '#disclaimer-block', '.age-check', '.age-gate', '#age-verification',
       ];
-      for (const s of sels) document.querySelectorAll(s).forEach((b) => { try { b.click(); } catch (_) {} });
+      const yes = /18|enter|agree|continue|войти|соглас|продолж|старше|больше/i;
+      const no = /under|exit|leave|younger|less than|decline|выйти|уйти|младше|меньше|\bno\b|\bнет\b/i;
+      for (const m of modals) {
+        document.querySelectorAll(`${m} button, ${m} a`).forEach((b) => {
+          const t = `${b.textContent || ''} ${b.className || ''} ${b.getAttribute('aria-label') || ''}`;
+          if (yes.test(t) && !no.test(t)) { try { b.click(); } catch (_) {} }
+        });
+      }
       // по тексту — только явные «мне есть 18» (обычные «Войти»/«OK» могут увести со страницы)
       const re = /^(i am 18|i'?m 18|i am over 18|i'?m over 18|мне есть 18|мне больше 18|я старше 18)/i;
       document.querySelectorAll('button, a[role="button"], .btn').forEach((b) => {
@@ -348,6 +358,15 @@ async function extractTubeStreams(page) {
           } catch (_) {}
         } else add(d.videoUrl, null, d.quality);
       }
+      // у pornhub адреса бывают собраны скриптом в глобальные media_N (строка) и qualityItems_<id> ([{url, text}])
+      for (const k of Object.keys(window)) {
+        try {
+          if (/^media_\d+$/.test(k)) add(window[k]);
+          else if (/^qualityItems_\d+$/.test(k) && Array.isArray(window[k])) {
+            for (const q of window[k]) add(q?.url, null, q?.text);
+          }
+        } catch (_) {}
+      }
 
       // 2) xhamster: window.initials.xplayerSettings.sources
       try {
@@ -381,11 +400,20 @@ async function extractTubeStreams(page) {
       document.querySelectorAll('video[src], video source[src], link[rel="preload"][href*=".m3u8"]').forEach((e) => {
         add(e.getAttribute('src') || e.getAttribute('href'));
       });
-      return out;
+      // ничего не нашли — для лога только имена данных плеера на странице (без адресов)
+      const diag = out.length ? null : {
+        defs: defs.length,
+        vars: Object.keys(window).filter((k) => /^(flashvars_|media_\d|qualityItems_|page_params$|initials$|stream_data$)/i.test(k)).slice(0, 15),
+      };
+      return { out, diag };
     })
     .catch((e) => {
       console.warn('[player-capture] тюб 18+: не удалось прочитать данные плеера:', e.message);
-      return [];
+      return { out: [], diag: null };
+    })
+    .then(({ out, diag }) => {
+      if (diag) console.warn('[player-capture] тюб 18+: потоков нет · страница', page.url().split('?')[0], '· mediaDefinitions', diag.defs, '· данные плеера', diag.vars);
+      return out;
     });
 
   let referer = null;
