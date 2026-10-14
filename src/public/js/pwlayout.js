@@ -130,6 +130,13 @@
         blocks.splice(top, 0, x);
       }
     }
+    // «Подписаться» — поверх «Имени и описания» (иначе текст описания закрывает кнопку)
+    const ii = blocks.findIndex((b) => b.type === 'info');
+    const fi = blocks.findIndex((b) => b.type === 'follow');
+    if (ii >= 0 && fi >= 0 && fi < ii) {
+      const [f] = blocks.splice(fi, 1);
+      blocks.splice(ii, 0, f); // info сдвинулся на ii − 1, кнопка встаёт сразу за ним
+    }
   }
 
   function syncChat(blocks) {
