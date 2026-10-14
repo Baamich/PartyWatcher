@@ -8,6 +8,7 @@ const PROXY_USER = process.env.PROXY_USER;
 const PROXY_PASS = process.env.PROXY_PASS;
 const { ProxyAgent } = require('undici');
 const { safeFetch, assertPublicHttpUrl } = require('../services/ssrfGuard');
+const { isAdultUrl } = require('../services/adultContent');
 
 let cachedDispatcher = null;
 function buildDispatcher() {
@@ -379,7 +380,9 @@ async function resolveStream(targetUrl, { fromQuery = '' } = {}) {
     ].map(originOf).filter(Boolean);
 
     const remembered = getRememberedReferer(host);
-    const refererCandidates = [remembered, queryCandidate, primary, hostCandidate, ...FAMILY_FALLBACKS].filter(Boolean);
+    // CDN 18+ (phncdn и т.п.) — referer'ы киносайтов им не нужны: 410/403 там из-за токена, а не referer'а
+    const fallbacks = isAdultUrl(targetUrl) ? [] : FAMILY_FALLBACKS;
+    const refererCandidates = [remembered, queryCandidate, primary, hostCandidate, ...fallbacks].filter(Boolean);
     const seen = new Set();
     const uniqueCandidates = refererCandidates.filter((c) => {
       const key = c.referer + '|' + c.origin;

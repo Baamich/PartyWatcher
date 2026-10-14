@@ -2910,7 +2910,24 @@ router.post('/extract', auth, async (req, res) => {
       }
     } else {
       // тюб 18+: только потоки из данных плеера — перехваченное из сети на этих сайтах часто реклама
-      if (uniqueStreams.some((s) => s.src === 'tube')) uniqueStreams = uniqueStreams.filter((s) => s.src === 'tube');
+      if (uniqueStreams.some((s) => s.src === 'tube')) {
+        uniqueStreams = uniqueStreams.filter((s) => s.src === 'tube');
+        // часть HLS сразу отвечает 410 (у pornhub так бывает с hv-h.phncdn.com, ev-h того же видео работает):
+        // проверяем через relay заранее и мёртвые убираем — иначе зритель ловил 410, и захват шёл по кругу.
+        // Заодно прогревается кэш relay. Не ответили все — оставляем как есть
+        const hls = uniqueStreams.filter((s) => s.type === 'hls');
+        if (hls.length) {
+          const ok = await Promise.all(hls.map((s) => Promise.race([
+            warmStream(s.url),
+            new Promise((r) => setTimeout(() => r(null), 6000)),
+          ])));
+          const dead = new Set(hls.filter((s, i) => ok[i] === false).map((s) => s.url));
+          if (dead.size && dead.size < uniqueStreams.length) {
+            uniqueStreams = uniqueStreams.filter((s) => !dead.has(s.url));
+            console.log('[player-capture] тюб 18+: убрал нерабочие потоки:', dead.size, '· осталось', uniqueStreams.length);
+          }
+        }
+      }
       // приоритет master.m3u8 — это основной манифест, а не отдельный сегмент/заглушка
       const master = uniqueStreams.find((s) => s.url.includes('master.m3u8'));
       if (master) {
