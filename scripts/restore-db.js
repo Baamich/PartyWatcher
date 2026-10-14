@@ -25,7 +25,7 @@ function decrypt(buf, pass) {
 }
 
 async function gh(url, raw) {
-  const res = await fetch(raw ? url : API + url, { headers: { Authorization: 'Bearer ' + TOKEN, Accept: 'application/vnd.github+json' } });
+  const res = await fetch(raw ? url : API + url, { signal: AbortSignal.timeout(120000), headers: { Authorization: 'Bearer ' + TOKEN, Accept: 'application/vnd.github+json' } });
   if (!res.ok) throw new Error(`GitHub ${url}: ${res.status}`);
   return raw ? res.text() : res.json();
 }
@@ -34,7 +34,9 @@ async function fromGist(id) {
   if (!TOKEN) throw new Error('GITHUB_TOKEN не задан');
   if (id === 'latest') {
     const list = await gh('/gists?per_page=100');
-    const g = list.filter((x) => String(x.description || '').startsWith(DESC)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    // недогруженные копии (« (загружается)») не берём
+    const g = list.filter((x) => String(x.description || '').startsWith(DESC) && !String(x.description).endsWith(' (загружается)'))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
     if (!g) throw new Error('копий в Gist нет');
     id = g.id;
     console.log('[restore] самая свежая копия:', g.description);
