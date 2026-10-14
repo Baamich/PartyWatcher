@@ -13,3 +13,5 @@ cloudflared/config.yml
 CLAUDE.md
 CLAUDE.local.md
 .mcp.json
+# graphify (граф кода, строится локально)
+graphify-out/
