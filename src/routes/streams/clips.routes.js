@@ -63,6 +63,10 @@ router.post('/', auth, minuteLimiter, hourLimiter, async (req, res) => {
     if (!s.isLive) return res.status(409).json({ error: req.t('server.clips.notLive') });
     const c = await clips.createClip(s, req.user);
     require('../../services/alerts').fire(s.streamerNameLower, 'clip', { name: req.user.username, title: c.title || '' }).catch(() => {});
+    // стримеру — «ник сделал клип на твоём канале» (свои клипы — без уведомления; подряд копятся в одно)
+    if (String(s._id) !== String(req.user.id)) {
+      require('../../services/notify').send(s._id, 'channel.clip', { name: req.user.username }, { group: 'clip', link: '/clips/' + c._id });
+    }
     res.status(201).json(await publicClip(c));
   } catch (e) {
     if (!e.i18nKey) console.error('[POST /clips]', e);

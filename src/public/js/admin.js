@@ -137,7 +137,8 @@ function pollStatus(log) {
   // снова делает его непрочитанным, и кнопки возвращаются
   function actionsHtml(tk, withView) {
     const id = escapeHtml(tk._id);
-    const noMail = !tk.email;
+    // ответить можно всегда, когда есть куда: вошедшему — на сайт, иначе на почту (куда именно — решает сервер)
+    const noMail = !tk.email && !tk.userId;
     let html = '';
     if (withView) html += `<button type="button" class="btn-trivial" data-act="view" data-id="${id}">${t('admin.support.view')}</button>`;
     // жалоба на пре-сет: удалить его прямо отсюда (в окне просмотра, пока не удалён)
@@ -324,7 +325,8 @@ function pollStatus(log) {
     } else {
       body = escapeHtml(m.text);
     }
-    const mail = support ? (m.emailed ? ' · ✉️ ' + t('admin.thread.emailed') : ' · ' + t('admin.thread.notEmailed')) : '';
+    const mail = m.site ? ' · 🔔 ' + t('admin.thread.onSite') + (m.fallback ? ' (' + t('admin.fallback.' + m.fallback) + ')' : '')
+      : support ? (m.emailed ? ' · ✉️ ' + t('admin.thread.emailed') : ' · ' + t('admin.thread.notEmailed')) : '';
     const who = support ? t('admin.thread.support', { name: m.author || '—' }) : t('admin.thread.user');
     return `
       <div class="ticket-msg ${support ? 'ticket-msg--support' : 'ticket-msg--user'}">
@@ -369,10 +371,14 @@ function pollStatus(log) {
       if (!openTicket || openTicket.ticket._id !== id) openTicket = await api('/support/' + encodeURIComponent(id));
       const { ticket: tk, reply } = openTicket;
       if (!reply) return PW.toast(t('admin.support.noEmailHint'), 'error');
+      const site = reply.via === 'site';
       document.getElementById('replyTitle').textContent = t('admin.reply.title', { n: tk.number ?? '—' });
-      document.getElementById('replyTo').value = tk.email;
+      document.getElementById('replyTo').value = site ? t('admin.reply.siteTo', { name: reply.to }) : reply.to;
       document.getElementById('replySubject').value = reply.subject;
-      document.getElementById('replyFooter').textContent = reply.footer;
+      // на сайт письма нет: вместо подписи и истории — подсказка, где человек увидит ответ
+      const foot = document.getElementById('replyFooter');
+      foot.textContent = site ? t('admin.reply.siteHint') : reply.footer;
+      document.getElementById('replyFooterLabel')?.classList.toggle('hidden', site);
       replyModal.classList.remove('hidden');
       document.getElementById('replyText').focus();
     } catch (e) {
@@ -392,7 +398,9 @@ function pollStatus(log) {
       if (data.unreadCount != null) setBadge(data.unreadCount);
       textEl.value = '';
       replyModal.classList.add('hidden');
-      PW.toast(t('admin.reply.sent'), 'success');
+      // письмо не ушло (лимит / сбой) — ответ всё равно у человека на сайте, причину он видит в уведомлении
+      if (data.fallback) PW.toast(t('admin.reply.sentFallback', { reason: t('admin.fallback.' + data.fallback) }), 'info');
+      else PW.toast(t(data.via === 'site' ? 'admin.reply.sentSite' : 'admin.reply.sent'), 'success');
       if (!viewModal.classList.contains('hidden')) await openView(id);
       await loadTickets();
     } catch (e) {
@@ -407,7 +415,9 @@ function pollStatus(log) {
     try {
       const data = await api('/support/' + encodeURIComponent(id) + '/status', { method: 'PATCH', body: { status } });
       if (data.unreadCount != null) setBadge(data.unreadCount);
-      if (data.emailed) PW.toast(t('admin.support.mailSent'), 'success');
+      if (data.fallback) PW.toast(t('admin.reply.sentFallback', { reason: t('admin.fallback.' + data.fallback) }), 'info');
+      else if (data.site) PW.toast(t('admin.support.siteSent'), 'success');
+      else if (data.emailed) PW.toast(t('admin.support.mailSent'), 'success');
       else if (data.hadEmail) PW.toast(t('admin.support.mailNotSent'), 'error');
       else PW.toast(t('admin.support.savedNoMail'), 'info');
       if (!viewModal.classList.contains('hidden') && openTicket?.ticket._id === id) await openView(id);

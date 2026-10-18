@@ -252,6 +252,50 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+/* 🔔 колокольчик уведомлений (кнопку ставит js/api.js, окно — js/notify-bell.js + css/notify-bell.css) */
+[data-theme] button.icon-btn.pw-bell,
+[data-theme] #roomHeader .pw-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-h-sm);
+  height: var(--ctl-h-sm);
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+.pw-bell svg { display: block; }
+.pw-bell--on svg { animation: pw-bell-ring 1.6s ease-in-out 1; transform-origin: 50% 10%; }
+@keyframes pw-bell-ring {
+  0%, 60%, 100% { transform: rotate(0); }
+  10%, 30% { transform: rotate(14deg); }
+  20%, 40% { transform: rotate(-12deg); }
+  50% { transform: rotate(6deg); }
+}
+.pw-bell-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+  background: #ff5f6d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.pw-bell-badge.hidden { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pw-bell--on svg { animation: none; }
+}
+
 .modal {
   position: fixed;
   inset: 0;

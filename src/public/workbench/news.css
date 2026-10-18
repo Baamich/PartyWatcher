@@ -53,6 +53,8 @@
 /* карточка + кнопки админа справа от неё */
 .news-row { display: flex; align-items: flex-start; gap: 12px; }
 .news-row .news-card { flex: 1; min-width: 0; }
+/* переход из уведомления: новость коротко подсвечена */
+.news-row--focus .news-card { box-shadow: 0 0 0 2px var(--accent); transition: box-shadow 0.4s; }
 .news-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
 .news-actions .icon-btn { width: auto; font-size: 12px; white-space: nowrap; }
 

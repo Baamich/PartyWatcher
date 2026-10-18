@@ -2,9 +2,10 @@
 // чтобы страница не ждала отдельный запрос). null — пользователя больше нет
 const User = require('../models/User');
 const { TERMS_VERSION } = require('./terms');
+const notify = require('./notify');
 
 async function meOf(userId) {
-  const user = await User.findById(userId).select('username role streamerName adultConfirmed showAdult termsVersion').lean();
+  const user = await User.findById(userId).select('username role streamerName adultConfirmed showAdult termsVersion notifSeenAt notifyOff createdAt').lean();
   if (!user) return null;
   return {
     id: user._id,
@@ -16,6 +17,7 @@ async function meOf(userId) {
     // false — условия пользования не приняты или изменились: страница покажет окно (js/terms-gate.js)
     termsOk: user.termsVersion === TERMS_VERSION,
     termsChanged: !!user.termsVersion && user.termsVersion !== TERMS_VERSION,
+    notif: await notify.unreadOf(user).catch(() => 0), // непрочитанные уведомления — кружок на колокольчике
   };
 }
 

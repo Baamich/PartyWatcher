@@ -210,7 +210,8 @@
     "tooManyFiles": "No more than 5 images",
     "noFilesMinors": "Images are not attached to a “danger to children” report — describe it in words",
     "reportOwn": "You cannot report your own preset",
-    "mailLimit": "The daily email limit is used up — the email was not sent, the request stays unread. Try again tomorrow."
+    "mailLimit": "The daily email limit is used up — the email was not sent, the request stays unread. Try again tomorrow.",
+    "messageEmpty": "Write a message"
   },
   "yt": {
     "hostOnly": "Only the host can switch the source",

@@ -5,7 +5,9 @@
     "general": "👤 General",
     "security": "🔒 Security",
     "devices": "📱 Devices",
-    "chat": "💬 Chat look"
+    "chat": "💬 Chat look",
+    "notifications": "🔔 Notifications",
+    "support": "📨 Support"
   },
   "general": {
     "title": "General",
@@ -95,5 +97,88 @@
     "sample1": "Hi everyone! 👋",
     "sample2": "Let’s keep watching",
     "saved": "Name color saved"
+  },
+  "notif": {
+    "title": "Notifications",
+    "hint": "What to show in the 🔔 bell in the site header. Opening the bell marks everything as read. Notifications are kept for 90 days.",
+    "saved": "Saved",
+    "locked": "Can’t be turned off — this protects your account.",
+    "cats": {
+      "news": {
+        "title": "📰 Site news",
+        "desc": "New posts in the “News” tab."
+      },
+      "support": {
+        "title": "💬 Support",
+        "desc": "Replies to your requests and decisions on your reports."
+      },
+      "security": {
+        "title": "🔒 Account security",
+        "desc": "Sign-in from a new device, password, email and main device changes."
+      },
+      "rooms": {
+        "title": "🏠 Rooms",
+        "desc": "An empty room will be deleted soon or was deleted after expiring."
+      },
+      "channel": {
+        "title": "📡 My channel",
+        "desc": "New followers and clips of your streams."
+      },
+      "chat": {
+        "title": "🛡️ Channel chats",
+        "desc": "You were made or removed as a moderator, banned or unbanned in a chat."
+      },
+      "presets": {
+        "title": "🧩 Presets",
+        "desc": "Your presets were added or liked; a preset was removed by moderation."
+      }
+    }
+  },
+  "sup": {
+    "title": "Support",
+    "new": "✏️ New request",
+    "mailTitle": "Get support replies by email",
+    "mailOff": "Replies currently come here and to the bell 🔔 — no emails are sent.",
+    "mailOn": "Replies currently come by email to your account address. There are no site notifications about them; the conversation is visible here.",
+    "mailConfirm": "Support replies will be sent by email to {email}.\n\n• You will no longer get site notifications about support replies — only emails.\n• You can reply right to the email: it goes into the same conversation.\n• Your requests and replies stay visible here in your profile.\n• If the site has already sent all the emails it can today (daily limit) or the email fails, the reply will still come here, to the bell, with a note why.\n\nYou can turn this off at any time.",
+    "mailConfirmTitle": "Support replies by email",
+    "mailEnable": "Turn on",
+    "mailOnToast": "Support replies now come by email",
+    "mailOffToast": "Support replies now come to the site",
+    "newTitle": "New request",
+    "subject": "Subject",
+    "subjectPh": "In short, what is it about",
+    "text": "Message",
+    "textPh": "What happened? (up to 1000 characters)",
+    "send": "Send",
+    "back": "← All requests",
+    "replyPh": "Write to support…",
+    "empty": "No requests yet. Have a question or something broke? Click “New request”.",
+    "noTopic": "No subject",
+    "updated": "Updated {d}",
+    "newReply": "New reply",
+    "status": {
+      "unread": "Under review",
+      "waiting": "Awaiting reply",
+      "accepted": "Accepted",
+      "trivial": "Reviewed",
+      "answered": "Replied"
+    },
+    "you": "You",
+    "team": "Support",
+    "viaMail": "sent by email",
+    "fromMail": "came by email",
+    "fallback": {
+      "mailLimit": "here instead of email: the site’s daily email limit was reached",
+      "mailFailed": "here instead of email: the email could not be sent"
+    },
+    "kind": {
+      "accepted": "Your request has been accepted for review. Thank you!",
+      "trivial": "Your request has been reviewed and processed."
+    },
+    "sent": "Message sent",
+    "needSubject": "Enter a subject",
+    "shortText": "Please describe your question in more detail",
+    "created": "Request #{n} sent"
   }
 }

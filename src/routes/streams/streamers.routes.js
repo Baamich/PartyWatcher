@@ -467,6 +467,8 @@ router.post('/:name/follow', auth, followLimiter, async (req, res) => {
       const nameLower = String(req.params.name || '').trim().toLowerCase();
       alerts.fire(nameLower, 'follow', { name: req.user.username }).catch(() => {});
       alerts.followers(nameLower, s._id, followers).catch(() => {});
+      // в колокольчик стримеру: подписки подряд копятся в одно «ник и ещё N»
+      require('../../services/notify').send(s._id, 'channel.follow', { name: req.user.username }, { group: 'follow', link: '/workbench/channel-activity.html' });
     }
     res.json({ followers, following: true, self: false });
   } catch (err) {

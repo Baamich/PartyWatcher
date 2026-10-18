@@ -1,0 +1,112 @@
+/* 🔔 окно уведомлений (js/notify-bell.js). Кнопка и кружок с числом — в common.css */
+.pw-nf {
+  position: fixed;
+  z-index: 10050;
+  width: 380px;
+  max-width: calc(100vw - 16px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow, 0 8px 24px rgba(0, 0, 0, 0.18));
+  overflow: hidden;
+  outline: none;
+  text-align: left;
+}
+/* новые: голубая подложка и полоска слева — своя для каждой темы, чтобы не резала глаз */
+[data-theme="dark"] .pw-nf { --nf-new-bg: rgba(122, 162, 255, 0.12); --nf-new-bar: #7aa2ff; --nf-new-text: #a9c2ff; }
+[data-theme="light"] .pw-nf { --nf-new-bg: #eaf1ff; --nf-new-bar: #3b6fe0; --nf-new-text: #2c5bc4; --shadow: 0 8px 24px rgba(40, 36, 30, 0.16); }
+
+.pw-nf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.pw-nf-title { font-size: 15px; font-weight: 800; }
+.pw-nf-settings { font-size: 12px; color: var(--text-muted); text-decoration: none; }
+.pw-nf-settings:hover { color: var(--text); text-decoration: underline; }
+
+/* видно ~4 уведомления, дальше — прокрутка (следующие подгружаются сами) */
+.pw-nf-list {
+  max-height: 440px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.pw-nf-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.pw-nf-item--link { cursor: pointer; }
+.pw-nf-item--link:hover { background: var(--surface-hover); }
+.pw-nf-item--new { background: var(--nf-new-bg); box-shadow: inset 3px 0 0 var(--nf-new-bar); }
+.pw-nf-item--new.pw-nf-item--link:hover { background: color-mix(in srgb, var(--nf-new-bg) 70%, var(--surface-hover)); }
+
+.pw-nf-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-alt);
+  font-size: 15px;
+}
+.pw-nf-body { flex: 1; min-width: 0; }
+.pw-nf-item-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; line-height: 1.35; }
+.pw-nf-new {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--nf-new-text);
+  border: 1px solid var(--nf-new-bar);
+}
+.pw-nf-text {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.pw-nf-note { margin-top: 4px; padding: 5px 8px; border-radius: var(--radius-sm); background: var(--surface-alt); font-size: 11px; line-height: 1.4; color: var(--text-muted); }
+.pw-nf-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.pw-nf-meta time { font-size: 11px; color: var(--text-muted); }
+[data-theme] .pw-nf .pw-nf-go {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  height: 26px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: none;
+}
+[data-theme] .pw-nf .pw-nf-go:hover { background: var(--surface-hover); }
+
+.pw-nf-empty { padding: 28px 14px; text-align: center; font-size: 13px; color: var(--text-muted); }
+.pw-nf-sentinel { height: 1px; }
+.pw-nf-sentinel--loading { height: 34px; background: linear-gradient(90deg, transparent, var(--surface-alt), transparent) 0 0 / 200% 100%; animation: pw-nf-load 1.2s linear infinite; }
+@keyframes pw-nf-load { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pw-nf-sentinel--loading { animation: none; }
+}

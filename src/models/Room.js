@@ -43,5 +43,6 @@ const roomSchema = new mongoose.Schema(
 // «Мои комнаты» и публичный список (сортировка по дате) — без перебора всей коллекции
 roomSchema.index({ owner: 1, createdAt: -1 });
 roomSchema.index({ isPublic: 1, createdAt: -1 });
+roomSchema.index({ emptySince: 1 }, { partialFilterExpression: { emptySince: { $type: 'date' } } }); // крон очистки пустых комнат
 
 module.exports = mongoose.model('Room', roomSchema);

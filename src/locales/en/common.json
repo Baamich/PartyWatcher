@@ -253,5 +253,163 @@
     "notImage": "This is not an image (PNG, JPG, WebP work)",
     "tooBig": "The image is too large",
     "wait": "Wait, the images are still being prepared"
+  },
+  "notify": {
+    "title": "Notifications",
+    "settings": "⚙️ Settings",
+    "empty": "No notifications yet",
+    "new": "new",
+    "go": "Open",
+    "justNow": "just now",
+    "generic": "Notification",
+    "unknownDevice": "unknown device",
+    "level": {
+      "mod": "a moderator",
+      "senior": "a senior moderator"
+    },
+    "fb": {
+      "mailLimit": "You chose to get replies by email, but the site has already sent all the emails it can today (daily limit), so the reply came here.",
+      "mailFailed": "You chose to get replies by email, but the email could not be sent, so the reply came here."
+    },
+    "type": {
+      "news": {
+        "title": "New on the site",
+        "text": "{title}",
+        "important": {
+          "title": "❗ Important update",
+          "text": "{title}"
+        }
+      },
+      "system": {
+        "welcome": {
+          "title": "Welcome to Party Watcher!",
+          "text": "Support replies, site news and important account events will appear here. You can choose what to show in the settings."
+        }
+      },
+      "support": {
+        "reply": {
+          "title": "Support replied",
+          "text": "Your request “{topic}” (#{n}) has a reply!"
+        },
+        "accepted": {
+          "title": "Request accepted",
+          "text": "Your request “{topic}” (#{n}) has been accepted for review. Thank you!"
+        },
+        "trivial": {
+          "title": "Request reviewed",
+          "text": "Your request “{topic}” (#{n}) has been reviewed and processed. Still have a question? Write in the conversation."
+        },
+        "report": {
+          "title": "Report reviewed",
+          "text": "Your report “{topic}” (#{n}) has been reviewed by moderation. Thanks for helping!"
+        }
+      },
+      "security": {
+        "login": {
+          "title": "Sign-in from a new device",
+          "text": "{device}{where}. If this wasn’t you, end the session in “Devices” and change your password."
+        },
+        "password": {
+          "title": "Password changed",
+          "text": "Other devices have been signed out. If this wasn’t you, contact support right away."
+        },
+        "passwordReset": {
+          "title": "Password reset via email link",
+          "text": "All previous sign-ins have been ended. If this wasn’t you, contact support right away."
+        },
+        "emailRequest": {
+          "title": "Email change requested",
+          "text": "A link was sent to {to}. Until it is opened, the account email stays the same."
+        },
+        "email": {
+          "title": "Account email changed",
+          "text": "{from} → {to}"
+        },
+        "emailByAdmin": {
+          "title": "Support changed the account email",
+          "text": "{from} → {to}"
+        },
+        "username": {
+          "title": "Support changed your username",
+          "text": "{from} → {to}. Sign in with the new username."
+        },
+        "mainDevice": {
+          "title": "Main device changed",
+          "text": "The main device is now: {device}."
+        },
+        "deleteCancel": {
+          "title": "Account deletion cancelled",
+          "text": "You signed in with your password — the account stays with you."
+        }
+      },
+      "room": {
+        "expiring": {
+          "title": "Room will be deleted soon",
+          "text": "Nobody has been in “{name}” for a while — it will be deleted in {h} h. Join it to keep it."
+        },
+        "expired": {
+          "title": "Room deleted",
+          "text": "The room “{name}” was empty for {h} h and was deleted automatically."
+        }
+      },
+      "channel": {
+        "follow": {
+          "title": "New follower",
+          "text": "{name} followed your channel",
+          "many": {
+            "one": "{name} and {n} other followed your channel",
+            "other": "{name} and {n} others followed your channel"
+          }
+        },
+        "clip": {
+          "title": "New clip on your channel",
+          "text": "{name} made a clip of your stream",
+          "many": {
+            "one": "{name} made a clip, plus {n} more clip of your stream",
+            "other": "{name} made a clip, plus {n} more clips of your stream"
+          }
+        }
+      },
+      "chat": {
+        "mod": {
+          "title": "You are a moderator",
+          "text": "The channel {channel} made you {levelText}."
+        },
+        "unmod": {
+          "title": "You are no longer a moderator",
+          "text": "The channel {channel} removed you from its moderators."
+        },
+        "ban": {
+          "title": "Banned from chat",
+          "text": "You were banned from the chat of {channel}."
+        },
+        "unban": {
+          "title": "Ban lifted",
+          "text": "You can chat on {channel} again."
+        }
+      },
+      "preset": {
+        "removed": {
+          "title": "Preset removed by moderation",
+          "text": "Your preset “{preset}” was removed by the administration because it broke the site rules. Think this is a mistake? Contact support."
+        },
+        "add": {
+          "title": "Your preset was added",
+          "text": "{name} added “{preset}”",
+          "many": {
+            "one": "{name} and {n} other channel added “{preset}”",
+            "other": "{name} and {n} other channels added “{preset}”"
+          }
+        },
+        "like": {
+          "title": "Your preset got a like",
+          "text": "{name} liked “{preset}”",
+          "many": {
+            "one": "{name} and {n} other channel liked “{preset}”",
+            "other": "{name} and {n} other channels liked “{preset}”"
+          }
+        }
+      }
+    }
   }
 }

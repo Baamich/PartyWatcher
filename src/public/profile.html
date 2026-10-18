@@ -41,6 +41,8 @@
         <button type="button" class="pf-nav-btn" data-tab="security" data-i18n="profile.nav.security">🔒 Безопасность</button>
         <button type="button" class="pf-nav-btn" data-tab="devices" data-i18n="profile.nav.devices">📱 Устройства</button>
         <button type="button" class="pf-nav-btn" data-tab="chat" data-i18n="profile.nav.chat">💬 Вид чата</button>
+        <button type="button" class="pf-nav-btn" data-tab="notifications" data-i18n="profile.nav.notifications">🔔 Уведомления</button>
+        <button type="button" class="pf-nav-btn" data-tab="support"><span data-i18n="profile.nav.support">📨 Поддержка</span><span class="pf-nav-dot hidden" id="pfSupDot"></span></button>
       </nav>
 
       <main class="pf-main">
@@ -201,6 +203,56 @@
             <div class="pf-swatches" id="pfSwatches"></div>
           </div>
         </section>
+        <!-- УВЕДОМЛЕНИЯ: что показывать в колокольчике (services/notify.js) -->
+        <section class="pf-section hidden" data-section="notifications">
+          <h1 class="pf-title" data-i18n="profile.notif.title">Уведомления</h1>
+          <p class="pf-hint pf-hint-block" data-i18n="profile.notif.hint">Что показывать в колокольчике 🔔 в шапке сайта. Открыл колокольчик — всё прочитано. Уведомления хранятся 90 дней.</p>
+          <div class="pf-card" id="pfNotifCats"></div>
+        </section>
+        <!-- ПОДДЕРЖКА: свои обращения и жалобы, переписка, ответ с сайта -->
+        <section class="pf-section hidden" data-section="support">
+          <div class="pf-sup-top">
+            <h1 class="pf-title" data-i18n="profile.sup.title">Служба поддержки</h1>
+            <button type="button" class="icon-btn pf-small-btn" id="pfSupNewBtn" data-click="supNew" data-i18n="profile.sup.new">✏️ Новое обращение</button>
+          </div>
+
+          <div class="pf-card pf-sup-mail">
+            <label class="pf-switch-row">
+              <input type="checkbox" id="pfSupEmail" data-change="supEmailToggle" />
+              <span class="pf-switch-text">
+                <b data-i18n="profile.sup.mailTitle">Получать ответы поддержки на почту</b>
+                <span class="pf-hint" id="pfSupMailHint" data-i18n="profile.sup.mailOff">Сейчас ответы приходят сюда и в колокольчик 🔔 — письма не отправляются.</span>
+              </span>
+            </label>
+          </div>
+
+          <form class="pf-card pf-form hidden" id="pfSupForm" data-submit="supSend" data-event autocomplete="off">
+            <h2 class="pf-card-title" data-i18n="profile.sup.newTitle">Новое обращение</h2>
+            <label class="pf-field-label" for="pfSupSubject" data-i18n="profile.sup.subject">Тема</label>
+            <input id="pfSupSubject" maxlength="100" placeholder="Коротко, о чём вопрос" data-i18n-placeholder="profile.sup.subjectPh" />
+            <label class="pf-field-label" for="pfSupText" data-i18n="profile.sup.text">Сообщение</label>
+            <textarea id="pfSupText" maxlength="1000" rows="5" placeholder="Что случилось? (до 1000 символов)" data-i18n-placeholder="profile.sup.textPh"></textarea>
+            <div id="pfSupAttach" class="pf-sup-attach"></div>
+            <div class="pf-sup-ops">
+              <button type="submit" id="pfSupSendBtn" data-i18n="profile.sup.send">Отправить</button>
+              <button type="button" class="icon-btn" data-click="supCancel" data-i18n="common.dialog.cancel">Отмена</button>
+            </div>
+          </form>
+
+          <div class="pf-card pf-sup-list" id="pfSupList" data-no-i18n></div>
+
+          <div class="pf-card pf-sup-thread hidden" id="pfSupThread">
+            <div class="pf-sup-thread-head">
+              <button type="button" class="icon-btn pf-small-btn" data-click="supBack" data-i18n="profile.sup.back">← Все обращения</button>
+              <div class="pf-sup-thread-title" id="pfSupThreadTitle" data-no-i18n></div>
+            </div>
+            <div class="pf-sup-msgs" id="pfSupMsgs" data-no-i18n></div>
+            <form class="pf-sup-reply" id="pfSupReplyForm" data-submit="supReply" data-event autocomplete="off">
+              <textarea id="pfSupReplyText" maxlength="2000" rows="3" placeholder="Написать в поддержку…" data-i18n-placeholder="profile.sup.replyPh"></textarea>
+              <button type="submit" id="pfSupReplyBtn" data-i18n="profile.sup.send">Отправить</button>
+            </form>
+          </div>
+        </section>
       </main>
     </div>
   </div>
@@ -208,6 +260,7 @@
   <script src="/js/api.js"></script>
   <script src="/js/actions.js"></script>
   <script src="/js/page-transition.js"></script>
+  <script src="/js/attach-images.js"></script>
   <script src="/js/profile.js"></script>
 </body>
 </html>

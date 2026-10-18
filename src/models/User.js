@@ -42,6 +42,11 @@ const userSchema = new mongoose.Schema(
     verifyQueuedAt: { type: Date, default: undefined },
     verifyLang: { type: String, default: undefined },
 
+    // ---- уведомления (колокольчик, services/notify.js) ----
+    notifSeenAt: { type: Date, default: undefined }, // открыл колокольчик: всё, что раньше, — прочитано (нет — с createdAt)
+    notifyOff: { type: [String], default: undefined }, // выключенные разделы (профиль → «Уведомления»): news, support, rooms…
+    supportByEmail: { type: Boolean, default: undefined }, // ответы поддержки — письмом, а не на сайте (профиль → «Поддержка»)
+
     // ---- условия пользования (services/terms.js) ----
     termsVersion: { type: String, default: null }, // какую версию принял; не текущая — окно «условия изменились»
     termsAt: { type: Date, default: null },

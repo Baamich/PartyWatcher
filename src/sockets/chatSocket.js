@@ -22,6 +22,7 @@ const { parseCommandLine, buildReply } = require('../services/chatCommands');
 const i18n = require('../services/i18n');
 const safeHandlers = require('./safeHandlers');
 const chatColor = require('../services/chatColor');
+const notify = require('../services/notify');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
@@ -270,6 +271,13 @@ module.exports = function registerChatSocket(io) {
     });
   }
 
+  // бан / разбан в чате канала — уведомление зрителю (таймауты — нет: короткие и частые). Имя канала — как пишет стример
+  function banNotify(userId, type, room) {
+    User.findOne({ streamerNameLower: room }).select('streamerName').lean()
+      .then((s) => notify.send(userId, type, { channel: s?.streamerName || room }, { link: '/streamers/' + encodeURIComponent(room) }))
+      .catch(() => {});
+  }
+
   // ---------- модерация: кнопки чата и команды «/» (права проверяет вызывающий) ----------
   // ответ — ключ ошибки словаря или null
   const actorName = (socket) => socket.data.authUser?.username || '?';
@@ -284,6 +292,7 @@ module.exports = function registerChatSocket(io) {
     );
     nsp.to(roomName(room)).emit('chat:user-banned', { userId });
     chatBus.emitToUser(room, userId, 'chat:restriction', { type: 'ban' });
+    banNotify(userId, 'chat.ban', room);
     alerts.fire(room, 'ban', { name: username }).catch(() => {});
     logAction(nsp, room, actorName(socket), 'ban', username);
     return null;
@@ -315,6 +324,7 @@ module.exports = function registerChatSocket(io) {
       .then((x) => chatBus.emitToUser(room, userId, 'chat:restriction', x))
       .catch(() => {});
     logAction(nsp, room, actorName(socket), kind === 'ban' ? 'unban' : 'untimeout', username);
+    if (kind === 'ban') banNotify(userId, 'chat.unban', room);
     return null;
   }
 

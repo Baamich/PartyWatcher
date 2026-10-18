@@ -42,6 +42,7 @@ async function start() {
   // API
   app.use('/api/support', supportRoutes);
   app.use('/api/auth', authRoutes);
+  app.use('/api/notifications', require('./routes/notifications.routes')); // колокольчик в шапке админки
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin', adminStatsRoutes);
   app.use('/api/admin', adminUsersRoutes);

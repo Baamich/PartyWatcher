@@ -162,3 +162,80 @@
 [data-theme] .pf-swatch.active { border-color: var(--surface); box-shadow: 0 0 0 2px var(--accent); }
 .pf-main-only { margin: -4px 0 16px; }
 .pf-locked { opacity: 0.55; }
+
+/* значок «новый ответ» на кнопке меню «Поддержка» */
+.pf-nav-btn { position: relative; }
+.pf-nav-dot { display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: #ff5f6d; vertical-align: middle; }
+
+/* строка-переключатель: галочка + заголовок + пояснение (уведомления, «ответы на почту») */
+.pf-switch-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; cursor: pointer; }
+.pf-switch-row + .pf-switch-row { border-top: 1px solid var(--border); }
+.pf-switch-row input { margin: 3px 0 0; flex-shrink: 0; width: 16px; height: 16px; }
+.pf-switch-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 14px; }
+.pf-switch-text .pf-hint { margin: 0; }
+.pf-notif-row--locked { cursor: default; }
+.pf-notif-row--locked b { color: var(--text-muted); }
+
+/* «Поддержка» */
+.pf-sup-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.pf-sup-top .pf-title { margin: 0; }
+[data-theme] .pf-sup-top .pf-small-btn { margin: 0; }
+.pf-sup-mail { padding: 0 16px; }
+.pf-form textarea { display: block; width: 100%; resize: vertical; }
+.pf-sup-attach { margin-top: 12px; }
+.pf-sup-ops { display: flex; gap: 8px; margin-top: 4px; }
+[data-theme] .pf-sup-ops button { width: auto; margin: 0; }
+[data-theme] .pf-sup-ops button[type="submit"] { flex: 1; }
+
+.pf-sup-list { padding: 4px 0; }
+.pf-sup-list .pf-empty { padding: 14px 16px; }
+[data-theme] .pf-sup-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-weight: 400;
+  box-shadow: none;
+  height: auto;
+}
+[data-theme] .pf-sup-row:last-child { border-bottom: 0; }
+[data-theme] .pf-sup-row:hover { background: var(--surface-hover); }
+[data-theme="dark"] .pf-sup-row--fresh { background: rgba(122, 162, 255, 0.10); box-shadow: inset 3px 0 0 #7aa2ff; }
+[data-theme="light"] .pf-sup-row--fresh { background: #eaf1ff; box-shadow: inset 3px 0 0 #3b6fe0; }
+.pf-sup-row-main { flex: 1; min-width: 0; }
+.pf-sup-row-title { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-sup-row-meta { margin-top: 2px; font-size: 12px; color: var(--text-muted); }
+.pf-sup-row-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pf-sup-new { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #fff; background: #ff5f6d; }
+.pf-sup-status { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--text-muted); border: 1px solid var(--border); white-space: nowrap; }
+.pf-sup-status--answered { color: #22a35a; border-color: color-mix(in srgb, #22a35a 45%, transparent); }
+.pf-sup-status--accepted { color: var(--accent-text, var(--text)); border-color: var(--border-strong); }
+
+.pf-sup-thread { padding: 12px 16px 16px; }
+.pf-sup-thread-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+[data-theme] .pf-sup-thread-head .pf-small-btn { margin: 0; }
+.pf-sup-thread-title { flex: 1; min-width: 0; font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.pf-sup-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; padding: 14px 0; }
+.pf-sup-msg { max-width: 86%; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border); }
+.pf-sup-msg--me { align-self: flex-end; background: var(--surface-alt); }
+.pf-sup-msg--support { align-self: flex-start; background: var(--bg); }
+.pf-sup-msg-head { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.pf-sup-msg-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pf-sup-msg-status { font-style: italic; color: var(--text-muted); }
+.pf-sup-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pf-sup-files img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+.pf-sup-reply { display: flex; gap: 8px; align-items: flex-end; padding-top: 12px; border-top: 1px solid var(--border); }
+.pf-sup-reply textarea { flex: 1; resize: vertical; min-height: 60px; margin: 0; }
+[data-theme] .pf-sup-reply button { width: auto; margin: 0; }
+@media (max-width: 600px) {
+  .pf-sup-msg { max-width: 100%; }
+  .pf-sup-row-side { flex-direction: column; align-items: flex-end; }
+}

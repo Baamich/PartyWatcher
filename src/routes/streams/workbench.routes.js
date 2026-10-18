@@ -177,6 +177,7 @@ router.delete('/bans/:userId', auth, requireStreamer, async (req, res) => {
   if (!/^[a-f0-9]{24}$/i.test(req.params.userId)) return res.status(400).json({ error: req.t('server.badId') });
   const ban = await ChannelBan.findOneAndDelete({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId }).select('username').lean();
   if (ban) chatBus.logAction(req.streamerUser.streamerNameLower, req.streamerUser.username || req.streamerUser.streamerName, 'unban', ban.username);
+  if (ban) modNotify(req.params.userId, 'chat.unban', req.streamerUser.streamerName);
   chatBus.emitToUser(req.streamerUser.streamerNameLower, req.params.userId, 'chat:restriction', { type: 'none' });
   res.json({ status: 'ok' });
 });
@@ -324,6 +325,11 @@ router.get('/mods/search', auth, modSearchLimit, requireStreamer, async (req, re
   });
 });
 
+// уведомление тому, кого назначили / сняли модератором (level: mod | senior)
+function modNotify(userId, type, channel, level) {
+  require('../../services/notify').send(userId, type, { channel, level }, { link: '/streamers/' + encodeURIComponent(String(channel || '').toLowerCase()) });
+}
+
 // POST /workbench/mods { username, level } — назначить по логину аккаунта
 router.post('/mods', auth, requireStreamer, async (req, res) => {
   const me = req.streamerUser;
@@ -343,6 +349,7 @@ router.post('/mods', auth, requireStreamer, async (req, res) => {
     { upsert: true }
   );
   modsChanged(me.streamerNameLower);
+  if (!exists) modNotify(u._id, 'chat.mod', me.streamerName, level);
   res.status(201).json({ userId: String(u._id), username: u.username, level });
 });
 
@@ -353,14 +360,16 @@ router.patch('/mods/:userId', auth, requireStreamer, async (req, res) => {
   const r = await ChannelMod.updateOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId }, { $set: { level } });
   if (!r.matchedCount) return res.status(404).json({ error: req.t('server.mods.notMod') });
   modsChanged(req.streamerUser.streamerNameLower);
+  if (r.modifiedCount) modNotify(req.params.userId, 'chat.mod', req.streamerUser.streamerName, level);
   res.json({ level });
 });
 
 // DELETE /workbench/mods/:userId — снять модератора
 router.delete('/mods/:userId', auth, requireStreamer, async (req, res) => {
   if (!ID24.test(req.params.userId)) return res.status(400).json({ error: req.t('server.badId') });
-  await ChannelMod.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
+  const del = await ChannelMod.deleteOne({ streamerNameLower: req.streamerUser.streamerNameLower, userId: req.params.userId });
   modsChanged(req.streamerUser.streamerNameLower);
+  if (del.deletedCount) modNotify(req.params.userId, 'chat.unmod', req.streamerUser.streamerName);
   res.json({ status: 'ok' });
 });
 

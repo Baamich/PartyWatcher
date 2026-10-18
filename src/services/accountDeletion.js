@@ -131,6 +131,7 @@ async function purge(userId, by = '') {
     del('Session', { userId: uid }),
     del('AccountEvent', { userId: uid }),
     del('UserSeen', { userId: uid }),
+    del('Notification', { userId: uid }),
     del('Follow', { $or: [{ followerId: uid }, { streamerId: uid }] }),
     del('ChannelPoints', { $or: [{ userId: uid }, { streamerId: uid }] }),
     del('ChannelSeen', ch ? { $or: [{ userId: uid }, { streamerNameLower: ch }] } : { userId: uid }),

@@ -7,6 +7,7 @@ const auth = require('../../middleware/auth');
 const adminOnly = require('../../middleware/adminOnly');
 const i18n = require('../../services/i18n');
 const { translate, detectLang } = require('../../services/translator');
+const { newsChanged } = require('../../services/notify'); // колокольчик: новости сайта берутся из кэша — обновить
 
 const router = express.Router();
 
@@ -76,6 +77,7 @@ async function translateNews(id) {
     }
     // новость успели изменить, пока переводили, — этот перевод уже не про неё
     await News.updateOne({ _id: id, editedAt: n.editedAt ?? null }, { $set: { lang: from, tr, trStamp: stampOf(n) } });
+    newsChanged();
     failedAt.delete(id);
   } catch (e) {
     failedAt.set(id, Date.now());
@@ -160,6 +162,7 @@ router.post('/', adminGuard, async (req, res) => {
     });
 
     scheduleTranslation(news._id);
+    newsChanged();
     res.status(201).json(serialize(news, req.lang));
   } catch (err) {
     console.error('[POST /news]', err);
@@ -207,6 +210,7 @@ router.patch('/:id', adminGuard, async (req, res) => {
     await news.save();
 
     if (contentChanged) scheduleTranslation(news._id);
+    newsChanged();
     res.json(serialize(news, req.lang));
   } catch (err) {
     console.error('[PATCH /news/:id]', err);
@@ -218,6 +222,7 @@ router.patch('/:id', adminGuard, async (req, res) => {
 router.delete('/:id', adminGuard, async (req, res) => {
   try {
     await News.deleteOne({ _id: req.params.id });
+    newsChanged();
     res.json({ ok: true });
   } catch (_) {
     res.status(400).json({ error: req.t('server.deleteFailed') });

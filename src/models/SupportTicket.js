@@ -8,6 +8,8 @@ const messageSchema = new mongoose.Schema(
     text: { type: String, trim: true, maxlength: 5000, default: '' },
     author: { type: String, default: '' }, // ник админа, который ответил
     emailed: { type: Boolean, default: false }, // письмо ушло (SMTP настроен и не упал)
+    site: { type: Boolean, default: undefined }, // через сайт: ответ — уведомлением и в профиле, сообщение человека — из профиля
+    fallback: { type: String, default: undefined }, // хотел письмом, но не ушло: mailLimit (лимит писем) | mailFailed — ушло на сайт
     at: { type: Date, default: Date.now },
   },
   { _id: false }
@@ -68,6 +70,7 @@ const supportTicketSchema = new mongoose.Schema(
     },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     username: { type: String, default: '' },
+    userSeenAt: { type: Date, default: undefined }, // человек открыл переписку в профиле → «Поддержка» (новее — «новый ответ»)
   },
   { versionKey: false, timestamps: true }
 );
@@ -75,5 +78,6 @@ const supportTicketSchema = new mongoose.Schema(
 // админка: вкладки по статусу и «🚩 Жалобы» по источнику, свежие сверху
 supportTicketSchema.index({ status: 1, updatedAt: -1 });
 supportTicketSchema.index({ source: 1, updatedAt: -1 });
+supportTicketSchema.index({ userId: 1, updatedAt: -1 }, { partialFilterExpression: { userId: { $type: 'objectId' } } }); // профиль → «Поддержка»
 
 module.exports = mongoose.model('SupportTicket', supportTicketSchema);

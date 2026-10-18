@@ -82,6 +82,8 @@
       return;
     }
     if (d.guest) { stopped = true; return; }
+    // заодно — число непрочитанных уведомлений для колокольчика (js/notify-bell.js)
+    if (typeof d.notif === 'number') window.dispatchEvent(new CustomEvent('pw:notif', { detail: { unread: d.notif } }));
     const seen = readSeen();
     const now = Date.now();
     const here = location.pathname.toLowerCase();

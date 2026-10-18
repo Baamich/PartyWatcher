@@ -145,7 +145,7 @@
     "descPh": "What happened? (up to 1000 characters)",
     "sent": "Sent ✓",
     "send": "Send",
-    "emailOptional": "Email (optional)",
+    "emailOptional": "Email (optional — the reply comes to the bell 🔔 and profile → “Support”)",
     "emailRequired": "Email (required — we'll reply to it)",
     "needEmail": "Enter your email — without signing in we can only reply by email",
     "badEmail": "Invalid email",

@@ -22,6 +22,8 @@ const { signToken, setTokenCookie } = sessions;
 const Session = require('../models/Session');
 const accountDeletion = require('../services/accountDeletion');
 const chatColor = require('../services/chatColor');
+const notify = require('../services/notify');
+const welcome = (user) => notify.send(user._id, 'system.welcome', {}, { link: notify.profileLink(user.username, 'notifications') });
 
 // защита дневного лимита писем от спама регистрациями: с одного IP — не больше 3 регистраций за сутки
 // и не больше 2 аккаунтов одновременно в очереди
@@ -204,6 +206,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     }
     console.warn('[auth/register] SMTP не настроен — аккаунт активирован без подтверждения почты');
     await sessions.start(res, req, user, { main: true }); // устройство регистрации — главное
+    welcome(user);
     res.status(201).json({ id: user._id, username: user.username, role: user.role });
   } catch (err) {
     console.error('[auth/register]', err);
@@ -257,6 +260,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       await accountDeletion.cancel(req, user._id);
     }
 
+    notify.login(req, user); // до записи сеанса не ждём: «новое ли устройство» смотрит историю заходов
     await sessions.start(res, req, user);
     res.json({ id: user._id, username: user.username, role: user.role });
   } catch (err) {
@@ -286,6 +290,7 @@ router.post('/verify', resetLimiter, async (req, res) => {
   }
   await User.updateOne({ _id: user._id }, { $unset: { verifyPending: 1, verifyTokenHash: 1, verifyExpires: 1, verifySentAt: 1 } });
   await sessions.start(res, req, user, { main: true }); // подтвердил почту с устройства регистрации — оно главное
+  welcome(user);
   res.json({ ok: true, username: user.username });
 });
 
@@ -604,6 +609,7 @@ router.post('/email', auth, resendLimiter, sessions.requireMain, async (req, res
       return res.status(502).json({ error: req.t('server.sendFailed') });
     }
     console.log(`[auth/email] ${user.username}: письмо смены почты → ${maskEmail(email)}`);
+    notify.send(user._id, 'security.emailRequest', { to: maskEmail(email) }, { link: notify.profileLink(user.username, 'security') });
     res.json({ ok: true, pendingEmail: email, retryIn: VERIFY_RESEND_MS / 1000, message: req.t('server.account.emailSent', { email: maskEmail(email), n: VERIFY_TTL_MIN }) });
   } catch (err) {
     console.error('[auth/email]', err);

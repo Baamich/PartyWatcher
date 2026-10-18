@@ -54,6 +54,7 @@ async function goProfile() {
 function buildNewsRow(n) {
   const row = document.createElement('div');
   row.className = 'news-row';
+  row.id = 'n-' + n.id; // якорь: колокольчик уведомлений ведёт на /news#n-<id>
 
   const card = document.createElement('article');
   card.className = 'news-card' + (n.important ? ' news-card--important' : '');
@@ -157,6 +158,20 @@ function buildNewsRow(n) {
   return row;
 }
 
+// пришли из уведомления (/news#n-<id>) — прокрутить к новости и коротко подсветить (один раз за переход)
+let hashFocused = '';
+function focusHashNews() {
+  const id = /^#n-[a-f0-9]{24}$/i.test(location.hash) ? location.hash.slice(1) : '';
+  if (!id || hashFocused === id) return;
+  const row = document.getElementById(id);
+  if (!row) return;
+  hashFocused = id;
+  row.scrollIntoView({ block: 'center' });
+  row.classList.add('news-row--focus');
+  setTimeout(() => row.classList.remove('news-row--focus'), 2500);
+}
+window.addEventListener('hashchange', () => { hashFocused = ''; focusHashNews(); });
+
 // язык сменили без перезагрузки — перечитываем: перевод новостей и даты на новом языке
 window.addEventListener('pw:langchange', () => loadNews());
 
@@ -184,6 +199,7 @@ async function loadNews() {
       return;
     }
     data.items.forEach((n) => list.appendChild(buildNewsRow(n)));
+    focusHashNews();
   } catch (e) {
     list.innerHTML = '';
     const err = document.createElement('p');

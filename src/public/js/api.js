@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Показывается сама после любого /auth/me — страницам ничего вызывать не нужно
 const pwProfileHref = (name) => '/u/' + encodeURIComponent(String(name).toLowerCase());
 function pwShowMe(me) {
+  pwBell(me);
   const link = document.getElementById('meLink');
   if (!link) return;
   const name = me && me.username;
@@ -60,6 +61,66 @@ function pwShowMe(me) {
   link.href = pwProfileHref(name);
   const el = document.getElementById('meName');
   if (el) el.textContent = name;
+}
+
+// 🔔 колокольчик уведомлений рядом с ником (на страницах без ника — перед кнопкой темы). Кнопка и кружок
+// с числом — сразу (шапка не прыгает), окно со списком и опрос — js/notify-bell.js, загружается в простое
+const PW_BELL_JS = '/js/notify-bell.js?v=1';
+let pwBellLoading = null;
+function pwBellLoad() {
+  if (!pwBellLoading) {
+    pwBellLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = PW_BELL_JS;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    }).catch(() => { pwBellLoading = null; });
+  }
+  return pwBellLoading;
+}
+// число на кружке (0 — кружка нет); вызывает и js/notify-bell.js
+function pwBellCount(n) {
+  const badge = document.querySelector('#pwBell .pw-bell-badge');
+  if (!badge || typeof n !== 'number') return;
+  badge.textContent = n > 9 ? '9+' : String(n);
+  badge.classList.toggle('hidden', n <= 0);
+  document.getElementById('pwBell').classList.toggle('pw-bell--on', n > 0);
+}
+function pwBell(me) {
+  let btn = document.getElementById('pwBell');
+  if (!me || !me.username) {
+    if (btn) btn.remove();
+    return;
+  }
+  if (!btn) {
+    const host = document.getElementById('meLink') || document.querySelector('.corner-menu .theme-toggle, .header-right .theme-toggle, .theme-toggle');
+    if (!host || !host.parentNode) return;
+    const label = window.t ? t('common.notify.title') : 'Notifications';
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'pwBell';
+    btn.className = 'icon-btn pw-bell';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-haspopup', 'dialog');
+    btn.setAttribute('data-i18n-title', 'common.notify.title');
+    btn.setAttribute('data-i18n-aria-label', 'common.notify.title');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>'
+      + '<span class="pw-bell-badge hidden" data-no-i18n></span>';
+    host.parentNode.insertBefore(btn, host);
+    btn.addEventListener('click', () => pwBellLoad().then(() => window.PWBell && window.PWBell.toggle()));
+    if ('requestIdleCallback' in window) requestIdleCallback(pwBellLoad, { timeout: 4000 });
+    else setTimeout(pwBellLoad, 1500);
+  }
+  btn.dataset.user = me.username; // ссылка «Настройки» в окне и кэш списка — по аккаунту
+  if (typeof me.notif === 'number') {
+    window.__pwNotif = { n: me.notif, at: Date.now() };
+    // окно (если уже загружено) узнаёт о новых: при открытии перечитает список, а не покажет кэш
+    window.dispatchEvent(new CustomEvent('pw:notif', { detail: { unread: me.notif } }));
+  }
+  pwBellCount(me.notif);
 }
 
 // баннер согласия на статистику (js/consent.js) — пока человек не выбрал; на /datenschutz он сам решает, когда показать

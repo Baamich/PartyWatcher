@@ -245,6 +245,7 @@ async function start() {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/devices', require('./routes/devices.routes')); // профиль → «Устройства»
+  app.use('/api/notifications', require('./routes/notifications.routes')); // колокольчик уведомлений
   app.use('/api/rooms', roomRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin', adminStatsRoutes);

@@ -12,6 +12,7 @@ const rewardsApi = require('./rewards.routes');
 const { hasProfanity } = require('../../services/profanity');
 const PWStyle = require('../../public/js/pwstyle.js');
 const { parseArgsInput, parseCommandLine, buildReply } = require('../../services/chatCommands');
+const notify = require('../../services/notify');
 
 const PAGE_LIMIT = 24;
 const MAX_PUBLISHED = 20;
@@ -215,9 +216,10 @@ router.post('/', auth, requireStreamer, rate, async (req, res) => {
 // ---------- удаление ----------
 router.delete('/:id', auth, requireStreamer, rate, async (req, res) => {
   if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
-  const p = await Preset.findById(req.params.id).select('authorId');
+  const p = await Preset.findById(req.params.id).select('authorId name');
   if (!p) return res.status(404).json({ error: req.t('server.presets.notFound') });
-  if (String(p.authorId) !== String(req.me._id) && !require('../../services/roles').isAdminRole(req.me.role)) {
+  const byAdmin = String(p.authorId) !== String(req.me._id);
+  if (byAdmin && !require('../../services/roles').isAdminRole(req.me.role)) {
     return res.status(403).json({ error: req.t('server.presets.notYours') });
   }
   await Promise.all([
@@ -225,13 +227,15 @@ router.delete('/:id', auth, requireStreamer, rate, async (req, res) => {
     PresetAdd.deleteMany({ presetId: p._id }),
     p.deleteOne(),
   ]);
+  // удалила администрация — автору сообщаем (что и почему: решение модерации)
+  if (byAdmin) notify.send(p.authorId, 'preset.removed', { preset: p.name }, { link: '/workbench/presets.html' });
   res.json({ ok: true });
 });
 
 // ---------- лайк ----------
 router.put('/:id/like', auth, requireStreamer, rate, async (req, res) => {
   if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
-  const p = await Preset.findById(req.params.id).select('authorId likes');
+  const p = await Preset.findById(req.params.id).select('authorId likes name');
   if (!p) return res.status(404).json({ error: req.t('server.presets.notFound') });
   if (String(p.authorId) === String(req.me._id)) return res.status(400).json({ error: req.t('server.presets.selfLike') });
 
@@ -245,6 +249,7 @@ router.put('/:id/like', auth, requireStreamer, rate, async (req, res) => {
     try {
       await PresetLike.create({ presetId: p._id, userId: req.me._id });
       likes = (await Preset.findByIdAndUpdate(p._id, { $inc: { likes: 1 } }, { new: true }).select('likes')).likes;
+      notify.send(p.authorId, 'preset.like', { name: req.me.streamerName, preset: p.name }, { group: 'plike:' + p._id, link: '/workbench/presets.html' });
     } catch (e) {
       if (e.code !== 11000) throw e; // уже лайкнуто
     }
@@ -298,6 +303,7 @@ router.post('/:id/add', auth, requireStreamer, rate, async (req, res) => {
 
   try {
     await PresetAdd.create({ presetId: p._id, userId: req.me._id, commandId, rewardId });
+    notify.send(p.authorId, 'preset.add', { name: req.me.streamerName, preset: p.name }, { group: 'padd:' + p._id, link: '/workbench/presets.html' });
   } catch (e) {
     if (commandId) await ChatCommand.deleteOne({ _id: commandId });
     if (rewardId) await Reward.deleteOne({ _id: rewardId });

@@ -126,7 +126,8 @@
     "deletePresetText": "Delete the preset “{name}” for everyone? Likes and adds will be gone; commands and rewards people already created from it will stay.",
     "deletePresetOk": "Delete",
     "presetRemoved": "Preset deleted",
-    "presetGone": "The preset is already gone — the author deleted it"
+    "presetGone": "The preset is already gone — the author deleted it",
+    "siteSent": "Status changed, the user got a site notification"
   },
   "thread": {
     "title": "Request #{n}",
@@ -139,7 +140,8 @@
     "files": {
       "one": "{n} screenshot",
       "other": "{n} screenshots"
-    }
+    },
+    "onSite": "on site"
   },
   "reply": {
     "title": "Reply to request #{n}",
@@ -150,7 +152,11 @@
     "footer": "Added to the email automatically (not editable)",
     "send": "Send",
     "empty": "Write the reply text",
-    "sent": "Reply sent"
+    "sent": "Reply sent",
+    "siteTo": "{name} · site notification",
+    "siteHint": "No email is sent: the reply goes to the user’s bell 🔔 and profile → “Support” (they did not choose email replies).",
+    "sentSite": "Reply sent to the site",
+    "sentFallback": "The email was not sent ({reason}) — the reply went to the site, the user will see why"
   },
   "nav": {
     "stats": "📊 Statistics",
@@ -489,5 +495,9 @@
     "count": "Showing {n} of {total}",
     "empty": "Nothing found — change the filters or period.",
     "noFiles": "pm2 log files not found (~/.pm2/logs) — there are no logs on a local computer."
+  },
+  "fallback": {
+    "mailLimit": "daily email limit",
+    "mailFailed": "sending error"
   }
 }

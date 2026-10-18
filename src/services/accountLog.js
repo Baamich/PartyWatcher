@@ -16,6 +16,8 @@ function record(userId, type, data = {}, req = null) {
     doc.ip = clientIp(req);
     doc.device = parseUA(req.headers || {}).name || '';
   }
+  // владельцу — уведомление в колокольчик (смена пароля, почты, логина…), services/notify.js
+  require('./notify').accountEvent(userId, type, data).catch(() => {});
   return AccountEvent.create(doc).catch((e) => console.error('[accountLog]', type, e.message));
 }
 

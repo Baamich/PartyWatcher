@@ -16,6 +16,7 @@ const User = require('../models/User');
 const rateLimit = require('express-rate-limit');
 const i18n = require('../services/i18n');
 const { sendSupportEmail, footer, subjectOf, ticketIdFromRefs } = require('../services/supportMail');
+const notify = require('../services/notify');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const STATUSES = ['unread', 'accepted', 'trivial', 'answered'];
@@ -64,6 +65,31 @@ async function createWithFiles(doc, files) {
 // язык писем для обращения с почты: есть кириллица — русский, иначе английский
 const guessLang = (...texts) => (/[А-Яа-яЁё]/.test(texts.join(' ')) ? 'ru' : 'en');
 
+// тема для человека (профиль, уведомления): своя тема, иначе первая строка описания
+function topicOf(t) {
+  const s = String(t.subject || '').trim() || String(t.description || '').split('\n').find((l) => l.trim()) || '';
+  return s.trim().slice(0, 80);
+}
+const isReport = (t) => REPORT_SOURCES.includes(t.source);
+
+// куда доставить ответ поддержки. Вошедшему — на сайт (уведомление + профиль → «Поддержка»), если он не выбрал
+// «ответы на почту»; письмо — гостю, обращению из почты и тому, кто выбрал почту. { via: 'site'|'email'|'none', user, email }
+async function deliveryOf(ticket) {
+  const u = ticket.userId ? await User.findById(ticket.userId).select('username email supportByEmail').lean() : null;
+  if (u && ticket.source !== 'email' && !u.supportByEmail) return { via: 'site', user: u };
+  const email = ticket.email || (u && u.supportByEmail ? u.email : '');
+  if (email) return { via: 'email', user: u, email };
+  if (u) return { via: 'site', user: u };
+  return { via: 'none', user: null };
+}
+// уведомление в колокольчик: ответ, «принято», «пустяк» (жалобе — «рассмотрена»); кнопка — в профиль на эту переписку
+// fallback — почему на сайт, а не письмом (mailLimit | mailFailed): клиент допишет причину к тексту
+function notifyUser(ticket, user, kind, fallback) {
+  const type = kind === 'reply' ? 'support.reply' : isReport(ticket) ? 'support.report' : 'support.' + kind;
+  return notify.send(user._id, type, { topic: topicOf(ticket), n: ticket.number, fb: fallback },
+    { link: notify.profileLink(user.username, 'support') + ':' + ticket._id });
+}
+
 // гостей ограничиваем жёстче: обращение без входа — самый простой путь для спама
 const guestLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -79,6 +105,7 @@ router.post('/', auth.optional, guestLimiter, async (req, res) => {
     const name = String(req.body.name || '').trim().slice(0, 12);
     const email = String(req.body.email || '').trim().toLowerCase().slice(0, 100);
     const description = String(req.body.description || '').trim().slice(0, 1000);
+    const subject = String(req.body.subject || '').replace(/\s+/g, ' ').trim().slice(0, 100); // тема (форма в профиле)
 
     if (!req.user && !email) {
       return res.status(400).json({ error: req.t('server.support.needEmail') });
@@ -100,6 +127,7 @@ router.post('/', auth.optional, guestLimiter, async (req, res) => {
       name,
       email,
       description,
+      ...(subject ? { subject } : {}),
       lang: req.lang,
       userId: req.user ? req.user.id : null,
       username: req.user ? req.user.username || '' : '',
@@ -110,6 +138,86 @@ router.post('/', auth.optional, guestLimiter, async (req, res) => {
   } catch (err) {
     console.error('[support/create]', err);
     res.status(500).json({ error: req.t('server.sendFailed') });
+  }
+});
+
+// ---- профиль → «Поддержка»: свои обращения, переписка и ответ с сайта ----
+function myBrief(t) {
+  const sup = (t.messages || []).filter((m) => m.from === 'support');
+  const lastSup = sup.length ? sup[sup.length - 1].at : null;
+  return {
+    id: String(t._id), number: t.number, topic: topicOf(t), source: t.source, status: t.status, report: isReport(t),
+    createdAt: t.createdAt, updatedAt: t.updatedAt, answered: sup.length > 0,
+    fresh: !!lastSup && (!t.userSeenAt || new Date(lastSup) > new Date(t.userSeenAt)), // ответ, который ещё не открывал
+  };
+}
+
+// GET /support/my — свои обращения и жалобы, свежие сверху
+router.get('/my', auth, async (req, res) => {
+  try {
+    const [rows, u] = await Promise.all([
+      SupportTicket.find({ userId: req.user.id }).sort({ updatedAt: -1 }).limit(50)
+        .select('number subject description source status messages.from messages.at createdAt updatedAt userSeenAt').lean(),
+      User.findById(req.user.id).select('supportByEmail').lean(),
+    ]);
+    res.json({ supportByEmail: !!u?.supportByEmail, tickets: rows.map(myBrief) });
+  } catch (err) {
+    console.error('[support/my]', err.message);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// GET /support/my/:id — переписка (открыл — ответы прочитаны; updatedAt не трогаем, порядок списка тот же)
+router.get('/my/:id', auth, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+    const t = await SupportTicket.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { $set: { userSeenAt: new Date() } },
+      { new: true, timestamps: false }
+    ).select('number subject description source status messages files createdAt updatedAt userSeenAt').lean();
+    if (!t) return res.status(404).json({ error: req.t('server.notFound') });
+    res.json({
+      ticket: {
+        ...myBrief(t), description: t.description, files: (t.files || []).map(String),
+        // кто из поддержки ответил, человеку не показываем — «Служба поддержки»
+        messages: (t.messages || []).map((m) => ({
+          from: m.from, kind: m.kind, text: m.text, at: m.at, site: !!m.site, emailed: !!m.emailed, fallback: m.fallback || null,
+        })),
+      },
+    });
+  } catch (err) {
+    console.error('[support/my/get]', err.message);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// POST /support/my/:id/reply { text } — написать в переписку с сайта: обращение снова «непрочитанное» у админов
+const myReplyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => 'u:' + req.user.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: (req) => ({ error: req.t('server.support.tooMany') }),
+});
+router.post('/my/:id/reply', auth, myReplyLimiter, async (req, res) => {
+  try {
+    if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+    const text = String(req.body?.text || '').trim().slice(0, 2000);
+    if (text.length < 2) return res.status(400).json({ error: req.t('server.support.messageEmpty') });
+    const msg = { from: 'user', kind: 'user', text, site: true, at: new Date() };
+    const ticket = await SupportTicket.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { $push: { messages: { $each: [msg], $slice: -MAX_MESSAGES } }, $set: { status: 'unread', hasNewReply: true, userSeenAt: new Date() } },
+      { new: true }
+    ).select('-mailIds');
+    if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
+    await notifyAdmins(req, ticket);
+    res.json({ ok: true, message: { ...msg, emailed: false }, ticket: myBrief(ticket) });
+  } catch (err) {
+    console.error('[support/my/reply]', err.message);
+    res.status(500).json({ error: req.t('server.serverError') });
   }
 });
 
@@ -457,9 +565,10 @@ router.delete('/:id/preset', auth, adminOnly, async (req, res) => {
     const ticket = await SupportTicket.findById(req.params.id).select('-mailIds');
     const pid = ticket?.report?.preset?.id;
     if (!pid) return res.status(404).json({ error: req.t('server.notFound') });
-    const p = isId(pid) && (await Preset.findById(pid).select('_id'));
+    const p = isId(pid) && (await Preset.findById(pid).select('_id authorId name'));
     if (p) {
       await Promise.all([PresetLike.deleteMany({ presetId: p._id }), PresetAdd.deleteMany({ presetId: p._id }), p.deleteOne()]);
+      notify.send(p.authorId, 'preset.removed', { preset: p.name }, { link: '/workbench/presets.html' }); // автору — решение модерации
     }
     ticket.report.preset.deleted = true;
     await ticket.save();
@@ -478,10 +587,20 @@ router.get('/clip/:id', auth, adminOnly, (req, res) => {
   res.sendFile(file, { headers: { 'Cache-Control': 'private, max-age=86400' } });
 });
 
-// скриншот обращения — только админу (картинку не кэширует Cloudflare: private)
-router.get('/file/:id', auth, adminOnly, async (req, res) => {
+// скриншот обращения — админу и автору обращения (картинку не кэширует Cloudflare: private)
+async function fileAccess(req, res, next) {
   try {
     if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+    const f = await SupportFile.findById(req.params.id).select('ticketId').lean();
+    if (!f) return res.status(404).json({ error: req.t('server.notFound') });
+    if (await SupportTicket.exists({ _id: f.ticketId, userId: req.user.id })) return next();
+    return adminOnly(req, res, next);
+  } catch (e) {
+    next(e);
+  }
+}
+router.get('/file/:id', auth, fileAccess, async (req, res) => {
+  try {
     const f = await SupportFile.findById(req.params.id).lean();
     if (!f) return res.status(404).json({ error: req.t('server.notFound') });
     res.set({ 'Content-Type': f.mime, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
@@ -507,10 +626,12 @@ router.get('/:id', auth, adminOnly, async (req, res) => {
     const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, { $set: { hasNewReply: false } }, { new: true })
       .select('-mailIds').lean();
     if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
-    res.json({
-      ticket: { ...briefOf(ticket), messages: ticket.messages || [] },
-      reply: ticket.email ? { subject: subjectOf(ticket), footer: footer(ticket, req.user.username) } : null,
-    });
+    // куда уйдёт ответ: на сайт (уведомление) или письмом — решает сервер (deliveryOf), админу только показываем
+    const d = await deliveryOf(ticket);
+    const reply = d.via === 'email'
+      ? { via: 'email', to: ticket.email || d.email, subject: subjectOf(ticket), footer: footer(ticket, req.user.username) }
+      : d.via === 'site' ? { via: 'site', to: '@' + d.user.username, subject: topicOf(ticket), footer: '' } : null;
+    res.json({ ticket: { ...briefOf(ticket), messages: ticket.messages || [] }, reply });
   } catch (err) {
     console.error('[support/get]', err.message);
     res.status(500).json({ error: req.t('server.serverError') });
@@ -536,32 +657,43 @@ router.patch('/:id/status', auth, adminOnly, async (req, res) => {
     }
     const ticket = await SupportTicket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
+    const d = await deliveryOf(ticket);
     if (!(await claimUnread(ticket, status))) return res.status(409).json({ error: req.t('server.support.closed') });
 
     let emailed = false;
-    if (ticket.email) {
+    let site = d.via === 'site';
+    let fallback; // письмо не ушло (лимит / сбой) — уведомление на сайт с причиной
+    if (d.via === 'email') {
+      if (!ticket.email) ticket.email = d.email;
       try {
         const r = await sendSupportEmail(ticket, status);
         emailed = r.emailed;
         if (r.messageId) ticket.mailIds.push(r.messageId);
       } catch (e) {
-        console.error('[support/status] письмо не отправлено:', e.message);
+        console.error('[support/status] письмо не отправлено:', e.code === 'MAIL_LIMIT' ? 'дневной лимит писем исчерпан' : e.message);
+        if (d.user) fallback = e.code === 'MAIL_LIMIT' ? 'mailLimit' : 'mailFailed';
       }
-      ticket.messages.push({ from: 'support', kind: status, text: '', author: req.user.username || '', emailed });
+      if (!emailed && d.user && !fallback) fallback = 'mailFailed';
+      if (fallback) site = true;
     }
+    ticket.messages.push({
+      from: 'support', kind: status, text: '', author: req.user.username || '', emailed,
+      ...(site ? { site: true } : {}), ...(fallback ? { fallback } : {}),
+    });
     ticket.status = status;
     ticket.hasNewReply = false;
     await ticket.save();
+    if (site) notifyUser(ticket, d.user, status, fallback);
 
     const unreadCount = await broadcast(req, ticket);
-    res.json({ ticket: briefOf(ticket), unreadCount, emailed, hadEmail: !!ticket.email });
+    res.json({ ticket: briefOf(ticket), unreadCount, emailed, hadEmail: d.via === 'email', site, fallback: fallback || null });
   } catch (err) {
     console.error('[support/status]', err.message);
     res.status(500).json({ error: req.t('server.serverError') });
   }
 });
 
-// админ: ответ на обращение письмом. Без почты ответить нельзя
+// админ: ответ на обращение — на сайт или письмом (deliveryOf); письмо не ушло, а аккаунт есть — на сайт
 router.post('/:id/reply', auth, adminOnly, async (req, res) => {
   try {
     if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
@@ -570,8 +702,24 @@ router.post('/:id/reply', auth, adminOnly, async (req, res) => {
 
     const ticket = await SupportTicket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ error: req.t('server.notFound') });
-    if (!ticket.email) return res.status(400).json({ error: req.t('server.support.noEmail') });
+    const d = await deliveryOf(ticket);
+    if (d.via === 'none') return res.status(400).json({ error: req.t('server.support.noEmail') });
     if (!(await claimUnread(ticket, 'answered'))) return res.status(409).json({ error: req.t('server.support.closed') });
+
+    // на сайт: письма нет — уведомление в колокольчик и переписка в профиле (дневной лимит писем не тратится).
+    // fallback — человек выбрал почту, но письмо не ушло (лимит писем / сбой): тоже на сайт, с причиной
+    const toSite = async (fallback) => {
+      ticket.messages.push({ from: 'support', kind: 'reply', text, author: req.user.username || '', site: true, ...(fallback ? { fallback } : {}) });
+      if (ticket.messages.length > MAX_MESSAGES) ticket.messages = ticket.messages.slice(-MAX_MESSAGES);
+      ticket.status = 'answered';
+      ticket.hasNewReply = false;
+      await ticket.save();
+      notifyUser(ticket, d.user, 'reply', fallback);
+      const unreadCount = await broadcast(req, ticket);
+      return res.json({ ticket: briefOf(ticket), unreadCount, via: 'site', fallback: fallback || null });
+    };
+    if (d.via === 'site') return toSite();
+    if (!ticket.email) ticket.email = d.email; // выбрал «ответы на почту» уже после обращения
 
     let r;
     let limit = false;
@@ -583,7 +731,9 @@ router.post('/:id/reply', auth, adminOnly, async (req, res) => {
       r = { emailed: false };
     }
     if (!r.emailed) {
-      // письмо не ушло — возвращаем «непрочитанное», чтобы админ мог отправить ещё раз
+      // у человека есть аккаунт — ответ не теряется и не ждёт: уходит на сайт, причину он увидит в уведомлении
+      if (d.user) return toSite(limit ? 'mailLimit' : 'mailFailed');
+      // гость: письмо не ушло — возвращаем «непрочитанное», чтобы админ мог отправить ещё раз
       await SupportTicket.updateOne({ _id: ticket._id, status: 'answered' }, { $set: { status: 'unread' } });
       return res.status(limit ? 503 : 502).json({ error: req.t(limit ? 'server.support.mailLimit' : 'server.support.mailFailed') });
     }
@@ -597,7 +747,7 @@ router.post('/:id/reply', auth, adminOnly, async (req, res) => {
     await ticket.save();
 
     const unreadCount = await broadcast(req, ticket);
-    res.json({ ticket: briefOf(ticket), unreadCount });
+    res.json({ ticket: briefOf(ticket), unreadCount, via: 'email' });
   } catch (err) {
     console.error('[support/reply]', err.message);
     res.status(500).json({ error: req.t('server.serverError') });

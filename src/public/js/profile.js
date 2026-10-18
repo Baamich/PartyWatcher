@@ -5,7 +5,7 @@ const profileName = (() => {
   try { return decodeURIComponent(raw).toLowerCase(); } catch (_) { return raw.toLowerCase(); }
 })();
 
-const TABS = ['general', 'security', 'devices', 'chat'];
+const TABS = ['general', 'security', 'devices', 'chat', 'notifications', 'support'];
 let account = null; // GET /auth/account
 let emailShown = false;
 
@@ -26,17 +26,34 @@ async function profileLogout() {
   location.href = '/';
 }
 
+// tab может быть «support:<id>» — сразу открыть переписку (ссылка из уведомления)
 function openTab(tab) {
+  let ticketId = null;
+  const m = /^support:([a-f0-9]{24})$/i.exec(String(tab || ''));
+  if (m) {
+    tab = 'support';
+    ticketId = m[1];
+  }
   if (!TABS.includes(tab)) tab = TABS[0];
   document.querySelectorAll('.pf-nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.pf-section').forEach((s) => s.classList.toggle('hidden', s.dataset.section !== tab));
-  history.replaceState(null, '', '#' + tab);
+  history.replaceState(null, '', '#' + (ticketId ? 'support:' + ticketId : tab));
   if (tab === 'devices') loadDevices();
+  if (tab === 'notifications') loadNotifSettings();
+  if (tab === 'support') {
+    if (ticketId) openThread(ticketId);
+    else supBack();
+    loadSupport();
+  }
 }
 
 document.getElementById('pfNav')?.addEventListener('click', (e) => {
   const b = e.target.closest('.pf-nav-btn');
   if (b) openTab(b.dataset.tab);
+});
+// переход из колокольчика на этой же странице (меняется только #…)
+window.addEventListener('hashchange', () => {
+  if (account) openTab(location.hash.slice(1));
 });
 
 const fmtDate = (d) => new Date(d).toLocaleDateString(I18N.locale, { day: 'numeric', month: 'long', year: 'numeric' });
@@ -379,10 +396,287 @@ async function changePassword(e) {
   }
 }
 
+// ---------- Уведомления: что показывать в колокольчике ----------
+
+let notifSettings = null; // GET /notifications/settings
+
+function renderNotifSettings() {
+  const box = document.getElementById('pfNotifCats');
+  box.replaceChildren(...notifSettings.cats.map((c) => {
+    const row = document.createElement('label');
+    row.className = 'pf-switch-row pf-notif-row' + (c.locked ? ' pf-notif-row--locked' : '');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = c.on;
+    input.disabled = c.locked;
+    input.addEventListener('change', () => saveNotifCat(c.id, input.checked, input));
+    const text = document.createElement('span');
+    text.className = 'pf-switch-text';
+    const b = document.createElement('b');
+    b.textContent = t('profile.notif.cats.' + c.id + '.title');
+    const hint = document.createElement('span');
+    hint.className = 'pf-hint';
+    hint.textContent = t('profile.notif.cats.' + c.id + '.desc') + (c.locked ? ' ' + t('profile.notif.locked') : '');
+    text.append(b, hint);
+    row.append(input, text);
+    return row;
+  }));
+}
+
+async function loadNotifSettings() {
+  try {
+    notifSettings = await api('/notifications/settings');
+    renderNotifSettings();
+    renderSupMail();
+  } catch (err) {
+    PW.toast(err.message, 'error');
+  }
+}
+
+async function saveNotifCat(id, on, input) {
+  const off = notifSettings.cats.filter((c) => (c.id === id ? !on : !c.on)).map((c) => c.id);
+  input.disabled = true;
+  try {
+    notifSettings = await api('/notifications/settings', { method: 'PUT', body: { off } });
+    renderNotifSettings();
+    PW.toast(t('profile.notif.saved'), 'success');
+  } catch (err) {
+    input.checked = !on;
+    input.disabled = false;
+    PW.toast(err.message, 'error');
+  }
+}
+
+// ---------- Поддержка: обращения, переписка, «ответы на почту» ----------
+
+let supTickets = null; // GET /support/my
+let supByEmail = false;
+let supThread = null; // открытая переписка
+let supAttach = null;
+
+const supStatus = (tk) => t('profile.sup.status.' + (tk.status === 'unread' && tk.answered ? 'waiting' : tk.status));
+
+function renderSupMail() {
+  const box = document.getElementById('pfSupEmail');
+  if (notifSettings) supByEmail = notifSettings.supportByEmail;
+  box.checked = supByEmail;
+  document.getElementById('pfSupMailHint').textContent = t(supByEmail ? 'profile.sup.mailOn' : 'profile.sup.mailOff');
+}
+
+function renderSupList() {
+  const box = document.getElementById('pfSupList');
+  if (!supTickets.length) {
+    const p = document.createElement('p');
+    p.className = 'pf-empty';
+    p.textContent = t('profile.sup.empty');
+    box.replaceChildren(p);
+  } else {
+    box.replaceChildren(...supTickets.map((tk) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'pf-sup-row' + (tk.fresh ? ' pf-sup-row--fresh' : '');
+      const main = document.createElement('div');
+      main.className = 'pf-sup-row-main';
+      const title = document.createElement('div');
+      title.className = 'pf-sup-row-title';
+      title.textContent = (tk.report ? '🚩 ' : '') + '#' + tk.number + ' · ' + (tk.topic || t('profile.sup.noTopic'));
+      const meta = document.createElement('div');
+      meta.className = 'pf-sup-row-meta';
+      meta.textContent = t('profile.sup.updated', { d: fmtTime(tk.updatedAt) });
+      main.append(title, meta);
+      const side = document.createElement('div');
+      side.className = 'pf-sup-row-side';
+      if (tk.fresh) {
+        const n = document.createElement('span');
+        n.className = 'pf-sup-new';
+        n.textContent = t('profile.sup.newReply');
+        side.appendChild(n);
+      }
+      const st = document.createElement('span');
+      st.className = 'pf-sup-status pf-sup-status--' + tk.status;
+      st.textContent = supStatus(tk);
+      side.appendChild(st);
+      row.append(main, side);
+      row.addEventListener('click', () => openTab('support:' + tk.id));
+      return row;
+    }));
+  }
+  document.getElementById('pfSupDot').classList.toggle('hidden', !supTickets.some((x) => x.fresh));
+}
+
+async function loadSupport() {
+  try {
+    const r = await api('/support/my');
+    supTickets = r.tickets;
+    supByEmail = !!r.supportByEmail;
+    if (notifSettings) notifSettings.supportByEmail = supByEmail;
+    renderSupMail();
+    renderSupList();
+  } catch (err) {
+    PW.toast(err.message, 'error');
+  }
+}
+
+function msgEl(m) {
+  const mine = m.from === 'user';
+  const el = document.createElement('div');
+  el.className = 'pf-sup-msg ' + (mine ? 'pf-sup-msg--me' : 'pf-sup-msg--support');
+  const head = document.createElement('div');
+  head.className = 'pf-sup-msg-head';
+  const via = m.fallback ? '🔔 ' + t('profile.sup.fallback.' + m.fallback)
+    : !mine && m.emailed ? '✉️ ' + t('profile.sup.viaMail')
+      : mine && m.kind === 'user' && !m.site && m.at ? '✉️ ' + t('profile.sup.fromMail') : '';
+  head.textContent = [mine ? t('profile.sup.you') : t('profile.sup.team'), fmtTime(m.at), via].filter(Boolean).join(' · ');
+  const text = document.createElement('div');
+  text.className = 'pf-sup-msg-text';
+  text.textContent = m.kind === 'accepted' || m.kind === 'trivial' ? t('profile.sup.kind.' + m.kind) : m.text;
+  if (m.kind === 'accepted' || m.kind === 'trivial') text.classList.add('pf-sup-msg-status');
+  el.append(head, text);
+  return el;
+}
+
+function renderThread() {
+  const tk = supThread;
+  document.getElementById('pfSupThreadTitle').textContent =
+    (tk.report ? '🚩 ' : '') + '#' + tk.number + ' · ' + (tk.topic || t('profile.sup.noTopic')) + ' — ' + supStatus(tk);
+  const first = { from: 'user', kind: 'user', text: tk.description, at: tk.createdAt, site: true };
+  const box = document.getElementById('pfSupMsgs');
+  box.replaceChildren(...[first, ...tk.messages].map(msgEl));
+  if (tk.files && tk.files.length) {
+    const files = document.createElement('div');
+    files.className = 'pf-sup-files';
+    for (const id of tk.files) {
+      const a = document.createElement('a');
+      a.href = '/api/support/file/' + encodeURIComponent(id);
+      a.target = '_blank';
+      a.rel = 'noopener';
+      const img = document.createElement('img');
+      img.src = a.href;
+      img.alt = '';
+      img.loading = 'lazy';
+      a.appendChild(img);
+      files.appendChild(a);
+    }
+    box.firstElementChild.appendChild(files);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+async function openThread(id) {
+  document.getElementById('pfSupForm').classList.add('hidden');
+  try {
+    const r = await api('/support/my/' + encodeURIComponent(id));
+    supThread = r.ticket;
+    document.getElementById('pfSupList').classList.add('hidden');
+    document.getElementById('pfSupThread').classList.remove('hidden');
+    renderThread();
+    // открыл — ответ прочитан: убрать метку в списке
+    const row = supTickets && supTickets.find((x) => x.id === id);
+    if (row && row.fresh) {
+      row.fresh = false;
+      renderSupList();
+    }
+  } catch (err) {
+    PW.toast(err.message, 'error');
+    supBack();
+  }
+}
+
+function supBack() {
+  supThread = null;
+  document.getElementById('pfSupThread').classList.add('hidden');
+  document.getElementById('pfSupList').classList.remove('hidden');
+  if (/^#support:/.test(location.hash)) history.replaceState(null, '', '#support');
+}
+
+async function supReply(e) {
+  e.preventDefault();
+  const input = document.getElementById('pfSupReplyText');
+  const text = input.value.trim();
+  if (!supThread || text.length < 2) return;
+  const btn = document.getElementById('pfSupReplyBtn');
+  btn.disabled = true;
+  try {
+    const r = await api('/support/my/' + encodeURIComponent(supThread.id) + '/reply', { method: 'POST', body: { text } });
+    input.value = '';
+    supThread.messages.push(r.message);
+    supThread.status = r.ticket.status;
+    renderThread();
+    const row = supTickets && supTickets.find((x) => x.id === supThread.id);
+    if (row) {
+      Object.assign(row, r.ticket);
+      supTickets.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      renderSupList();
+    }
+    PW.toast(t('profile.sup.sent'), 'success');
+  } catch (err) {
+    PW.toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function supNew() {
+  supBack();
+  const form = document.getElementById('pfSupForm');
+  form.classList.remove('hidden');
+  if (!supAttach && window.PWAttach) supAttach = PWAttach.create(document.getElementById('pfSupAttach'), { max: 5, pasteRoot: form });
+  document.getElementById('pfSupSubject').focus();
+}
+
+function supCancel() {
+  document.getElementById('pfSupForm').classList.add('hidden');
+}
+
+async function supSend(e) {
+  e.preventDefault();
+  const subject = document.getElementById('pfSupSubject').value.trim();
+  const description = document.getElementById('pfSupText').value.trim();
+  if (!subject) return PW.toast(t('profile.sup.needSubject'), 'error');
+  if (description.length < 5) return PW.toast(t('profile.sup.shortText'), 'error');
+  if (supAttach && supAttach.busy()) return PW.toast(t('common.attach.wait'), 'error');
+  const btn = document.getElementById('pfSupSendBtn');
+  btn.disabled = true;
+  try {
+    const r = await api('/support', { method: 'POST', body: { subject, description, files: supAttach ? supAttach.files() : [] } });
+    document.getElementById('pfSupForm').reset();
+    if (supAttach) supAttach.clear();
+    supCancel();
+    PW.toast(t('profile.sup.created', { n: r.number }), 'success');
+    await loadSupport();
+    if (r.id) openTab('support:' + r.id);
+  } catch (err) {
+    PW.toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// «Ответы на почту»: включение — только после объяснения, что изменится
+async function supEmailToggle(_arg, box) {
+  const want = box.checked;
+  box.checked = supByEmail;
+  if (want && !(await PW.confirm(t('profile.sup.mailConfirm', { email: account ? account.email : '' }), { title: t('profile.sup.mailConfirmTitle'), okText: t('profile.sup.mailEnable') }))) return;
+  box.disabled = true;
+  try {
+    notifSettings = await api('/notifications/settings', { method: 'PUT', body: { supportByEmail: want } });
+    supByEmail = notifSettings.supportByEmail;
+    renderSupMail();
+    PW.toast(t(supByEmail ? 'profile.sup.mailOnToast' : 'profile.sup.mailOffToast'), 'success');
+  } catch (err) {
+    PW.toast(err.message, 'error');
+  } finally {
+    box.disabled = false;
+  }
+}
+
 // язык сменили без перезагрузки — перерисовать то, что собрано в JS (даты, подписи кнопок)
 window.addEventListener('pw:langchange', () => {
   if (account) { renderGeneral(); renderChat(); }
   if (devices) renderDevices();
+  if (notifSettings) renderNotifSettings();
+  if (supTickets) { renderSupMail(); renderSupList(); }
+  if (supThread) renderThread();
 });
 
 // ---------- старт ----------
@@ -405,4 +699,6 @@ window.addEventListener('pw:langchange', () => {
   lockCritical(!account.isMain);
   renderEmailState(account.pendingEmail, account.emailRetryIn);
   openTab(location.hash.slice(1));
+  // точка «новый ответ» у «Поддержки» видна из любого раздела
+  if (!/^support/.test(location.hash.slice(1))) loadSupport();
 })();

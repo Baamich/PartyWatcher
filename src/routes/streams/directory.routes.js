@@ -145,7 +145,9 @@ router.get('/live-follows', auth.optional, async (req, res) => {
       .map((r) => s.byId.get(String(r.streamerId)))
       .filter((c) => c && c.card.isLive && c.startedAt)
       .map((c) => ({ ...c.card, startedAt: c.startedAt, notice: c.notice }));
-    res.json({ list });
+    // заодно — непрочитанные уведомления: колокольчик не делает свой опрос (public/js/notify-bell.js)
+    const notif = await require('../../services/notify').unreadOf(req.user.id).catch(() => null);
+    res.json({ list, notif });
   } catch (err) {
     console.error('[GET /streams/live-follows]', err);
     res.status(500).json({ error: req.t('server.error') });
