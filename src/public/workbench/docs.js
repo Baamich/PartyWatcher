@@ -202,7 +202,7 @@ async function loadPage(id) {
     if (h1 && page.num) h1.textContent = `${page.num} ${h1.textContent}`;
 
     enhanceCode(contentEl);
-    document.title = `PartyWatcher — ${page.num ? page.num + ' ' : ''}${page.title}`;
+    document.title = `Party Watcher — ${page.num ? page.num + ' ' : ''}${page.title}`;
     window.scrollTo({ top: 0 });
   } catch (err) {
     if (token !== loadToken) return;

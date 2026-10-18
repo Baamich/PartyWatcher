@@ -117,7 +117,7 @@
     "time": "Moscow time; {time:+1} — another time zone",
     "date": "Moscow date"
   },
-  "pageTitle": "PartyWatcher — Builder",
+  "pageTitle": "Party Watcher — Builder",
   "chatTitle": "🧩 Chat builder",
   "chatHint": "Set up the chat look and copy a ready OBS link. The chat key is added automatically.",
   "readyStyles": "Ready-made styles",

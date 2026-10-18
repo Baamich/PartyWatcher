@@ -260,9 +260,9 @@
   },
   "mail": {
     "emailChange": {
-      "subject": "PartyWatcher email change",
+      "subject": "Party Watcher email change",
       "hello": "Hi {name}!",
-      "intro": "Someone asked in the PartyWatcher profile to change the account email to this address.",
+      "intro": "Someone asked in the Party Watcher profile to change the account email to this address.",
       "openLink": "To confirm, open the link within {n} minutes:",
       "ignore": "If it was not you, just ignore this email — the account email will not change.",
       "button": "Confirm new email",
@@ -270,19 +270,19 @@
       "footer": "The link is valid for {n} minutes. If it was not you, do nothing — the email stays the same."
     },
     "reset": {
-      "subject": "PartyWatcher password reset",
+      "subject": "Party Watcher password reset",
       "hello": "Hello, {name}!",
-      "requested": "Someone (possibly you) requested a password reset on PartyWatcher.",
+      "requested": "Someone (possibly you) requested a password reset on Party Watcher.",
       "openLink": "To set a new password, open the link (valid for {n} minutes):",
       "ignore": "If you did not request anything, just ignore this email — your password stays the same.",
       "button": "Set a new password",
       "footer": "The link is valid for {n} minutes. If you did not request anything, just ignore this email — your password stays the same."
     },
     "support": {
-      "subject": "Support PartyWatcher",
+      "subject": "Support Party Watcher",
       "hello": "Hello!",
       "helloName": "Hello, {name}!",
-      "accepted": "Your request #{n} has been accepted for review. Thank you for helping us make PartyWatcher better: we will look into it carefully and write to you if needed.",
+      "accepted": "Your request #{n} has been accepted for review. Thank you for helping us make Party Watcher better: we will look into it carefully and write to you if needed.",
       "acceptedBye": "Have a nice day!",
       "trivial": "Thank you for contacting support! Your request #{n} has been reviewed and processed. If you still have a question, just reply to this email — we will read it.",
       "trivialBye": "All the best!",
@@ -295,9 +295,9 @@
       "historySupport": "Support"
     },
     "verify": {
-      "subject": "Confirm your PartyWatcher email",
+      "subject": "Confirm your Party Watcher email",
       "hello": "Hi, {name}!",
-      "intro": "You signed up on PartyWatcher. Confirm your email to activate the account.",
+      "intro": "You signed up on Party Watcher. Confirm your email to activate the account.",
       "openLink": "Open the link within {n} minutes:",
       "button": "Activate account",
       "linkHint": "If the button does not work, open this link:",
@@ -471,7 +471,7 @@
   },
   "ban": {
     "pageTitle": "Access denied",
-    "pageText": "Access to PartyWatcher from this device or network has been blocked by the administration. If this is a mistake, write to support@partywatcher.de.",
+    "pageText": "Access to Party Watcher from this device or network has been blocked by the administration. If this is a mistake, write to support@partywatcher.de.",
     "blocked": "Access from this device or network is blocked",
     "accountShort": "Account blocked",
     "accountUntil": "Your account is blocked until {until}.",

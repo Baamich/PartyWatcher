@@ -16,6 +16,7 @@ const config = require('../config');
 const i18n = require('./i18n');
 const auth = require('../middleware/auth');
 const { meOf } = require('./me');
+const seo = require('./seo');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const DEV = config.env !== 'production';
@@ -203,7 +204,8 @@ async function bootJson(req) {
 }
 
 // ---------- отдача ----------
-// opts.vars — подстановки {{ключ}} в готовую страницу (экранируются), opts.raw — уже готовый HTML (без экранирования)
+// opts.vars — подстановки {{ключ}} в готовую страницу (экранируются), opts.raw — уже готовый HTML (без экранирования),
+// opts.seo — заголовок/описание/noindex/разметка для поисковиков (services/seo.js; без него — по адресу файла)
 async function send(req, res, rel, opts = {}) {
   const abs = typeof rel === 'string' && path.isAbsolute(rel) ? rel : path.join(PUBLIC, rel);
   let st;
@@ -221,6 +223,7 @@ async function send(req, res, rel, opts = {}) {
       return all;
     });
   }
+  html = seo.decorate(html, req, res, lang, path.relative(PUBLIC, abs).split(path.sep).join('/'), opts.seo);
 
   const etag = 'W/"' + crypto.createHash('sha1').update(html).digest('base64').slice(0, 22) + '"';
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

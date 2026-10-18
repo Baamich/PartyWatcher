@@ -186,3 +186,4 @@ router.get('/directory', auth.optional, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.thumbUrl = thumbUrl; // кадр эфира для разметки LIVE (services/seo.js)

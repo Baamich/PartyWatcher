@@ -51,7 +51,12 @@
   const me = document.currentScript;
   const ssrLang = me && me.getAttribute('data-lang');
   // язык, на котором сервер уже собрал страницу, важнее языков браузера (cookie — важнее всего)
-  let lang = readCookie() || (LANGS[ssrLang] ? ssrLang : null) || detect();
+  // ?lang= в адресе (так поисковики открывают версию на нужном языке) важнее cookie
+  const urlLang = (() => {
+    try { const v = new URLSearchParams(location.search).get('lang'); return v && LANGS[v] ? v : null; } catch (_) { return null; }
+  })();
+  let lang = urlLang || readCookie() || (LANGS[ssrLang] ? ssrLang : null) || detect();
+  let cookieSeen = readCookie(); // смену языка в другой вкладке узнаём по изменению cookie
   const ssr = ssrLang === lang && !!window.PW_I18N_DATA; // разметка уже переведена, словарь уже загружен
   document.documentElement.setAttribute('lang', lang);
 
@@ -262,6 +267,15 @@
   function setLang(next) {
     if (!LANGS[next] || next === lang) return Promise.resolve();
     saveCookie(next); // запросы к API с этого момента идут уже с новым языком
+    cookieSeen = next;
+    // выбранный язык — и в адресе, если он там был (иначе перезагрузка вернёт старый)
+    if (urlLang) {
+      try {
+        const u = new URL(location.href);
+        u.searchParams.set('lang', next);
+        history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+      } catch (_) {}
+    }
     const oldData = dict();
     dataByLang[lang] = oldData;
     const job = loadBundle(next).then((data) => {
@@ -286,7 +300,9 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
     const c = readCookie();
-    if (c && c !== lang) setLang(c);
+    if (!c || c === cookieSeen) return;
+    cookieSeen = c;
+    if (c !== lang) setLang(c);
   });
 
   // ===== переключатель языка =====

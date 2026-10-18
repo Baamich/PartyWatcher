@@ -81,7 +81,7 @@ async function sendPasswordReset(to, username, link, ttlMinutes, lang) {
     `${tr('requested')}\n` +
     `${tr('openLink', { n: ttlMinutes })}\n\n${link}\n\n` +
     `${tr('ignore')}\n\n` +
-    `— PartyWatcher`;
+    `— Party Watcher`;
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;max-width:520px">` +
     `<p>${escapeHtml(tr('hello', { name: username }))}</p>` +
@@ -104,7 +104,7 @@ async function sendVerifyEmail(to, username, link, ttlMinutes, lang) {
     `${tr('intro')}\n` +
     `${tr('openLink', { n: ttlMinutes })}\n\n${link}\n\n` +
     `${tr('ignore')}\n\n` +
-    `— PartyWatcher`;
+    `— Party Watcher`;
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;max-width:520px">` +
     `<p>${escapeHtml(tr('hello', { name: username }))}</p>` +
@@ -134,7 +134,7 @@ ${link}
     `${tr('ignore')}
 
 ` +
-    `— PartyWatcher`;
+    `— Party Watcher`;
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;max-width:520px">` +
     `<p>${escapeHtml(tr('hello', { name: username }))}</p>` +

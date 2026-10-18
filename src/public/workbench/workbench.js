@@ -226,6 +226,8 @@ async function loadSettings() {
     document.getElementById('liveNoticeInput').value = data.liveNotice || '';
     document.getElementById('chatRulesInput').value = data.chatRules || '';
     document.getElementById('streamAdultInput').checked = !!data.streamAdult;
+    document.getElementById('searchIndexInput').checked = data.searchIndex !== false;
+    renderSearchStatus(data.search);
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
     setGenerateBtnState(!!data.streamKeyMasked);
     setChatApiKeyUi(data.chatApiKeyMasked);
@@ -233,6 +235,18 @@ async function loadSettings() {
   } catch (err) {
     console.warn('[loadSettings]', err.message);
   }
+}
+
+// в поиске ли канал сейчас (services/searchIndex.status)
+function renderSearchStatus(st) {
+  const el = document.getElementById('searchIndexStatus');
+  if (!el) return;
+  el.classList.toggle('hidden', !st);
+  if (!st) return;
+  if (st.off) el.textContent = t('workbench.settings.searchOff');
+  else if (st.adult) el.textContent = t('workbench.settings.searchAdult');
+  else if (st.indexed) el.textContent = t('workbench.settings.searchOn');
+  else el.textContent = t('workbench.settings.searchNeed', { n: st.need, min: st.minMinutes });
 }
 
 function setGenerateBtnState(hasKey) {
@@ -568,10 +582,12 @@ async function saveSettings() {
     liveNotice: document.getElementById('liveNoticeInput').value,
     chatRules: document.getElementById('chatRulesInput').value,
     streamAdult: document.getElementById('streamAdultInput').checked,
+    searchIndex: document.getElementById('searchIndexInput').checked,
   };
   try {
     const r = await api('/workbench/settings', { method: 'PATCH', body });
     setCategory(r.category || null);
+    renderSearchStatus(r.search);
     showToast('success', t('common.saved'));
   } catch (err) {
     showToast('error', err.message || t('common.saveFailed'));

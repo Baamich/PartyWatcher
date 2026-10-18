@@ -1,6 +1,6 @@
 {
-  "pageTitle": "PartyWatcher — События",
-  "overlayTitle": "PartyWatcher — Алерты",
+  "pageTitle": "Party Watcher — События",
+  "overlayTitle": "Party Watcher — Алерты",
   "overlay": {
     "noKey": "В ссылке нет ключа — скопируй её заново в студии (🔔 События)",
     "badKey": "Ключ не подходит — скопируй ссылку заново в студии (🔔 События)"

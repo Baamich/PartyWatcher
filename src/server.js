@@ -66,6 +66,8 @@ const authMw = require('./middleware/auth');
 const perf = require('./services/perf');
 const bans = require('./services/bans');
 const analytics = require('./services/analytics');
+const seo = require('./services/seo');
+const searchPing = require('./services/searchPing');
 const adminStatsRoutes = require('./routes/adminStats.routes');
 const adminUsersRoutes = require('./routes/adminUsers.routes');
 const adminDetectRoutes = require('./routes/adminDetect.routes');
@@ -80,6 +82,8 @@ async function start() {
   if (staleReset.modifiedCount) {
     console.log(`[boot] сброшено зависших isLive: ${staleReset.modifiedCount}`);
   }
+  // счётчик эфиров для поисковиков у стримеров, у которых его ещё нет (один раз; не держит запуск)
+  require('./services/searchIndex').backfill().catch((e) => console.warn('[searchIndex] backfill', e.message));
 
   const app = express();
   app.set('trust proxy', 1);
@@ -187,6 +191,25 @@ async function start() {
     pages.send(req, res, 'datenschutz.html', imprintOpts(req)).catch(next);
   });
 
+  // карта сайта для поисковиков: собирается из базы, в памяти час (services/seo.js)
+  app.get('/sitemap.xml', (req, res, next) => {
+    seo.sitemapXml().then((xml) => {
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.send(xml);
+    }).catch(next);
+  });
+  // файл ключа IndexNow: Bing и Яндекс проверяют, что уведомления шлёт хозяин сайта (services/searchPing.js)
+  if (searchPing.INDEXNOW_KEY) {
+    app.get(`/${searchPing.INDEXNOW_KEY}.txt`, (req, res) => res.type('text/plain').send(searchPing.INDEXNOW_KEY));
+  }
+  // каталог трансляций; ?cat=<slug> — страница категории со своим заголовком для поиска
+  app.get('/streams.html', (req, res, next) => {
+    const slug = typeof req.query.cat === 'string' ? req.query.cat.trim().toLowerCase().slice(0, 100) : '';
+    if (!slug) return pages.send(req, res, 'streams.html').catch(next);
+    seo.categoryPage(req.lang, slug).then(({ page }) => pages.send(req, res, 'streams.html', { seo: page })).catch(next);
+  });
+
   app.use(pages.middleware); // HTML-страницы: версии файлов, словарь, перевод и данные входа сразу в разметке
   app.use(assets.middleware(pages.absOf, pages.staticHeaders)); // свои js/css: минифицированы и сжаты заранее
   assets.warm([pages.PUBLIC, ...Object.values(pages.VENDOR), ...(() => { try { return [require.resolve('hls.js/dist/hls.min.js')]; } catch { return []; } })()]);
@@ -273,7 +296,13 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
   });
 
   app.get('/streamers/:name', (req, res, next) => {
-    pages.send(req, res, 'streamers/streamer.html').catch(next);
+    const nameLower = String(req.params.name || '').trim().toLowerCase().slice(0, 64);
+    seo.streamerPage(req, req.lang, nameLower, (pid) => directoryRoutes.thumbUrl(pid))
+      .then(({ page, notFound }) => {
+        if (notFound) res.status(404);
+        return pages.send(req, res, 'streamers/streamer.html', { seo: page });
+      })
+      .catch(next);
   });
 
   // профиль пользователя (кнопка-ник в шапке) — единый шаблон на любое имя

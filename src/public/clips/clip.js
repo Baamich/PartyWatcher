@@ -14,7 +14,7 @@ function render() {
   if (!clip) return;
   const title = clip.title || t('clips.untitled');
   document.getElementById('clipTitle').textContent = title;
-  document.title = title + ' — PartyWatcher';
+  document.title = title + ' — Party Watcher';
 
   const st = document.getElementById('clipStreamer');
   st.href = '/streamers/' + encodeURIComponent(clip.streamerNameLower);

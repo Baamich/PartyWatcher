@@ -9,7 +9,7 @@
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
   <link rel="stylesheet" href="/workbench/workbench.css?v=8" />
-  <title data-i18n="workbench.pageTitle">PartyWatcher — Творческая студия</title>
+  <title data-i18n="workbench.pageTitle">Party Watcher — Творческая студия</title>
 </head>
 <body>
   <div class="page-header">
@@ -21,7 +21,7 @@
           <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         <span class="brand-stack">
-          <span class="brand-text"><span class="brand-party">Party</span><span class="brand-watcher">Watcher</span></span>
+          <span class="brand-text"><span class="brand-party">Party</span> <span class="brand-watcher">Watcher</span></span>
           <span class="brand-live-tag" data-no-i18n>LIVE</span>
         </span>
       </a>
@@ -116,6 +116,10 @@
 
           <label class="wb-check"><input type="checkbox" id="streamAdultInput" /> <span data-i18n="workbench.settings.adult">Эфир 18+</span></label>
           <p class="wb-hint" data-i18n="workbench.settings.adultHint">Обязательно, если в эфире бывают эротические сцены или обнажённость (фильмы, сериалы, игры). Зрители сначала подтвердят, что им есть 18, а в каталоге трансляций эфир увидят только те, кто уже подтверждал возраст, — с плашкой «18+» вместо кадра. Порнография запрещена всегда.</p>
+
+          <label class="wb-check"><input type="checkbox" id="searchIndexInput" checked /> <span data-i18n="workbench.settings.search">Показывать канал в поисковиках</span></label>
+          <p class="wb-hint" data-i18n="workbench.settings.searchHint">Страница канала появится в Google, Яндексе и Bing — по запросам вроде «ник стрим». Нужно 5 эфиров от 30 минут за месяц; при 12 и больше канал остаётся в поиске и весь следующий месяц, а дальше для этого хватает 8 в месяц. Каналы с эфирами 18+ в поиск не попадают.</p>
+          <p class="wb-hint hidden" id="searchIndexStatus"></p>
 
           <button type="button" class="auth-submit" data-click="saveSettings" data-i18n="common.save">Сохранить</button>
         </div>

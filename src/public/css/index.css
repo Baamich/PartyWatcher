@@ -806,3 +806,36 @@ html.pw-authed #appBox.hidden { display: block !important; }
 /* «Забыли пароль»: подсказка после отправки; кнопки писем во время отсчёта */
 .forgot-hint { margin: 0 0 10px; font-size: 13px; color: var(--text-muted); }
 .verify-actions .auth-link:disabled { opacity: 0.6; cursor: default; }
+
+/* «Что такое Party Watcher» под экраном входа (только гостю — вместе с #authBox) */
+.about {
+  max-width: 760px;
+  margin: 0 auto 48px;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+.about h2 {
+  font-size: 20px;
+  margin: 0 0 10px;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
+}
+.about h3 {
+  font-size: 15px;
+  margin: 18px 0 6px;
+}
+.about p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0;
+}
+.about .about-links {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#authBox.hidden + .about,
+html.pw-authed .about { display: none; }

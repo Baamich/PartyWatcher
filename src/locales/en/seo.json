@@ -1,0 +1,24 @@
+{
+  "site": {
+    "description": "Party Watcher is a service for watching videos and live streams together: watch YouTube, Twitch and VK Video with friends in sync, talk in chat and voice, and run your own streams."
+  },
+  "streams": {
+    "title": "Live streams — watch streams online | Party Watcher",
+    "description": "Streams that are live right now: games, talk shows, music and creative streams. Watch live online, chat, earn channel points and follow your favourite streamers on Party Watcher."
+  },
+  "category": {
+    "title": "{name} — watch live streams | Party Watcher",
+    "description": "{name} live streams on Party Watcher: watch streams online, chat with streamers and viewers, follow channels."
+  },
+  "streamer": {
+    "title": "{name} — watch live stream | Party Watcher",
+    "descLive": "{name} is live on Party Watcher: {title}. Watch the stream online, chat and earn channel points.",
+    "descLiveCat": "{name} is live on Party Watcher: {title} ({cat}). Watch the stream online, chat and earn channel points.",
+    "desc": "{name} is a streamer on Party Watcher. Watch live streams and past broadcasts online, follow to never miss the start of a stream.",
+    "liveName": "{name} — live stream"
+  },
+  "news": {
+    "title": "Party Watcher news — updates and new features",
+    "description": "What's new on Party Watcher: updates to watch parties, streams, chat, rewards and the creator studio."
+  }
+}

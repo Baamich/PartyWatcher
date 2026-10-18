@@ -1,6 +1,6 @@
 {
-  "pageTitle": "PartyWatcher — Events",
-  "overlayTitle": "PartyWatcher — Alerts",
+  "pageTitle": "Party Watcher — Events",
+  "overlayTitle": "Party Watcher — Alerts",
   "overlay": {
     "noKey": "The link has no key — copy it again in the studio (🔔 Events)",
     "badKey": "The key is wrong — copy the link again in the studio (🔔 Events)"

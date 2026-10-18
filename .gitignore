@@ -15,3 +15,5 @@ CLAUDE.local.md
 .mcp.json
 # graphify (граф кода, строится локально)
 graphify-out/
+# ключ сервисного аккаунта Google (Indexing API)
+google-indexing*.json

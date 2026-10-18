@@ -82,6 +82,14 @@ const userSchema = new mongoose.Schema(
     streamCategoryId: { type: String, default: null }, // Category.tid, выбирается в студии
     liveNotice: { type: String, default: '' }, // текст в уведомлении подписчикам «вышел в эфир»
     streamAdult: { type: Boolean, default: false }, // эфир 18+ (эротические сцены): окно подтверждения возраста, нет на главной каталога
+    // ---- поисковики (services/searchIndex) ----
+    searchIndex: { type: Boolean, default: true }, // галочка в студии «Показывать канал в поисковиках»
+    seo: {
+      m: { type: String, default: undefined }, // месяц счётчика 'YYYY-MM' (UTC)
+      n: { type: Number, default: undefined }, // эфиров от 30 минут в этом месяце
+      carry: { type: Boolean, default: undefined }, // в поиске весь месяц (наработал в прошлом)
+      adultAt: { type: Date, default: undefined }, // последний эфир 18+
+    },
     chatFollowMin: { type: Number, default: null }, // чат только для подписчиков: null — выкл, 0 — сразу, N — подписан не меньше N минут
     chatFilter: { type: Number, default: 0 }, // фильтр слов в чате: 0 — выкл … 4 — очень сильно (services/chatFilter)
     chatSlowSec: { type: Number, default: 0 }, // медленный режим: секунд между сообщениями зрителя (0 — выкл)

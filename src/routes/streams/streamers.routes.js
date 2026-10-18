@@ -7,6 +7,7 @@ const { hasProfanity } = require('../../services/profanity');
 const PWLayout = require('../../public/js/pwlayout.js');
 const categories = require('../../services/categories');
 const { isAdultStream, seesAdultStreams } = require('../../services/adultContent');
+const { BOT_RE } = require('../../services/clientInfo');
 
 // название и категория идущего эфира (для плашки над плеером и строки под именем)
 async function liveInfo(s) {
@@ -255,7 +256,7 @@ router.get('/:name/bundle', async (req, res) => {
 
     const s = await User.findOneAndUpdate(
       { streamerNameLower: nameLower },
-      { $inc: { profileViews: 1 } },
+      { $inc: { profileViews: BOT_RE.test(req.headers['user-agent'] || '') ? 0 : 1 } }, // поисковики просмотрами не считаем
       { new: true }
     )
       .select('streamerName isLive streamPlaybackId profileRev streamTitle streamCategoryId streamAdult')
@@ -547,7 +548,7 @@ router.get('/:name', async (req, res) => {
 
     const s = await User.findOneAndUpdate(
       { streamerNameLower: nameLower },
-      { $inc: { profileViews: 1 } },
+      { $inc: { profileViews: BOT_RE.test(req.headers['user-agent'] || '') ? 0 : 1 } }, // поисковики просмотрами не считаем
       { new: true }
     )
       .select('streamerName isLive streamerBio streamPlaybackId profileRev streamAdult streamTitle')

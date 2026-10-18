@@ -129,8 +129,10 @@ function has(lang, key) {
 }
 
 // версию словарей браузер получает прямо в HTML (pages.js: data-h у i18n.js) — cookie для неё больше не нужна
+// ?lang=ru|en в адресе (ссылки для поисковиков, hreflang) важнее cookie; cookie при этом не меняется
 function middleware(req, res, next) {
-  req.lang = langFromHeaders(req.headers);
+  const q = req.query && req.query.lang;
+  req.lang = (typeof q === 'string' && LANGS.includes(q) && q) || langFromHeaders(req.headers);
   req.t = (key, vars) => t(req.lang, key, vars);
   next();
 }

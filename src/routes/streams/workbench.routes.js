@@ -19,6 +19,7 @@ const streamKeyCache = require('../../services/streamKeyCache');
 const StreamVod = require('../../models/StreamVod');
 const chatBus = require('../../services/chatBus');
 const chatRules = require('../../services/chatRules');
+const searchIdx = require('../../services/searchIndex');
 const rateLimit = require('express-rate-limit');
 
 // Проверяем реальность по диску: обновляется ли index.m3u8 прямо сейчас,
@@ -74,7 +75,7 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     category: categories.publicView(cat),
     liveNotice: me.liveNotice || '',
     streamAdult: !!me.streamAdult,
-    ...(req.query.full && { chatRules: me.chatRules || '' }),
+    ...(req.query.full && { chatRules: me.chatRules || '', searchIndex: me.searchIndex !== false, search: searchIdx.status(me) }),
     streamKeyMasked: maskKey(me.streamKey),
     chatApiKeyMasked: maskChatKey(me.chatApiKey),
     streamPlaybackId: me.streamPlaybackId || null,
@@ -113,7 +114,7 @@ router.post('/stream-key/reveal', auth, requireStreamer, async (req, res) => {
 
 // PATCH /workbench/settings — название и описание трансляции
 router.patch('/settings', auth, requireStreamer, async (req, res) => {
-  const { streamTitle, streamDescription, streamCategoryId, liveNotice, streamAdult, chatRules: rules } = req.body;
+  const { streamTitle, streamDescription, streamCategoryId, liveNotice, streamAdult, chatRules: rules, searchIndex } = req.body;
   let rulesNew = null;
   if (rules !== undefined) {
     if (String(rules).length > chatRules.MAX_LEN) return res.status(400).json({ error: req.t('server.wb.rulesLong', { n: chatRules.MAX_LEN }) });
@@ -125,6 +126,7 @@ router.patch('/settings', auth, requireStreamer, async (req, res) => {
     req.streamerUser.liveNotice = String(liveNotice).trim();
   }
   if (streamAdult !== undefined) req.streamerUser.streamAdult = streamAdult === true;
+  if (searchIndex !== undefined) req.streamerUser.searchIndex = searchIndex !== false; // «Показывать канал в поисковиках»
   if (streamTitle !== undefined) {
     if (String(streamTitle).length > 140) return res.status(400).json({ error: req.t('server.wb.titleLong') });
     req.streamerUser.streamTitle = String(streamTitle).trim();
@@ -157,6 +159,8 @@ router.patch('/settings', auth, requireStreamer, async (req, res) => {
     liveNotice: req.streamerUser.liveNotice || '',
     streamAdult: !!req.streamerUser.streamAdult,
     chatRules: req.streamerUser.chatRules || '',
+    searchIndex: req.streamerUser.searchIndex !== false,
+    search: searchIdx.status(req.streamerUser),
   });
 });
 

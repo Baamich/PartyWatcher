@@ -11,6 +11,8 @@ const chatBus = require('./chatBus');
 const alerts = require('./alerts');
 const StreamVod = require('../models/StreamVod');
 const streamKeyCache = require('./streamKeyCache');
+const searchIndex = require('./searchIndex');
+const { isAdultStream } = require('./adultContent');
 
 const MEDIA_ROOT = path.join(process.cwd(), 'media');
 // ключ стрима — ровно 40 символов 0-9a-f (crypto.randomBytes(20).toString('hex') в workbench.routes.js)
@@ -98,7 +100,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
         { _id: entry.userId },
         { $set: { isLive: false, liveStartedAt: null } },
         { new: false }
-      ).select('liveStartedAt streamCategoryId streamTitle').lean();
+      ).select('liveStartedAt streamCategoryId streamTitle streamAdult').lean();
       console.log(`[rtmp] isLive=false, startedAt=clear, key=${key.slice(0, 8)}…`);
       const startedAt = prev?.liveStartedAt ? new Date(prev.liveStartedAt) : null;
       const sec = startedAt ? Math.round((Date.now() - startedAt.getTime()) / 1000) : 0;
@@ -106,6 +108,13 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
       viewerStats.delete(key);
       const chat = chatBus.chatStatsTake(entry.streamerNameLower);
       alerts.resetStream(entry.streamerNameLower); // эфир закончился — рубежи зрителей в следующем эфире заново
+      const adult = isAdultStream(prev);
+      if (startedAt) { // повторная остановка (эфира уже нет) — не считаем
+        // счётчик эфиров для поисковиков (services/searchIndex), потом — «эфир закончился» им же
+        searchIndex.onStreamEnd(entry.userId, sec, adult)
+          .then(() => searchIndex.notifyLater(entry.userId, 'end'))
+          .catch((e) => console.warn('[rtmp] searchIndex', e.message));
+      }
       if (sec >= 30) {
         Follow.countDocuments({ streamerId: entry.userId, createdAt: { $gte: startedAt } })
           .catch(() => 0)
@@ -113,6 +122,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
             streamerId: entry.userId, startedAt, endedAt: new Date(), sec,
             categoryId: prev.streamCategoryId || null,
             title: prev.streamTitle || '',
+            adult,
             peakViewers: vs?.peak || 0,
             avgViewers: vs?.n ? Math.round((vs.sum / vs.n) * 10) / 10 : 0,
             newFollowers,
@@ -138,6 +148,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
         ]
       );
       console.log(`[rtmp] isLive=true, startedAt=keep-or-set, key=${key.slice(0, 8)}… mod=${r.modifiedCount}`);
+      if (r.modifiedCount) searchIndex.notifyLater(entry.userId, 'start'); // новый эфир — поисковикам (если канал в поиске)
     } else {
       const r = await User.updateOne(
         { _id: entry.userId },

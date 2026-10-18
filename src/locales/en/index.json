@@ -1,12 +1,12 @@
 {
   "meta": {
-    "title": "PartyWatcher — watch YouTube together and stream with friends",
-    "description": "PartyWatcher is a free service for watch parties and live streams. Create a room and watch YouTube, Twitch and VK Video in sync with chat and voice, or start your own stream with rewards, clips and alerts.",
+    "title": "Party Watcher — watch videos together with friends and live streams",
+    "description": "Party Watcher is a free watch party service: watch YouTube, Twitch and VK Video together with friends in sync, with chat and voice. Live streams online and your own streams via OBS.",
     "ogDescription": "Watch YouTube, Twitch and VK Video together with friends — in sync, with chat and voice. Or start your own stream with rewards and clips."
   },
   "intro": {
     "title": "Watch videos together with friends — and stream yourself",
-    "text": "PartyWatcher is a service for watch parties and live streams. Create a room, share the link — and everyone watches the same video in sync: YouTube, Twitch, VK Video, Google Drive. Rooms have text chat and voice. You can also go live through OBS — with channel-point rewards, clips, alerts and moderation."
+    "text": "Party Watcher is a service for watch parties and live streams. Create a room, share the link — and everyone watches the same video in sync: YouTube, Twitch, VK Video, Google Drive. Rooms have text chat and voice. You can also go live through OBS — with channel-point rewards, clips, alerts and moderation."
   },
   "login": {
     "title": "Sign in",
@@ -177,5 +177,19 @@
   },
   "mail": {
     "wait": "{label} ({time})"
+  },
+  "about": {
+    "title": "What is Party Watcher",
+    "text": "Party Watcher is a website for watching videos and live streams together. Create a room, send the link to your friends — and everyone watches the same video at the same time: pause, seeking and switching videos happen for everyone at once. Works with YouTube, Twitch, VK Video, Google Drive and direct video links.",
+    "q1": "How do I watch videos together with friends?",
+    "a1": "Sign up, create a room, paste a video link and send your friends the room link or its key. The room has chat and voice, and the player stays in sync for everyone — like sitting in front of one screen.",
+    "q2": "Where can I watch live streams?",
+    "a2": "The “Live streams” section shows broadcasts that are live right now: games, talk shows, music and creative streams. With an account you can chat, follow streamers, earn channel points and spend them on channel rewards.",
+    "q3": "How do I start my own stream?",
+    "a3": "Open the creator studio, get your stream key and go live with OBS. Your channel gets a moderated chat, channel point rewards, clips, past broadcasts and alerts right in OBS.",
+    "q4": "Is it free?",
+    "a4": "Yes. Party Watcher is free and has no ads.",
+    "streams": "Watch live streams",
+    "news": "Service news"
   }
 }

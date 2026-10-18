@@ -1,4 +1,13 @@
 User-agent: *
+Allow: /api/news
+Allow: /api/streamers/
+Allow: /api/streams/
+Allow: /api/clips
+Allow: /api/categories/
+Allow: /media/live/*/thumb.jpg
 Disallow: /api/
+Disallow: /media/
 Disallow: /room.html
+Disallow: /overlay/
+
 Sitemap: https://partywatcher.de/sitemap.xml

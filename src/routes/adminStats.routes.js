@@ -69,7 +69,7 @@ async function visitorsPart(since, chartDays, now) {
       { $match: { day: { $gte: dayOf(now - (chartDays - 1) * DAY) }, type: { $ne: 'bot' } } },
       { $group: { _id: '$day', n: { $sum: 1 }, pages: { $sum: '$pages' } } },
     ]),
-    VisitDay.find({}).sort({ lastAt: -1 }).limit(60)
+    VisitDay.find({ type: { $ne: 'bot' } }).sort({ lastAt: -1 }).limit(60)
       .select('lastAt firstAt ip country type name username hits pages').lean(),
   ]);
   const f = agg[0] || {};

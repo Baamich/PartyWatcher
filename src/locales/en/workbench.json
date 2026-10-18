@@ -1,5 +1,5 @@
 {
-  "pageTitle": "PartyWatcher — Creator studio",
+  "pageTitle": "Party Watcher — Creator studio",
   "profile": "← Stream profile",
   "resetLayout": "↺ Default",
   "copyFailed": "Could not copy",
@@ -58,7 +58,16 @@
     "rulesPh": "1. Don't insult the streamer or viewers\n2. No spoilers\n3. Swearing is fine, just don't overdo it",
     "rulesHint": "Viewers see them together with the site rules when they first click the chat, and must agree. You can allow swearing and banter, but threats, harassment, hate and insulting someone's family are always forbidden. If you change the rules, viewers accept them again.",
     "adult": "18+ stream",
-    "adultHint": "Required if the stream may contain erotic scenes or nudity (films, series, games). Viewers first confirm they are 18 or older, and in the streams directory it is shown only to those who have already confirmed their age, with an “18+” plate instead of the preview frame. Pornography is always forbidden."
+    "adultHint": "Required if the stream may contain erotic scenes or nudity (films, series, games). Viewers first confirm they are 18 or older, and in the streams directory it is shown only to those who have already confirmed their age, with an “18+” plate instead of the preview frame. Pornography is always forbidden.",
+    "search": "Show my channel in search engines",
+    "searchHint": "Your channel page will appear in Google, Yandex and Bing for searches like “nickname stream”. It takes 5 streams of 30+ minutes in a month; with 12 or more the channel also stays in search all next month, and after that 8 a month are enough to keep it. Channels with 18+ streams are not shown in search.",
+    "searchOn": "Your channel is in search now.",
+    "searchOff": "Your channel is hidden from search engines.",
+    "searchAdult": "Not in search for now: there was an 18+ stream in the last 30 days.",
+    "searchNeed": {
+      "one": "To get into search: {n} more stream of {min}+ minutes this month.",
+      "other": "To get into search: {n} more streams of {min}+ minutes this month."
+    }
   },
   "log": {
     "title": "Action log",

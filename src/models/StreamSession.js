@@ -9,6 +9,7 @@ const streamSessionSchema = new mongoose.Schema(
     sec: { type: Number, required: true },
     categoryId: { type: String, default: null }, // Category.tid на момент конца эфира
     title: { type: String, default: '' },
+    adult: { type: Boolean, default: false }, // эфир 18+ (категория с таким эфиром не идёт в поисковики)
     peakViewers: { type: Number, default: 0 },
     avgViewers: { type: Number, default: 0 }, // среднее по замерам раз в 30 с (без самого стримера)
     newFollowers: { type: Number, default: 0 }, // подписались за время эфира
