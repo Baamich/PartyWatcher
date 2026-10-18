@@ -14,6 +14,7 @@ const $ = (id) => document.getElementById(id);
 if (/^\/news\/?$/.test(location.pathname)) {
   $('siteNav').classList.remove('hidden');
   $('studioNav').classList.add('hidden');
+  $('studioProfileBtn').classList.add('hidden'); // «← Стрим-профиль» — только в студии; на сайте есть кнопка-ник
   // логотип — по тому, откуда пришли: из трансляций (каталог, профиль стримера, клип) — «LIVE» и к трансляциям,
   // из комнат (главная, комната) — без «LIVE» и на главную. Раздел помним на вкладку: обновление и фильтры не сбивают
   let from = '';
