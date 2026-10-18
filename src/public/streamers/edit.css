@@ -117,10 +117,10 @@
 .mode-btn.mode-pro {
   color: #fff;
   border: none;
-  background: linear-gradient(135deg, #ff9d3d, #ff5f6d 55%, #b89bff);
-  box-shadow: var(--btn-glow);
+  background: linear-gradient(120deg, var(--btn-grad-start), var(--btn-grad-end));
+  box-shadow: none;
 }
-.mode-btn.mode-pro:hover { filter: brightness(1.1); box-shadow: var(--btn-glow-hover); }
+.mode-btn.mode-pro:hover { filter: brightness(1.08); box-shadow: none; }
 @media (max-width: 900px) {
   .mode-switch { position: static; flex-direction: row; margin-bottom: 14px; }
   .mode-btn { width: auto; flex: 1; }

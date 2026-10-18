@@ -1,8 +1,6 @@
 async function initMeName() {
   try {
     const me = await api('/auth/me');
-    const el = document.getElementById('meName');
-    if (el) el.textContent = me.username || '';
     return me;
   } catch {
     return null; // не авторизован

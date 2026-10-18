@@ -273,12 +273,11 @@
   height: min(440px, calc(100% - 24px));
   min-width: 220px;
   min-height: 200px;
-  background: rgba(28, 28, 32, 0.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* без backdrop-filter, как в комнате: размытие поверх видео пересчитывается каждый кадр */
+  background: rgba(28, 28, 32, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  border-radius: 16px;
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
   display: none;
 }
 .live-strip-inner.fs-active .live-chat-side.fs-open {
@@ -289,7 +288,7 @@
   background: rgba(0, 0, 0, 0.55);
   color: rgba(255, 255, 255, 0.75);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 .live-strip-inner.fs-active #liveMessages { color: #fff; }
 .live-strip-inner.fs-active #liveChatForm {
@@ -704,10 +703,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: rgba(124, 92, 255, 0.88);
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 6px;
   text-decoration: none;
 }
 .live-info-cat:hover { filter: brightness(1.12); }
@@ -803,7 +802,7 @@
   border-radius: 8px;
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(120deg, #7c3aed, #db2777 60%, #f97316);
+  background: linear-gradient(120deg, var(--btn-grad-start), var(--btn-grad-end));
 }
 
 /* ---- стрим-поинты: слева под чатом, бонус над кнопкой, награды над чатом ---- */
@@ -825,8 +824,8 @@
   border-radius: 50%;
   font-size: 17px;
   line-height: 1;
-  background: radial-gradient(circle at 35% 35%, #c4b5fd, #7c3aed);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.35), 0 6px 16px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(120deg, var(--btn-grad-start), var(--btn-grad-end));
+  box-shadow: 0 0 0 3px var(--surface);
   transform: translateX(-50%);
   animation: lp-bounce 1.2s ease-in-out infinite;
   z-index: 6;
@@ -841,8 +840,8 @@
   white-space: nowrap;
   font-weight: 900;
   font-size: 15px;
-  color: #a78bfa;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  color: var(--btn-grad-start);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   animation: lp-float 1.6s ease-out forwards;
   z-index: 7;
@@ -867,7 +866,7 @@
 /* содержимое окна (.lp-*) — стили в js/rewards-popup.js */
 
 /* выделенное сообщение (награда «Выделить сообщение») */
-#liveMessages > .live-msg-hl { margin: 4px 0; padding: 6px 8px; border-radius: 8px; background: linear-gradient(120deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.25)); border-left: 3px solid #a78bfa; }
+#liveMessages > .live-msg-hl { margin: 4px 0; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--btn-grad-start) 16%, transparent); border-left: 3px solid var(--btn-grad-start); }
 
 /* 🚩 жалоба на эфир */
 #liveFollowBar .live-report-btn { width: auto; flex: 0 0 auto; padding-left: 10px; padding-right: 10px; }

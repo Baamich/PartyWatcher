@@ -37,11 +37,28 @@ function pwTermsGate(me) {
 }
 function pwWatchMe(me) {
   if (me && me.termsOk === false) pwTermsGate(me);
+  pwShowMe(me);
   return me;
 }
 document.addEventListener('DOMContentLoaded', () => {
   if (pwBoot && pwBoot.data && pwBoot.data.me) pwWatchMe(pwBoot.data.me);
+  // нет вшитого ответа (упреждающая загрузка) — спросим сами, чтобы показать ник в шапке
+  else if (!pwBoot && document.getElementById('meLink')) api('/auth/me').catch(() => {});
 });
+
+// ник в шапке (#meLink > #meName) — кнопка «Мой профиль» (/u/<ник>); гостю кнопки нет.
+// Показывается сама после любого /auth/me — страницам ничего вызывать не нужно
+const pwProfileHref = (name) => '/u/' + encodeURIComponent(String(name).toLowerCase());
+function pwShowMe(me) {
+  const link = document.getElementById('meLink');
+  if (!link) return;
+  const name = me && me.username;
+  link.classList.toggle('hidden', !name);
+  if (!name) return;
+  link.href = pwProfileHref(name);
+  const el = document.getElementById('meName');
+  if (el) el.textContent = name;
+}
 
 // баннер согласия на статистику (js/consent.js) — пока человек не выбрал; на /datenschutz он сам решает, когда показать
 document.addEventListener('DOMContentLoaded', () => {

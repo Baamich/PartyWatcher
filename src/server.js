@@ -274,6 +274,11 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
   app.get('/streamers/:name', (req, res, next) => {
     pages.send(req, res, 'streamers/streamer.html').catch(next);
   });
+
+  // профиль пользователя (кнопка-ник в шапке) — единый шаблон на любое имя
+  app.get('/u/:name', (req, res, next) => {
+    pages.send(req, res, 'profile.html').catch(next);
+  });
     
   app.set('io', io);
 

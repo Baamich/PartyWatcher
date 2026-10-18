@@ -1,63 +1,76 @@
+/* =========================================
+   ОСНОВА: размеры одни на весь сайт
+   Высоты: поле и обычная кнопка — 38 px, кнопки шапки — 32 px. Отступы кратны 4.
+   ========================================= */
+
 :root {
-  --radius: 14px;
-  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --ctl-h: 38px;   /* поле ввода, select, обычная кнопка */
+  --ctl-h-sm: 32px; /* кнопки шапки и маленькие */
 }
 
 /* =========================================
-   ТЁМНАЯ ТЕМА (тёплая)
+   ТЁМНАЯ ТЕМА (тёплая, плоская)
    ========================================= */
 
 [data-theme="dark"] {
-  --bg: #121110;
-  --surface: #1c1b19;
-  --surface-alt: #252422;
-  --text: #f0ebe6;
-  --text-muted: #a39e96;
-  --border: #322f2c;
-  /* акцент нейтральный (белый); фиолетовый остаётся только для текста: --accent-text */
-  --accent: #f0ebe6;
+  --bg: #131211;
+  --surface: #1b1a18;
+  --surface-alt: #242320;
+  --surface-hover: #2d2b28;
+  --text: #eeeae5;
+  --text-muted: #9d978f;
+  --border: #302e2b;
+  --border-strong: #3d3a36;
+  /* акцент нейтральный (белый); фиолетовый — только для текста и логотипа: --accent-text */
+  --accent: #eeeae5;
   --accent-hover: #ffffff;
-  --accent-contrast: #121110; /* цвет текста на фоне акцента */
-  --accent-text: #b89bff;
-  --danger: #f87171;
-  --shadow: 0 4px 22px rgba(0, 0, 0, 0.55);
-  --logo-alt: #f0ebe6;
+  --accent-contrast: #131211; /* цвет текста на фоне акцента */
+  --accent-text: #b39cf5;
+  --danger: #ef6b6b;
+  --focus-ring: 0 0 0 2px rgba(238, 234, 229, 0.22);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --logo-alt: #eeeae5;
 
-  /* фирменный цвет кнопок для тёмной темы — тёплый янтарь/оранжевый, под тон общей "тёплой" тёмной палитры */
+  /* главная кнопка — градиент тёплый янтарь → коралл; при наведении он плавно сдвигается (без свечения) */
   --btn-grad-start: #ff9d3d;
   --btn-grad-end: #ff5f6d;
   --btn-grad-start-hover: #ffb35c;
   --btn-grad-end-hover: #ff7a86;
-  --btn-glow: 0 4px 16px rgba(255, 130, 70, 0.35);
-  --btn-glow-hover: 0 6px 22px rgba(255, 130, 70, 0.5);
+  --btn-glow: none;
+  --btn-glow-hover: none;
 }
 
 /* =========================================
-   СВЕТЛАЯ ТЕМА
+   СВЕТЛАЯ ТЕМА (тёплая бумага вместо сине-серой дымки)
    ========================================= */
 
 [data-theme="light"] {
-  --bg: #e8eaf0;
-  --surface: #f4f5f9;
-  --surface-alt: #dee1ea;
-  --text: #272c3a;
-  --text-muted: #6a7183;
-  --border: #ccd1de;
-  --accent: #1c202b;
+  --bg: #f3f2ee;
+  --surface: #ffffff;
+  --surface-alt: #ebe9e3;
+  --surface-hover: #e1ded7;
+  --text: #1f1e1c;
+  --text-muted: #6b6760;
+  --border: #dcd8d0;
+  --border-strong: #c9c4ba;
+  --accent: #1f1e1c;
   --accent-hover: #000000;
   --accent-contrast: #ffffff;
-  --accent-text: #6a5cd0;
-  --danger: #cf5559;
-  --shadow: 0 2px 10px rgba(35, 40, 65, 0.10);
-  --logo-alt: #272c3a;
+  --accent-text: #5f45c9;
+  --danger: #c84448;
+  --focus-ring: 0 0 0 2px rgba(31, 30, 28, 0.18);
+  --shadow: 0 6px 20px rgba(40, 36, 30, 0.12);
+  --logo-alt: #1f1e1c;
 
-  /* фирменный цвет кнопок для светлой темы — свежий изумрудно-бирюзовый */
+  /* главная кнопка — изумруд → бирюза */
   --btn-grad-start: #0fb37f;
   --btn-grad-end: #17c9a8;
   --btn-grad-start-hover: #0c9c6e;
   --btn-grad-end-hover: #13b596;
-  --btn-glow: 0 3px 12px rgba(15, 179, 127, 0.28);
-  --btn-glow-hover: 0 5px 18px rgba(15, 179, 127, 0.4);
+  --btn-glow: none;
+  --btn-glow-hover: none;
 }
 
 /* =========================================
@@ -81,61 +94,87 @@ body {
 }
 
 h2 {
-  font-size: 13px;
-  margin: 22px 0 8px;
+  font-size: 12px;
+  margin: 24px 0 8px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 input, select {
   font-family: inherit;
   font-size: 15px;
+  line-height: 18px;
   background: var(--surface);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 9px 12px;
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 input:focus, select:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+/* select на Windows выше поля при том же padding — высоту задаём явно */
+select {
+  height: var(--ctl-h);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 input::placeholder {
   color: var(--text-muted);
 }
 
+/* главная кнопка: 38 px вместе с рамкой (рамка прозрачная — высота как у поля ввода).
+   Градиент вдвое шире кнопки: при наведении он переезжает (переход start → end → start-hover) */
 button {
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  background: linear-gradient(135deg, var(--btn-grad-start), var(--btn-grad-end));
+  line-height: 18px;
+  background: var(--btn-grad-start) linear-gradient(120deg, var(--btn-grad-start) 0%, var(--btn-grad-end) 50%, var(--btn-grad-start-hover) 100%) 0 0 / 200% 100%;
   color: #fff;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 9px 14px;
   cursor: pointer;
-  box-shadow: var(--btn-glow);
-  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+  box-shadow: none;
+  transition: background-position 0.4s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 button:hover {
-  background: linear-gradient(135deg, var(--btn-grad-start-hover), var(--btn-grad-end-hover));
-  box-shadow: var(--btn-glow-hover);
+  background-position: 100% 0;
+  box-shadow: none;
 }
 
 button:active {
-  transform: scale(0.98);
-  box-shadow: var(--btn-glow);
+  transform: translateY(1px);
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .hidden {
   display: none !important;
 }
 
+/* второстепенная кнопка: фон поверхности и рамка */
 .icon-btn {
   background: var(--surface-alt);
   border: 1px solid var(--border);
@@ -149,13 +188,12 @@ button:active {
 }
 
 .icon-btn:hover {
-  background: var(--border);
+  background: var(--surface-hover);
   box-shadow: none;
 }
 
 .icon-btn:active {
   transform: none;
-  box-shadow: none;
 }
 
 .corner-menu {
@@ -176,6 +214,50 @@ button:active {
   padding: 6px 10px;
 }
 
+/* кнопки шапки стоят в ряд — одной высоты (32 px), независимо от эмодзи, флага и правил страницы
+   (index.css даёт всем button display:block и margin). Квадратная — только кнопка темы */
+[data-theme] .corner-menu .icon-btn,
+[data-theme] .header-right .icon-btn,
+[data-theme] .terms-top .icon-btn,
+[data-theme] #roomHeader .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  height: var(--ctl-h-sm);
+  margin: 0;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+[data-theme] .corner-menu .theme-toggle,
+[data-theme] .terms-top .theme-toggle,
+[data-theme] #roomHeader .theme-toggle {
+  width: var(--ctl-h-sm);
+  padding: 0;
+  font-size: 15px;
+}
+
+/* переключатель языка — той же высоты, что кнопки шапки */
+[data-theme] .lang-switch-btn {
+  height: var(--ctl-h-sm);
+  margin: 0;
+  padding: 0 10px;
+}
+
+/* ник в шапке — кнопка «Мой профиль»: длинное имя обрезается */
+.profile-btn {
+  max-width: 180px;
+}
+.profile-btn > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .modal {
   position: fixed;
   inset: 0;
@@ -189,8 +271,9 @@ button:active {
 .modal-content {
   background: var(--surface);
   color: var(--text);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 20px;
   min-width: 280px;
   max-width: 90vw;
   max-height: 80vh;
@@ -228,119 +311,50 @@ button:active {
 @media (max-width: 600px) {
   button {
     font-size: 15px;
-    padding: 12px 14px;
   }
 }
 
 /* =========================================
-   ДОВОДКА ТЁМНОЙ ТЕМЫ
+   ТЕМЫ: что не выражается переменными
    ========================================= */
-
-[data-theme="dark"] body {
-  background: linear-gradient(180deg, #141311 0%, #100f0e 100%);
-  background-attachment: fixed;
-}
-
-[data-theme="dark"] input,
-[data-theme="dark"] select {
-  background: #1f1e1c;
-  border-color: #3a3733;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] input:focus,
-[data-theme="dark"] select:focus {
-  background: #242220;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(240, 235, 230, 0.16);
-}
-
-[data-theme="dark"] button {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-}
-
-[data-theme="dark"] .icon-btn {
-  background: #2a2825;
-  border-color: #3f3c38;
-  box-shadow: none;
-}
-
-[data-theme="dark"] .icon-btn:hover {
-  background: #35322e;
-  box-shadow: none;
-}
 
 [data-theme="dark"] .modal {
   background: rgba(0, 0, 0, 0.68);
 }
 
-[data-theme="dark"] .room-card {
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.45);
+[data-theme="light"] .modal {
+  background: rgba(31, 30, 28, 0.35);
 }
 
-[data-theme="dark"] .room-card:hover {
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
-  border-color: var(--accent);
-}
-
-[data-theme="dark"] .auth-card {
-  background: #1c1b19;
-  border-color: #322f2c;
-  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.55);
-}
-
-[data-theme="dark"] .support-card {
-  background: #1f1e1c;
-}
-
-[data-theme="dark"] .support-card-desc {
-  background: #161513;
-}
-
-[data-theme="dark"] #log {
-  background: #141311;
-}
-
-[data-theme="dark"] .commit-item:hover {
-  background: rgba(240, 235, 230, 0.07);
-}
-
-/* =========================================
-   ДОВОДКА СВЕТЛОЙ ТЕМЫ
-   ========================================= */
-
-[data-theme="light"] body {
-  background: linear-gradient(180deg, #edeff4 0%, #e4e7ef 100%);
-  background-attachment: fixed;
-}
-
-[data-theme="light"] input,
-[data-theme="light"] select {
-  background: #fbfbfe;
-  box-shadow: inset 0 1px 2px rgba(35, 40, 65, 0.04);
-}
-
-[data-theme="light"] input:focus,
-[data-theme="light"] select:focus {
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(28, 32, 43, 0.14);
-}
-
-[data-theme="light"] button {
-  box-shadow: 0 1px 2px rgba(35, 40, 65, 0.12);
-}
-
-[data-theme="light"] .icon-btn {
-  background: #e3e6ef;
+[data-theme] .room-card {
   box-shadow: none;
 }
 
-[data-theme="light"] .icon-btn:hover {
-  background: #d6dae6;
+[data-theme] .room-card:hover {
+  box-shadow: none;
+  border-color: var(--border-strong);
 }
 
-[data-theme="light"] .modal {
-  background: rgba(35, 40, 65, 0.35);
+[data-theme] .auth-card {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .support-card {
+  background: var(--surface);
+}
+
+[data-theme="dark"] .support-card-desc {
+  background: var(--bg);
+}
+
+[data-theme="dark"] #log {
+  background: var(--bg);
+}
+
+[data-theme] .commit-item:hover {
+  background: var(--surface-alt);
 }
 
 /* =========================================
@@ -658,8 +672,8 @@ button:active {
 
 [data-theme="light"] {
   color-scheme: light;
-  --scroll-thumb: #c3c8d5;
-  --scroll-thumb-hover: #a2a9ba;
+  --scroll-thumb: #cdc8bf;
+  --scroll-thumb-hover: #aea89d;
 }
 
 ::-webkit-scrollbar {
@@ -711,7 +725,7 @@ button:active {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 0 10px;
 }
 
 .lang-flag {

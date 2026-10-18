@@ -69,7 +69,7 @@
   justify-content: center;
   overflow: hidden;
   border-radius: var(--radius-sm);
-  background: radial-gradient(circle at 50% 40%, rgba(124, 92, 255, 0.25), transparent 70%), #0d0d12;
+  background: #111110;
   cursor: pointer;
 }
 [data-theme] .ev-change {
@@ -130,7 +130,7 @@
 [data-theme] .cw-modal-x { position: absolute; top: 10px; right: 10px; width: auto; padding: 0 8px; background: none; box-shadow: none; color: var(--text-muted); font-size: 20px; }
 .cw-modal-body { display: flex; flex-direction: column; gap: 10px; }
 .am-sec { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-top: 4px; }
-.am-preview { height: 210px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--radius-sm); background: radial-gradient(circle at 50% 40%, rgba(124, 92, 255, 0.25), transparent 70%), #0d0d12; }
+.am-preview { height: 210px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--radius-sm); background: #111110; }
 .am-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 [data-theme] .am-tile {
   position: relative;

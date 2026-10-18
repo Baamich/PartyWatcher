@@ -166,8 +166,8 @@ body {
   /* без backdrop-filter: размытие поверх идущего видео пересчитывается на каждом кадре фильма */
   background: rgba(28, 28, 32, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   overflow: hidden;
   left: 16px;
   top: 60px;
@@ -357,6 +357,38 @@ body {
 
 #roomHeader button {
   width: auto;
+}
+
+/* «← Назад» и «⚙️ N» — той же высоты, что кнопки шапки (common.css) */
+#roomHeader > button:not(.icon-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+#roomHeader .profile-btn {
+  max-width: 110px;
+}
+
+/* первая строка: «← Назад» слева, язык, ник и тема справа; вторая: название и ключ, справа «⚙️ N» */
+#roomHeader .lang-switch {
+  margin-left: auto;
+}
+
+#roomHeader > [data-click="openSettings"] {
+  order: 2;
+}
+
+#roomHeader #roomMeta {
+  order: 1;
+  flex: 1 1 calc(100% - 90px);
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2px 12px;
 }
 
 #messages {
@@ -758,10 +790,10 @@ video::-webkit-media-controls-fullscreen-button {
   color: #fff;
   font-size: 14px;
   line-height: 1.4;
-  border-radius: 12px;
+  border-radius: var(--radius);
   text-align: center;
   pointer-events: none;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: opacity 0.4s ease;
   word-break: break-word;

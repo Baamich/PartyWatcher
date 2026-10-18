@@ -5,6 +5,7 @@
   "header": {
     "theme": "Switch theme",
     "logout": "Sign out",
+    "profile": "My profile",
     "admin": "Admin",
     "streamProfile": "👤 Stream profile",
     "studio": "🛠️ Creator studio"

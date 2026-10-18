@@ -53,10 +53,12 @@ button {
 }
 
 
+/* «i» и замок стоят в ряд с select — той же высоты */
 .info-btn {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  margin: 0;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
@@ -68,9 +70,10 @@ button {
 }
 
 .lock-btn {
-  width: 34px;
-  height: 26px;
-  border-radius: 6px;
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  margin: 0;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   cursor: pointer;
   flex-shrink: 0;
@@ -111,25 +114,15 @@ button {
   padding: 12px;
   margin: 12px 0; 
   position: relative;
-  box-shadow: var(--shadow);
-  transition: transform 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
 .room-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
-}
-
-[data-theme="light"] .room-card {
-  box-shadow: 0 1px 3px rgba(35, 40, 65, 0.08);
-}
-
-[data-theme="light"] .room-card:hover {
-  box-shadow: 0 6px 18px rgba(35, 40, 65, 0.12);
+  border-color: var(--border-strong);
 }
 
 [data-theme="light"] .info-popup {
-  background: #eceff6;
+  background: var(--surface-alt);
 }
 
 /* Kodik: результаты поиска под полем ссылки */
@@ -449,10 +442,6 @@ button {
   content: '✓';
 }
 
-[data-theme="light"] .auth-card {
-  background: #f7f8fc;
-}
-
 #appBox:not(.hidden) {
   display: block;
   min-height: 100vh;
@@ -478,14 +467,12 @@ button {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: var(--btn-glow);
+  box-shadow: var(--shadow);
   padding: 0;
   margin: 0;
 }
 .support-fab:hover {
   background: linear-gradient(135deg, var(--btn-grad-start-hover), var(--btn-grad-end-hover));
-  box-shadow: var(--btn-glow-hover);
-  transform: scale(1.05);
 }
 .support-modal-content {
   width: min(420px, 94vw);

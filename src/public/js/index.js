@@ -31,9 +31,6 @@ async function checkAuth() {
     if (appBox) appBox.classList.remove('hidden');
     document.documentElement.classList.remove('pw-authed');
 
-    const meName = document.getElementById('meName');
-    if (meName) meName.textContent = me.username || '';
-
     const adminLink = document.getElementById('adminLink');
     if (adminLink) {
       adminLink.classList.toggle('hidden', me.role !== 'admin' && me.role !== 'owner');
@@ -400,13 +397,6 @@ document.getElementById('regPassword')?.addEventListener('input', validateRegist
 document.getElementById('regPasswordConfirm')?.addEventListener('input', validateRegisterForm);
 document.getElementById('regUsername')?.addEventListener('input', validateRegisterForm);
 document.getElementById('regTerms')?.addEventListener('change', validateRegisterForm);
-
-async function logout() {
-  await api('/auth/logout', { method: 'POST' });
-  try { localStorage.removeItem('pw_authed'); } catch {}
-  stopAutoRefresh();
-  checkAuth();
-}
 
 // ---- тип видео + приватность — один общий инфо-попап на двоих ----
 

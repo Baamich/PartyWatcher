@@ -252,11 +252,11 @@
   max-width: calc(100% - 32px);
   padding: 8px 16px;
   border-radius: 999px;
-  background: rgba(77, 141, 255, 0.92);
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow);
   pointer-events: none;
   text-align: center;
 }

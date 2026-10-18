@@ -954,7 +954,7 @@
   padding: 3px 10px;
   font-size: 12px;
   color: #fff;
-  background: linear-gradient(120deg, #7c3aed, #db2777);
+  background: linear-gradient(120deg, var(--btn-grad-start), var(--btn-grad-end));
   box-shadow: none;
 }
 .wb-raid-slot { flex-shrink: 0; margin: 0 -16px; }
@@ -964,7 +964,7 @@
   border-radius: 8px;
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(120deg, #7c3aed, #db2777 60%, #f97316);
+  background: linear-gradient(120deg, var(--btn-grad-start), var(--btn-grad-end));
 }
 
 /* ---- 😀 смайлы канала ---- */
@@ -1010,4 +1010,4 @@
 }
 
 /* выделенное сообщение (награда) */
-.wb-msg-hl { padding: 2px 6px; border-radius: 6px; background: linear-gradient(120deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.25)); }
+.wb-msg-hl { padding: 2px 6px; border-radius: 6px; background: color-mix(in srgb, var(--btn-grad-start) 18%, transparent); }
