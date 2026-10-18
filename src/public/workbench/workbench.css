@@ -981,6 +981,8 @@
 .emote-upload-fields button { align-self: flex-start; width: auto; }
 .emote-public { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .emote-public input { width: auto; margin: 0; }
+.wb-check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 8px; cursor: pointer; }
+.wb-check input { width: auto; margin: 0; }
 .emote-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; }
 .emote-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 8px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: var(--surface-alt); }
 .emote-card img { width: 40px; height: 40px; object-fit: contain; }

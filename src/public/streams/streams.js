@@ -19,6 +19,14 @@ function esc(s) {
   }[c]));
 }
 
+// эфир 18+ (метка стримера): сервер отдаёт его только подтвердившим возраст и без кадра — вместо кадра плашка «18+»
+const adultBadge = (s, cls) => (s.adult ? `<span class="${cls}" title="${esc(t('streams.adultHint'))}">18+</span>` : '');
+// гость подтвердил возраст в окне «Тебе есть 18?» (страница канала, комнаты) — просим каталог с эфирами 18+.
+// У аккаунта сервер смотрит adultConfirmed и этот признак не читает
+function adultParam(sep) {
+  try { return localStorage.getItem('pw_age18') === '1' ? sep + 'adult=1' : ''; } catch { return ''; }
+}
+
 const profileHref = (name) => `/streamers/${encodeURIComponent(String(name).toLowerCase())}`;
 
 // название категории на языке зрителя: у неигровых есть русское, игры — как в оригинале
@@ -44,12 +52,14 @@ function renderStreamerCard(streamer, opts = {}) {
   card.className = 'streamer-card';
   card.href = profileHref(streamer.streamerName);
   const meta = cardMeta(streamer, opts.withCategory);
-  if (streamer.isLive && streamer.thumb) {
-    // эфир с кадром: картинка 16:9, ниже — аватар, имя, название эфира
+  if (streamer.isLive && (streamer.thumb || streamer.adult)) {
+    // эфир с кадром: картинка 16:9 (у 18+ — плашка), ниже — аватар, имя, название эфира
     card.classList.add('has-thumb');
     card.innerHTML = `
       <div class="card-thumb">
-        <img src="${esc(streamer.thumb)}" loading="lazy" decoding="async" alt="" />
+        ${streamer.adult
+          ? `<span class="card-thumb-adult" title="${esc(t('streams.adultHint'))}">18+</span>`
+          : `<img src="${esc(streamer.thumb)}" loading="lazy" decoding="async" alt="" />`}
         <span class="live-badge">${t('streams.liveBadge')}</span>
         <span class="card-thumb-viewers" title="${esc(t('streams.viewers'))}">● ${streamer.viewers || 0}</span>
       </div>
@@ -95,7 +105,7 @@ function renderSideRow(s) {
   a.href = profileHref(s.streamerName);
   a.title = s.streamerName;
   const line2 = s.isLive
-    ? `<span class="side-live">${t('streams.liveBadge')}</span>${s.category ? ' ' + esc(catName(s.category)) : ''}`
+    ? `<span class="side-live">${t('streams.liveBadge')}</span>${adultBadge(s, 'side-adult')}${s.category ? ' ' + esc(catName(s.category)) : ''}`
     : esc(t('streams.offline'));
   a.innerHTML = `
     <span class="side-avatar">${avatarHtml(s, 'side-avatar-img', 'side-avatar-fallback')}</span>
@@ -272,7 +282,7 @@ async function loadDirectory() {
   try {
     let d;
     try {
-      d = await api('/streams/directory' + q);
+      d = await api('/streams/directory' + q + adultParam(q ? '&' : '?'));
     } catch (err) {
       if (err.status !== 404) throw err;
       d = { following: null, category: null, list: [] }; // категории больше нет
@@ -281,7 +291,7 @@ async function loadDirectory() {
     dirData = d;
     if (!allSide && q) {
       // открыли сразу полный список — правый столбик догружаем отдельно
-      api('/streams/directory').then((h) => { allSide = h.all; renderSideList(document.getElementById('allList'), allSide, ''); }).catch(() => {});
+      api('/streams/directory' + adultParam('?')).then((h) => { allSide = h.all; renderSideList(document.getElementById('allList'), allSide, ''); }).catch(() => {});
     }
     renderDirectory();
   } catch (err) {
@@ -349,7 +359,7 @@ function handleStreamerSearchInput() {
 
   searchDebounceTimer = setTimeout(async () => {
     try {
-      const results = await api('/streamers?q=' + encodeURIComponent(q.trim()) + '&limit=5');
+      const results = await api('/streamers?q=' + encodeURIComponent(q.trim()) + '&limit=5' + adultParam('&'));
       renderSuggestions(results, q.trim());
     } catch (err) {
       console.warn('[handleStreamerSearchInput]', err.message);
@@ -376,6 +386,7 @@ function renderSuggestions(streamers, query) {
         ? `<img class="suggestion-avatar" src="${esc(s.avatarUrl)}" decoding="async" alt="" />`
         : `<div class="suggestion-avatar-fallback">${esc(streamerInitial(s.streamerName))}</div>`}
       <span class="suggestion-name">${esc(s.streamerName)}</span>
+      ${adultBadge(s, 'side-adult')}
       ${s.isLive ? `<span class="suggestion-badge">${t('streams.liveBadge')}</span>` : ''}
     `;
     row.onclick = () => (location.href = profileHref(s.streamerName));

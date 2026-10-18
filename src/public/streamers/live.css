@@ -880,3 +880,30 @@
 /* кнопка «Подписаться» под чатом в стиле из PRO-редактора: размер текста — как у соседних кнопок, полоска не разъезжается */
 #liveFollowBar .follow-btn.pw-fs,
 #liveFollowBar .follow-btn .pw-fa-sweep { font-size: 14px !important; overflow: hidden; text-overflow: ellipsis; }
+
+/* правила чата: плашка над полем ввода, пока зритель не нажмёт «Согласиться» */
+.live-chat-rules {
+  flex-shrink: 1;
+  min-height: 0;
+  max-height: 70%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+}
+.live-chat-rules.hidden { display: none; }
+.live-rules-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.live-rules-logo { width: 26px; height: 26px; flex-shrink: 0; }
+.live-rules-close { margin-left: auto; width: auto; padding: 2px 8px; background: none; border: none; color: var(--text-muted); cursor: pointer; }
+.live-rules-body { overflow-y: auto; min-height: 0; line-height: 1.4; }
+.live-rules-site ul { margin: 0 0 6px; padding-left: 18px; }
+.live-rules-site li { margin-bottom: 3px; }
+.live-rules-site p { margin: 0; color: var(--text-muted); font-size: 12px; }
+.live-rules-own-h { margin-top: 8px; font-weight: 600; }
+.live-rules-own { margin-top: 4px; padding: 8px; border-radius: var(--radius-sm); background: var(--surface-alt); white-space: pre-line; overflow-wrap: anywhere; }
+.live-rules-note { margin: 0; font-size: 12px; color: var(--text-muted); }
+.live-chat-rules .auth-submit { margin: 0; flex-shrink: 0; }
+.live-strip-inner.fs-active .live-chat-rules { background: rgba(0, 0, 0, 0.75); border-top-color: rgba(255, 255, 255, 0.1); }

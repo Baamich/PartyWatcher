@@ -11,5 +11,7 @@ const chatMessageSchema = new mongoose.Schema(
 );
 
 chatMessageSchema.index({ room: 1, createdAt: 1 });
+// чат комнаты хранится 3 дня (условия п. 10, политика п. 5), с удалением комнаты — сразу; показывается только последний час
+chatMessageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 3 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('ChatMessage', chatMessageSchema);

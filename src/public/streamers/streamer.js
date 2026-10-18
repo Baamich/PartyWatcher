@@ -56,6 +56,7 @@ async function checkOwnership(nameLower) {
   try {
     const me = await api('/auth/me');
     liveIsAuthed = true;
+    myAdult = !!me.adultConfirmed;
     if (me.streamerName && me.streamerName.toLowerCase() === nameLower) {
       isOwnerFlag = true;
       document.getElementById('ownerControls').classList.remove('hidden');
@@ -63,6 +64,37 @@ async function checkOwnership(nameLower) {
   } catch {
     liveIsAuthed = false;
   }
+}
+
+// ---------- эфир 18+ (метка стримера в студии) ----------
+// До плеера (эфир и записи) — окно «Тебе есть 18?». Аккаунт подтверждает один раз (adultConfirmed, как в комнатах),
+// гость — на этом устройстве (localStorage pw_age18). «Нет» — в каталог трансляций
+let myAdult = false;
+let adultAsking = null;
+function adultOk() {
+  if (!currentStreamer?.adult || isOwnerFlag || myAdult) return true;
+  try { return localStorage.getItem('pw_age18') === '1'; } catch { return false; }
+}
+function ensureAdultChannel() {
+  if (adultOk()) return Promise.resolve(true);
+  if (!adultAsking) {
+    adultAsking = (async () => {
+      const ok = await PW.confirm(t('streamer.adult.text'), {
+        title: t('streamer.adult.title'), okText: t('streamer.adult.yes'), cancelText: t('streamer.adult.no'), danger: true,
+      });
+      if (!ok) {
+        location.href = '/streams.html';
+        return false;
+      }
+      try { localStorage.setItem('pw_age18', '1'); } catch {}
+      if (liveIsAuthed) {
+        myAdult = true;
+        api('/auth/adult', { method: 'PATCH', body: { confirmed: true } }).catch(() => {});
+      }
+      return true;
+    })().finally(() => { adultAsking = null; });
+  }
+  return adultAsking;
 }
 
 // ---------- название и категория идущего эфира ----------
@@ -470,6 +502,12 @@ function switchToVodPlayback(v) {
 
 // запустили одну запись — остальные на паузу (иначе звук нескольких сразу)
 document.getElementById('vodGrid')?.addEventListener('play', (e) => {
+  if (!adultOk()) {
+    // канал 18+: запись тоже только после подтверждения возраста
+    e.target.pause();
+    ensureAdultChannel().then((ok) => ok && e.target.play().catch(() => {}));
+    return;
+  }
   document.querySelectorAll('#vodGrid video').forEach((v) => { if (v !== e.target && !v.paused) v.pause(); });
 }, true);
 
@@ -562,7 +600,8 @@ function startLiveSession() {
       overlay.classList.add('hidden');
     };
     const playbackId = currentStreamer.streamPlaybackId;
-    loadHls().then((H) => {
+    ensureAdultChannel().then((ok) => ok && loadHls()).then((H) => {
+      if (H === false) return; // «мне нет 18» — уходим со страницы
       if (!liveOpen || liveHls || currentStreamer?.streamPlaybackId !== playbackId) return; // закрыли или сменилось, пока грузился
       if (!H) throw new Error('hls.js не загрузился');
       attachLiveHls(playbackId);
@@ -1377,6 +1416,7 @@ function applyLiveRestriction(r) {
 
   form.classList.add('hidden');
   box.classList.remove('hidden');
+  hideLiveRules();
 
   if (r.type === 'ban') {
     box.textContent = t('streamer.chat.banned');
@@ -1412,6 +1452,57 @@ function applyLiveRestriction(r) {
   liveRestrictTimer = setInterval(tick, 1000);
 }
 
+// ---- правила чата (services/chatRules): пока зритель не согласился, поле не пишет — по нажатию открывается плашка ----
+const RULES_KEY = 'pw_chat_rules'; // { канал: «время.подпись» } — отметка о согласии, выданная сервером
+let liveRules = null; // { text, ver } — правила, которые ещё надо принять
+let liveLastSent = null; // { text, at } — если сервер не принял сообщение из-за правил, вернём его в поле
+
+function rulesAcks() {
+  try { return JSON.parse(localStorage.getItem(RULES_KEY) || '{}') || {}; } catch { return {}; }
+}
+function saveRulesAck(room, token) {
+  try {
+    const all = rulesAcks();
+    delete all[room];
+    all[room] = token;
+    const keys = Object.keys(all);
+    keys.slice(0, Math.max(0, keys.length - 100)).forEach((k) => delete all[k]); // не больше 100 каналов
+    localStorage.setItem(RULES_KEY, JSON.stringify(all));
+  } catch {}
+}
+const liveRulesOpen = () => !document.getElementById('liveChatRules')?.classList.contains('hidden');
+function showLiveRules() {
+  const box = document.getElementById('liveChatRules');
+  if (!box || !liveRules) return;
+  document.getElementById('liveChatRulesOwn').textContent = liveRules.text;
+  document.getElementById('liveChatRulesOwnBox').classList.toggle('hidden', !liveRules.text);
+  box.classList.remove('hidden');
+}
+function hideLiveRules() { document.getElementById('liveChatRules')?.classList.add('hidden'); }
+document.getElementById('liveChatRulesClose')?.addEventListener('click', hideLiveRules);
+document.getElementById('liveChatRulesAccept')?.addEventListener('click', () => {
+  if (liveRules) return liveSocket?.emit('chat:rules-accept', { ver: liveRules.ver });
+  onLiveRulesOk(); // после переподключения сервер уже не требует согласия
+});
+
+function onLiveRules(r = {}) {
+  liveRules = { text: String(r.text || ''), ver: r.ver };
+  const bounced = liveLastSent && Date.now() - liveLastSent.at < 3000; // сообщение не ушло: правила сменились или сутки прошли
+  if (bounced) {
+    const input = document.getElementById('liveChatInput');
+    if (input && !input.value) input.value = liveLastSent.text;
+    liveLastSent = null;
+  }
+  if (bounced || liveRulesOpen()) showLiveRules();
+}
+function onLiveRulesOk({ room, token } = {}) {
+  if (room && token) saveRulesAck(room, token);
+  liveRules = null;
+  if (!liveRulesOpen()) return;
+  hideLiveRules();
+  document.getElementById('liveChatInput')?.focus();
+}
+
 window.addEventListener('pw:langchange', (e) => liveSocket?.emit('lang:set', e.detail.lang)); // язык ответов бота
 function connectLiveChat(nameLower) {
   liveSocket = io('/chat', { reconnection: false, transports: ['websocket', 'polling'], tryAllTransports: true }); // сразу WebSocket: чат появляется на 1–2 круга к серверу раньше
@@ -1429,6 +1520,8 @@ function connectLiveChat(nameLower) {
   });
   liveSocket.on('chat:cleared', () => { document.getElementById('liveMessages').innerHTML = ''; });
   liveSocket.on('chat:restriction', applyLiveRestriction);
+  liveSocket.on('chat:rules', onLiveRules);
+  liveSocket.on('chat:rules-ok', onLiveRulesOk);
   liveSocket.on('chat:mode', (mode = {}) => {
     liveMode = mode;
     renderModeBadges();
@@ -1472,7 +1565,8 @@ function connectLiveChat(nameLower) {
 
   liveSocket.on('connect', () => {
     liveChatReconnect?.reset();
-    liveSocket.emit('chat:join', { streamerName: nameLower });
+    liveRules = null; // нужно ли принять правила — скажет сервер в ответ на вход
+    liveSocket.emit('chat:join', { streamerName: nameLower, rulesAck: rulesAcks()[nameLower] });
   });
   liveSocket.on('disconnect', () => liveChatReconnect?.start());
 
@@ -1513,6 +1607,7 @@ document.getElementById('liveAuthRegisterBtn')?.addEventListener('click', () => 
 
 document.getElementById('liveChatInput')?.addEventListener('focus', (e) => {
   if (!liveIsAuthed) { e.target.blur(); openLiveAuthModal(); }
+  else if (liveRules) { e.target.blur(); showLiveRules(); }
 });
 
 document.getElementById('liveChatForm')?.addEventListener('submit', (e) => {
@@ -1521,7 +1616,9 @@ document.getElementById('liveChatForm')?.addEventListener('submit', (e) => {
   const input = document.getElementById('liveChatInput');
   const text = input.value.trim();
   if (!text || !liveSocket) return;
+  if (liveRules) { input.blur(); showLiveRules(); return; } // текст остаётся в поле до согласия
   liveSocket.emit('chat:send', { text });
+  liveLastSent = { text, at: Date.now() };
   input.value = '';
 });
 
@@ -1601,7 +1698,7 @@ async function loadProfile() {
     return; // нет сети, но есть кэш: оставляем показанное
   }
 
-  const live = { isLive: !!b.isLive, streamPlaybackId: b.streamPlaybackId || null, title: b.title || '', category: b.category || null };
+  const live = { isLive: !!b.isLive, streamPlaybackId: b.streamPlaybackId || null, adult: !!b.adult, title: b.title || '', category: b.category || null };
   const same = !!(b.unchanged && cached);
   const stat = same
     ? { streamer: cached.streamer, layout: cached.layout }
@@ -1666,7 +1763,11 @@ async function pollStreamerLiveStatus() {
       if (!nowLive) scheduleBonus(); // эфир кончился — бонус прячем сразу, не ждём ответа сервера
       setTimeout(loadPoints, 1500);
     }
-    if (nowLive && !wasLive) {
+    if (nowLive && wasLive && liveOpen && liveHls && !adultOk()) {
+      // стример поставил метку 18+ посреди эфира — плеер заново, через окно подтверждения возраста
+      stopLiveSession();
+      startLiveSession();
+    } else if (nowLive && !wasLive) {
       // стрим только что начался — открыть плеер без F5
       if (!liveOpen) openLiveStrip();
       else {

@@ -224,6 +224,8 @@ async function loadSettings() {
     document.getElementById('streamDescInput').value = data.streamDescription || '';
     setCategory(data.category || null);
     document.getElementById('liveNoticeInput').value = data.liveNotice || '';
+    document.getElementById('chatRulesInput').value = data.chatRules || '';
+    document.getElementById('streamAdultInput').checked = !!data.streamAdult;
     document.getElementById('streamKeyInput').value = data.streamKeyMasked || '';
     setGenerateBtnState(!!data.streamKeyMasked);
     setChatApiKeyUi(data.chatApiKeyMasked);
@@ -564,6 +566,8 @@ async function saveSettings() {
     streamDescription: document.getElementById('streamDescInput').value,
     streamCategoryId: chosenCategory ? chosenCategory.id : '',
     liveNotice: document.getElementById('liveNoticeInput').value,
+    chatRules: document.getElementById('chatRulesInput').value,
+    streamAdult: document.getElementById('streamAdultInput').checked,
   };
   try {
     const r = await api('/workbench/settings', { method: 'PATCH', body });

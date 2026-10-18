@@ -13,6 +13,7 @@ const FOLLOW_MIN_VALUES = [null, 0, 10, 30, 60, 1440];
 const FILTER_VALUES = [0, 1, 2, 3, 4];
 const SLOW_VALUES = [0, 3, 5, 10, 30, 60, 120];
 const chatFilter = require('../services/chatFilter');
+const chatRules = require('../services/chatRules');
 const emotes = require('../services/emotes');
 const alerts = require('../services/alerts');
 const points = require('../services/points');
@@ -84,6 +85,15 @@ module.exports = function registerChatSocket(io) {
   const slowLast = new Map();
   // маска фильтра для сообщения (null — нечего прятать)
   const maskFor = (room, text) => chatFilter.mask(text, modeOf(room).filter);
+  // правила чата: streamerNameLower → { text, ver } (читаются при входе зрителя, обновляются из студии)
+  const rulesMap = new Map();
+  const EMPTY_RULES = { text: '', ver: chatRules.versionOf('') };
+  const rulesOf = (room) => rulesMap.get(room) || EMPTY_RULES;
+  const setRules = (room, text) => rulesMap.set(room, { text: text || '', ver: chatRules.versionOf(text) });
+  // писать можно: стример и модераторы — всегда, остальные — приняв текущие правила (не подписан — на сутки)
+  const rulesOk = (socket, room, followed) =>
+    !!socket.data.role || (socket.data.rulesVer === rulesOf(room).ver && chatRules.stillValid(socket.data.rulesAt, followed));
+  const askRules = (socket, room) => socket.emit('chat:rules', rulesOf(room));
 
   async function refreshRoles(nameLower) {
     const ids = nsp.adapter.rooms.get(roomName(nameLower)) || new Set();
@@ -98,6 +108,15 @@ module.exports = function registerChatSocket(io) {
     }
   }
   chatBus.setRoleRefresher(refreshRoles);
+  chatBus.setRulesRefresher((room, text) => {
+    const ids = nsp.adapter.rooms.get(roomName(room));
+    if (!ids) return rulesMap.delete(room);
+    setRules(room, text);
+    for (const sid of ids) {
+      const s2 = nsp.sockets.get(sid);
+      if (s2?.data.userId && !s2.data.isOverlay && !s2.data.role) askRules(s2, room);
+    }
+  });
   const hasPerm = (socket, perm) => Array.isArray(socket.data.perms) && socket.data.perms.includes(perm);
 
   // ---------- рейд: зрители канала через N секунд переходят на чужой эфир ----------
@@ -495,7 +514,7 @@ module.exports = function registerChatSocket(io) {
       let currentStreamerNameLower = null;
       let lastSendAt = 0;
 
-    socket.on('chat:join', async ({ streamerName, chatKey } = {}) => {
+    socket.on('chat:join', async ({ streamerName, chatKey, rulesAck } = {}) => {
       // если уже были в другой комнате — выходим
       if (currentStreamerNameLower) {
         if (!socket.data.isOverlay) getRoomPresence(currentStreamerNameLower).delete(socket.id);
@@ -506,6 +525,8 @@ module.exports = function registerChatSocket(io) {
 
       socket.data.isOverlay = false;
       socket.data.isOwner = false;
+      socket.data.rulesAt = 0;
+      socket.data.rulesVer = null;
       currentStreamerNameLower = null;
 
       let streamer = null;
@@ -527,10 +548,11 @@ module.exports = function registerChatSocket(io) {
         const name = String(streamerName || '').toLowerCase();
         if (!name) return;
         currentStreamerNameLower = name;
-        streamer = await User.findOne({ streamerNameLower: name }).select('_id chatFollowMin chatFilter chatSlowSec').lean();
+        streamer = await User.findOne({ streamerNameLower: name }).select('_id chatFollowMin chatFilter chatSlowSec chatRules').lean();
         socket.data.isOwner = !!(authUser && streamer && String(streamer._id) === String(authUser.id));
         if (streamer) {
           chatMode.set(name, { followMin: streamer.chatFollowMin ?? null, filter: streamer.chatFilter || 0, slowSec: streamer.chatSlowSec || 0 });
+          setRules(name, streamer.chatRules);
         }
       }
 
@@ -587,6 +609,32 @@ module.exports = function registerChatSocket(io) {
 
       if (authUser && !socket.data.isOverlay) {
         socket.emit('chat:restriction', await fullRestriction(room, ownerId, authUser.id, !!socket.data.role));
+        // правила чата: отметка о согласии из localStorage зрителя ещё подходит — плашку не показываем
+        if (ownerId && !socket.data.role) {
+          const { ver } = rulesOf(room);
+          const at = chatRules.acceptedAt(rulesAck, socket.data.userId, room, ver);
+          if (at && chatRules.stillValid(at, await emotes.isFollower(ownerId, socket.data.userId))) {
+            socket.data.rulesAt = at;
+            socket.data.rulesVer = ver;
+          } else askRules(socket, room);
+        }
+      }
+    });
+
+    // «Согласиться» на плашке правил: { ver } — версия, которую человек видел (правила могли смениться)
+    socket.on('chat:rules-accept', ({ ver } = {}) => {
+      const room = currentStreamerNameLower;
+      if (!authUser || !room || socket.data.isOverlay || !socket.data.streamerId) return;
+      const cur = rulesOf(room);
+      if (ver !== cur.ver) return askRules(socket, room);
+      const at = Date.now();
+      // и другим вкладкам этого человека в этом чате
+      for (const sid of nsp.adapter.rooms.get(roomName(room)) || []) {
+        const s2 = nsp.sockets.get(sid);
+        if (s2?.data.userId !== socket.data.userId) continue;
+        s2.data.rulesAt = at;
+        s2.data.rulesVer = cur.ver;
+        s2.emit('chat:rules-ok', { room, ver: cur.ver, token: chatRules.sign(socket.data.userId, room, cur.ver, at) });
       }
     });
 
@@ -627,6 +675,9 @@ module.exports = function registerChatSocket(io) {
 
       const restriction = await fullRestriction(currentStreamerNameLower, socket.data.streamerId, authUser.id, !!socket.data.role);
       if (restriction.type !== 'none') return socket.emit('chat:restriction', restriction);
+      const followed = !socket.data.role && (await emotes.isFollower(socket.data.streamerId, String(authUser.id)));
+      // правила чата не приняты (или сутки прошли, или стример их поменял) — сообщение не уходит
+      if (socket.data.streamerId && !rulesOk(socket, currentStreamerNameLower, followed)) return askRules(socket, currentStreamerNameLower);
 
       // медленный режим: стримера и модераторов не касается
       const slow = modeOf(currentStreamerNameLower).slowSec;
@@ -639,7 +690,7 @@ module.exports = function registerChatSocket(io) {
       }
 
       // смайлы :code: — канала (стримеру, модераторам и подписчикам) и публичные (всем)
-      const canChannel = !!socket.data.role || (await emotes.isFollower(socket.data.streamerId, String(authUser.id)));
+      const canChannel = !!socket.data.role || followed;
       const usedEmotes = await emotes.resolve(trimmed, currentStreamerNameLower, canChannel).catch(() => null);
 
       const msg = await StreamChatMessage.create({
@@ -714,6 +765,7 @@ module.exports = function registerChatSocket(io) {
       if (getRoomPresence(currentStreamerNameLower).size === 0) {
         presence.delete(currentStreamerNameLower);
         chatMode.delete(currentStreamerNameLower); // режим перечитается из базы при следующем входе
+        rulesMap.delete(currentStreamerNameLower);
       }
     });
   });

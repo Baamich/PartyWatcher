@@ -110,6 +110,13 @@
           <textarea id="liveNoticeInput" rows="2" maxlength="140" placeholder="Например: «Заходите, сегодня проходим финал!»" data-i18n-placeholder="workbench.settings.noticePh"></textarea>
           <p class="wb-hint" data-i18n="workbench.settings.noticeHint">Подписчики увидят это справа сверху на сайте, когда ты выйдешь в эфир.</p>
 
+          <label class="auth-label" for="chatRulesInput" data-i18n="workbench.settings.rules">Правила чата</label>
+          <textarea id="chatRulesInput" rows="5" maxlength="1000" placeholder="1. Не оскорблять стримера и зрителей&#10;2. Без спойлеров&#10;3. Мат можно, но без перебора" data-i18n-placeholder="workbench.settings.rulesPh"></textarea>
+          <p class="wb-hint" data-i18n="workbench.settings.rulesHint">Зрители увидят их вместе с правилами сайта, когда впервые нажмут на чат, и должны согласиться.</p>
+
+          <label class="wb-check"><input type="checkbox" id="streamAdultInput" /> <span data-i18n="workbench.settings.adult">Эфир 18+</span></label>
+          <p class="wb-hint" data-i18n="workbench.settings.adultHint">Обязательно, если в эфире бывают эротические сцены или обнажённость (фильмы, сериалы, игры). Зрители сначала подтвердят, что им есть 18, а в каталоге трансляций эфир увидят только те, кто уже подтверждал возраст, — с плашкой «18+» вместо кадра. Порнография запрещена всегда.</p>
+
           <button type="button" class="auth-submit" data-click="saveSettings" data-i18n="common.save">Сохранить</button>
         </div>
         <div class="wb-resize-handle"></div>

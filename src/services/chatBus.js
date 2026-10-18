@@ -62,6 +62,15 @@ function refreshRoles(streamerNameLower) {
   roleRefresher(streamerNameLower).catch((e) => console.warn('[chatBus] refreshRoles', e.message));
 }
 
+// стример сохранил правила чата — сокет-файл обновит их и попросит зрителей принять заново
+let rulesRefresher = () => {};
+function setRulesRefresher(fn) {
+  rulesRefresher = fn;
+}
+function rulesChanged(streamerNameLower, text) {
+  try { rulesRefresher(streamerNameLower, text); } catch (e) { console.warn('[chatBus] rulesChanged', e.message); }
+}
+
 // журнал действий канала (студия → «Журнал действий»): пишем запись и сразу шлём её стримеру, если он в чате.
 // details — без слов (журнал читают на разных языках): «00:10:00», «chatSlowSec=30», название категории
 async function logAction(streamerNameLower, actorUsername, action, targetUsername, details) {
@@ -77,4 +86,4 @@ async function logAction(streamerNameLower, actorUsername, action, targetUsernam
 }
 const logActionQuiet = (...a) => logAction(...a).catch((e) => console.warn('[chatBus] logAction', e.message));
 
-module.exports = { init, emitMessage, emitToUser, logAction: logActionQuiet, setViewerCounter, viewerCount, chatStatsStart, countChatMessage, chatStatsTake, setRoleRefresher, refreshRoles };
+module.exports = { init, emitMessage, emitToUser, logAction: logActionQuiet, setViewerCounter, viewerCount, chatStatsStart, countChatMessage, chatStatsTake, setRoleRefresher, refreshRoles, setRulesRefresher, rulesChanged };

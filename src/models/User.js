@@ -69,9 +69,11 @@ const userSchema = new mongoose.Schema(
     streamDescription: { type: String, default: '' },
     streamCategoryId: { type: String, default: null }, // Category.tid, выбирается в студии
     liveNotice: { type: String, default: '' }, // текст в уведомлении подписчикам «вышел в эфир»
+    streamAdult: { type: Boolean, default: false }, // эфир 18+ (эротические сцены): окно подтверждения возраста, нет на главной каталога
     chatFollowMin: { type: Number, default: null }, // чат только для подписчиков: null — выкл, 0 — сразу, N — подписан не меньше N минут
     chatFilter: { type: Number, default: 0 }, // фильтр слов в чате: 0 — выкл … 4 — очень сильно (services/chatFilter)
     chatSlowSec: { type: Number, default: 0 }, // медленный режим: секунд между сообщениями зрителя (0 — выкл)
+    chatRules: { type: String, default: '' }, // правила чата от стримера: зритель принимает их перед первым сообщением (services/chatRules)
     modPerms: { type: mongoose.Schema.Types.Mixed, default: null }, // права модераторов { mod: [...], senior: [...] } (services/channelMods)
     // ---- стрим-поинты канала (студия → 🎁 Награды) ----
     pointsName: { type: String, default: null }, // своё название; null — «стрим-поинты» на языке зрителя

@@ -22,7 +22,7 @@ async function performSearch(q) {
   heading.textContent = t('streams.didYouMean');
 
   try {
-    const results = await api('/streamers?q=' + encodeURIComponent(q) + '&limit=20');
+    const results = await api('/streamers?q=' + encodeURIComponent(q) + '&limit=20' + adultParam('&'));
     renderStreamersList(grid, results, t('streams.noResults', { q }));
   } catch (err) {
     console.warn('[performSearch]', err.message);

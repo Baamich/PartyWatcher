@@ -6,6 +6,7 @@ const i18n = require('../../services/i18n');
 const { hasProfanity } = require('../../services/profanity');
 const PWLayout = require('../../public/js/pwlayout.js');
 const categories = require('../../services/categories');
+const { isAdultStream, seesAdultStreams } = require('../../services/adultContent');
 
 // название и категория идущего эфира (для плашки над плеером и строки под именем)
 async function liveInfo(s) {
@@ -72,8 +73,9 @@ function validateStreamerName(name) {
   return null;
 }
 
-// GET /streamers?q=имя&limit=5  — список стримеров, поиск без учёта регистра
-router.get('/', async (req, res) => {
+// GET /streamers?q=имя&limit=5  — список стримеров, поиск без учёта регистра.
+// Эфир 18+ видят только подтвердившие возраст (как в каталоге, ?adult=1 — для гостя)
+router.get('/', auth.optional, async (req, res) => {
   try {
     const q = (req.query.q || '').trim().toLowerCase();
     const limit = Math.min(parseInt(req.query.limit, 10) || 0, 50) || null;
@@ -89,7 +91,7 @@ router.get('/', async (req, res) => {
       { $match: { streamerNameLower: match } },
       {
         $project: {
-          _id: 0, streamerName: 1, streamerNameLower: 1, isLive: 1, profileViews: 1, profileRev: 1,
+          _id: 0, streamerName: 1, streamerNameLower: 1, isLive: 1, profileViews: 1, profileRev: 1, streamAdult: 1, streamTitle: 1,
           hasAvatar: { $gt: ['$streamerAvatarUrl', null] },
         },
       },
@@ -98,12 +100,19 @@ router.get('/', async (req, res) => {
     ];
     if (limit) pipeline.push({ $limit: limit });
 
-    const rows = await User.aggregate(pipeline);
-    res.json(rows.map((s) => ({
-      streamerName: s.streamerName,
-      isLive: !!s.isLive,
-      avatarUrl: s.hasAvatar ? avatarUrl(s.streamerNameLower, s.profileRev) : null,
-    })));
+    const [rows, seesAdult] = await Promise.all([User.aggregate(pipeline), seesAdultStreams(req)]);
+    const out = [];
+    for (const s of rows) {
+      const adult = !!s.isLive && isAdultStream(s);
+      if (adult && !seesAdult) continue;
+      out.push({
+        streamerName: s.streamerName,
+        isLive: !!s.isLive,
+        avatarUrl: s.hasAvatar ? avatarUrl(s.streamerNameLower, s.profileRev) : null,
+        ...(adult && { adult: true }),
+      });
+    }
+    res.json(out);
   } catch (err) {
     console.error('[GET /streamers]', err);
     res.status(500).json({ error: req.t('server.streamers.listFailed') });
@@ -247,7 +256,7 @@ router.get('/:name/bundle', async (req, res) => {
       { $inc: { profileViews: 1 } },
       { new: true }
     )
-      .select('streamerName isLive streamPlaybackId profileRev streamTitle streamCategoryId')
+      .select('streamerName isLive streamPlaybackId profileRev streamTitle streamCategoryId streamAdult')
       .lean();
     if (!s) return res.status(404).json({ error: req.t('server.streamers.notFound') });
 
@@ -257,6 +266,7 @@ router.get('/:name/bundle', async (req, res) => {
       streamerName: s.streamerName,
       isLive: !!s.isLive,
       streamPlaybackId: s.streamPlaybackId || null,
+      adult: isAdultStream(s), // эфир 18+: до плеера окно «Тебе есть 18?»
       ...(await liveInfo(s)),
     };
 
@@ -512,9 +522,9 @@ router.get('/:name/live-status', async (req, res) => {
     let hit = liveStatusCache.get(nameLower);
     if (!hit || Date.now() - hit.at > LIVE_STATUS_TTL_MS) {
       const streamer = await User.findOne({ streamerNameLower: nameLower })
-        .select('isLive streamPlaybackId streamTitle streamCategoryId -_id')
+        .select('isLive streamPlaybackId streamTitle streamCategoryId streamAdult -_id')
         .lean();
-      const data = streamer && { isLive: !!streamer.isLive, streamPlaybackId: streamer.streamPlaybackId || null, ...(await liveInfo(streamer)) };
+      const data = streamer && { isLive: !!streamer.isLive, streamPlaybackId: streamer.streamPlaybackId || null, adult: isAdultStream(streamer), ...(await liveInfo(streamer)) };
       if (liveStatusCache.size > 3000) liveStatusCache.clear();
       hit = { at: Date.now(), data };
       liveStatusCache.set(nameLower, hit);
@@ -538,7 +548,7 @@ router.get('/:name', async (req, res) => {
       { $inc: { profileViews: 1 } },
       { new: true }
     )
-      .select('streamerName isLive streamerBio streamPlaybackId profileRev')
+      .select('streamerName isLive streamerBio streamPlaybackId profileRev streamAdult streamTitle')
       .lean();
 
     if (!s) return res.status(404).json({ error: req.t('server.streamers.notFound') });
@@ -549,6 +559,7 @@ router.get('/:name', async (req, res) => {
       isLive: s.isLive,
       streamerBio: s.streamerBio,
       streamPlaybackId: s.streamPlaybackId,
+      adult: isAdultStream(s),
       ...imageUrls(nameLower, s.profileRev, img),
     });
   } catch (err) {

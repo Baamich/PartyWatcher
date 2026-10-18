@@ -11,6 +11,7 @@ const auth = require('../../middleware/auth');
 const chatBus = require('../../services/chatBus');
 const categories = require('../../services/categories');
 const streamKeyCache = require('../../services/streamKeyCache');
+const { isAdultStream, seesAdultStreams } = require('../../services/adultContent');
 const fs = require('fs');
 const path = require('path');
 
@@ -37,7 +38,7 @@ async function buildSnapshot() {
     {
       $project: {
         streamerName: 1, streamerNameLower: 1, isLive: 1, liveStartedAt: 1, profileRev: 1, profileViews: 1,
-        streamTitle: 1, streamCategoryId: 1, streamPlaybackId: 1, liveNotice: 1,
+        streamTitle: 1, streamCategoryId: 1, streamPlaybackId: 1, liveNotice: 1, streamAdult: 1,
         hasAvatar: { $gt: ['$streamerAvatarUrl', null] },
       },
     },
@@ -60,6 +61,7 @@ async function buildSnapshot() {
   const cards = rows.map((r) => {
     const live = !!r.isLive;
     const cat = r.streamCategoryId ? catById.get(r.streamCategoryId) || null : null;
+    const adult = live && isAdultStream(r); // эфир 18+: вместо кадра плашка, видят только подтвердившие возраст
     const liveSec = live && r.liveStartedAt ? Math.max(0, (now - new Date(r.liveStartedAt).getTime()) / 1000) : 0;
     return {
       id: String(r._id), // только для сервера, наружу не уходит
@@ -73,9 +75,10 @@ async function buildSnapshot() {
         avatarUrl: r.hasAvatar ? avatarUrl(r.streamerNameLower, r.profileRev) : null,
         isLive: live,
         viewers: live ? chatBus.viewerCount(r.streamerNameLower, r._id) : 0,
-        thumb: live ? thumbUrl(r.streamPlaybackId) : null,
+        thumb: live && !adult ? thumbUrl(r.streamPlaybackId) : null,
         title: live ? r.streamTitle || '' : '',
         category: cat ? { slug: cat.slug, name: cat.name, ru: cat.ru } : null,
+        ...(adult && { adult: true }),
       },
     };
   });
@@ -84,6 +87,15 @@ async function buildSnapshot() {
   const byPopularity = (a, b) => (b.card.isLive - a.card.isLive) || (b.card.viewers - a.card.viewers) || (b.views - a.views);
   cards.sort(byPopularity);
 
+  return {
+    byId: new Map(cards.map((c) => [c.id, c])), // подписки — все, включая 18+
+    full: views(cards, catById), // подтвердил возраст (аккаунт — adultConfirmed, гость — adult=1)
+    safe: views(cards.filter((c) => !c.card.adult), catById), // остальным эфиров 18+ нет ни в одном списке
+  };
+}
+
+// списки каталога из готовых карточек: активные, категории (с числом эфиров)
+function views(cards, catById) {
   const active = cards.filter((c) => c.sec >= 60).sort((a, b) => b.sec - a.sec);
 
   const groups = new Map();
@@ -96,9 +108,9 @@ async function buildSnapshot() {
     g.list.push(c);
   }
   // категории, где сейчас кто-то в эфире, — выше; потом по числу стримеров
-  const cats2 = [...groups.values()].sort((a, b) => b.live - a.live || b.list.length - a.list.length);
+  const cats = [...groups.values()].sort((a, b) => b.live - a.live || b.list.length - a.list.length);
 
-  return { cards, byId: new Map(cards.map((c) => [c.id, c])), active, cats: cats2, bySlug: groups };
+  return { cards, active, cats, bySlug: groups };
 }
 
 async function snapshot() {
@@ -145,12 +157,15 @@ router.get('/live-follows', auth.optional, async (req, res) => {
 // GET /streams/directory?cat=<slug>      — все стримеры категории
 router.get('/directory', auth.optional, async (req, res) => {
   try {
-    const s = await snapshot();
-    const following = await followingOf(req.user, s);
+    const all = await snapshot();
+    const [following, adult] = await Promise.all([followingOf(req.user, all), seesAdultStreams(req)]);
+    const s = adult ? all.full : all.safe;
     res.set('Cache-Control', 'no-store');
 
     if (req.query.cat) {
-      const g = s.bySlug.get(String(req.query.cat));
+      const slug = String(req.query.cat);
+      const fg = !s.bySlug.has(slug) && all.full.bySlug.get(slug); // в категории только эфиры 18+ — пустая, а не «не найдена»
+      const g = s.bySlug.get(slug) || (fg && { ...fg, live: 0, list: [] });
       if (!g) return res.status(404).json({ error: req.t('server.cat.notFound'), following });
       return res.json({ following, category: catHead(g), list: cardsOf(g.list, 500) });
     }

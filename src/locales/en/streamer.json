@@ -47,7 +47,14 @@
     "revealText": "The streamer's filter hid rude words here. Do you really want to see the whole message?",
     "revealOk": "Show",
     "slowHint": "Slow mode: you can write no more often than this",
-    "slowWait": "Slow mode: {n} s left"
+    "slowWait": "Slow mode: {n} s left",
+    "rules": {
+      "title": "Chat rules",
+      "site": "<ul><li>No threats, harassment, hate or discrimination. Insulting anyone's family is not allowed, not even as a joke.</li><li>Don't post other people's personal data (addresses, phone numbers, photos without consent).</li><li>No spam, ads, scams or mentioning services for hacking or fraud.</li><li>Occasional swearing is fine unless the streamer forbids it. Rough banter only if the streamer allows it.</li></ul><p>For violations the streamer can ban you from their chat, and the administration can issue a warning or block the account without warning. Details are in the <a href=\"/terms\" target=\"_blank\" rel=\"noopener\">terms of use</a>.</p>",
+      "own": "Channel rules",
+      "note": "Follow the channel and you won't have to confirm the rules again. Without following — once a day.",
+      "accept": "Agree"
+    }
   },
   "auth": {
     "title": "Sign in to chat",
@@ -62,6 +69,12 @@
     "pointsText": "Stream points and rewards are tied to an account: sign in or register."
   },
   "previewBadge": "Preview: changes are not saved yet",
+  "adult": {
+    "title": "18+ stream",
+    "text": "The streamer marked this stream as 18+: it may contain erotic scenes and nudity. Confirm that you are 18 or older. If not, you will go back to the list of streams.",
+    "yes": "I am 18 or older",
+    "no": "I am under 18"
+  },
   "follow": {
     "follow": "❤ Follow",
     "following": "💜 Following",

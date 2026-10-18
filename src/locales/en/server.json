@@ -182,7 +182,8 @@
     "maxCommands": "You can create at most {n} commands",
     "cmdExists": "This command already exists",
     "cmdNotFound": "Command not found",
-    "noticeLong": "The notification can be at most 140 characters"
+    "noticeLong": "The notification can be at most 140 characters",
+    "rulesLong": "Chat rules can be at most {n} characters"
   },
   "support": {
     "tooMany": "Too many requests, try later",

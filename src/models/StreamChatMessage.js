@@ -23,10 +23,18 @@ const streamChatMessageSchema = new mongoose.Schema(
 
 streamChatMessageSchema.index({ streamerNameLower: 1, createdAt: 1 });
 
-// сообщения из API (боты, мосты) хранятся 3 дня, чтобы база не пухла от спама
-streamChatMessageSchema.index(
-  { createdAt: 1 },
-  { expireAfterSeconds: 3 * 24 * 60 * 60, partialFilterExpression: { external: true } }
-);
+// сообщения чата хранятся 3 дня (условия п. 10, политика п. 5); «Очистить чат» удаляет сразу
+streamChatMessageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 3 * 24 * 60 * 60 });
 
-module.exports = mongoose.model('StreamChatMessage', streamChatMessageSchema);
+const StreamChatMessage = mongoose.model('StreamChatMessage', streamChatMessageSchema);
+
+// раньше 3 дня жили только сообщения из API (partial-индекс с тем же именем): разово меняем его на общий
+StreamChatMessage.init().catch(() => {}).then(async () => {
+  const old = (await StreamChatMessage.collection.indexes()).find((i) => i.name === 'createdAt_1' && i.partialFilterExpression);
+  if (!old) return;
+  await StreamChatMessage.collection.dropIndex('createdAt_1');
+  await StreamChatMessage.createIndexes();
+  console.log('[mongo] stream chat: TTL 3 days for all messages');
+}).catch((e) => console.warn('[mongo] stream chat TTL:', e.message));
+
+module.exports = StreamChatMessage;

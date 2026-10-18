@@ -18,6 +18,7 @@ const auth = require('../../middleware/auth');
 const streamKeyCache = require('../../services/streamKeyCache');
 const StreamVod = require('../../models/StreamVod');
 const chatBus = require('../../services/chatBus');
+const chatRules = require('../../services/chatRules');
 const rateLimit = require('express-rate-limit');
 
 // Проверяем реальность по диску: обновляется ли index.m3u8 прямо сейчас,
@@ -72,6 +73,8 @@ router.get('/me', auth, requireStreamer, async (req, res) => {
     streamDescription: me.streamDescription || '',
     category: categories.publicView(cat),
     liveNotice: me.liveNotice || '',
+    streamAdult: !!me.streamAdult,
+    ...(req.query.full && { chatRules: me.chatRules || '' }),
     streamKeyMasked: maskKey(me.streamKey),
     chatApiKeyMasked: maskChatKey(me.chatApiKey),
     streamPlaybackId: me.streamPlaybackId || null,
@@ -110,11 +113,18 @@ router.post('/stream-key/reveal', auth, requireStreamer, async (req, res) => {
 
 // PATCH /workbench/settings — название и описание трансляции
 router.patch('/settings', auth, requireStreamer, async (req, res) => {
-  const { streamTitle, streamDescription, streamCategoryId, liveNotice } = req.body;
+  const { streamTitle, streamDescription, streamCategoryId, liveNotice, streamAdult, chatRules: rules } = req.body;
+  let rulesNew = null;
+  if (rules !== undefined) {
+    if (String(rules).length > chatRules.MAX_LEN) return res.status(400).json({ error: req.t('server.wb.rulesLong', { n: chatRules.MAX_LEN }) });
+    const text = chatRules.clean(rules);
+    if (text !== (req.streamerUser.chatRules || '')) req.streamerUser.chatRules = rulesNew = text;
+  }
   if (liveNotice !== undefined) {
     if (String(liveNotice).length > 140) return res.status(400).json({ error: req.t('server.wb.noticeLong') });
     req.streamerUser.liveNotice = String(liveNotice).trim();
   }
+  if (streamAdult !== undefined) req.streamerUser.streamAdult = streamAdult === true;
   if (streamTitle !== undefined) {
     if (String(streamTitle).length > 140) return res.status(400).json({ error: req.t('server.wb.titleLong') });
     req.streamerUser.streamTitle = String(streamTitle).trim();
@@ -139,11 +149,14 @@ router.patch('/settings', auth, requireStreamer, async (req, res) => {
     cat = await Category.findOne({ tid: req.streamerUser.streamCategoryId }).select('-cover').lean();
   }
   await req.streamerUser.save();
+  if (rulesNew !== null) chatBus.rulesChanged(req.streamerUser.streamerNameLower, rulesNew); // зрители в чате примут новые правила
   res.json({
     streamTitle: req.streamerUser.streamTitle,
     streamDescription: req.streamerUser.streamDescription,
     category: categories.publicView(cat),
     liveNotice: req.streamerUser.liveNotice || '',
+    streamAdult: !!req.streamerUser.streamAdult,
+    chatRules: req.streamerUser.chatRules || '',
   });
 });
 

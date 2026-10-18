@@ -53,7 +53,12 @@
     "categoryNothing": "Nothing found",
     "notice": "Notification for followers",
     "noticePh": "For example: “Come in, we are beating the final boss today!”",
-    "noticeHint": "Followers will see this in the top right corner of the site when you go live."
+    "noticeHint": "Followers will see this in the top right corner of the site when you go live.",
+    "rules": "Chat rules",
+    "rulesPh": "1. Don't insult the streamer or viewers\n2. No spoilers\n3. Swearing is fine, just don't overdo it",
+    "rulesHint": "Viewers see them together with the site rules when they first click the chat, and must agree. You can allow swearing and banter, but threats, harassment, hate and insulting someone's family are always forbidden. If you change the rules, viewers accept them again.",
+    "adult": "18+ stream",
+    "adultHint": "Required if the stream may contain erotic scenes or nudity (films, series, games). Viewers first confirm they are 18 or older, and in the streams directory it is shown only to those who have already confirmed their age, with an “18+” plate instead of the preview frame. Pornography is always forbidden."
   },
   "log": {
     "title": "Action log",

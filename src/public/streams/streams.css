@@ -290,6 +290,29 @@
   color: var(--text-muted);
 }
 
+/* ---- эфир 18+ (метка стримера): плашка вместо кадра и значок в строках списков ---- */
+.card-thumb-adult {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a2522, #121110);
+  color: #f0ebe6;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.side-adult {
+  margin-left: 4px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
 /* ---- категория: вертикальная обложка первой в ряду ---- */
 .cat-section .streams-section-head { align-items: center; }
 .cat-count { font-size: 12px; color: var(--text-muted); }

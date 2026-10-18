@@ -34,4 +34,24 @@ function isAdultUrl(url) {
   return ADULT_HOSTS.some((h) => host === h || host.endsWith('.' + h));
 }
 
-module.exports = { isAdultUrl };
+// эфир 18+ (эротические сцены, не порно): метка стримера в студии (User.streamAdult) или «18+» в названии эфира —
+// условия разрешают оба способа. До плеера — окно возраста (streamer.js), на главной каталога такого эфира нет
+const ADULT_TITLE = /(^|[^\d])18\s*\+/;
+const isAdultStream = (u) => !!(u && (u.streamAdult || ADULT_TITLE.test(u.streamTitle || '')));
+
+// видит ли зритель эфиры 18+ в каталогах: аккаунт — хоть раз подтвердил возраст в окне «Тебе есть 18?»
+// (User.adultConfirmed, не отменяется — признак из запроса не берём), гость — отметка того же окна на устройстве (?adult=1).
+// Подтвердившие запоминаются в памяти: подтверждение не отменяется, а неподтвердившего спрашиваем у базы заново
+const adultSeen = new Set();
+async function seesAdultStreams(req) {
+  if (!req.user) return req.query?.adult === '1';
+  const id = String(req.user.id);
+  if (adultSeen.has(id)) return true;
+  const u = await require('../models/User').findById(id).select('adultConfirmed -_id').lean();
+  if (!u?.adultConfirmed) return false;
+  if (adultSeen.size > 20000) adultSeen.clear();
+  adultSeen.add(id);
+  return true;
+}
+
+module.exports = { isAdultUrl, isAdultStream, seesAdultStreams };
