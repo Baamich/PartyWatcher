@@ -145,7 +145,8 @@
   }
 
   // служебные имена, которые сервер пишет по-русски (у людей логины только латиницей — не спутать)
-  const SYS_NAMES = { 'Бот': 'common.sys.bot', 'Система': 'common.sys.system', 'Гость': 'common.sys.guest' };
+  // 'Удалён' — автор удалённого аккаунта (services/accountDeletion.js обезличивает его сообщения)
+  const SYS_NAMES = { 'Бот': 'common.sys.bot', 'Система': 'common.sys.system', 'Гость': 'common.sys.guest', 'Удалён': 'common.sys.deleted' };
   function sysName(name) {
     const k = SYS_NAMES[name];
     return k && has(k) ? t(k) : name;

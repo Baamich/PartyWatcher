@@ -259,6 +259,16 @@
     "error": "ERROR: {error}"
   },
   "mail": {
+    "emailChange": {
+      "subject": "PartyWatcher email change",
+      "hello": "Hi {name}!",
+      "intro": "Someone asked in the PartyWatcher profile to change the account email to this address.",
+      "openLink": "To confirm, open the link within {n} minutes:",
+      "ignore": "If it was not you, just ignore this email — the account email will not change.",
+      "button": "Confirm new email",
+      "linkHint": "Button not working? Copy the link into your browser:",
+      "footer": "The link is valid for {n} minutes. If it was not you, do nothing — the email stays the same."
+    },
     "reset": {
       "subject": "PartyWatcher password reset",
       "hello": "Hello, {name}!",
@@ -306,6 +316,28 @@
   },
   "adult": {
     "notConfirmed": "Confirm that you are 18 or older first"
+  },
+  "account": {
+    "mustAgree": "Confirm you understand that changing the password signs you out on all devices",
+    "badPassword": "Current password is incorrect",
+    "passSame": "The new password is the same as the current one",
+    "passMismatch": "The new passwords do not match",
+    "emailSame": "That is already your email",
+    "emailMailLimit": "The site has already sent all the emails it can today. Send a request to support — we will change the email manually",
+    "emailSent": "Email sent to {email}. Open the link in it within {n} minutes to change your email",
+    "emailRequestOpen": "An email change request has already been sent — wait for support to reply",
+    "emailRequestText": "Email change request from the profile (site email limit reached): {from} → {to}",
+    "emailRequestSent": "Request #{n} sent. Support will check it and change your email",
+    "badColor": "Pick a color from the palette",
+    "deletionPending": "This account will be deleted on {date} — you asked for it. Sign in and cancel the deletion?",
+    "deleteMustAgree": "Confirm you understand that the account and everything in it will be deleted",
+    "ownerNoDelete": "The site owner's account cannot be deleted this way",
+    "notPending": "This account did not ask to be deleted",
+    "deleteRequestText": "Account deletion request for {name} from the profile. It will be deleted automatically on {date} unless they sign in and cancel.",
+    "devices": {
+      "notFound": "This session no longer exists",
+      "mainOnly": "This can only be done from the main device"
+    }
   },
   "follow": {
     "self": "You can't follow your own channel",

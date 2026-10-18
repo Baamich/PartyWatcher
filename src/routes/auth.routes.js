@@ -10,10 +10,18 @@ const auth = require('../middleware/auth');
 const { meOf } = require('../services/me');
 const { TERMS_VERSION } = require('../services/terms');
 const { clientIp, parseUA } = require('../services/clientInfo');
-const { sendPasswordReset, isMailConfigured, maskEmail } = require('../services/mailer');
+const { sendPasswordReset, sendEmailChange, isMailConfigured, maskEmail } = require('../services/mailer');
+const SupportTicket = require('../models/SupportTicket');
+const { createRequestTicket } = require('./support.routes');
 const rateLimit = require('express-rate-limit');
 const mailQuota = require('../services/mailQuota');
 const regQueue = require('../services/regQueue');
+const accountLog = require('../services/accountLog');
+const sessions = require('../services/sessions');
+const { signToken, setTokenCookie } = sessions;
+const Session = require('../models/Session');
+const accountDeletion = require('../services/accountDeletion');
+const chatColor = require('../services/chatColor');
 
 // защита дневного лимита писем от спама регистрациями: с одного IP — не больше 3 регистраций за сутки
 // и не больше 2 аккаунтов одновременно в очереди
@@ -31,17 +39,6 @@ const VERIFY_RESEND_MS = 2 * 60 * 1000;
 const RESET_RESEND_MS = 2 * 60 * 1000; // одно письмо на аккаунт раз в 2 минуты
 // сколько секунд до следующего письма (кнопки «Отправить ещё раз» показывают отсчёт)
 const retryIn = (sentAt, gapMs) => (sentAt ? Math.max(0, Math.ceil((new Date(sentAt).getTime() + gapMs - Date.now()) / 1000)) : 0);
-
-// cookie на весь домен (сайт + live. + админка); на localhost домен не ставим, иначе браузер её не примет
-const COOKIE_DOMAIN = (() => {
-  if (process.env.COOKIE_DOMAIN !== undefined) return process.env.COOKIE_DOMAIN || undefined;
-  try {
-    const host = new URL(config.publicUrl).hostname;
-    return host === 'partywatcher.de' || host.endsWith('.partywatcher.de') ? '.partywatcher.de' : undefined;
-  } catch {
-    return undefined;
-  }
-})();
 
 const forgotLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -85,29 +82,6 @@ const resendLimiter = rateLimit({
 });
 // для логинов, которых нет в базе: сравниваем с «пустышкой», чтобы время ответа не выдавало, что такого логина нет
 const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', 12);
-
-function signToken(user) {
-  return jwt.sign(
-    { id: user._id, username: user.username, role: user.role, tv: user.tokenVersion || 0 },
-    config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn }
-  );
-}
-
-function setTokenCookie(res, token) {
-  const isHttps =
-    config.publicUrl?.startsWith('https://') ||
-    process.env.FORCE_SECURE_COOKIE === '1';
-
-  res.cookie('token', token, {
-    httpOnly: true,
-    secure: isHttps,
-    sameSite: 'lax',
-    domain: COOKIE_DOMAIN,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: '/',
-  });
-}
 
 // валидаторы возвращают ключ словаря ошибки (перевод — req.t) или null
 function validatePassword(password) {
@@ -229,8 +203,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       });
     }
     console.warn('[auth/register] SMTP не настроен — аккаунт активирован без подтверждения почты');
-    const token = signToken(user);
-    setTokenCookie(res, token);
+    await sessions.start(res, req, user, { main: true }); // устройство регистрации — главное
     res.status(201).json({ id: user._id, username: user.username, role: user.role });
   } catch (err) {
     console.error('[auth/register]', err);
@@ -273,9 +246,18 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (user.banUntil && user.banUntil.getTime() > Date.now()) {
       return res.status(403).json({ error: banText(req, user.banUntil, user.banReason), code: 'banned' });
     }
+    // аккаунт ждёт удаления: вход с паролем — только с явной отменой удаления (страница спросит)
+    if (user.deleteAt) {
+      if (req.body?.cancelDeletion !== true) {
+        return res.status(403).json({
+          error: req.t('server.account.deletionPending', { date: user.deleteAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC' }),
+          code: 'deletionPending', deleteAt: user.deleteAt,
+        });
+      }
+      await accountDeletion.cancel(req, user._id);
+    }
 
-    const token = signToken(user);
-    setTokenCookie(res, token);
+    await sessions.start(res, req, user);
     res.json({ id: user._id, username: user.username, role: user.role });
   } catch (err) {
     console.error('[auth/login]', err);
@@ -303,7 +285,7 @@ router.post('/verify', resetLimiter, async (req, res) => {
     return res.status(410).json({ error: req.t('server.auth.verifyExpired', { n: VERIFY_TTL_MIN }) });
   }
   await User.updateOne({ _id: user._id }, { $unset: { verifyPending: 1, verifyTokenHash: 1, verifyExpires: 1, verifySentAt: 1 } });
-  setTokenCookie(res, signToken(user));
+  await sessions.start(res, req, user, { main: true }); // подтвердил почту с устройства регистрации — оно главное
   res.json({ ok: true, username: user.username });
 });
 
@@ -415,11 +397,13 @@ router.post('/terms', auth, async (req, res) => {
   res.json({ ok: true, version: TERMS_VERSION });
 });
 
-router.post('/logout', (req, res) => {
-  res.clearCookie('token', {
-    domain: COOKIE_DOMAIN,
-    path: '/',
-  });
+// выход: сеанс этого устройства завершается (токен больше не примут, даже если его скопировали)
+router.post('/logout', async (req, res) => {
+  try {
+    const payload = jwt.verify(req.cookies?.token || '', config.jwt.secret);
+    if (payload.sid) await sessions.revokeWhere({ sid: payload.sid });
+  } catch (_) {}
+  sessions.clearTokenCookie(res);
   res.json({ status: 'ok' });
 });
 
@@ -496,13 +480,209 @@ router.post('/reset', resetLimiter, async (req, res) => {
     user.resetTokenHash = undefined;
     user.resetTokenExpires = undefined;
     user.tokenVersion = (user.tokenVersion || 0) + 1; // выкидываем все старые сессии
+    user.passwordChangedAt = new Date();
     await user.save();
     auth.forgetUser(user._id);
-
-    setTokenCookie(res, signToken(user)); // сразу входим с новым паролем
+    accountLog.record(user._id, 'password', { to: 'reset' }, req);
+    // аккаунт ждал удаления: сброс пароля = вход с паролем, удаление отменяется (иначе удалился бы под живым человеком)
+    if (user.deleteAt) await accountDeletion.cancel(req, user._id);
+    await sessions.revokeWhere({ userId: user._id }); // все прежние входы — долой
+    await sessions.start(res, req, user); // сразу входим с новым паролем
     res.json({ status: 'ok' });
   } catch (err) {
     console.error('[auth/reset]', err);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// GET /auth/account — профиль → «Общее»: свои данные (почта целиком — страница сама прячет её под •••)
+router.get('/account', auth, async (req, res) => {
+  const u = await User.findById(req.user.id).select('username email createdAt streamerName passwordChangedAt regDevice pendingEmail emailChangeExpires emailChangeSentAt').lean();
+  if (!u) return res.status(401).json({ error: req.t('server.userNotFound') });
+  res.json({
+    username: u.username,
+    email: u.email,
+    createdAt: u.createdAt,
+    regDevice: u.regDevice || '',
+    streamerName: u.streamerName || null,
+    passwordChangedAt: u.passwordChangedAt || null,
+    // письмо смены почты ушло и ссылка ещё жива
+    pendingEmail: u.pendingEmail && u.emailChangeExpires > new Date() ? u.pendingEmail : null,
+    emailRetryIn: retryIn(u.emailChangeSentAt, VERIFY_RESEND_MS),
+    // «Вид чата»: свой цвет ника (не выбирал — закрепится случайный) и палитра
+    chatColor: await chatColor.of(u._id),
+    palette: chatColor.PALETTE,
+    // пароль, почта и удаление — только с главного устройства (профиль покажет плашку)
+    ...(await sessions.mainState(u._id, req.user.sid)),
+  });
+});
+
+// POST /auth/chat-color { color } — цвет ника в чатах (только из палитры)
+router.post('/chat-color', auth, async (req, res) => {
+  if (!(await chatColor.set(req.user.id, req.body?.color))) return res.status(400).json({ error: req.t('server.account.badColor') });
+  res.json({ ok: true, chatColor: String(req.body.color).toLowerCase() });
+});
+
+// POST /auth/password { current, password, confirm, agree: true } — смена пароля из профиля.
+// Все сессии выходят (tokenVersion), текущая получает новый токен и остаётся
+router.post('/password', auth, resetLimiter, sessions.requireMain, async (req, res) => {
+  const current = String(req.body?.current || '');
+  const password = String(req.body?.password || '');
+  if (req.body?.agree !== true) return res.status(400).json({ error: req.t('server.account.mustAgree') });
+  const passErr = validatePassword(password);
+  if (passErr) return res.status(400).json({ error: req.t(passErr) });
+  if (String(req.body?.confirm || '') !== password) return res.status(400).json({ error: req.t('server.account.passMismatch') });
+  if (password === current) return res.status(400).json({ error: req.t('server.account.passSame') });
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(401).json({ error: req.t('server.userNotFound') });
+    if (!current || !(await bcrypt.compare(current, user.passwordHash))) {
+      return res.status(400).json({ error: req.t('server.account.badPassword'), code: 'badPassword' });
+    }
+    user.passwordHash = await bcrypt.hash(password, 12);
+    user.passwordChangedAt = new Date();
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save(); // документ целиком — pre('validate') не сотрёт streamerNameLower
+    auth.forgetUser(user._id);
+    accountLog.record(user._id, 'password', { to: 'change' }, req);
+    // остальные сеансы — долой; этот остаётся с новой tokenVersion
+    const sid = req.user.sid;
+    await sessions.revokeWhere(sid ? { userId: user._id, sid: { $ne: sid } } : { userId: user._id });
+    if (sid) {
+      await Session.updateOne({ sid }, { $set: { tv: user.tokenVersion } });
+      setTokenCookie(res, signToken(user, sid));
+    } else {
+      await sessions.start(res, req, user);
+    }
+    console.log(`[auth/password] ${user.username}: пароль изменён, остальные сессии закрыты`);
+    res.json({ ok: true, passwordChangedAt: user.passwordChangedAt });
+  } catch (err) {
+    console.error('[auth/password]', err);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// ---------- смена почты из профиля ----------
+// POST /auth/email { email, password } — письмо со ссылкой на новый адрес; почта меняется, только когда по ней перейдут.
+// Лимит писем исчерпан — 503 code: 'mailLimit': профиль предложит заявку в поддержку (POST /auth/email/support)
+async function checkNewEmail(req, user, email) {
+  const err = validateEmail(email);
+  if (err) return req.t(err);
+  if (email === user.email) return req.t('server.account.emailSame');
+  if (await User.exists({ email, _id: { $ne: user._id } })) return req.t('server.auth.emailTaken');
+  return null;
+}
+
+router.post('/email', auth, resendLimiter, sessions.requireMain, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  try {
+    const user = await User.findById(req.user.id).select('username email passwordHash emailChangeSentAt').lean();
+    if (!user) return res.status(401).json({ error: req.t('server.userNotFound') });
+    const bad = await checkNewEmail(req, user, email);
+    if (bad) return res.status(400).json({ error: bad });
+    if (!(await bcrypt.compare(String(req.body?.password || ''), user.passwordHash))) {
+      return res.status(400).json({ error: req.t('server.account.badPassword'), code: 'badPassword' });
+    }
+    if (user.emailChangeSentAt && Date.now() - new Date(user.emailChangeSentAt).getTime() < VERIFY_RESEND_MS) {
+      return res.status(429).json({ error: req.t('server.auth.forgotWait'), retryIn: retryIn(user.emailChangeSentAt, VERIFY_RESEND_MS) });
+    }
+    if (!(await mailQuota.take('other'))) {
+      return res.status(503).json({ error: req.t('server.account.emailMailLimit'), code: 'mailLimit' });
+    }
+    const token = crypto.randomBytes(32).toString('base64url');
+    await User.updateOne({ _id: user._id }, {
+      $set: { pendingEmail: email, emailChangeHash: hashResetToken(token), emailChangeExpires: new Date(Date.now() + VERIFY_TTL_MIN * 60000), emailChangeSentAt: new Date() },
+    });
+    const link = `${config.publicUrl.replace(/\/$/, '')}/verify-email.html#c=${token}`;
+    try {
+      await sendEmailChange(email, user.username, link, VERIFY_TTL_MIN, req.lang);
+    } catch (e) {
+      console.error('[auth/email] письмо не отправлено:', e.message);
+      if (!mailQuota.isQuotaError(e)) await mailQuota.giveBack('other');
+      await User.updateOne({ _id: user._id }, { $unset: { pendingEmail: 1, emailChangeHash: 1, emailChangeExpires: 1, emailChangeSentAt: 1 } });
+      if (mailQuota.isQuotaError(e)) return res.status(503).json({ error: req.t('server.account.emailMailLimit'), code: 'mailLimit' });
+      return res.status(502).json({ error: req.t('server.sendFailed') });
+    }
+    console.log(`[auth/email] ${user.username}: письмо смены почты → ${maskEmail(email)}`);
+    res.json({ ok: true, pendingEmail: email, retryIn: VERIFY_RESEND_MS / 1000, message: req.t('server.account.emailSent', { email: maskEmail(email), n: VERIFY_TTL_MIN }) });
+  } catch (err) {
+    console.error('[auth/email]', err);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// POST /auth/email/confirm { token } — переход по ссылке из письма (вход не нужен: ссылку могут открыть в почтовом приложении)
+router.post('/email/confirm', resetLimiter, async (req, res) => {
+  const token = String(req.body?.token || '');
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) return res.status(400).json({ error: req.t('server.auth.badLink') });
+  try {
+    const user = await User.findOne({ emailChangeHash: hashResetToken(token), emailChangeExpires: { $gt: new Date() } })
+      .select('username email pendingEmail').lean();
+    if (!user || !user.pendingEmail) return res.status(400).json({ error: req.t('server.auth.badLink') });
+    const unset = { pendingEmail: 1, emailChangeHash: 1, emailChangeExpires: 1, emailChangeSentAt: 1 };
+    if (await User.exists({ email: user.pendingEmail, _id: { $ne: user._id } })) {
+      await User.updateOne({ _id: user._id }, { $unset: unset });
+      return res.status(409).json({ error: req.t('server.auth.emailTaken') });
+    }
+    await User.updateOne({ _id: user._id }, { $set: { email: user.pendingEmail }, $unset: unset });
+    accountLog.record(user._id, 'email', { from: user.email, to: user.pendingEmail }, req);
+    console.log(`[auth/email] ${user.username}: почта сменена → ${maskEmail(user.pendingEmail)}`);
+    res.json({ ok: true, email: maskEmail(user.pendingEmail) });
+  } catch (err) {
+    console.error('[auth/email/confirm]', err);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// POST /auth/email/support { email, password } — лимит писем исчерпан: заявка в поддержку (админ сверит и сменит почту в карточке).
+// Одна открытая заявка на аккаунт
+// свой лимит: заявку пишут после неудачных попыток письма — общий resendLimiter к этому времени уже съеден
+const emailSupportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: (req) => ({ error: req.t('server.auth.tooManyAttempts') }),
+});
+router.post('/email/support', auth, emailSupportLimiter, sessions.requireMain, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  try {
+    const user = await User.findById(req.user.id).select('username email passwordHash').lean();
+    if (!user) return res.status(401).json({ error: req.t('server.userNotFound') });
+    const bad = await checkNewEmail(req, user, email);
+    if (bad) return res.status(400).json({ error: bad });
+    if (!(await bcrypt.compare(String(req.body?.password || ''), user.passwordHash))) {
+      return res.status(400).json({ error: req.t('server.account.badPassword'), code: 'badPassword' });
+    }
+    if (await SupportTicket.exists({ userId: user._id, 'request.kind': 'emailChange', status: 'unread' })) {
+      return res.status(409).json({ error: req.t('server.account.emailRequestOpen') });
+    }
+    const ticket = await createRequestTicket(req, user, { kind: 'emailChange', from: user.email, to: email },
+      req.t('server.account.emailRequestText', { from: user.email, to: email }));
+    res.json({ ok: true, number: ticket.number, message: req.t('server.account.emailRequestSent', { n: ticket.number }) });
+  } catch (err) {
+    console.error('[auth/email/support]', err);
+    res.status(500).json({ error: req.t('server.serverError') });
+  }
+});
+
+// POST /auth/delete { password, agree: true } — запрос на удаление аккаунта: заморозка, через 3 дня удалится сам
+// (services/accountDeletion.js); вход с паролем в эти дни отменяет. Владельца сайта так не удалить
+router.post('/delete', auth, resetLimiter, sessions.requireMain, async (req, res) => {
+  if (req.body?.agree !== true) return res.status(400).json({ error: req.t('server.account.deleteMustAgree') });
+  try {
+    const user = await User.findById(req.user.id).lean();
+    if (!user) return res.status(401).json({ error: req.t('server.userNotFound') });
+    if (user.role === 'owner') return res.status(403).json({ error: req.t('server.account.ownerNoDelete') });
+    if (!(await bcrypt.compare(String(req.body?.password || ''), user.passwordHash))) {
+      return res.status(400).json({ error: req.t('server.account.badPassword'), code: 'badPassword' });
+    }
+    if (user.deleteAt) return res.json({ ok: true, deleteAt: user.deleteAt });
+    const deleteAt = await accountDeletion.request(req, user, createRequestTicket);
+    sessions.clearTokenCookie(res);
+    res.json({ ok: true, deleteAt });
+  } catch (err) {
+    console.error('[auth/delete]', err);
     res.status(500).json({ error: req.t('server.serverError') });
   }
 });

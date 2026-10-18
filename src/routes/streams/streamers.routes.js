@@ -15,6 +15,7 @@ async function liveInfo(s) {
 }
 
 const Follow = require('../../models/Follow');
+const accountLog = require('../../services/accountLog');
 const rateLimit = require('express-rate-limit');
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
@@ -138,6 +139,7 @@ router.post('/', auth, async (req, res) => {
     me.streamerName = name;
     me.streamerNameLower = nameLower;
     await me.save();
+    accountLog.record(me._id, 'streamer', { to: name }, req);
 
     res.status(201).json({ streamerName: me.streamerName });
   } catch (err) {

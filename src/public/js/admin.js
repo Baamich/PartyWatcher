@@ -196,11 +196,86 @@ function pollStatus(log) {
       `${status === 'unread' ? '' : ' · ' + escapeHtml(status)}</div>`;
   }
 
+  // заявка из профиля: смена почты (лимит писем исчерпан) или удаление аккаунта
+  function requestHtml(tk) {
+    const r = tk.request;
+    if (!r) return '';
+    const uid = escapeHtml(tk.userId || '');
+    const open = uid ? `<button type="button" class="btn-trivial" data-act="openUser" data-uid="${uid}">${t('admin.support.req.openUser')}</button>` : '';
+    if (r.kind === 'emailChange') {
+      return `<div class="support-request"><b>${t('admin.support.req.email')}</b> <span data-no-i18n>${escapeHtml(r.from || '—')} → ${escapeHtml(r.to || '—')}</span>` +
+        `<div class="support-request-hint">${t('admin.support.req.emailHint')}</div><div class="support-card-actions">${open}</div></div>`;
+    }
+    if (r.kind === 'deletion') {
+      const id = escapeHtml(tk._id);
+      const state = r.done
+        ? t('admin.support.req.delDone', { date: formatDate(r.doneAt), by: r.doneBy || t('admin.support.req.byTimer') })
+        : r.cancelled ? t('admin.support.req.delCancelled') : t('admin.support.req.delPending', { date: formatDate(r.deleteAt) });
+      let btns = '';
+      if (r.hasLogs) btns += `<button type="button" class="btn-trivial" data-act="showLogs" data-id="${id}">${t('admin.support.req.logs')}</button>`;
+      if (!r.done) btns += open;
+      if (!r.done && !r.cancelled && uid) btns += `<button type="button" class="btn-danger" data-act="deleteNow" data-id="${id}" data-uid="${uid}">${t('admin.support.req.deleteNow')}</button>`;
+      return `<div class="support-request support-request--del"><b>${t('admin.support.req.deletion')}</b> ${escapeHtml(state)}` +
+        `<div class="support-request-hint">${t('admin.support.req.delHint')}</div><div class="support-card-actions">${btns}</div></div>`;
+    }
+    return '';
+  }
+
+  // «Логи пользователя»: что делал за сутки до запроса на удаление (снимок в обращении)
+  const LOG_SECTIONS = [
+    ['logins', ['at', 'last', 'device', 'ip', 'country']],
+    ['seen', ['at', 'ip', 'device', 'country', 'hits']],
+    ['events', ['at', 'type', 'from', 'to', 'ip']],
+    ['rooms', ['at', 'name', 'code', 'video']],
+    ['roomMessages', ['at', 'room', 'text']],
+    ['streamMessages', ['at', 'channel', 'text']],
+    ['modActions', ['at', 'channel', 'action', 'target', 'details']],
+  ];
+  function logsHtml(logs) {
+    if (!logs) return `<div class="support-logs"><i>${t('admin.support.logs.gone')}</i></div>`;
+    const cell = (k, v) => (k === 'at' || k === 'last') ? formatDate(v) : escapeHtml(v == null ? '' : String(v));
+    let html = `<div class="support-logs" data-no-i18n><div class="ticket-msg-head">${escapeHtml(t('admin.support.logs.title', { from: formatDate(logs.since), to: formatDate(logs.until) }))}</div>`;
+    for (const [sec, cols] of LOG_SECTIONS) {
+      const rows = logs[sec] || [];
+      html += `<div class="support-logs-sec"><b>${escapeHtml(t('admin.support.logs.' + sec))} (${rows.length})</b>`;
+      if (rows.length) {
+        html += '<div class="pwa-table-wrap"><table class="pwa-table"><thead><tr>' + cols.map((c) => `<th>${escapeHtml(t('admin.support.logs.col.' + c))}</th>`).join('') + '</tr></thead><tbody>';
+        html += rows.map((r) => '<tr>' + cols.map((c) => `<td>${cell(c, r[c])}</td>`).join('') + '</tr>').join('');
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+    }
+    return html + '</div>';
+  }
+  async function showLogs(id) {
+    try {
+      if (!openTicket || openTicket.ticket._id !== id || viewModal.classList.contains('hidden')) await openView(id);
+      const r = await api('/support/' + encodeURIComponent(id) + '/logs');
+      const thread = document.getElementById('ticketViewThread');
+      thread.querySelector('.support-logs')?.remove();
+      thread.insertAdjacentHTML('afterbegin', logsHtml(r.logs));
+    } catch (e) {
+      PW.toast(e.message || t('admin.error'), 'error');
+    }
+  }
+  async function deleteNow(id, uid) {
+    if (!(await PW.confirm(t('admin.support.req.deleteNowConfirm'), { danger: true, okText: t('admin.support.req.deleteNow') }))) return;
+    try {
+      await api('/admin/users/' + encodeURIComponent(uid) + '/delete-now', { method: 'POST', body: {} });
+      PW.toast(t('admin.support.req.deleted'), 'success');
+      if (openTicket?.ticket._id === id && !viewModal.classList.contains('hidden')) await openView(id);
+      loadTickets();
+    } catch (e) {
+      PW.toast(e.message || t('admin.error'), 'error');
+    }
+  }
+
   function cardHtml(tk) {
     return `
       <div class="support-card${tk.hasNewReply ? ' support-card--fresh' : ''}" data-id="${escapeHtml(tk._id)}">
         <div class="support-card-meta">${metaHtml(tk)}</div>
         <div class="support-card-name">${escapeHtml(tk.name || t('admin.support.noName'))}${tk.email ? ' · ' + escapeHtml(tk.email) : ' · ' + t('admin.support.noEmail')}</div>
+        ${requestHtml(tk)}
         ${tk.report ? reportHtml(tk.report, tk.status) + clipHtml(tk, false) : tk.subject ? `<div class="support-card-subject" data-no-i18n>${escapeHtml(tk.subject)}</div>` : ''}
         <div class="support-card-desc" data-no-i18n>${escapeHtml(tk.description)}</div>
         ${tk.files?.length ? `<div class="support-card-meta">📎 ${t('admin.thread.files', { n: tk.files.length })}</div>` : ''}
@@ -272,7 +347,7 @@ function pollStatus(log) {
       const src = '/api/support/file/' + encodeURIComponent(id);
       return `<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="" loading="lazy"></a>`;
     }).join('');
-    document.getElementById('ticketViewThread').innerHTML = clipHtml(tk, true) + [first, ...(tk.messages || [])].map(messageHtml).join('') +
+    document.getElementById('ticketViewThread').innerHTML = requestHtml(tk) + clipHtml(tk, true) + [first, ...(tk.messages || [])].map(messageHtml).join('') +
       (shots ? `<div class="ticket-files"><div class="ticket-msg-head">📎 ${escapeHtml(t('admin.thread.files', { n: tk.files.length }))}</div><div class="ticket-files-list">${shots}</div></div>` : '');
     document.getElementById('ticketViewActions').innerHTML = actionsHtml(tk, false);
   }
@@ -365,6 +440,9 @@ function pollStatus(log) {
     if (act === 'view') openView(id);
     else if (act === 'reply') openReply(id);
     else if (act === 'delPreset') deletePreset(id);
+    else if (act === 'openUser') window.PWAdminUsers?.open(b.dataset.uid); // карточка аккаунта (js/admin-users.js)
+    else if (act === 'showLogs') showLogs(id);
+    else if (act === 'deleteNow') deleteNow(id, b.dataset.uid);
     else setStatus(id, act);
   }
 

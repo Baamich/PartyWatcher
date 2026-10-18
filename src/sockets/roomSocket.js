@@ -5,6 +5,7 @@ const path = require('path');
 const { verifyToken } = require('../middleware/auth');
 const Room = require('../models/Room');
 const ChatMessage = require('../models/ChatMessage');
+const chatColor = require('../services/chatColor');
 const SupportTicket = require('../models/SupportTicket');
 const i18n = require('../services/i18n');
 const kodik = require('../services/kodik');
@@ -175,7 +176,7 @@ function registerRoomSocket(io) {
       const history = await ChatMessage.find({ room: room._id, createdAt: { $gte: oneHourAgo } })
         .sort({ createdAt: 1 })
         .limit(200);
-      socket.emit('chat:history', history.map((m) => ({ username: m.username, text: m.text, at: m.createdAt.getTime() })));
+      socket.emit('chat:history', history.map((m) => ({ username: m.username, text: m.text, color: m.color || null, at: m.createdAt.getTime() })));
 
       socket.emit('room:state', {
         video: room.video,
@@ -448,11 +449,13 @@ function registerRoomSocket(io) {
       const trimmed = String(text ?? '').trim().slice(0, 500);
       if (!trimmed) return;
 
+      // цвет ника из профиля (не выбирал — закрепится случайный)
+      const color = socket.user.id ? await chatColor.of(socket.user.id).catch(() => null) : null;
       if (socket.data.roomId) {
-        await ChatMessage.create({ room: socket.data.roomId, username: socket.user.username, text: trimmed });
+        await ChatMessage.create({ room: socket.data.roomId, username: socket.user.username, text: trimmed, color });
       }
 
-      io.to(code).emit('chat:message', { username: socket.user.username, text: trimmed, at: Date.now() });
+      io.to(code).emit('chat:message', { username: socket.user.username, text: trimmed, color, at: Date.now() });
     });
 
     socket.on('disconnect', async () => {

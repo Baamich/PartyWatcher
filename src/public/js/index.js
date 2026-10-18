@@ -257,14 +257,17 @@ async function login() {
     showAuthError('loginError', t('index.login.empty'));
     return;
   }
+  const send = (cancelDeletion) => api('/auth/login', { method: 'POST', body: { login: loginVal, password, cancelDeletion } });
   try {
-    await api('/auth/login', {
-      method: 'POST',
-      body: {
-        login: loginVal,
-        password,
-      },
-    });
+    try {
+      await send(false);
+    } catch (err) {
+      // аккаунт ждёт удаления (сам попросил в профиле): войти — значит отменить удаление
+      if (err.code !== 'deletionPending') throw err;
+      if (!(await PW.confirm(err.message, { okText: t('index.login.cancelDeletion') }))) return;
+      await send(true);
+      PW.toast(t('index.login.deletionCancelled'), 'success');
+    }
     const returnTo = getReturnTo();
     if (returnTo) {
       location.href = returnTo;

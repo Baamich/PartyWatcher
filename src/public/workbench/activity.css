@@ -102,7 +102,7 @@
 .act-row-text b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .act-row-text small { font-size: 12px; color: var(--text-muted); }
 .act-row-ctl { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.act-row-ctl select { margin: 0; padding: 4px 6px; font-size: 13px; width: auto; }
+.act-row-ctl select { margin: 0; height: auto; padding: 4px 6px; font-size: 13px; width: auto; }
 .act-row-ctl .icon-btn { width: auto; margin: 0; white-space: nowrap; }
 [data-theme] .act-del { color: var(--danger); }
 .act-empty { margin: 4px 0; color: var(--text-muted); font-size: 13px; }

@@ -1,4 +1,99 @@
 {
   "pageTitle": "Profile — PartyWatcher",
-  "back": "← Back"
+  "back": "← Back",
+  "nav": {
+    "general": "👤 General",
+    "security": "🔒 Security",
+    "devices": "📱 Devices",
+    "chat": "💬 Chat look"
+  },
+  "general": {
+    "title": "General",
+    "nick": "Username",
+    "email": "Email",
+    "show": "Show",
+    "hide": "Hide",
+    "stream": "Stream channel",
+    "streamNone": "None",
+    "streamOpen": "Open",
+    "streamCreate": "Create",
+    "created": "Account created",
+    "passChanged": "Password changed",
+    "passNever": "Never changed",
+    "passChange": "Change",
+    "logout": "Sign out",
+    "logoutConfirm": "Sign out on this device?"
+  },
+  "security": {
+    "title": "Security",
+    "mainOnly": "You can change the email and password or delete the account only from the main device — so nobody with a stolen password can lock you out. Forgot the password? Use “Forgot password?” on the sign-in page. Lost the main device? Contact support.",
+    "toDevices": "📱 Devices"
+  },
+  "pass": {
+    "title": "Change password",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Repeat the new password",
+    "agree": "I understand that changing the password signs me out on all devices except this one",
+    "submit": "Change password",
+    "done": "Password changed. Other devices need to sign in again"
+  },
+  "rules": {
+    "length": "At least 8 characters",
+    "upper": "Starts with a capital Latin letter (A–Z)",
+    "letter": "Contains letters",
+    "digit": "Contains digits",
+    "match": "Passwords match"
+  },
+  "email": {
+    "title": "Change email",
+    "hint": "A letter with a link will be sent to the new address. Until you open it, the account email stays the same.",
+    "new": "New email",
+    "submit": "Send email",
+    "again": "Again in {n} s",
+    "pending": "Email sent to {email} — open the link in it. Not there? Check spam.",
+    "support": "Send a request to support"
+  },
+  "devices": {
+    "title": "Devices",
+    "hint": "The main device is the one you registered from. Only from it can you end any session and make another device the main one. Lost the main device? Contact support.",
+    "current": "This device",
+    "others": "Other sessions",
+    "none": "No other sessions — the account is open only here",
+    "unknown": "Unknown device",
+    "main": "main",
+    "now": "now",
+    "seen": "active {d}",
+    "since": "signed in {d}",
+    "revoke": "End",
+    "revokeAll": "End all others",
+    "revokeConfirm": "End the session on “{device}”? You will need to sign in there again.",
+    "revokeAllConfirm": "End all other sessions? Those devices will need to sign in again.",
+    "revoked": "Session ended",
+    "revokedN": "Sessions ended: {n}",
+    "makeMain": "Make main",
+    "makeMainConfirm": "Make “{device}” the main device? This device will stop being the main one.",
+    "mainDone": "Main device changed"
+  },
+  "del": {
+    "title": "Delete account",
+    "p1": "Right after the request you will be signed out everywhere; the stream key and chat API key will stop working.",
+    "p2": "In 3 days the account is deleted for good: rooms, channel, clips, stream recordings, rewards, emotes, presets, follows. Support can delete it earlier.",
+    "p3": "Your messages in other people’s stream chats stay, but without your name — “Deleted user”.",
+    "p4": "Changed your mind? Just sign in with your password within these 3 days and the deletion is cancelled.",
+    "agree": "I understand that the account and everything in it will be deleted",
+    "submit": "Delete account",
+    "confirm": "Really delete the account? You will be signed out now and everything will be deleted in 3 days.",
+    "done": "Request accepted. The account will be deleted on {date}. Changed your mind? Sign in with your password before then."
+  },
+  "chat": {
+    "title": "Chat look",
+    "hint": "The color of your name in stream and room chats and in streamers’ OBS overlay.",
+    "onSite": "On the site",
+    "onObs": "In OBS and fullscreen chat",
+    "pick": "Name color",
+    "sample1": "Hi everyone! 👋",
+    "sample2": "Let’s keep watching",
+    "saved": "Name color saved"
+  }
 }

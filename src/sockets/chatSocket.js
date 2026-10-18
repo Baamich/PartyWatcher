@@ -21,6 +21,7 @@ const ChatCommand = require('../models/ChatCommand');
 const { parseCommandLine, buildReply } = require('../services/chatCommands');
 const i18n = require('../services/i18n');
 const safeHandlers = require('./safeHandlers');
+const chatColor = require('../services/chatColor');
 
 function roomName(streamerNameLower) {
   return `chat:${streamerNameLower}`;
@@ -693,11 +694,13 @@ module.exports = function registerChatSocket(io) {
       const canChannel = !!socket.data.role || followed;
       const usedEmotes = await emotes.resolve(trimmed, currentStreamerNameLower, canChannel).catch(() => null);
 
+      const nickColor = await chatColor.of(authUser.id).catch(() => null); // профиль → «Вид чата»
       const msg = await StreamChatMessage.create({
         streamerNameLower: currentStreamerNameLower,
         senderId: authUser.id,
         senderUsername: authUser.username,
         text: trimmed,
+        nickColor,
         ...(usedEmotes && { emotes: usedEmotes }),
       });
 
@@ -710,6 +713,7 @@ module.exports = function registerChatSocket(io) {
         emotes: usedEmotes || undefined,
         deleted: false,
         createdAt: msg.createdAt,
+        nickColor,
         isOwner: !!socket.data.isOwner,
         modLevel: socket.data.role === 'mod' || socket.data.role === 'senior' ? socket.data.role : null,
       });

@@ -54,6 +54,18 @@ const supportTicketSchema = new mongoose.Schema(
     messages: { type: [messageSchema], default: [] },
     // Message-ID писем этой переписки (входящих и наших): по ним ответ человека находит свой тикет
     mailIds: { type: [String], default: [] },
+    // заявка из профиля: emailChange — сменить почту (лимит писем исчерпан), deletion — удалить аккаунт
+    request: {
+      kind: { type: String, default: undefined },
+      from: { type: String, default: undefined },
+      to: { type: String, default: undefined },
+      deleteAt: { type: Date, default: undefined },
+      logs: { type: mongoose.Schema.Types.Mixed, default: undefined }, // снимок «что делал за сутки до запроса» (живёт 30 дней после удаления)
+      cancelled: { type: Boolean, default: undefined }, // вошёл с паролем — удаление отменено
+      done: { type: Boolean, default: undefined }, // аккаунт удалён
+      doneAt: { type: Date, default: undefined },
+      doneBy: { type: String, default: undefined }, // админ, если удалил раньше срока
+    },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     username: { type: String, default: '' },
   },

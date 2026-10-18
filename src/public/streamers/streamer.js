@@ -1107,10 +1107,10 @@ function buildLiveMessageHtml(msg) {
     ? `<span class="live-src">${liveEscapeHtml(msg.source || 'api')}</span>`
     : '';
 
-  const nickCls = 'live-nick' + (msg.isOwner ? ' live-nick--owner' : '');
-  const nickStyle = !msg.isOwner && /^#[0-9a-f]{6}$/i.test(msg.nickColor || '')
-    ? ` style="color:${msg.nickColor}"`
-    : '';
+  // цвет ника из профиля; .pw-nick (common.css) затемняет его в светлой теме
+  const hasColor = !msg.isOwner && /^#[0-9a-f]{6}$/i.test(msg.nickColor || '');
+  const nickCls = 'live-nick' + (msg.isOwner ? ' live-nick--owner' : hasColor ? ' pw-nick' : '');
+  const nickStyle = hasColor ? ` style="--nick:${msg.nickColor}"` : '';
 
   // фильтр слов: показываем «****», по клику (с подтверждением) — оригинал
   const body = msg.masked && !msg.revealed

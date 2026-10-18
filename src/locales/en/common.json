@@ -4,7 +4,6 @@
   },
   "header": {
     "theme": "Switch theme",
-    "logout": "Sign out",
     "profile": "My profile",
     "admin": "Admin",
     "streamProfile": "👤 Stream profile",
@@ -33,7 +32,8 @@
   "sys": {
     "bot": "Bot",
     "system": "System",
-    "guest": "Guest"
+    "guest": "Guest",
+    "deleted": "Deleted user"
   },
   "mini": {
     "unsupported": "The browser does not support the mini window",

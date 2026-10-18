@@ -142,7 +142,7 @@
 .pm-title { font-weight: 800; font-size: 14px; margin-bottom: 8px; }
 .pm-body { display: flex; flex-direction: column; gap: 8px; }
 .pm-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--text-muted); }
-.pm-row input[type='text'], .pm-row input[type='number'], .pm-row select { width: 150px; padding: 5px 8px; font-size: 13px; }
+.pm-row input[type='text'], .pm-row input[type='number'], .pm-row select { width: 150px; height: auto; padding: 5px 8px; font-size: 13px; }
 .pm-row input[type='color'] { width: 44px; height: 28px; padding: 0; border: none; background: none; }
 .pm-area { width: 100%; min-height: 70px; resize: vertical; font: inherit; font-size: 13px; color: var(--text); background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; }
 .pm-btn { width: 100%; font-size: 13px; padding: 8px 10px; }

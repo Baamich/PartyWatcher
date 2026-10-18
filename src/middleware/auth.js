@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const User = require('../models/User');
 const { TERMS_VERSION } = require('../services/terms');
+const sessions = require('../services/sessions');
 
 // состояние пользователя держим в памяти минуту: не ходим в базу на каждый запрос, а после смены пароля
 // или бана старые токены перестают работать максимум через минуту (в этом процессе — сразу, forgetUser)
@@ -30,8 +31,9 @@ function readToken(req) {
   return req.cookies?.token || (req.headers.authorization || '').replace('Bearer ', '');
 }
 
-// { id, username, role, tv, terms } или исключение; используется и HTTP, и сокетами
-async function verifyToken(token) {
+// { id, username, role, tv, sid, terms } или исключение; используется и HTTP, и сокетами.
+// req (если есть) — для «был активен» и IP сеанса
+async function verifyToken(token, req) {
   const payload = jwt.verify(token, config.jwt.secret);
   const st = await userState(String(payload.id));
   if (st.tv === null || (payload.tv || 0) !== st.tv) throw new Error('token revoked');
@@ -39,23 +41,33 @@ async function verifyToken(token) {
   if (st.perm || st.banUntil > Date.now()) {
     throw Object.assign(new Error('banned'), { code: 'BANNED' });
   }
+  // сеанс завершили (профиль → «Устройства», выход, смена пароля)
+  if (!(await sessions.check(payload, req))) throw new Error('session ended');
   payload.terms = st.terms;
   return payload;
 }
 
-async function verifyRequest(req) {
+async function verifyRequest(req, res) {
   const token = readToken(req);
   if (!token) throw Object.assign(new Error('no token'), { code: 'NO_TOKEN' });
-  return verifyToken(token);
+  const payload = await verifyToken(token, req);
+  // токен выдан до сеансов — заводим сеанс и меняем cookie (человек ничего не замечает); его сеанс завершили — не пускаем
+  if (!payload.sid && res) {
+    payload.sid = await sessions.upgradeLegacy(req, res, payload, token);
+    // sid из кэша апгрейда тоже проверяем: его сеанс могли завершить минуту назад
+    if (!payload.sid || !(await sessions.check(payload, req))) throw new Error('session ended');
+  }
+  return payload;
 }
 
 // без принятых условий пользования можно читать и смотреть, но не менять данные — кроме самого
 // согласия и выхода (окно js/terms-gate.js показывается на любой странице)
-const TERMS_FREE = /^\/api\/auth\/(?:terms|logout|me)\b/;
+// удалить аккаунт можно и не принимая новые условия (условия сами отправляют в профиль)
+const TERMS_FREE = /^\/api\/auth\/(?:terms|logout|me|delete)\b/;
 
 async function auth(req, res, next) {
   try {
-    req.user = await verifyRequest(req);
+    req.user = await verifyRequest(req, res);
   } catch (e) {
     if (e.code === 'NO_TOKEN') {
       // гость — обычное дело (главная спрашивает /auth/me у каждого), в лог не пишем
@@ -74,7 +86,7 @@ async function auth(req, res, next) {
 // не требует входа: если токен валиден — заполняет req.user, иначе req.user = null
 async function optionalAuth(req, res, next) {
   try {
-    req.user = await verifyRequest(req);
+    req.user = await verifyRequest(req, res);
   } catch (_) {
     req.user = null;
   }

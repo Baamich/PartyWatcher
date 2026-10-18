@@ -1,2 +1,164 @@
-/* /u/<ник> — профиль пользователя (пока пустой) */
-.profile-page { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+/* /u/<ник> — профиль: меню слева (как в студии), раздел справа */
+.pf-outer { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+.pf-layout { display: flex; gap: 24px; align-items: flex-start; }
+
+.pf-nav { width: 200px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
+[data-theme] .pf-nav-btn {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 9px 12px;
+  font-size: 14px;
+}
+[data-theme] .pf-nav-btn:hover { background: var(--surface-hover); color: var(--text); }
+[data-theme] .pf-nav-btn.active { color: var(--text); border-color: var(--accent); }
+
+.pf-main { flex: 1; min-width: 0; max-width: 640px; }
+.pf-title { font-size: 20px; font-weight: 800; margin: 0 0 16px; }
+
+.pf-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 16px;
+  margin-bottom: 16px;
+}
+.pf-card-title { margin: 14px 0 4px; }
+
+/* строки «подпись — значение» */
+.pf-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 52px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pf-row:last-child { border-bottom: none; }
+.pf-label { width: 160px; flex-shrink: 0; color: var(--text-muted); font-size: 13px; }
+.pf-value { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.pf-value-line { display: flex; align-items: center; gap: 10px; }
+.pf-secret { letter-spacing: 0.1em; color: var(--text-muted); }
+[data-theme] .pf-eye,
+[data-theme] .pf-small-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--ctl-h-sm);
+  margin: 0 0 0 auto;
+  padding: 0 12px;
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+[data-theme] .pf-eye { width: var(--ctl-h-sm); padding: 0; }
+
+/* выход — красная кнопка */
+[data-theme] .pf-logout {
+  background: var(--danger);
+  color: #fff;
+}
+[data-theme] .pf-logout:hover { background: var(--danger); filter: brightness(1.08); }
+
+/* формы раздела «Безопасность» */
+.pf-form { padding-bottom: 16px; }
+.pf-form input:not([type="checkbox"]) { display: block; width: 100%; }
+.pf-field-label { display: block; font-size: 13px; color: var(--text-muted); margin: 14px 0 6px; }
+.pf-pass-wrap { position: relative; }
+.pf-pass-wrap input { padding-right: 44px; }
+[data-theme] .pf-pass-eye {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+[data-theme] .pf-pass-eye:hover { background: var(--surface-alt); color: var(--text); }
+
+.pf-rules { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; }
+.pf-rules li { position: relative; padding: 3px 0 3px 22px; color: var(--danger); }
+.pf-rules li::before { content: '✕'; position: absolute; left: 0; font-size: 12px; }
+.pf-rules li.ok { color: #22a35a; }
+.pf-rules li.ok::before { content: '✓'; }
+
+.pf-check { display: flex; align-items: flex-start; gap: 8px; margin: 16px 0; font-size: 13px; color: var(--text-muted); cursor: pointer; }
+.pf-check input { margin: 2px 0 0; flex-shrink: 0; }
+.pf-form button[type="submit"] { width: 100%; margin: 0; }
+
+@media (max-width: 900px) {
+  .pf-layout { flex-direction: column; }
+  .pf-nav { width: 100%; flex-direction: row; flex-wrap: wrap; }
+  [data-theme] .pf-nav-btn { width: auto; }
+  .pf-main { max-width: none; width: 100%; }
+}
+@media (max-width: 600px) {
+  .pf-row { flex-wrap: wrap; gap: 4px 16px; }
+  .pf-label { width: 100%; }
+}
+
+.pf-hint { margin: 0 0 4px; font-size: 13px; color: var(--text-muted); }
+.pf-note { margin: 14px 0 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-alt); font-size: 13px; }
+.pf-note-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.pf-note-warn .pf-small-btn { margin-left: 0; }
+.pf-form > button[type="submit"] { margin-top: 16px; }
+
+/* «Устройства» */
+.pf-hint-block { margin: -8px 0 16px; }
+.pf-section h2 { margin: 20px 0 8px; }
+.pf-dev-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pf-dev { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.pf-dev:last-child { border-bottom: none; }
+.pf-dev-info { flex: 1; min-width: 0; }
+.pf-dev-name { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.pf-dev-meta { margin-top: 2px; font-size: 12px; color: var(--text-muted); }
+.pf-dev-ops { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.pf-dev-ops .pf-small-btn { margin: 0; }
+.pf-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--accent-contrast); background: var(--accent); }
+[data-theme] .pf-danger-btn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+[data-theme] .pf-danger-btn:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.pf-dev-head .pf-small-btn { margin: 0; }
+.pf-empty { margin: 0; padding: 14px 0; font-size: 13px; color: var(--text-muted); }
+@media (max-width: 600px) {
+  .pf-dev { flex-wrap: wrap; }
+  .pf-dev-ops { width: 100%; justify-content: flex-start; }
+}
+
+/* удаление аккаунта */
+.pf-danger-card { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.pf-danger-card .pf-card-title { color: var(--danger); }
+.pf-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.pf-list li { margin: 4px 0; }
+[data-theme] .pf-form .pf-logout { width: 100%; margin: 0; }
+[data-theme] .pf-logout:disabled { filter: none; }
+
+/* «Вид чата» */
+.pf-chat-card { padding: 4px 16px 16px; }
+.pf-chat-label { margin: 14px 0 6px; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.pf-chat-preview { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg); border: 1px solid var(--border); font-size: 14px; line-height: 1.6; }
+/* OBS-оверлей и полноэкранный чат — всегда тёмная подложка, цвет без затемнения */
+.pf-chat-preview--dark { background: #121110; color: #f0ebe6; border-color: #302e2b; }
+[data-theme] .pf-chat-preview--dark .pw-nick { color: var(--nick); }
+.pf-chat-line { overflow-wrap: anywhere; }
+.pf-swatches { display: grid; grid-template-columns: repeat(auto-fill, 36px); gap: 10px; }
+[data-theme] .pf-swatch {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+[data-theme] .pf-swatch:hover { background: var(--sw); transform: scale(1.06); }
+[data-theme] .pf-swatch.active { border-color: var(--surface); box-shadow: 0 0 0 2px var(--accent); }
+.pf-main-only { margin: -4px 0 16px; }
+.pf-locked { opacity: 0.55; }

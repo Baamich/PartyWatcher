@@ -29,6 +29,13 @@ function set(oldKey, newKey, entry) {
   if (entry.playbackId) byPlaybackId.set(entry.playbackId, newKey);
 }
 
+// ключ сброшен (аккаунт заморожен перед удалением)
+function remove(key) {
+  const old = byKey.get(key);
+  if (old?.playbackId) byPlaybackId.delete(old.playbackId);
+  byKey.delete(key);
+}
+
 function get(key) {
   return byKey.get(key) || null;
 }
@@ -37,4 +44,4 @@ function keyByPlaybackId(playbackId) {
   return byPlaybackId.get(playbackId) || null;
 }
 
-module.exports = { loadAll, set, get, keyByPlaybackId };
+module.exports = { loadAll, set, get, remove, keyByPlaybackId };

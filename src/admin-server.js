@@ -18,6 +18,8 @@ const i18n = require('./services/i18n');
 const pages = require('./services/pages');
 const assets = require('./services/assets');
 const compression = require('compression');
+// отдельный процесс: про завершённые на сайте сеансы не знает — спрашиваем базу раз в минуту, а не раз в час
+require('./services/sessions').setCheckTtl(60 * 1000);
 
 async function start() {
   await connectDB();

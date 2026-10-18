@@ -4,5 +4,6 @@
   "checking": "Checking the link…",
   "done": "Account activated ✓ Taking you to the site…",
   "home": "Home",
-  "badLink": "The link is invalid or has already been used."
+  "badLink": "The link is invalid or has already been used.",
+  "emailChanged": "Email changed ✓ Emails will now go to {email}"
 }

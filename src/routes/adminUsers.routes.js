@@ -22,6 +22,8 @@ const ChannelMod = require('../models/ChannelMod');
 const ChannelBan = require('../models/ChannelBan');
 const ChannelTimeout = require('../models/ChannelTimeout');
 const Redemption = require('../models/Redemption');
+const accountLog = require('../services/accountLog');
+const accountDeletion = require('../services/accountDeletion');
 
 const PAGE = 50;
 const BLOCK_HOURS = [1, 6, 24, 72, 168, 720];
@@ -85,7 +87,10 @@ router.get('/users/:id', auth, adminOnly, async (req, res) => {
   const seen = await UserSeen.find({ userId: u._id }).sort({ lastAt: -1 }).limit(100).lean();
   // IP регистрации тоже показываем, даже если с него больше не заходил
   if (u.regIp && !seen.some((s) => s.ip === u.regIp)) seen.push({ ip: u.regIp, name: u.regDevice, firstAt: u.createdAt, lastAt: u.createdAt, hits: 0, did: '', hw: '' });
+  // история аккаунта: первая почта и логин, все смены — чтобы вернуть украденный аккаунт
+  const history = await accountLog.historyOf(u);
   res.json({
+    history,
     user: { ...view(u), streamerBio: u.streamerBio || '', streamTitle: u.streamTitle || '', streamDescription: u.streamDescription || '', liveNotice: u.liveNotice || '' },
     seen: seen.map((s) => ({
       ip: s.ip, did: s.did || '', hw: s.hw || '', name: s.name || '', country: s.country || '',
@@ -195,12 +200,24 @@ router.patch('/users/:id', auth, adminOnly, async (req, res) => {
     if (profileChanged) update.$inc.profileRev = 1; // профиль у зрителей обновится, а не возьмётся из кэша
   }
   await User.updateOne({ _id: u._id }, update);
+  if (set.email) accountLog.record(u._id, 'email', { from: u.email, to: set.email, by: req.user.username }, req);
+  if (renamed) accountLog.record(u._id, 'username', { from: u.username, to: set.username, by: req.user.username }, req);
   if (renamed) {
     auth.forgetUser(u._id);
     await Promise.all([ChannelMod, ChannelBan, ChannelTimeout, Redemption].map((M) => M.updateMany({ userId: u._id }, { $set: { username: set.username } })));
   }
   console.log(`[admin] ${req.user.username}: аккаунт ${u._id} изменён (${Object.keys(set).filter((k) => k !== 'usernameLower').join(', ')})`);
   res.json({ ok: true, renamed });
+});
+
+// POST /admin/users/:id/delete-now — удалить раньше срока аккаунт, который сам попросил удаление (из обращения)
+router.post('/users/:id/delete-now', auth, adminOnly, async (req, res) => {
+  const u = await target(req, res);
+  if (!u) return;
+  const full = await User.findById(u._id).select('deleteAt').lean();
+  if (!full?.deleteAt) return res.status(400).json({ error: req.t('server.account.notPending') });
+  await accountDeletion.purge(u._id, req.user.username);
+  res.json({ ok: true });
 });
 
 // POST /admin/users/:id/login-link — срочный вход без письма сайта (лимит писем исчерпан, письмо не доходит):

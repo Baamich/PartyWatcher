@@ -33,7 +33,6 @@ async function init() {
   const q = getQueryFromUrl();
   document.getElementById('searchQueryInput').value = q;
   if (q) await performSearch(q);
-  initMeName();
 }
 
 init();

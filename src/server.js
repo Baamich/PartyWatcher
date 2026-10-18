@@ -221,6 +221,7 @@ async function start() {
   });
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/devices', require('./routes/devices.routes')); // профиль → «Устройства»
   app.use('/api/rooms', roomRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/admin', adminStatsRoutes);
@@ -286,7 +287,19 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
   registerChatSocket(io);
   registerAlertsSocket(io);
 
+  // завершённый сеанс (профиль → «Устройства», выход, смена пароля, удаление аккаунта) — его сокеты тоже долой:
+  // чат и комната иначе работали бы до переподключения
+  require('./services/sessions').onRevoke((sids) => {
+    for (const nsp of [io.of('/'), io.of('/chat')]) {
+      for (const s of nsp.sockets.values()) {
+        const sid = s.user?.sid || s.data?.authUser?.sid;
+        if (sid && sids.has(sid)) s.disconnect(true);
+      }
+    }
+  });
+
   bans.start(); // список банов IP/устройств — в память, перечитывается раз в 30 с
+  require('./services/accountDeletion').start(); // аккаунты, попросившие удаление: через 3 дня — удалить (раз в час)
   analytics.start(io); // CPU, память, сокеты и посещения — раз в минуту в базу
   require('./services/regQueue').start(); // очередь регистраций: письма, не влезшие в дневной лимит, — когда он откроется
 

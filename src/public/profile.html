@@ -12,7 +12,7 @@
   <title data-i18n="profile.pageTitle">Профиль — PartyWatcher</title>
 </head>
 <body>
-  <!-- профиль пользователя: /u/<ник> (server.js). Пока пустой — содержимое нарисуем отдельно -->
+  <!-- профиль пользователя: /u/<ник> (server.js). Свой — настройки аккаунта (меню слева, раздел справа), чужой — пока пусто -->
   <div class="page-header">
     <div class="brand-row">
       <a href="/" class="brand">
@@ -30,12 +30,180 @@
       <div class="corner-menu">
         <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
         <button class="icon-btn" data-click="profileBack" data-i18n="profile.back">← Назад</button>
-        <button class="icon-btn hidden" id="logoutBtn" data-click="profileLogout" data-i18n="common.header.logout">Выйти</button>
       </div>
     </div>
   </div>
 
-  <main id="profileRoot" class="profile-page"></main>
+  <div class="pf-outer">
+    <div id="pfOwn" class="pf-layout hidden">
+      <nav class="pf-nav" id="pfNav">
+        <button type="button" class="pf-nav-btn" data-tab="general" data-i18n="profile.nav.general">👤 Общее</button>
+        <button type="button" class="pf-nav-btn" data-tab="security" data-i18n="profile.nav.security">🔒 Безопасность</button>
+        <button type="button" class="pf-nav-btn" data-tab="devices" data-i18n="profile.nav.devices">📱 Устройства</button>
+        <button type="button" class="pf-nav-btn" data-tab="chat" data-i18n="profile.nav.chat">💬 Вид чата</button>
+      </nav>
+
+      <main class="pf-main">
+        <!-- ОБЩЕЕ -->
+        <section class="pf-section hidden" data-section="general">
+          <h1 class="pf-title" data-i18n="profile.general.title">Общее</h1>
+          <div class="pf-card">
+            <div class="pf-row">
+              <div class="pf-label" data-i18n="profile.general.nick">Ник</div>
+              <div class="pf-value" id="pfNick" data-no-i18n></div>
+            </div>
+            <div class="pf-row">
+              <div class="pf-label" data-i18n="profile.general.email">Почта</div>
+              <div class="pf-value pf-value-line">
+                <span id="pfEmail" class="pf-secret" data-no-i18n>••••••••••</span>
+                <button type="button" class="icon-btn pf-eye" id="pfEmailEye" data-click="toggleEmail" data-i18n-title="profile.general.show" title="Показать">👁</button>
+              </div>
+            </div>
+            <div class="pf-row">
+              <div class="pf-label" data-i18n="profile.general.stream">Стрим-канал</div>
+              <div class="pf-value pf-value-line">
+                <span id="pfStream" data-no-i18n></span>
+                <a id="pfStreamBtn" class="icon-btn pf-small-btn" href="/streamers/edit.html"></a>
+              </div>
+            </div>
+            <div class="pf-row">
+              <div class="pf-label" data-i18n="profile.general.created">Аккаунт создан</div>
+              <div class="pf-value" id="pfCreated" data-no-i18n></div>
+            </div>
+            <div class="pf-row">
+              <div class="pf-label" data-i18n="profile.general.passChanged">Пароль изменён</div>
+              <div class="pf-value pf-value-line">
+                <span id="pfPassChanged" data-no-i18n></span>
+                <button type="button" class="icon-btn pf-small-btn" data-click="openTab" data-arg="security" data-i18n="profile.general.passChange">Сменить</button>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" class="pf-logout" data-click="profileLogout" data-i18n="profile.general.logout">Выйти из аккаунта</button>
+        </section>
+
+        <!-- БЕЗОПАСНОСТЬ -->
+        <section class="pf-section hidden" data-section="security">
+          <h1 class="pf-title" data-i18n="profile.security.title">Безопасность</h1>
+          <!-- не с главного устройства: формы ниже заблокированы (сервер тоже не даст — 403 mainOnly) -->
+          <div id="pfMainOnly" class="pf-note pf-note-warn pf-main-only hidden">
+            <span data-i18n="profile.security.mainOnly">Сменить почту и пароль или удалить аккаунт можно только с главного устройства — так никто с украденным паролем не выкинет тебя из аккаунта. Забыл пароль — «Забыли пароль?» на странице входа. Потерял главное устройство — напиши в поддержку.</span>
+            <button type="button" class="icon-btn pf-small-btn" data-click="openTab" data-arg="devices" data-i18n="profile.security.toDevices">📱 Устройства</button>
+          </div>
+
+          <form class="pf-card pf-form" id="pfEmailForm" data-submit="changeEmail" data-event autocomplete="off">
+            <h2 class="pf-card-title" data-i18n="profile.email.title">Смена почты</h2>
+            <p class="pf-hint" data-i18n="profile.email.hint">На новую почту придёт письмо со ссылкой. Пока по ней не перейдёшь, почта аккаунта прежняя.</p>
+
+            <label class="pf-field-label" for="pfEmailNew" data-i18n="profile.email.new">Новая почта</label>
+            <input id="pfEmailNew" type="email" autocomplete="email" maxlength="254" />
+
+            <label class="pf-field-label" for="pfEmailPass" data-i18n="profile.pass.current">Текущий пароль</label>
+            <div class="pf-pass-wrap">
+              <input id="pfEmailPass" type="password" autocomplete="current-password" />
+              <button type="button" class="pf-pass-eye" data-click="togglePass" data-arg="pfEmailPass" data-i18n-title="profile.general.show" title="Показать">👁</button>
+            </div>
+
+            <div id="pfEmailState" class="pf-note hidden" data-no-i18n></div>
+            <!-- лимит писем сайта исчерпан: заявка в поддержку вместо письма -->
+            <div id="pfEmailLimit" class="pf-note pf-note-warn hidden">
+              <span id="pfEmailLimitText" data-no-i18n></span>
+              <button type="button" class="icon-btn pf-small-btn" data-click="emailSupport" data-i18n="profile.email.support">Отправить заявку в поддержку</button>
+            </div>
+
+            <button type="submit" id="pfEmailSubmit" data-i18n="profile.email.submit">Отправить письмо</button>
+          </form>
+
+          <form class="pf-card pf-form" id="pfPassForm" data-submit="changePassword" data-event autocomplete="off">
+            <h2 class="pf-card-title" data-i18n="profile.pass.title">Смена пароля</h2>
+
+            <label class="pf-field-label" for="pfPassCurrent" data-i18n="profile.pass.current">Текущий пароль</label>
+            <div class="pf-pass-wrap">
+              <input id="pfPassCurrent" type="password" autocomplete="current-password" />
+              <button type="button" class="pf-pass-eye" data-click="togglePass" data-arg="pfPassCurrent" data-i18n-title="profile.general.show" title="Показать">👁</button>
+            </div>
+
+            <label class="pf-field-label" for="pfPassNew" data-i18n="profile.pass.new">Новый пароль</label>
+            <div class="pf-pass-wrap">
+              <input id="pfPassNew" type="password" autocomplete="new-password" data-input="checkPassRules" />
+              <button type="button" class="pf-pass-eye" data-click="togglePass" data-arg="pfPassNew" data-i18n-title="profile.general.show" title="Показать">👁</button>
+            </div>
+
+            <label class="pf-field-label" for="pfPassConfirm" data-i18n="profile.pass.confirm">Повтори новый пароль</label>
+            <div class="pf-pass-wrap">
+              <input id="pfPassConfirm" type="password" autocomplete="new-password" data-input="checkPassRules" />
+              <button type="button" class="pf-pass-eye" data-click="togglePass" data-arg="pfPassConfirm" data-i18n-title="profile.general.show" title="Показать">👁</button>
+            </div>
+
+            <ul class="pf-rules" id="pfPassRules">
+              <li data-rule="length" data-i18n="profile.rules.length">Минимум 8 символов</li>
+              <li data-rule="upper" data-i18n="profile.rules.upper">Первая буква — заглавная латиница (A–Z)</li>
+              <li data-rule="letter" data-i18n="profile.rules.letter">Есть буквы</li>
+              <li data-rule="digit" data-i18n="profile.rules.digit">Есть цифры</li>
+              <li data-rule="match" data-i18n="profile.rules.match">Пароли совпадают</li>
+            </ul>
+
+            <label class="pf-check">
+              <input type="checkbox" id="pfPassAgree" data-change="checkPassRules" />
+              <span data-i18n="profile.pass.agree">Понимаю: после смены пароля я выйду на всех устройствах, кроме этого</span>
+            </label>
+
+            <button type="submit" id="pfPassSubmit" disabled data-i18n="profile.pass.submit">Сменить пароль</button>
+          </form>
+
+          <form class="pf-card pf-form pf-danger-card" id="pfDeleteForm" data-submit="deleteAccount" data-event autocomplete="off">
+            <h2 class="pf-card-title" data-i18n="profile.del.title">Удаление аккаунта</h2>
+            <ul class="pf-list">
+              <li data-i18n="profile.del.p1">Сразу после запроса ты выйдешь на всех устройствах, ключ эфира и ключ API чата перестанут работать.</li>
+              <li data-i18n="profile.del.p2">Через 3 дня аккаунт удалится насовсем: комнаты, канал, клипы, записи эфиров, награды, смайлы, пре-сеты, подписки. Поддержка может удалить его и раньше.</li>
+              <li data-i18n="profile.del.p3">Твои сообщения в чужих чатах эфиров останутся, но без ника — «Удалённый пользователь».</li>
+              <li data-i18n="profile.del.p4">Передумал — просто войди с паролем в эти 3 дня, удаление отменится.</li>
+            </ul>
+
+            <label class="pf-field-label" for="pfDelPass" data-i18n="profile.pass.current">Текущий пароль</label>
+            <div class="pf-pass-wrap">
+              <input id="pfDelPass" type="password" autocomplete="current-password" data-input="checkDelete" />
+              <button type="button" class="pf-pass-eye" data-click="togglePass" data-arg="pfDelPass" data-i18n-title="profile.general.show" title="Показать">👁</button>
+            </div>
+
+            <label class="pf-check">
+              <input type="checkbox" id="pfDelAgree" data-change="checkDelete" />
+              <span data-i18n="profile.del.agree">Понимаю: аккаунт и всё, что в нём, будут удалены</span>
+            </label>
+
+            <button type="submit" class="pf-logout" id="pfDelSubmit" disabled data-i18n="profile.del.submit">Удалить аккаунт</button>
+          </form>
+        </section>
+        <!-- УСТРОЙСТВА -->
+        <section class="pf-section hidden" data-section="devices">
+          <h1 class="pf-title" data-i18n="profile.devices.title">Устройства</h1>
+          <p class="pf-hint pf-hint-block" data-i18n="profile.devices.hint">Главное устройство — то, с которого ты регистрировался. Только с него можно завершить любой сеанс и сделать главным другое устройство. Потерял главное устройство — напиши в поддержку.</p>
+
+          <h2 data-i18n="profile.devices.current">Это устройство</h2>
+          <div class="pf-card" id="pfDevCurrent" data-no-i18n></div>
+
+          <div class="pf-dev-head">
+            <h2 data-i18n="profile.devices.others">Другие сеансы</h2>
+            <button type="button" class="icon-btn pf-small-btn pf-danger-btn hidden" id="pfDevRevokeAll" data-click="revokeOthers" data-i18n="profile.devices.revokeAll">Завершить все другие</button>
+          </div>
+          <div class="pf-card" id="pfDevOthers" data-no-i18n></div>
+        </section>
+        <!-- ВИД ЧАТА -->
+        <section class="pf-section hidden" data-section="chat">
+          <h1 class="pf-title" data-i18n="profile.chat.title">Вид чата</h1>
+          <p class="pf-hint pf-hint-block" data-i18n="profile.chat.hint">Цвет твоего ника в чатах эфиров и комнат и в OBS-оверлее у стримеров.</p>
+          <div class="pf-card pf-chat-card">
+            <div class="pf-chat-label" data-i18n="profile.chat.onSite">На сайте</div>
+            <div class="pf-chat-preview" id="pfChatSite"></div>
+            <div class="pf-chat-label" data-i18n="profile.chat.onObs">В OBS и полноэкранном чате</div>
+            <div class="pf-chat-preview pf-chat-preview--dark" id="pfChatObs"></div>
+            <div class="pf-chat-label" data-i18n="profile.chat.pick">Цвет ника</div>
+            <div class="pf-swatches" id="pfSwatches"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
 
   <script src="/js/api.js"></script>
   <script src="/js/actions.js"></script>

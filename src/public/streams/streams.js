@@ -415,5 +415,4 @@ async function goToMyProfile() {
   }
 }
 
-initMeName();
 initStreamsPage();

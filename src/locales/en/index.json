@@ -17,7 +17,9 @@
     "noAccount": "No account?",
     "toRegister": "Sign up",
     "empty": "Enter your username and password",
-    "failed": "Could not sign in"
+    "failed": "Could not sign in",
+    "cancelDeletion": "Sign in and cancel deletion",
+    "deletionCancelled": "Account deletion cancelled"
   },
   "password": {
     "show": "Show password",

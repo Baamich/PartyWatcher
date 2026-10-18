@@ -134,6 +134,8 @@
     renderUser(r);
   }
 
+  window.PWAdminUsers = { open: openUser }; // «Открыть аккаунт» из обращения (js/admin.js)
+
   async function act(path, body, okKey) {
     try {
       const r = await api('/admin/users/' + encodeURIComponent(openId) + path, { method: 'POST', body: body || {} });
@@ -257,6 +259,9 @@
       card.appendChild(node('p', 'pwa-hint', t(String(u.id) === String(myId) ? 'admin.users.selfHint' : 'admin.users.adminHint')));
     }
 
+    // история аккаунта: первая почта и логин, все смены — чтобы вернуть украденный аккаунт
+    if (r.history) card.appendChild(historyBox(r.history));
+
     // откуда заходил
     card.appendChild(node('div', 'pwa-sub', t('admin.users.seenTitle', { n: r.seen.length })));
     if (!r.seen.length) {
@@ -293,6 +298,46 @@
     table.append(thead, tbody);
     wrap.appendChild(table);
     card.appendChild(wrap);
+  }
+
+  // «История аккаунта»: с чего начался (первая почта, логин, IP и устройство регистрации) и что менялось
+  function historyBox(h) {
+    const box = node('div', 'pwa-history');
+    box.appendChild(node('div', 'pwa-sub', t('admin.users.historyTitle')));
+    const first = node('dl', 'pwa-info');
+    const add = (k, v) => { first.appendChild(node('dt', '', t('admin.users.hist.' + k))); first.appendChild(node('dd', '', v || '—')); };
+    add('firstEmail', h.first.email);
+    add('firstLogin', h.first.username);
+    add('created', [fmt(h.first.at), h.first.ip, h.first.device].filter(Boolean).join(' · '));
+    box.appendChild(first);
+    if (!h.events.length) {
+      box.appendChild(node('p', 'pwa-empty', t('admin.users.hist.none')));
+      return box;
+    }
+    const wrap = node('div', 'pwa-table-wrap');
+    const table = node('table', 'pwa-table');
+    const htr = node('tr');
+    for (const k of ['when', 'what', 'change', 'who', 'where']) htr.appendChild(node('th', '', t('admin.users.hist.col.' + k)));
+    const thead = node('thead');
+    thead.appendChild(htr);
+    const tbody = node('tbody');
+    for (const e of h.events) {
+      const what = e.type === 'password' ? 'password_' + (e.to === 'reset' ? 'reset' : 'change') : e.type;
+      const change = e.type === 'password' ? '' : e.from ? e.from + ' → ' + e.to : e.to;
+      const tr = node('tr');
+      tr.append(
+        node('td', '', fmt(e.at)),
+        node('td', '', t('admin.users.ev.' + what)),
+        node('td', 'pwa-td-wide', change || '—'),
+        node('td', '', e.by || t('admin.users.hist.self')),
+        node('td', 'pwa-mono', [e.ip, e.device].filter(Boolean).join(' · ') || '—'),
+      );
+      tbody.appendChild(tr);
+    }
+    table.append(thead, tbody);
+    wrap.appendChild(table);
+    box.appendChild(wrap);
+    return box;
   }
 
   // «Роль»: user / friend / admin (владельца назначают только в базе)

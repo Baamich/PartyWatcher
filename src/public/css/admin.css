@@ -408,3 +408,8 @@ button {
 
 /* удалить пре-сет из жалобы */
 [data-theme] .support-card-actions .btn-danger { background: var(--danger, #e5484d); color: #fff; border: 0; box-shadow: none; }
+
+/* заявка из профиля (смена почты, удаление аккаунта) в обращении */
+.support-request { margin: 8px 0; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-alt); font-size: 14px; word-break: break-word; }
+.support-request-hint { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.support-request .support-card-actions { margin-top: 8px; }

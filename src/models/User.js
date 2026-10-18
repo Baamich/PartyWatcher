@@ -18,6 +18,18 @@ const userSchema = new mongoose.Schema(
     resetSentAt: { type: Date, default: undefined }, // когда ушло письмо или выдана ссылка — «повторить через 2 мин»
     // растёт при смене пароля — все старые JWT с меньшей версией перестают действовать
     tokenVersion: { type: Number, default: 0 },
+    mainDeviceId: { type: String, default: undefined }, // главное устройство (id браузера pw_dev) — профиль → «Устройства»
+    // запрос на удаление (services/accountDeletion.js): аккаунт заморожен, в deleteAt удалится; вход с паролем отменяет
+    deleteRequestedAt: { type: Date, default: undefined },
+    deleteAt: { type: Date, default: undefined, index: { sparse: true } },
+    chatColor: { type: String, default: undefined }, // цвет ника в чатах (services/chatColor.js)
+    passwordChangedAt: { type: Date, default: null }, // смена или сброс пароля (профиль → «Общее»); у старых аккаунтов нет
+
+    // ---- смена почты из профиля: письмо со ссылкой на новый адрес (до перехода по ней почта прежняя) ----
+    pendingEmail: { type: String, default: undefined },
+    emailChangeHash: { type: String, default: undefined, index: { sparse: true } }, // sha256 токена из письма
+    emailChangeExpires: { type: Date, default: undefined },
+    emailChangeSentAt: { type: Date, default: undefined },
 
     // ---- подтверждение почты (новые регистрации; у старых аккаунтов полей нет — они подтверждены) ----
     // пока verifyPending — входа нет; не подтвердил за 30 минут — запись удаляет TTL-индекс (логин и почта свободны)

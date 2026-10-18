@@ -704,10 +704,10 @@ function buildMessageHtml(msg) {
     ? `<span class="wb-msg-src">${escapeHtml(msg.source || 'api')}</span>`
     : '';
 
-  const nickCls = 'wb-msg-author' + (msg.isOwner ? ' wb-msg-author--owner' : '');
-  const nickStyle = !msg.isOwner && /^#[0-9a-f]{6}$/i.test(msg.nickColor || '')
-    ? ` style="color:${msg.nickColor}"`
-    : '';
+  // цвет ника из профиля; .pw-nick (common.css) затемняет его в светлой теме
+  const hasColor = !msg.isOwner && /^#[0-9a-f]{6}$/i.test(msg.nickColor || '');
+  const nickCls = 'wb-msg-author' + (msg.isOwner ? ' wb-msg-author--owner' : hasColor ? ' pw-nick' : '');
+  const nickStyle = hasColor ? ` style="--nick:${msg.nickColor}"` : '';
 
   return `
     ${delBtn}${userBtns}

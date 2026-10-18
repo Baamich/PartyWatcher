@@ -9,12 +9,6 @@ body {
   padding: 0 16px;
 }
 
-.corner-menu {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .layout {
   max-width: 1290px;
   margin: 0 auto;
@@ -298,7 +292,6 @@ button {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 28px 24px 22px;
-  box-shadow: var(--shadow);
 }
 
 .auth-title {

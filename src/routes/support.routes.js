@@ -375,6 +375,8 @@ function briefOf(t) {
     description: o.description, status: o.status, hasNewReply: !!o.hasNewReply, username: o.username,
     lang: o.lang, createdAt: o.createdAt, updatedAt: o.updatedAt,
     report: o.report && (o.report.streamer || o.report.preset?.id) ? o.report : null,
+    // снимок логов не отдаём в списке (он большой) — только флаг; сами логи — GET /support/:id/logs
+    request: o.request?.kind ? { ...o.request, logs: undefined, hasLogs: !!o.request.logs } : null, userId: o.userId ? String(o.userId) : null,
     files: (o.files || []).map(String), messagesCount: (o.messages || []).length, lastMessage: last ? { from: last.from, kind: last.kind, at: last.at } : null,
   };
 }
@@ -491,6 +493,14 @@ router.get('/file/:id', auth, adminOnly, async (req, res) => {
 });
 
 // полная карточка с перепиской + нижний блок ответа (подпись и история), ровно как уйдёт в письме
+// GET /support/:id/logs — снимок «что делал за сутки до запроса на удаление» (кнопка «Логи пользователя»)
+router.get('/:id/logs', auth, adminOnly, async (req, res) => {
+  if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
+  const t = await SupportTicket.findById(req.params.id).select('request.logs request.kind').lean();
+  if (!t || t.request?.kind !== 'deletion') return res.status(404).json({ error: req.t('server.notFound') });
+  res.json({ logs: t.request.logs || null });
+});
+
 router.get('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isId(req.params.id)) return res.status(400).json({ error: req.t('server.badId') });
@@ -594,4 +604,21 @@ router.post('/:id/reply', auth, adminOnly, async (req, res) => {
   }
 });
 
+// заявка из профиля (смена почты, когда лимит писем исчерпан; удаление аккаунта) — обычное обращение с пометкой request
+async function createRequestTicket(req, user, request, description) {
+  const ticket = await SupportTicket.create({
+    number: await nextNumber(),
+    name: String(user.username || '').slice(0, 12),
+    email: user.email || '',
+    description: String(description).slice(0, 5000),
+    lang: req.lang,
+    userId: user._id,
+    username: user.username || '',
+    request,
+  });
+  await notifyAdmins(req, ticket);
+  return ticket;
+}
+
 module.exports = router;
+module.exports.createRequestTicket = createRequestTicket;

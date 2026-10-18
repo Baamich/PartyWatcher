@@ -24,6 +24,8 @@ function bootMe() {
 let pwTermsGateLoading = null;
 function pwTermsGate(me) {
   if (/^\/terms(\.html)?$/.test(location.pathname)) return;
+  // свой профиль открывается без окна: удалить аккаунт можно и не принимая новые условия (POST /auth/delete)
+  if (me && /^\/u\//.test(location.pathname)) return;
   if (!pwTermsGateLoading) {
     pwTermsGateLoading = new Promise((resolve, reject) => {
       const s = document.createElement('script');

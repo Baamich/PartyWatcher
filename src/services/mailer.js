@@ -116,4 +116,34 @@ async function sendVerifyEmail(to, username, link, ttlMinutes, lang) {
   return sendMail({ to, subject, text, html });
 }
 
-module.exports = { sendMail, sendPasswordReset, sendVerifyEmail, isMailConfigured, escapeHtml, maskEmail };
+// Письмо на новую почту при смене из профиля: пока по ссылке не перешли, почта аккаунта прежняя
+async function sendEmailChange(to, username, link, ttlMinutes, lang) {
+  const tr = (key, vars) => i18n.t(lang, 'server.mail.emailChange.' + key, vars);
+  const subject = tr('subject');
+  const text =
+    `${tr('hello', { name: username })}
+
+` +
+    `${tr('intro')}
+` +
+    `${tr('openLink', { n: ttlMinutes })}
+
+${link}
+
+` +
+    `${tr('ignore')}
+
+` +
+    `— PartyWatcher`;
+  const html =
+    `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;max-width:520px">` +
+    `<p>${escapeHtml(tr('hello', { name: username }))}</p>` +
+    `<p>${escapeHtml(tr('intro'))}</p>` +
+    `<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#6c5ce7;color:#fff;border-radius:8px;text-decoration:none">${escapeHtml(tr('button'))}</a></p>` +
+    `<p style="font-size:13px;color:#444">${escapeHtml(tr('linkHint'))}<br><a href="${escapeHtml(link)}" style="color:#6c5ce7;word-break:break-all">${escapeHtml(link)}</a></p>` +
+    `<p style="color:#666;font-size:13px">${escapeHtml(tr('footer', { n: ttlMinutes }))}</p>` +
+    `</div>`;
+  return sendMail({ to, subject, text, html });
+}
+
+module.exports = { sendMail, sendPasswordReset, sendVerifyEmail, sendEmailChange, isMailConfigured, escapeHtml, maskEmail };

@@ -203,12 +203,6 @@ button:disabled {
   margin-bottom: 8px;
 }
 
-.corner-name {
-  font-weight: 600;
-  color: var(--text);
-  font-size: 14px;
-}
-
 .theme-toggle {
   font-size: 16px;
   padding: 6px 10px;
@@ -324,21 +318,6 @@ button:disabled {
 
 [data-theme="light"] .modal {
   background: rgba(31, 30, 28, 0.35);
-}
-
-[data-theme] .room-card {
-  box-shadow: none;
-}
-
-[data-theme] .room-card:hover {
-  box-shadow: none;
-  border-color: var(--border-strong);
-}
-
-[data-theme] .auth-card {
-  background: var(--surface);
-  border-color: var(--border);
-  box-shadow: none;
 }
 
 [data-theme="dark"] .support-card {
@@ -800,3 +779,9 @@ button:disabled {
 .site-legal { display: flex; justify-content: center; gap: 8px; padding: 24px 16px 32px; font-size: 12px; color: var(--text-muted); }
 .site-legal a { color: var(--text-muted); text-decoration: none; }
 .site-legal a:hover { color: var(--text); text-decoration: underline; }
+
+/* цвет ника из профиля (services/chatColor.js): светлая палитра под тёмный чат, в светлой теме — темнее */
+[data-theme] .pw-nick { color: var(--nick); }
+[data-theme="light"] .pw-nick { color: color-mix(in srgb, var(--nick) 58%, #000); }
+/* полноэкранный чат эфира — тёмная подложка поверх видео: там цвет как есть */
+[data-theme="light"] .fs-active .pw-nick { color: var(--nick); }

@@ -5,6 +5,7 @@ const chatMessageSchema = new mongoose.Schema(
     room: { type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true },
     username: { type: String, required: true },
     text: { type: String, required: true },
+    color: { type: String, default: null }, // цвет ника из профиля (services/chatColor.js)
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

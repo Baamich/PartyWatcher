@@ -1910,7 +1910,7 @@ async function init() {
       const el = document.getElementById(id);
       if (el) el.textContent = '';
     }
-    list.forEach(({ username, text }) => addHistoryMessage({ username, text }));
+    list.forEach(({ username, text, color }) => addHistoryMessage({ username, text, color }));
   });
 
   socket.on('youtube:age-restricted-stream', async ({ url }) => {
@@ -2292,21 +2292,23 @@ function displayName(username) {
   return username === SYSTEM_NAME ? t('room.system') : username;
 }
 
-function formatMessageHTML(username, text) {
+// color — цвет ника из профиля (#rrggbb); у старых сообщений его нет — цвет по нику, как раньше
+function formatMessageHTML(username, text, color) {
   const isSystem = username === SYSTEM_NAME;
+  const c = /^#[0-9a-f]{6}$/i.test(color || '') ? color : usernameColor(username);
   const nameHTML = isSystem
     ? `<span style="color:var(--danger); font-weight:600;">${escapeHTML(t('room.system'))}</span>`
-    : `<b style="color:${usernameColor(username)}">${escapeHTML(username)}</b>`;
+    : `<b class="pw-nick" style="--nick:${c}">${escapeHTML(username)}</b>`;
   return `${nameHTML}: ${escapeHTML(text)}`;
 }
 
 const CHAT_MAX_NODES = 300;
 
-function appendMessageTo(containerId, username, text) {
+function appendMessageTo(containerId, username, text, color) {
   const container = document.getElementById(containerId);
   if (!container) return;
   const div = document.createElement('div');
-  div.innerHTML = formatMessageHTML(username, text);
+  div.innerHTML = formatMessageHTML(username, text, color);
   container.appendChild(div);
   // за долгий вечер в чате набегали тысячи узлов (и в обычном, и в полноэкранном) — держим последние
   while (container.childElementCount > CHAT_MAX_NODES) container.firstElementChild.remove();
@@ -2329,17 +2331,17 @@ function showFsNotice(username, text) {
 }
 
 // key — сообщение сервера с ключом словаря (переводим на языке этого зрителя)
-function addMessage({ username, text, key, vars }) {
+function addMessage({ username, text, key, vars, color }) {
   if (key && I18N.has(key)) text = t(key, vars);
-  appendMessageTo('messages', username, text);
-  appendMessageTo('fsMessages', username, text);
+  appendMessageTo('messages', username, text, color);
+  appendMessageTo('fsMessages', username, text, color);
   showFsNotice(username, text);
 }
 
-function addHistoryMessage({ username, text }) {
+function addHistoryMessage({ username, text, color }) {
   // старые сообщения из истории — без всплывающего уведомления в fullscreen, только сам текст
-  appendMessageTo('messages', username, text);
-  appendMessageTo('fsMessages', username, text);
+  appendMessageTo('messages', username, text, color);
+  appendMessageTo('fsMessages', username, text, color);
 }
 
 function showLocalSystemMessage(text) {
