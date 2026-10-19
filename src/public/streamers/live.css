@@ -879,6 +879,13 @@
 /* кнопка «Подписаться» под чатом в стиле из PRO-редактора: размер текста — как у соседних кнопок, полоска не разъезжается */
 #liveFollowBar .follow-btn.pw-fs,
 #liveFollowBar .follow-btn .pw-fa-sweep { font-size: 14px !important; overflow: hidden; text-overflow: ellipsis; }
+/* место под «Вы подписаны»: у зрителя «✂ Клип» — только значок (подпись в подсказке), отступы соседей уже */
+#liveFollowBar.live-bar-split { gap: 6px; }
+#liveFollowBar .live-clip-btn > span { display: none; }
+#liveFollowBar .live-clip-btn,
+#liveFollowBar .live-points-btn,
+#liveFollowBar .live-report-btn { padding-left: 8px; padding-right: 8px; }
+#liveFollowBar .follow-btn { padding-left: 8px; padding-right: 8px; white-space: nowrap; }
 
 /* правила чата: плашка над полем ввода, пока зритель не нажмёт «Согласиться» */
 .live-chat-rules {

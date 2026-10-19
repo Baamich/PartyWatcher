@@ -593,12 +593,9 @@ function startLiveSession() {
     offline.classList.add('hidden');
     overlay.classList.remove('hidden');
     overlayText.textContent = t('streamer.live.loading');
-    startBtn.classList.remove('hidden');
-    startBtn.onclick = () => {
-      video.muted = false;
-      applyVolumeToLive(getSavedVolume());
-      overlay.classList.add('hidden');
-    };
+    overlayText.classList.remove('hidden');
+    startBtn.classList.add('hidden');
+    startBtn.onclick = () => unmuteLive();
     const playbackId = currentStreamer.streamPlaybackId;
     ensureAdultChannel().then((ok) => ok && loadHls()).then((H) => {
       if (H === false) return; // «мне нет 18» — уходим со страницы
@@ -640,6 +637,7 @@ function stopLiveSession() {
   try { video.pause(); video.removeAttribute('src'); video.load(); } catch (_) {}
   video.classList.add('hidden');
   video.dataset.liveLockAttached = '';
+  if (liveUnmuteArmed) unmuteLive(); // снять ожидание клика
 
   if (liveSocket) {
     liveSocket.removeAllListeners();
@@ -779,7 +777,7 @@ function attachLiveHls(playbackId) {
   liveHls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
     document.getElementById('liveOverlay').classList.add('hidden');
     video.classList.remove('hidden');
-    video.play().catch(() => {});
+    playLiveWithSound(video);
     populateQualityMenu(data.levels || []);
   });
   liveHls.on(Hls.Events.LEVEL_SWITCHED, updateAutoLabel);
@@ -825,6 +823,45 @@ function applyVolumeToLive(v) {
   if (slider) slider.value = v;
 }
 
+// эфир сразу со звуком (сохранённая громкость, по умолчанию 50%). Браузер не дал играть со звуком
+// (на сайте ещё не было клика) — играем без звука и включаем его первым кликом/клавишей на странице
+let liveUnmuteArmed = false;
+function playLiveWithSound(video) {
+  applyVolumeToLive(getSavedVolume());
+  if (liveUnmuteArmed) { video.play().catch(() => {}); return; } // уже ждём жеста — не дёргаем звук
+  video.muted = false;
+  video.play().catch(() => {
+    video.muted = true;
+    video.play().catch(() => {});
+    armLiveUnmute();
+  });
+}
+
+function armLiveUnmute() {
+  if (liveUnmuteArmed) return;
+  liveUnmuteArmed = true;
+  const overlay = document.getElementById('liveOverlay');
+  document.getElementById('liveOverlayText')?.classList.add('hidden');
+  document.getElementById('liveStartBtn')?.classList.remove('hidden');
+  overlay?.classList.remove('hidden');
+  document.addEventListener('click', unmuteLive, true);
+  document.addEventListener('keydown', unmuteLive, true);
+}
+
+function unmuteLive() {
+  liveUnmuteArmed = false;
+  document.removeEventListener('click', unmuteLive, true);
+  document.removeEventListener('keydown', unmuteLive, true);
+  const video = document.getElementById('liveVideo');
+  if (video) {
+    applyVolumeToLive(getSavedVolume());
+    video.muted = false;
+    if (video.paused && !video.classList.contains('hidden')) video.play().catch(() => {});
+  }
+  document.getElementById('liveStartBtn')?.classList.add('hidden');
+  document.getElementById('liveOverlay')?.classList.add('hidden');
+}
+
 document.getElementById('liveVolumeBtn')?.addEventListener('click', () => {
   document.getElementById('liveQualityPopup').classList.add('hidden');
   document.getElementById('liveVolumePopup').classList.toggle('hidden');
@@ -834,6 +871,9 @@ document.getElementById('liveVolumeSlider')?.addEventListener('input', (e) => {
   const v = parseInt(e.target.value, 10);
   saveVolume(v);
   applyVolumeToLive(v);
+  const video = document.getElementById('liveVideo');
+  if (liveUnmuteArmed) unmuteLive();
+  else if (video && v > 0) video.muted = false;
 });
 document.getElementById('liveQualityBtn')?.addEventListener('click', () => {
   document.getElementById('liveVolumePopup').classList.add('hidden');
