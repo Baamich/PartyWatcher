@@ -182,6 +182,8 @@ function actionLogLabel(entry) {
     case 'edit_title': return t('workbench.log.edit_title', { details });
     case 'edit_desc': return t('workbench.log.edit_desc');
     case 'edit_category': return details ? t('workbench.log.edit_category', { details }) : t('workbench.log.clear_category');
+    case 'points_add': return t('workbench.log.points_add', { name, details });
+    case 'points_sub': return t('workbench.log.points_sub', { name, details });
     default: return entry.action;
   }
 }
@@ -959,7 +961,7 @@ document.getElementById('wbRaidBtn')?.addEventListener('click', () => {
 
 // ---- команды модерации «/ban имя» и т.п.: подсказка у поля чата (js/chat-slash.js), права — из chat:role ----
 let wbChatPerms = [];
-window.PWChatSlash?.attach(document.getElementById('chatInput'), () => wbChatPerms);
+window.PWChatSlash?.attach(document.getElementById('chatInput'), () => wbChatPerms, { socket: () => socket });
 
 // ---- 🎁 у поля чата: свои награды — стример проверяет их бесплатно (поинты у владельца бесконечные) ----
 // окно — общий модуль js/rewards-popup.js; награда срабатывает по-настоящему (чат, OBS, бот), в «Покупках» — с пометкой «проверка»

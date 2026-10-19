@@ -258,4 +258,113 @@ async function checkAdultLink(url) {
   return adult;
 }
 
-module.exports = { normalizeLink, hasToken, search, isKnownPoster, isAdultLink, checkAdultLink, linkForTranslation, posInt };
+// ---------- сезоны и серии для списков «Сезон / Серия» у хоста комнаты ----------
+// Фильм (/video/) — один сезон с одной серией, без запросов. Сериал: Kodik API (with_episodes) по id материала из
+// ссылки (serial-<id>), для ссылок на сезон/серию — по player_link; API не ответил или нет токена — страница плеера
+// (списки serial-seasons-box / serial-series-box: серии в ней — только выбранного сезона). Не вышло ничего — null
+const EP_TTL_MS = 6 * 60 * 60 * 1000;
+const EP_MISS_TTL_MS = 10 * 60 * 1000;
+const EP_CACHE_MAX = 500;
+const EP_MAX_SEASONS = 100;
+const EP_MAX_EPISODES = 3000;
+const epCache = new Map(); // `${ссылка}|${сезон}` → { data, at }
+
+const numKeys = (obj) => Object.keys(obj || {}).map(Number).filter((n) => Number.isInteger(n) && n >= 0).sort((a, b) => a - b);
+
+// результат API → [{ season, episodes: [номера] }]
+function seasonsFromApi(r) {
+  const out = [];
+  for (const s of numKeys(r?.seasons).slice(0, EP_MAX_SEASONS)) {
+    const eps = numKeys(r.seasons[s]?.episodes).slice(0, EP_MAX_EPISODES);
+    if (eps.length) out.push({ season: s, episodes: eps });
+  }
+  // без списка серий (старый ответ API) — хотя бы последний сезон и число серий
+  if (!out.length && (posInt(r?.episodes_count) || posInt(r?.last_episode))) {
+    const n = Math.min(EP_MAX_EPISODES, posInt(r.episodes_count) || posInt(r.last_episode));
+    out.push({ season: posInt(r.last_season) || 1, episodes: Array.from({ length: n }, (_, i) => i + 1) });
+  }
+  return out;
+}
+
+async function episodesFromApi(link) {
+  if (!hasToken()) return null;
+  const [, type, id] = link.match(/\/(serial|season|seria)\/(\d+)\//) || [];
+  if (!type) return null;
+  const params = new URLSearchParams({ token: config.kodik.token, with_episodes: 'true', limit: '20' });
+  if (type === 'serial') params.set('id', 'serial-' + id);
+  else params.set('player_link', link.replace(/^https:/, ''));
+  const res = await fetch(`${config.kodik.apiUrl}/search`, {
+    method: 'POST',
+    headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+    signal: AbortSignal.timeout(8000),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || data.error) {
+    console.warn('[kodik] серии: API отказал', res.status, String(data?.error || '').slice(0, 120));
+    return null;
+  }
+  const list = Array.isArray(data.results) ? data.results : [];
+  // та же озвучка, что в комнате (у разных озвучек бывает разное число серий), иначе первая
+  const r = list.find((x) => normalizeLink(x?.link) === link) || list[0];
+  const seasons = r ? seasonsFromApi(r) : [];
+  return seasons.length ? seasons : null;
+}
+
+async function episodesFromPage(link, season) {
+  const url = season ? `${link}?season=${season}` : link;
+  const res = await fetch(url, { headers: { 'User-Agent': UA, Referer: config.publicUrl + '/' }, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return null;
+  const html = (await res.text()).slice(0, MAX_PAGE_BYTES);
+  const box = (cls) => {
+    const m = html.match(new RegExp(`class="[^"]*\\b${cls}\\b[^"]*"[^>]*>[\\s\\S]*?<select[^>]*>([\\s\\S]*?)</select>`, 'i'));
+    if (!m) return { values: [], selected: null };
+    const values = [];
+    let selected = null;
+    for (const o of m[1].matchAll(/<option\b([^>]*)>/gi)) {
+      const v = Number((o[1].match(/\bvalue="(\d+)"/i) || [])[1]);
+      if (!Number.isInteger(v)) continue;
+      values.push(v);
+      if (/\bselected\b/i.test(o[1])) selected = v;
+    }
+    return { values: [...new Set(values)].sort((a, b) => a - b), selected };
+  };
+  const seasons = box('serial-seasons-box');
+  const series = box('serial-series-box');
+  if (!series.values.length) return null;
+  const cur = season || seasons.selected || seasons.values[0] || 1;
+  const list = (seasons.values.length ? seasons.values : [cur]).slice(0, EP_MAX_SEASONS);
+  // серии известны только у текущего сезона — у остальных список догрузится, когда хост их выберет
+  return list.map((s) => ({ season: s, episodes: s === cur ? series.values.slice(0, EP_MAX_EPISODES) : [], partial: s !== cur }));
+}
+
+// season — для запасного пути: серии какого сезона нужны (страница плеера отдаёт один сезон)
+async function episodes(url, season) {
+  const link = normalizeLink(url);
+  if (!link) return null;
+  if (/\/video\//.test(link)) return { serial: false, seasons: [{ season: 1, episodes: [1] }] };
+  const s = posInt(season) || 0;
+  const key = `${link}|${s}`;
+  const hit = epCache.get(key);
+  if (hit && Date.now() - hit.at < (hit.data ? EP_TTL_MS : EP_MISS_TTL_MS)) return hit.data;
+
+  let seasons = null;
+  try {
+    seasons = await episodesFromApi(link);
+  } catch (e) {
+    console.warn('[kodik] серии: нет ответа API:', e.cause?.code || e.name);
+  }
+  if (!seasons) {
+    try {
+      seasons = await episodesFromPage(link, s || null);
+    } catch (e) {
+      console.warn('[kodik] серии: страница плеера не открылась:', e.cause?.code || e.name);
+    }
+  }
+  const data = seasons ? { serial: true, seasons } : null;
+  if (!data) console.warn('[kodik] серии не нашлись для', link.slice(0, 80));
+  remember(epCache, key, { data, at: Date.now() }, EP_CACHE_MAX);
+  return data;
+}
+
+module.exports = { normalizeLink, hasToken, search, isKnownPoster, isAdultLink, checkAdultLink, linkForTranslation, episodes, posInt };

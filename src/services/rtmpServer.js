@@ -13,6 +13,7 @@ const StreamVod = require('../models/StreamVod');
 const streamKeyCache = require('./streamKeyCache');
 const searchIndex = require('./searchIndex');
 const { isAdultStream } = require('./adultContent');
+const os = require('os');
 
 const MEDIA_ROOT = path.join(process.cwd(), 'media');
 // ключ стрима — ровно 40 символов 0-9a-f (crypto.randomBytes(20).toString('hex') в workbench.routes.js)
@@ -25,12 +26,21 @@ const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const MERGE_WINDOW_MS = 60_000; // вернулся за минуту → та же запись
 
 // качества эфира: «источник» без перекодирования + 720p и 360p — только те, что ниже источника
-// (перекодировать 720 из 720 или растягивать 480 до 720 — зря жечь процессор)
+// (перекодировать 720 из 720 или растягивать 480 до 720 — зря жечь процессор).
+// 720p — superfast: самое тяжёлое кодирование, ~на четверть дешевле veryfast при чуть худшей картинке
 const SOURCE = { name: 'source', copy: true };
 const LADDER = [
-  { name: '720', height: 720, vBitrate: '2500k', vMaxrate: '2800k', vBufsize: '5000k', aBitrate: '128k' },
-  { name: '360', height: 360, vBitrate: '800k', vMaxrate: '900k', vBufsize: '1600k', aBitrate: '96k' },
+  { name: '720', height: 720, preset: 'superfast', vBitrate: '2500k', vMaxrate: '2800k', vBufsize: '5000k' },
+  { name: '360', height: 360, preset: 'veryfast', vBitrate: '800k', vMaxrate: '900k', vBufsize: '1600k' },
 ];
+// сервер уже загружен (другой эфир с полной лесенкой, захват) → вместо двух кодирований одно: 480p.
+// HD остаётся в «источнике». Решается один раз на старте ffmpeg: посреди эфира качества не меняются (это обрыв у зрителей)
+const LITE = { name: '480', height: 480, preset: 'veryfast', vBitrate: '1200k', vMaxrate: '1400k', vBufsize: '2400k' };
+// «Источник» не выше 1080p: до 1080 — копия без нагрузки, эфир 1440p/4K перекодируется в 1080p (тяжело, но редко;
+// к нему тогда только 480p — три кодирования с 4K сервер не потянет)
+const SOURCE_MAX_H = 1080;
+const SOURCE_1080 = { name: 'source', height: 1080, preset: 'superfast', vBitrate: '6000k', vMaxrate: '6500k', vBufsize: '12000k' };
+const LITE_CPU_PCT = Math.min(100, Math.max(0, parseInt(process.env.LIVE_LITE_CPU, 10) || 70));
 // каждый эфир с лесенкой — это два кодирования x264. Больше стольких эфиров одновременно — дальше только «источник»,
 // чтобы несколько стримеров разом не положили сервер
 const MAX_LADDER_STREAMS = Math.max(0, parseInt(process.env.LIVE_MAX_TRANSCODES, 10) || 2);
@@ -244,15 +254,75 @@ function probeSource(key) {
   });
 }
 
-function renditionsFor(src) {
+// ---------- загрузка сервера для выбора качеств ----------
+// Считаем всё, кроме процессов с nice: сжатие записей и кадры (nice 19) уступают любому делу и могут часами
+// держать «100%» — новый эфир из-за них зря ушёл бы в 480p. Живые ffmpeg тоже с nice (ниже сайта), но это
+// настоящая нагрузка — их время добавляем по /proc/<pid>/stat
+const LOAD_SAMPLE_MS = 10 * 1000;
+const loadSamples = []; // последние 3 замера (~30 с), %
+let prevLoad = null;
+
+// процессорное время процесса, мс (utime + stime; такт ядра — 10 мс). Не Linux или процесса уже нет — null
+function procCpuMs(pid) {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const f = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+    return (Number(f[11]) + Number(f[12])) * 10;
+  } catch (_) {
+    return null;
+  }
+}
+
+function sampleLoad() {
+  let busy = 0;
+  let total = 0;
+  for (const { times: t } of os.cpus()) {
+    busy += t.user + t.sys + t.irq;
+    total += t.user + t.nice + t.sys + t.idle + t.irq;
+  }
+  const procs = new Map();
+  for (const t of activeTranscodes.values()) {
+    const ms = t.proc.pid && procCpuMs(t.proc.pid);
+    if (ms != null) procs.set(t.proc.pid, ms);
+  }
+  if (prevLoad && total > prevLoad.total) {
+    let live = 0;
+    for (const [pid, ms] of procs) if (prevLoad.procs.has(pid)) live += Math.max(0, ms - prevLoad.procs.get(pid));
+    loadSamples.push(Math.min(100, ((busy - prevLoad.busy + live) / (total - prevLoad.total)) * 100));
+    if (loadSamples.length > 3) loadSamples.shift();
+  }
+  prevLoad = { busy, total, procs };
+}
+setInterval(sampleLoad, LOAD_SAMPLE_MS).unref();
+
+function recentLoad() {
+  return loadSamples.length ? loadSamples.reduce((a, b) => a + b, 0) / loadSamples.length : null;
+}
+
+function renditionsFor(key, src) {
+  const h = src?.height || 0;
+  const fps = src && src.fps > 31 ? 30 : null; // 60 к/с — только в «источнике»
+  const big = h > SOURCE_MAX_H + 20;
+  if (big) console.log(`[rtmp] ${key.slice(0, 8)}…: источник ${h}p выше ${SOURCE_MAX_H}p → «источник» перекодируется в ${SOURCE_MAX_H}p`);
+  // 1440p/4K → 1080p; 60 к/с сохраняем, только если сервер не занят (иначе 30)
+  const source = (calm) => (big ? { ...SOURCE_1080, fps: calm ? (src.fps > 61 ? 60 : null) : fps } : SOURCE);
+
   const busy = [...activeTranscodes.values()].filter((t) => t.ladder).length;
   if (busy >= MAX_LADDER_STREAMS) {
     console.log(`[rtmp] уже перекодируется ${busy} эфир(а) (лимит LIVE_MAX_TRANSCODES=${MAX_LADDER_STREAMS}) → только «источник»`);
-    return [SOURCE];
+    return [source(false)];
   }
-  const h = src?.height || 0;
-  const fps = src && src.fps > 31 ? 30 : null; // 60 к/с — только в «источнике»
-  return [SOURCE, ...LADDER.filter((r) => !h || r.height < h - 20).map((r) => ({ ...r, fps }))];
+
+  // один эфир с полной лесенкой — это уже ~60–70% процессора: второму полная не влезет, сколько бы ни показал замер
+  const fullBusy = [...activeTranscodes.values()].some((t) => t.full);
+  const load = recentLoad();
+  const lite = fullBusy || (load != null && load >= LITE_CPU_PCT);
+  if (lite) {
+    console.log(`[rtmp] ${key.slice(0, 8)}…: ${fullBusy ? 'уже идёт эфир с полной лесенкой' : `сервер загружен на ${Math.round(load)}% (порог LIVE_LITE_CPU=${LITE_CPU_PCT})`} → «источник» + 480p`);
+  }
+
+  const levels = lite || big ? [LITE] : LADDER;
+  return [source(!lite), ...levels.filter((r) => !h || r.height < h - 20).map((r) => ({ ...r, fps }))];
 }
 
 // ---------- раз в 30 с для каждого эфира: кадр для карточки и замер зрителей ----------
@@ -267,7 +337,7 @@ async function grabThumb(key) {
   thumbBusy.add(key);
   try {
     const dir = mediaDir(key);
-    const sub = ['360', '720', 'source'].find((n) => fs.existsSync(path.join(dir, n, 'index.m3u8')));
+    const sub = ['360', '480', '720', 'source'].find((n) => fs.existsSync(path.join(dir, n, 'index.m3u8')));
     if (!sub) return;
     const list = fs.readFileSync(path.join(dir, sub, 'index.m3u8'), 'utf8').split(/\r?\n/).filter((l) => /^seg_\d+\.ts$/.test(l.trim()));
     if (!list.length) return;
@@ -577,14 +647,15 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions) {
       args.push(
         '-map', `[s${si}]`,
         `-c:v:${vIdx}`, 'libx264',
-        '-preset', 'veryfast',
-        '-tune', 'zerolatency',
+        `-preset:v:${vIdx}`, r.preset,
+        `-tune:v:${vIdx}`, 'zerolatency',
         `-b:v:${vIdx}`, r.vBitrate,
         `-maxrate:v:${vIdx}`, r.vMaxrate,
         `-bufsize:v:${vIdx}`, r.vBufsize,
         `-force_key_frames:v:${vIdx}`, 'expr:gte(t,n_forced*1)'
       );
-      args.push('-map', '0:a', `-c:a:${aIdx}`, 'aac', `-b:a:${aIdx}`, r.aBitrate);
+      // звук как в «источнике», без перекодирования: AAC из OBS и так лёгкий, а кодировать его на каждое качество — зря
+      args.push('-map', '0:a', `-c:a:${aIdx}`, 'copy');
     }
     varStreamMapParts.push(`v:${vIdx},a:${aIdx},name:${r.name}`);
     vIdx += 1;
@@ -631,8 +702,15 @@ function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditions) {
   const args = buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions);
 
   console.log('[rtmp] ffmpeg start', key.slice(0, 8) + '…', 'gen=', gen, 'vod=', vodId || '—', 'качества:', renditions.map((r) => r.name + (r.fps ? '@' + r.fps : '')).join(','));
-  const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-  activeTranscodes.set(key, { proc, gen, vodId: vodId || null, ladder: renditions.length > 1 });
+  // приоритет ниже сайта: при перегрузе первым притормозит перекодирование, а не чат, сокеты и страницы.
+  // nice заменяет себя ffmpeg (тот же pid), так что сигналы остановки доходят до ffmpeg напрямую
+  const proc = spawn('nice', ['-n', '5', FFMPEG_PATH, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+  activeTranscodes.set(key, {
+    proc, gen, vodId: vodId || null,
+    ladder: renditions.some((r) => !r.copy), // хоть одно перекодирование
+    // тяжёлый эфир: 720/360 или «источник» 1440p/4K → 1080p — следующему достанется только облегчённая лесенка
+    full: renditions.some((r) => LADDER.some((l) => l.name === r.name) || (r.name === 'source' && !r.copy)),
+  });
 
   proc.stderr.on('data', (c) => {
     const line = c.toString().trim();
@@ -726,7 +804,7 @@ async function startTranscode(key) {
     if (src) console.log(`[rtmp] источник ${key.slice(0, 8)}…: ${src.height}p, ${Math.round(src.fps)} к/с`);
     else console.warn('[rtmp] не удалось узнать параметры источника — полная лесенка', key.slice(0, 8) + '…');
 
-    spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditionsFor(src));
+    spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditionsFor(key, src));
 
     await setLiveState(key, {
       isLive: true,

@@ -584,6 +584,11 @@ body {
   margin-bottom: 0;
 }
 
+/* YouTube, Twitch и прочие без серий: у хоста остаётся только смена видео (important — поверх style строк от «Просмотра фильма») */
+.host-controls.no-episodes .episode-row {
+  display: none !important;
+}
+
 .episode-row label {
   width: 70px;
   font-size: 13px;

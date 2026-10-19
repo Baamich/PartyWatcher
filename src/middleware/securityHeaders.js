@@ -26,6 +26,7 @@ function buildDirectives() {
     // строгий режим: inline-скриптов и onclick="..." на сайте больше нет
     scriptSrc: [
       "'self'",
+      "'report-sample'",           // в отчёт — первые 40 символов заблокированного кода: видно, наш это скрипт или расширения
       'https://www.youtube.com',   // YouTube IFrame API
       'https://s.ytimg.com',
       'https://embed.twitch.tv',   // Twitch embed

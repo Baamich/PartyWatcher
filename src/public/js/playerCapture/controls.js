@@ -6,6 +6,7 @@ let availableStreams = [];
 
 export function showEpisodeControls(meta, onChange, streams, onQualityChange) {
   currentMeta = meta;
+  window.onEpisodeChange = onEpisodeChange; // списки общие с Kodik — он ставит свой обработчик, возвращаем свой
   onEpisodeChangeCallback = onChange || null;
   onQualityChangeCallback = onQualityChange || null;
   availableStreams = Array.isArray(streams) ? streams : [];

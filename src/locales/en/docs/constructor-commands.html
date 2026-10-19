@@ -42,7 +42,7 @@ Reply:     Random number up to {number}: {random:{number}}</code></pre>
   <tr><td><code>{coin}</code></td><td>“heads” or “tails” (in the language of whoever used the command)</td></tr>
   <tr><td><code>{choice:yes|no|maybe}</code></td><td>A random option from a list (separated by <code>|</code>)</td></tr>
   <tr><td><code>{calc:2+2*3}</code></td><td>Calculator: <code>+ - * / %</code> and parentheses</td></tr>
-  <tr><td><code>{time}</code>, <code>{date}</code></td><td>Moscow time and date. <code>{time:+1}</code> — for another time zone</td></tr>
+  <tr><td><code>{time}</code>, <code>{date}</code></td><td>Moscow time and date. Another time zone — an offset from UTC (−14 to +14): <code>{time:+1}</code> — Germany in winter, <code>{time:+2}</code> — in summer, <code>{time:+3}</code> — Moscow</td></tr>
 </table>
 </div>
 <p>Variables can be nested: <code>{random:{number}}</code>, <code>{calc:{args}}</code>.</p>

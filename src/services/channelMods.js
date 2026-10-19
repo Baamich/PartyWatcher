@@ -8,6 +8,8 @@ const ChannelMod = require('../models/ChannelMod');
 const CHAT_PERMS = ['deleteMsg', 'timeout', 'ban', 'clearChat', 'chatSettings'];
 const STREAM_PERMS = ['editTitle', 'editCategory', 'raid'];
 const ALL_PERMS = [...CHAT_PERMS, ...STREAM_PERMS];
+// только у владельца канала, модераторам не выдаётся: начислить/списать стрим-поинты (/SP+ /SP-)
+const OWNER_PERMS = ['points'];
 const DEFAULT_PERMS = {
   mod: ['deleteMsg', 'timeout'],
   senior: ['deleteMsg', 'timeout', 'ban', 'clearChat', 'chatSettings', 'editTitle', 'editCategory', 'raid'],
@@ -57,7 +59,7 @@ async function roleOf(nameLower, userId) {
 // { role, perms: [...] } — у владельца все права
 async function permsOf(nameLower, userId) {
   const role = await roleOf(nameLower, userId);
-  if (role === 'owner') return { role, perms: [...ALL_PERMS] };
+  if (role === 'owner') return { role, perms: [...ALL_PERMS, ...OWNER_PERMS] };
   if (!role) return { role: null, perms: [] };
   const e = await load(nameLower);
   return { role, perms: [...e.perms[role]] };

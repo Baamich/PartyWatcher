@@ -129,10 +129,16 @@ pointsRouter.post('/:name/redeem', auth, limiter(20, 60 * 1000), async (req, res
     if (!acc) return res.status(400).json({ error: req.t('server.rewards.notEnough') });
   }
 
-  const red = await Redemption.create({
-    streamerId: s._id, rewardId: reward._id, rewardSlug: reward.slug, rewardTitle: reward.title,
-    userId: req.user.id, username: req.user.username, cost: reward.cost, message, test: own,
-  });
+  let red;
+  try {
+    red = await Redemption.create({
+      streamerId: s._id, rewardId: reward._id, rewardSlug: reward.slug, rewardTitle: reward.title,
+      userId: req.user.id, username: req.user.username, cost: reward.cost, message, test: own,
+    });
+  } catch (e) {
+    if (acc) await points.refund(s._id, req.user.id, reward.cost).catch(() => {}); // поинты уже списаны — вернуть
+    throw e;
+  }
 
   // действие стартовых наград
   if (reward.kind === 'highlight') {
@@ -320,11 +326,18 @@ async function setStatus(streamerId, rid, status, slug) {
   if (red && status === 'refunded' && !red.test) await points.refund(streamerId, red.userId, red.cost);
   return red;
 }
+// не обновилась: такой покупки нет (404) или её уже отметили (409) — второй запрос только на этой редкой ветке
+async function notUpdated(req, res, streamerId, rid, slug) {
+  const exists = await Redemption.exists({ _id: rid, streamerId, ...(slug && { rewardSlug: slug }) });
+  return exists
+    ? res.status(409).json({ error: req.t('server.rewards.alreadyHandled') })
+    : res.status(404).json({ error: req.t('server.rewards.notFound') });
+}
 rewardsRouter.patch('/studio-redemptions/:id', auth, requireStreamer, async (req, res) => {
   if (!ID_RE.test(req.params.id)) return res.status(404).json({ error: req.t('server.rewards.notFound') });
   const status = req.body?.status === 'refunded' ? 'refunded' : 'done';
   const red = await setStatus(req.me._id, req.params.id, status);
-  if (!red) return res.status(409).json({ error: req.t('server.rewards.alreadyHandled') });
+  if (!red) return notUpdated(req, res, req.me._id, req.params.id);
   res.json({ status: red.status });
 });
 
@@ -354,8 +367,9 @@ rewardsRouter.get('/:channel/:slug', botAuth, async (req, res) => {
 // POST /rewards/:channel/:slug/:id/done | /refund — бот отметил покупку
 rewardsRouter.post('/:channel/:slug/:id/:action', botAuth, async (req, res) => {
   if (!ID_RE.test(req.params.id) || !['done', 'refund'].includes(req.params.action)) return res.status(404).json({ error: req.t('server.rewards.notFound') });
-  const red = await setStatus(req.botStreamerId, req.params.id, req.params.action === 'refund' ? 'refunded' : 'done', String(req.params.slug));
-  if (!red) return res.status(409).json({ error: req.t('server.rewards.alreadyHandled') });
+  const slug = String(req.params.slug);
+  const red = await setStatus(req.botStreamerId, req.params.id, req.params.action === 'refund' ? 'refunded' : 'done', slug);
+  if (!red) return notUpdated(req, res, req.botStreamerId, req.params.id, slug);
   res.json({ id: String(red._id), status: red.status });
 });
 

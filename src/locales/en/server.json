@@ -467,8 +467,12 @@
       "filteroff": "Word filter is off",
       "raid": "Raid on {name} started",
       "unraid": "Raid cancelled",
-      "title": "Stream title changed"
-    }
+      "title": "Stream title changed",
+      "spAdd": "{name}: +{n} points, now {balance}",
+      "spSub": "{name}: −{n} points, now {balance}"
+    },
+    "pointsSelf": "You can’t give points to yourself: the channel owner’s points are already unlimited",
+    "spNone": "{name} has no channel points on this channel"
   },
   "ban": {
     "pageTitle": "Access denied",

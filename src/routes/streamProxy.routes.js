@@ -572,8 +572,9 @@ router.get('/relay', auth, async (req, res) => {
     if (cached) {
       res.setHeader('Content-Type', cached.contentType || 'application/octet-stream');
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=60');
-      return res.send(cached.buf);
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.setHeader('Content-Length', cached.buf.length);
+      return res.end(cached.buf);
     }
 
     const fromQuery = (req.query.referer || '').toString();
@@ -605,15 +606,12 @@ router.get('/relay', auth, async (req, res) => {
     if (buf.length > 0 && buf.length < 8_000_000) {
       segmentCacheSet(cacheKey, buf, ct);
     }
+    // сегмент уже целиком в памяти — отдаём одним куском с длиной (как и из кэша выше)
     res.setHeader('Content-Type', ct);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const { Readable } = require('stream');
-    const nodeStream = Readable.from(buf);
-    nodeStream.pipe(res);
-    nodeStream.on('error', (streamErr) => {
-      console.error('[stream-relay] ошибка потока:', streamErr.message);
-      if (!res.headersSent) res.status(500).end();
-    });
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.setHeader('Content-Length', buf.length);
+    res.end(buf);
   } catch (err) {
     console.error('[stream-relay] EXCEPTION:', err && err.message);
     if (!res.headersSent) res.status(500).json({ error: (err && err.message) || 'relay error' });

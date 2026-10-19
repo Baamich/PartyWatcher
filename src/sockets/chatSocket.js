@@ -205,9 +205,18 @@ module.exports = function registerChatSocket(io) {
     return users.size + guests;
   });
 
+  // список зрителей уходит всем в канале — при волне входов (рейд, начало эфира) это N рассылок по N человек.
+  // Склеиваем: не чаще раза в 1,5 с на канал, со свежим списком на момент отправки
+  const VIEWERS_EMIT_MS = 1500;
+  const viewersTimers = new Map(); // канал → таймер (живёт до отправки)
   function emitViewers(nameLower) {
-    const payload = buildViewersPayload(nameLower);
-    nsp.to(roomName(nameLower)).emit('chat:viewers', payload);
+    if (viewersTimers.has(nameLower)) return;
+    viewersTimers.set(nameLower, setTimeout(() => {
+      viewersTimers.delete(nameLower);
+      // все ушли — ноль (оверлеям и студии), не заводя пустую запись присутствия
+      const payload = presence.has(nameLower) ? buildViewersPayload(nameLower) : { count: 0, viewers: [] };
+      nsp.to(roomName(nameLower)).emit('chat:viewers', payload);
+    }, VIEWERS_EMIT_MS));
   }
 
   const COMMAND_COOLDOWN_MS = 3000;
@@ -419,7 +428,11 @@ module.exports = function registerChatSocket(io) {
     ban: 'ban', unban: 'ban', timeout: 'timeout', untimeout: 'timeout', clear: 'clearChat',
     slow: 'chatSettings', slowoff: 'chatSettings', followers: 'chatSettings', followersoff: 'chatSettings', filter: 'chatSettings',
     raid: 'raid', unraid: 'raid', title: 'editTitle',
+    'sp+': 'points', 'sp-': 'points', // только владелец канала (channelMods.OWNER_PERMS)
   };
+  // ключ подсказки в словаре (common.slash.<ключ>): «+» и «-» в ключах словаря не держим
+  const SLASH_KEY = { 'sp+': 'spAdd', 'sp-': 'spSub' };
+  const POINTS_CMD_MAX = 1000000; // за одну команду
   const nearest = (list, v) => list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
   // «90», «90s», «10m», «2h», «1d» (и по-русски с/м/ч/д) → секунды; без единицы — unit секунд
   function parseDuration(raw, unit = 1) {
@@ -444,7 +457,32 @@ module.exports = function registerChatSocket(io) {
     const perm = Object.hasOwn(SLASH_PERM, cmd) ? SLASH_PERM[cmd] : null;
     if (!perm) return say(false, 'server.modcmd.unknown', { cmd: '/' + cmd.slice(0, 20) });
     if (!hasPerm(socket, perm)) return say(false, 'server.modcmd.forbidden');
-    const usage = () => say(false, 'server.modcmd.usage', { usage: i18n.t(lang, 'common.slash.' + cmd + '.use') });
+    const usage = () => say(false, 'server.modcmd.usage', { usage: i18n.t(lang, 'common.slash.' + (SLASH_KEY[cmd] || cmd) + '.use') });
+
+    // /SP+ @ник 100 и /SP- @ник 100 (порядок «число, ник» тоже понимаем)
+    if (cmd === 'sp+' || cmd === 'sp-') {
+      let [who, num] = args;
+      if (/^\d+$/.test(who || '') && num && !/^\d+$/.test(num)) [who, num] = [num, who];
+      const n = Number(num);
+      if (!who || !Number.isInteger(n) || n < 1 || n > POINTS_CMD_MAX) return usage();
+      const u = await findChatUser(who);
+      if (!u) return say(false, 'server.modcmd.noUser', { name: who.replace(/^@/, '').slice(0, 32) });
+      const id = String(u._id);
+      if (id === String(socket.data.streamerId)) return say(false, 'server.modcmd.pointsSelf');
+      let delta, balance;
+      if (cmd === 'sp+') {
+        balance = await points.grant(socket.data.streamerId, id, n);
+        delta = n;
+      } else {
+        const r = await points.take(socket.data.streamerId, id, n);
+        if (!r.taken) return say(false, 'server.modcmd.spNone', { name: u.username }); // списывать нечего
+        balance = r.balance;
+        delta = -r.taken;
+      }
+      chatBus.emitToUser(room, id, 'chat:points', { delta, balance }); // зрителю: обновить счёт и показать, сколько
+      logAction(nsp, room, actorName(socket), cmd === 'sp+' ? 'points_add' : 'points_sub', u.username, `${Math.abs(delta)} → ${balance}`);
+      return say(true, cmd === 'sp+' ? 'server.modcmd.done.spAdd' : 'server.modcmd.done.spSub', { name: u.username, n: Math.abs(delta), balance });
+    }
 
     if (cmd === 'ban' || cmd === 'unban' || cmd === 'timeout' || cmd === 'untimeout') {
       if (!args[0]) return usage();
@@ -671,6 +709,29 @@ module.exports = function registerChatSocket(io) {
     socket.on('chat:raid-cancel', () => {
       if (!hasPerm(socket, 'raid') || !currentStreamerNameLower) return;
       cancelRaid(socket, currentStreamerNameLower);
+    });
+
+    // подсказка ника в командах «/ban @…», «/SP+ @…» (js/chat-slash.js): стримеру и модераторам, от 3 символов.
+    // Сначала те, кто сейчас в чате, дальше аккаунты, чей логин начинается так же (уникальный индекс usernameLower)
+    let lastUserSearchAt = 0;
+    socket.on('chat:user-search', async ({ q } = {}, ack) => {
+      if (typeof ack !== 'function') return;
+      const room = currentStreamerNameLower;
+      const s = String(q || '').trim().replace(/^@/, '').toLowerCase().slice(0, 32);
+      const now = Date.now();
+      if (!room || !socket.data.role || socket.data.isOverlay || s.length < 3 || now - lastUserSearchAt < 200) return ack({ users: [] });
+      lastUserSearchAt = now;
+      const out = new Map(); // usernameLower → { username, online }
+      for (const [, info] of presence.get(room) || []) {
+        const lower = String(info.username || '').toLowerCase();
+        if (info.userId && lower.startsWith(s) && out.size < 8) out.set(lower, { username: info.username, online: true });
+      }
+      if (out.size < 8) {
+        const re = new RegExp('^' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const rows = await User.find({ usernameLower: re }).select('username usernameLower -_id').limit(8).lean();
+        for (const u of rows) if (!out.has(u.usernameLower) && out.size < 8) out.set(u.usernameLower, { username: u.username, online: false });
+      }
+      ack({ users: [...out.values()] });
     });
 
     socket.on('chat:send', async ({ text }) => {

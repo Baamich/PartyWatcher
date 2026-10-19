@@ -36,4 +36,21 @@ router.get('/search', auth, searchLimiter, async (req, res) => {
   }
 });
 
+// GET /kodik/episodes?url=<ссылка на плеер>[&season=N] — сезоны и серии для списков хоста в комнате.
+// Kodik по готовой ссылке доступен всем, поэтому и это — всем вошедшим; ответы кэшируются сервисом (6 ч)
+const episodesLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 40,
+  keyGenerator: (req) => String(req.user.id),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: (req) => ({ error: req.t('server.kodik.tooMany') }),
+});
+router.get('/episodes', auth, episodesLimiter, async (req, res) => {
+  const url = typeof req.query.url === 'string' ? req.query.url : '';
+  if (!kodik.normalizeLink(url)) return res.status(400).json({ error: req.t('server.room.badKodik') });
+  const data = await kodik.episodes(url, req.query.season);
+  res.json(data || { serial: true, seasons: null });
+});
+
 module.exports = router;

@@ -359,10 +359,12 @@ function registerRoomSocket(io) {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return reply({});
       const season = kodik.posInt(payload.season);
       const episode = kodik.posInt(payload.episode);
-      const voice = typeof payload.voice === 'string' ? payload.voice.slice(0, 100) : null;
+      let voice = typeof payload.voice === 'string' ? payload.voice.slice(0, 100) : null;
 
       const room = await Room.findOne({ code }).select('video playback').lean();
       if (room?.video?.type !== 'kodik') return reply({});
+      // смена серии из списков хоста приходит без озвучки — оставляем ту, что была
+      if (!voice && !payload.translationId) voice = room.video.meta?.currentVoice || null;
 
       let url = room.video.url;
       // смена озвучки = запрос к Kodik с сервера: не чаще раза в 2 с на сокет (хост не раскачает сервер перебором id)
@@ -402,15 +404,15 @@ function registerRoomSocket(io) {
 
     socket.on('playback:update', async ({ code, isPlaying, positionSeconds }) => {
       if (!socket.data.isOwner || socket.data.roomCode !== code) return;
+      // хост шлёт это раз в 3 с: пишем без чтения документа обратно и только число/флаг, а не что прислали
+      const pos = Number(positionSeconds);
+      if (!Number.isFinite(pos) || pos < 0) return;
+      const playing = !!isPlaying;
 
-      const room = await Room.findOneAndUpdate(
-        { code },
-        { playback: { isPlaying, positionSeconds, updatedAt: new Date() } },
-        { new: true }
-      );
-      if (!room) return;
+      const r = await Room.updateOne({ code }, { $set: { playback: { isPlaying: playing, positionSeconds: pos, updatedAt: new Date() } } });
+      if (!r.matchedCount) return;
 
-      socket.to(code).emit('playback:update', { isPlaying, positionSeconds });
+      socket.to(code).emit('playback:update', { isPlaying: playing, positionSeconds: pos });
     });
 
     socket.on('playback:force-sync', async ({ code, isPlaying, positionSeconds }) => {
@@ -419,9 +421,9 @@ function registerRoomSocket(io) {
       const pos = Number(positionSeconds) || 0;
       const playing = !!isPlaying;
 
-      await Room.findOneAndUpdate(
+      await Room.updateOne(
         { code },
-        { playback: { isPlaying: playing, positionSeconds: pos, updatedAt: new Date() } }
+        { $set: { playback: { isPlaying: playing, positionSeconds: pos, updatedAt: new Date() } } }
       );
 
       socket.to(code).emit('playback:force-sync', {
@@ -432,8 +434,8 @@ function registerRoomSocket(io) {
 
     socket.on('room:resync', async ({ code }) => {
       if (socket.data.roomCode !== code) return; // только для своей комнаты (заодно закрывает подмену кода объектом)
-      const room = await Room.findOne({ code });
-      if (!room) return;
+      const room = await Room.findOne({ code }).select('playback').lean();
+      if (!room?.playback) return;
       socket.emit('playback:update', {
         isPlaying: room.playback.isPlaying,
         positionSeconds: room.playback.positionSeconds,

@@ -449,7 +449,7 @@ function teardownMicGraph() {
 
 const DRIFT_THRESHOLD_SECONDS = 3; // совпадает с текстом системной подсказки для зрителей
 // один и тот же URL везде: разные ?t=... создавали бы новый экземпляр модуля при каждой смене серии
-const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=7';
+const CAPTURE_MODULE_URL = '/js/playerCapture/index.js?v=8';
 const KODIK_MODULE_URL = '/js/kodik/player.js?v=3';
 const KODIK_SEARCH_URL = '/js/kodik/search.js?v=1';
 const VK_MODULE_URL = '/js/vk/player.js?v=1';
@@ -760,6 +760,8 @@ function isAgeConfirmedLocally() {
 
   function renderPlayer(video) {
   currentVideoType = video.type;
+  // строки «Сезон / Серия / Озвучка» у хоста — только там, где есть серии (Kodik, «Просмотр фильма»)
+  document.getElementById('hostControls')?.classList.toggle('no-episodes', video.type !== 'kodik' && video.type !== 'player_capture');
   const container = document.getElementById('player');
   const gen = ++renderGen;
   const stale = () => gen !== renderGen; // пока грузились, началась более новая отрисовка
@@ -819,6 +821,7 @@ function isAgeConfirmedLocally() {
       });
       playerReady = true;
       warnIfKodikBlocked(video.url, stale);
+      loadKodikEpisodes(video.url);
       return apiPlayer;
     });
   }
@@ -1721,6 +1724,7 @@ function onKodikEpisode({ season, episode, translationId, translationTitle }) {
   if (!voiceChanged && season === kodikState.season && episode === kodikState.episode) return;
 
   setKodikState({ ...kodikState, season, episode });
+  fillKodikSelects(); // серию сменили в самом плеере Kodik — списки хоста следом
   socket.emit('kodik:episode', {
     code,
     season,
@@ -1728,6 +1732,93 @@ function onKodikEpisode({ season, episode, translationId, translationTitle }) {
     translationId: voiceChanged ? translationId : undefined,
     voice: translationTitle,
   }, (res) => {
+    if (!res?.url || !kodikState) return;
+    const urlChanged = res.url !== kodikState.url;
+    setKodikState({ ...kodikState, url: res.url });
+    if (urlChanged) loadKodikEpisodes(res.url); // у другой озвучки бывает другое число серий
+  });
+}
+
+// ---- списки «Сезон / Серия» у хоста для Kodik (данные — GET /kodik/episodes, сервер берёт их у Kodik) ----
+let kodikEpisodes = null; // [{ season, episodes: [номера], partial? }] или null — не узнали
+let kodikEpisodesUrl = null;
+let kodikEpisodesSeq = 0;
+
+async function loadKodikEpisodes(url, season) {
+  if (!isOwner || !url) return;
+  const seq = ++kodikEpisodesSeq;
+  if (url !== kodikEpisodesUrl) kodikEpisodes = null;
+  kodikEpisodesUrl = url;
+  fillKodikSelects();
+  try {
+    const q = '/kodik/episodes?url=' + encodeURIComponent(url) + (season ? '&season=' + season : '');
+    const r = await api(q);
+    if (seq !== kodikEpisodesSeq || !Array.isArray(r?.seasons)) return;
+    // запасной путь сервера знает серии одного сезона — дополняем уже известные, а не затираем
+    const known = new Map((kodikEpisodes || []).map((s) => [s.season, s]));
+    for (const s of r.seasons) {
+      const prev = known.get(s.season);
+      if (!s.partial || !prev) known.set(s.season, s);
+    }
+    kodikEpisodes = [...known.values()].sort((a, b) => a.season - b.season);
+  } catch (_) {
+    // не узнали — в списках останется текущая серия
+  }
+  if (seq === kodikEpisodesSeq) fillKodikSelects();
+}
+
+function kodikSeasonsList() {
+  const cur = { season: kodikState?.season || 1, episodes: [kodikState?.episode || 1] };
+  const list = kodikEpisodes?.length ? kodikEpisodes.map((s) => ({ ...s, episodes: [...s.episodes] })) : [cur];
+  // текущая серия должна быть в списке, даже если данные Kodik отстали
+  let s = list.find((x) => x.season === cur.season);
+  if (!s) list.push((s = { season: cur.season, episodes: [] }));
+  if (!s.episodes.includes(cur.episodes[0])) s.episodes.push(cur.episodes[0]);
+  s.episodes.sort((a, b) => a - b);
+  return list.sort((a, b) => a.season - b.season);
+}
+
+function fillKodikSelects() {
+  if (!isOwner || currentVideoType !== 'kodik' || !kodikState) return;
+  const seasonSel = document.getElementById('seasonSelect');
+  const episodeSel = document.getElementById('episodeSelect');
+  if (!seasonSel || !episodeSel) return;
+  for (const id of ['voiceRow', 'playerRow', 'qualityRow']) {
+    const row = document.getElementById(id);
+    if (row) row.style.display = 'none'; // озвучка — в самом плеере Kodik, качество и плееры — только у «Просмотра фильма»
+  }
+  const list = kodikSeasonsList();
+  const curSeason = kodikState.season || list[0].season;
+  const opt = (value, text, selected) => {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = text;
+    o.selected = selected;
+    return o;
+  };
+  seasonSel.replaceChildren(...list.map((s) => opt(s.season, t('capture.season', { n: s.season }), s.season === curSeason)));
+  const cur = list.find((s) => s.season === curSeason) || list[0];
+  const curEp = kodikState.episode || cur.episodes[0] || 1;
+  episodeSel.replaceChildren(...(cur.episodes.length ? cur.episodes : [curEp]).map((e) => opt(e, t('capture.episode', { n: e }), e === curEp)));
+  seasonSel.disabled = list.length < 2;
+  episodeSel.disabled = list.length < 2 && cur.episodes.length < 2;
+  window.onEpisodeChange = onKodikSelect; // общий data-change у списков (у «Просмотра фильма» — свой обработчик)
+}
+
+function onKodikSelect() {
+  if (!isOwner || currentVideoType !== 'kodik' || !kodikState || !apiPlayer) return;
+  const season = Number(document.getElementById('seasonSelect').value) || 1;
+  let episode = Number(document.getElementById('episodeSelect').value) || 1;
+  const s = kodikSeasonsList().find((x) => x.season === season);
+  if (season !== (kodikState.season || 1)) {
+    episode = s?.episodes[0] || 1; // новый сезон — с первой серии
+    if (s?.partial) loadKodikEpisodes(kodikState.url, season); // серии этого сезона ещё не знаем
+  }
+  if (season === kodikState.season && episode === kodikState.episode) return;
+  setKodikState({ ...kodikState, season, episode });
+  apiPlayer.load(kodikState.url, season, episode);
+  fillKodikSelects();
+  socket.emit('kodik:episode', { code, season, episode }, (res) => {
     if (res?.url && kodikState) setKodikState({ ...kodikState, url: res.url });
   });
 }

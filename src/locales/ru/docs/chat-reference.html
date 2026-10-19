@@ -61,6 +61,10 @@
   <tr><td><code>nickColor</code></td><td>Цвет ника <code>#rrggbb</code> или <code>null</code>.</td></tr>
   <tr><td><code>senderId</code></td><td>Номер пользователя сайта. У сообщений через API это <code>null</code>.</td></tr>
   <tr><td><code>createdAt</code></td><td>Когда отправлено.</td></tr>
+  <tr><td><code>masked</code></td><td>Текст, где слова из фильтра канала заменены на <code>****</code>, или <code>null</code>, если прятать нечего. Показывай его на стриме вместо <code>text</code>.</td></tr>
+  <tr><td><code>emotes</code></td><td>Смайлы в тексте: <code>{ "код": "id" }</code>, картинка — <code>https://partywatcher.de/api/emotes/id</code>. Нет смайлов — поля нет.</td></tr>
+  <tr><td><code>modLevel</code></td><td><code>mod</code> или <code>senior</code>, если пишет модератор, иначе <code>null</code>.</td></tr>
+  <tr><td><code>highlight</code></td><td><code>true</code> — выделенное сообщение, купленное за стрим-поинты.</td></tr>
 </table>
 </div>
 

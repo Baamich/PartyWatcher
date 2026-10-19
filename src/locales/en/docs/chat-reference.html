@@ -61,6 +61,10 @@
   <tr><td><code>nickColor</code></td><td>Nickname color <code>#rrggbb</code> or <code>null</code>.</td></tr>
   <tr><td><code>senderId</code></td><td>Site user id. For messages via the API it is <code>null</code>.</td></tr>
   <tr><td><code>createdAt</code></td><td>When it was sent.</td></tr>
+  <tr><td><code>masked</code></td><td>The text with words from the channel filter replaced by <code>****</code>, or <code>null</code> if there is nothing to hide. Show it on stream instead of <code>text</code>.</td></tr>
+  <tr><td><code>emotes</code></td><td>Emotes in the text: <code>{ "code": "id" }</code>, the image is <code>https://partywatcher.de/api/emotes/id</code>. No emotes — no field.</td></tr>
+  <tr><td><code>modLevel</code></td><td><code>mod</code> or <code>senior</code> if a moderator writes, otherwise <code>null</code>.</td></tr>
+  <tr><td><code>highlight</code></td><td><code>true</code> — a highlighted message bought with channel points.</td></tr>
 </table>
 </div>
 

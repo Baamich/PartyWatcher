@@ -1,6 +1,6 @@
 // index.js (playerCapture)
 
-import { showEpisodeControls, hideEpisodeControls } from './controls.js?v=2';
+import { showEpisodeControls, hideEpisodeControls } from './controls.js?v=3';
 
 const HLS_CONFIG = {
   enableWorker: true,

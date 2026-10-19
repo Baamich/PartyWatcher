@@ -42,7 +42,7 @@
   <tr><td><code>{coin}</code></td><td>«орёл» или «решка»</td></tr>
   <tr><td><code>{choice:да|нет|может}</code></td><td>Случайный вариант из списка (через <code>|</code>)</td></tr>
   <tr><td><code>{calc:2+2*3}</code></td><td>Калькулятор: <code>+ - * / %</code> и скобки</td></tr>
-  <tr><td><code>{time}</code>, <code>{date}</code></td><td>Время и дата по Москве. <code>{time:+1}</code> — для другого часового пояса</td></tr>
+  <tr><td><code>{time}</code>, <code>{date}</code></td><td>Время и дата по Москве. Другой часовой пояс — сдвиг от UTC (от −14 до +14): <code>{time:+1}</code> — Германия зимой, <code>{time:+2}</code> — летом, <code>{time:+3}</code> — Москва</td></tr>
 </table>
 </div>
 <p>Переменные можно вкладывать друг в друга: <code>{random:{число}}</code>, <code>{calc:{args}}</code>.</p>

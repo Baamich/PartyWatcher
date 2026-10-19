@@ -154,7 +154,7 @@
     "added": "Emote added"
   },
   "slash": {
-    "heading": "Moderation commands",
+    "heading": "Chat commands",
     "title": {
       "use": "/title <text>",
       "desc": "Change the stream title"
@@ -206,6 +206,16 @@
     "unraid": {
       "use": "/unraid",
       "desc": "Cancel the raid"
+    },
+    "users": "Users",
+    "online": "In chat now",
+    "spAdd": {
+      "use": "/SP+ <name> <amount>",
+      "desc": "Give channel points to a viewer (streamer only)"
+    },
+    "spSub": {
+      "use": "/SP- <name> <amount>",
+      "desc": "Take channel points from a viewer, not below zero (streamer only)"
     }
   },
   "points": {

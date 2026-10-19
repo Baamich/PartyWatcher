@@ -87,6 +87,9 @@ async function start() {
 
   const app = express();
   app.set('trust proxy', 1);
+  // ETag Express — это SHA-1 всего тела каждого res.send: сегменты фильма в relay по несколько МБ, JSON API
+  // (а он и так no-store). Картинки отдаются с кэшем на год по ?v=, страницы и js/css ставят свой ETag
+  app.set('etag', false);
   const server = http.createServer(app);
   // cloudflared держит соединения к сайту открытыми и переиспользует их: у Node по умолчанию 5 с простоя —
   // туннель иногда попадал в уже закрытое соединение (лишняя попытка и задержка). Держим дольше, чем он
@@ -117,6 +120,29 @@ async function start() {
   app.use(i18n.middleware); // req.lang и req.t для сообщений API
   app.use(bans.guard); // забаненные IP и устройства — 403 на всё (админа не трогает)
   app.use(analytics.middleware); // статистика админки: счётчики в памяти, в базу раз в минуту
+
+  // эфир: каждый зритель просит плейлист и сегмент примерно раз в секунду — отвечаем раньше страниц и статики
+  // (иначе на каждый такой запрос лишние проверки и поиск файла в public)
+  app.get('/media/live/:playbackId/*', (req, res) => {
+    // 404 — без кэша: иначе Cloudflare (правило кэша сегментов) запомнил бы его на минуты
+    const notFound = () => res.setHeader('Cache-Control', 'no-store').status(404).end();
+    const key = streamKeyCache.keyByPlaybackId(req.params.playbackId);
+    if (!key) return notFound();
+
+    const liveDir = path.join(process.cwd(), 'media', 'live', key);
+    const rel = path.normalize(req.params[0] || '').replace(/^(\.\.[/\\])+/, '');
+    const filePath = path.join(liveDir, rel);
+
+    // защита от path traversal — итоговый путь обязан остаться внутри папки этого ключа
+    if (filePath !== liveDir && !filePath.startsWith(liveDir + path.sep)) return res.status(400).end();
+
+    if (rel === 'master.m3u8') return sendLiveMaster(liveDir, res);
+    // плейлисты меняются каждую секунду; сегменты неизменны (номера от времени, не повторяются после перезапуска)
+    res.setHeader('Cache-Control', /\.m3u8$/i.test(rel) ? 'no-store' : 'public, max-age=60');
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) notFound();
+    });
+  });
   app.get('/locales/:lang.js', i18n.bundle); // словари для браузера (src/locales)
   // страницы документации студии: src/locales/<язык>/docs/*.html
   for (const lang of i18n.LANGS) {
@@ -213,7 +239,9 @@ async function start() {
   app.use(pages.middleware); // HTML-страницы: версии файлов, словарь, перевод и данные входа сразу в разметке
   app.use(assets.middleware(pages.absOf, pages.staticHeaders)); // свои js/css: минифицированы и сжаты заранее
   assets.warm([pages.PUBLIC, ...Object.values(pages.VENDOR), ...(() => { try { return [require.resolve('hls.js/dist/hls.min.js')]; } catch { return []; } })()]);
-  app.use(express.static(path.join(__dirname, 'public'), { setHeaders: pages.staticHeaders }));
+  // в public нет ни /api, ни /media — такие запросы не ищем на диске (лишний stat на каждый вызов API)
+  const publicStatic = express.static(path.join(__dirname, 'public'), { setHeaders: pages.staticHeaders });
+  app.use((req, res, next) => (/^\/(api|media)\//.test(req.path) ? next() : publicStatic(req, res, next)));
   app.use('/media/thumbnails', express.static(THUMB_DIR));
   // скачанные видео YouTube 18+ — только админу и друзьям (как и сами комнаты с ними)
   app.use('/media/yt-cache', authMw.optional, async (req, res, next) => {
@@ -223,25 +251,6 @@ async function start() {
   app.use('/media/vod', express.static(path.join(process.cwd(), 'media', 'vod')));
   // клипы не меняются (у каждого свой id) — кэш на неделю
   app.use('/media/clips', express.static(path.join(process.cwd(), 'media', 'clips'), { maxAge: '7d', index: false }));
-
-  app.get('/media/live/:playbackId/*', (req, res) => {
-    const key = streamKeyCache.keyByPlaybackId(req.params.playbackId);
-    if (!key) return res.status(404).end();
-
-    const liveDir = path.join(process.cwd(), 'media', 'live', key);
-    const rel = path.normalize(req.params[0] || '').replace(/^(\.\.[/\\])+/, '');
-    const filePath = path.join(liveDir, rel);
-
-    // защита от path traversal — итоговый путь обязан остаться внутри папки этого ключа
-    if (filePath !== liveDir && !filePath.startsWith(liveDir + path.sep)) return res.status(400).end();
-
-    if (rel === 'master.m3u8') return sendLiveMaster(liveDir, res);
-    // плейлисты меняются каждую секунду; сегменты неизменны (номера от времени, не повторяются после перезапуска)
-    res.setHeader('Cache-Control', /\.m3u8$/i.test(rel) ? 'no-store' : 'public, max-age=60');
-    res.sendFile(filePath, (err) => {
-      if (err && !res.headersSent) res.status(404).end();
-    });
-  });
 
   app.use('/api/auth', authRoutes);
   app.use('/api/devices', require('./routes/devices.routes')); // профиль → «Устройства»

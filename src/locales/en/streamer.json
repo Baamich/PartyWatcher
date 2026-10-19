@@ -121,7 +121,9 @@
     "title": "Stream points and rewards",
     "default": "Stream points",
     "short": "SP",
-    "bonus": "Claim bonus"
+    "bonus": "Claim bonus",
+    "granted": "The streamer gave you {n} channel points!",
+    "revoked": "The streamer took {n} channel points from you"
   },
   "report": {
     "btn": "Report the stream",

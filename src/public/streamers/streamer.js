@@ -1433,7 +1433,7 @@ document.getElementById('modPanelSave')?.addEventListener('click', async () => {
 })();
 
 // подсказка команд модерации: в поле чата набрали «/» (js/chat-slash.js)
-window.PWChatSlash?.attach(document.getElementById('liveChatInput'), () => liveRole.perms);
+window.PWChatSlash?.attach(document.getElementById('liveChatInput'), () => liveRole.perms, { socket: () => liveSocket });
 
 (function initLiveChatMode() {
   const btn = document.getElementById('liveChatModeBtn');
@@ -1593,6 +1593,13 @@ function connectLiveChat(nameLower) {
   liveSocket.on('chat:raided', (raid) => PWRaid.raided(document.getElementById('liveRaidSlot'), raid));
   liveSocket.on('chat:slow', ({ wait } = {}) => startSlowCountdown(wait));
   liveSocket.on('chat:cmd-result', ({ ok, text } = {}) => PW.toast(text || t('common.requestFailed'), ok ? 'success' : 'error'));
+  // стример начислил или списал мне поинты (/SP+ /SP-): свежий счёт и сколько
+  liveSocket.on('chat:points', ({ delta } = {}) => {
+    const n = Math.abs(Number(delta) || 0);
+    if (n) PW.toast(t(delta > 0 ? 'streamer.points.granted' : 'streamer.points.revoked', { n }), delta > 0 ? 'success' : 'info');
+    if (delta > 0 && document.querySelector('.live-points-wrap')) floatPoints(n);
+    loadPoints();
+  });
 
   liveSocket.on('chat:viewers', (payload) => {
     if (typeof payload === 'number') {

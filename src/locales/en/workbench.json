@@ -91,7 +91,9 @@
       "slowOff": "turned off slow mode",
       "filter": "set the word filter to level {n}",
       "filterOff": "turned off the word filter"
-    }
+    },
+    "points_add": "gave {name} channel points: {details}",
+    "points_sub": "took channel points from {name}: {details}"
   },
   "chat": {
     "title": "Chat",

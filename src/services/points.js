@@ -80,6 +80,29 @@ async function refund(streamerId, userId, cost) {
   await ChannelPoints.updateOne({ streamerId, userId }, { $inc: { balance: cost } }, { upsert: true });
 }
 
+// стример вручную (/SP+): +n на счёт зрителя → новый баланс. «Заработано всего» (total) не растёт:
+// по нему срабатывает событие «накопил стрим-поинты», а подарок стримера — не накопление
+async function grant(streamerId, userId, n) {
+  const op = () => ChannelPoints.findOneAndUpdate({ streamerId, userId }, { $inc: { balance: n } }, { new: true, upsert: true }).lean();
+  try {
+    return (await op()).balance;
+  } catch (e) {
+    if (e.code !== 11000) throw e;
+    return (await op()).balance; // два upsert разом: второй упёрся в уникальный индекс — запись уже есть
+  }
+}
+
+// стример вручную (/SP-): −n, но не ниже нуля → { taken, balance } (сколько реально списали)
+async function take(streamerId, userId, n) {
+  const prev = await ChannelPoints.findOneAndUpdate(
+    { streamerId, userId },
+    [{ $set: { balance: { $max: [0, { $subtract: [{ $ifNull: ['$balance', 0] }, n] }] } } }],
+  ).lean();
+  const before = prev?.balance || 0;
+  const balance = Math.max(0, before - n);
+  return { taken: before - balance, balance };
+}
+
 // ---------- стартовые награды (создаются один раз) ----------
 const STARTERS = [
   { kind: 'highlight', slug: 'highlight', key: 'highlight', cost: 100, color: '#7c3aed', needInput: true },
@@ -101,4 +124,4 @@ async function seedStarters(streamer, lang) {
   }
 }
 
-module.exports = { CLAIM_MS, AMOUNT, watchJoin, watchLeave, nextClaimAt, account, claim, spend, refund, seedStarters, Redemption };
+module.exports = { CLAIM_MS, AMOUNT, watchJoin, watchLeave, nextClaimAt, account, claim, spend, refund, grant, take, seedStarters, Redemption };

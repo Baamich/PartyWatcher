@@ -62,6 +62,8 @@ router.post('/send', async (req, res) => {
   try {
     const key = extractKey(req);
     if (!key) return res.status(401).json({ error: req.t('server.chatApi.needKey') });
+    // формат ключа студии (workbench.routes: 'pwc_' + 24 байта hex) — мусор и перебор не доходят до базы
+    if (!/^pwc_[0-9a-f]{48}$/.test(key)) return res.status(401).json({ error: req.t('server.chatApi.badKey') });
 
     const streamer = await User.findOne({ chatApiKey: key }).select('_id streamerNameLower').lean();
     if (!streamer || !streamer.streamerNameLower) {
