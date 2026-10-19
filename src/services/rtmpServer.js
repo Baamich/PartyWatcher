@@ -388,22 +388,33 @@ async function isGoodMp4(p) {
   return fileSize(p) > 10 * 1024 && (await probeDurationSec(p)) > 0;
 }
 
-// сжатие (max 720p, CRF 28) из любого входа; пустой результат считается ошибкой
-async function encodeVod(inputArgs, outPath) {
-  await runFfmpeg([
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-fflags', '+genpts',
-    ...inputArgs,
-    '-vf', "scale=-2:'min(720,ih)'",
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '28',
-    '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
-    '-movflags', '+faststart',
-    outPath,
-  ]);
-  if (!(await isGoodMp4(outPath))) {
-    rmQuiet(outPath);
-    throw new Error('ffmpeg вернул пустой файл');
-  }
+// сжатие (max 720p, 30 к/с, CRF 28) из любого входа; пустой результат считается ошибкой.
+// Раньше medium на всех ядрах: час эфира 1080p60 держал сервер под 100% полчаса. veryfast ~в 3 раза быстрее
+// (файл чуть больше — записи живут 3 дня), 30 к/с — вдвое меньше работы, половина ядер — остальным процессам запас.
+// По одной записи за раз (очередь): два эфира, кончившиеся вместе, не сжимаются параллельно
+const VOD_THREADS = Math.max(1, Math.floor(os.cpus().length / 2));
+let vodChain = Promise.resolve();
+function encodeVod(inputArgs, outPath) {
+  const run = async () => {
+    await runFfmpeg([
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-fflags', '+genpts',
+      ...inputArgs,
+      '-vf', "scale=-2:'min(720,ih)'",
+      '-fpsmax', '30', // не выше 30 к/с, 25 остаются 25 (есть с ffmpeg 4.3)
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-threads', String(VOD_THREADS),
+      '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+      '-movflags', '+faststart',
+      outPath,
+    ]);
+    if (!(await isGoodMp4(outPath))) {
+      rmQuiet(outPath);
+      throw new Error('ffmpeg вернул пустой файл');
+    }
+  };
+  const p = vodChain.then(run, run);
+  vodChain = p.catch(() => {});
+  return p;
 }
 
 async function concatCopy(listPath, outPath) {
