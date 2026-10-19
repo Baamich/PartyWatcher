@@ -217,7 +217,9 @@
       "ip": "IP",
       "country": "Country",
       "user": "Account",
-      "pages": "Pages / requests"
+      "pages": "Pages / requests",
+      "bot": "Bot",
+      "kind": "Kind"
     },
     "w": {
       "visitors": "Unique visitors",
@@ -256,7 +258,9 @@
       "os": "Operating systems",
       "browsers": "Browsers",
       "countries": "Countries",
-      "recent": "Recent visitors"
+      "recent": "Recent visitors",
+      "botNames": "Which bots",
+      "recentBots": "Recent bots"
     },
     "sub": {
       "visitors": "in the period, each counted once a day",
@@ -283,6 +287,15 @@
       "clips": "made in the period",
       "support": "unread · new in the period: {n}",
       "bans": "IP: {ip} · devices: {dev}"
+    },
+    "botKind": {
+      "search": "search engine",
+      "ai": "AI crawler",
+      "preview": "link preview",
+      "seo": "SEO service",
+      "monitor": "monitoring",
+      "script": "script / program",
+      "other": "other bot"
     }
   },
   "users": {

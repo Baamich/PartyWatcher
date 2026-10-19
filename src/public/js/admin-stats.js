@@ -44,6 +44,8 @@
     { id: 'browsers', g: 'visits', k: 'list' },
     { id: 'countries', g: 'visits', k: 'list' },
     { id: 'recent', g: 'visits', k: 'table' },
+    { id: 'botNames', g: 'visits', k: 'list' },
+    { id: 'recentBots', g: 'visits', k: 'table' },
   ];
   const BY_ID = new Map(WINDOWS.map((w) => [w.id, w]));
   const GROUPS = ['visits', 'server', 'accounts', 'content'];
@@ -53,10 +55,17 @@
   let data = null;
   let days = 7;
   try { days = [1, 7, 30].includes(Number(localStorage.getItem(PERIOD_KEY))) ? Number(localStorage.getItem(PERIOD_KEY)) : 7; } catch (_) {}
-  let layout = { shown: [...DEFAULT_SHOWN], panels: {} };
+  // окна, добавленные после того, как у человека уже сохранилась раскладка: показываются один раз сами
+  // (дальше — как он решит галочкой). Новое окно — дописать сюда
+  const ADDED = ['botNames', 'recentBots'];
+  let layout = { shown: [...DEFAULT_SHOWN], panels: {}, added: [...ADDED] };
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-    if (saved && Array.isArray(saved.shown)) layout = { shown: saved.shown.filter((id) => BY_ID.has(id)), panels: saved.panels || {} };
+    if (saved && Array.isArray(saved.shown)) {
+      const seen = Array.isArray(saved.added) ? saved.added : [];
+      const fresh = ADDED.filter((id) => !seen.includes(id) && !saved.shown.includes(id));
+      layout = { shown: [...saved.shown.filter((id) => BY_ID.has(id)), ...fresh], panels: saved.panels || {}, added: [...ADDED] };
+    }
   } catch (_) {}
   function saveLayout() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(layout)); } catch (_) {}
@@ -314,6 +323,8 @@
         try { if (x.k && /^[A-Z]{2}$/.test(x.k) && rn) name = rn.of(x.k) + ' (' + x.k + ')'; } catch (_) {}
         return { label: name || t('admin.stats.unknown'), n: x.n };
       });
+      // по числу запросов за период; посетителей (адресов) — в подсказке строки
+      case 'botNames': return (d.botNames || []).map((x) => ({ label: botKindIcon(x.kind) + ' ' + x.name + ' · ' + t('admin.stats.botKind.' + x.kind), n: x.hits }));
       default: return [];
     }
   }
@@ -389,6 +400,42 @@
     box.appendChild(table);
   }
 
+  // ---------- боты: последние заходы ----------
+  const BOT_ICONS = { search: '🔎', ai: '🧠', preview: '🔗', seo: '📈', monitor: '📡', script: '⚙️', other: '🤖' };
+  const botKindIcon = (kind) => BOT_ICONS[kind] || BOT_ICONS.other;
+  function drawBots(box, d) {
+    box.innerHTML = '';
+    const rows = d.recentBots || [];
+    if (!rows.length) {
+      box.appendChild(Object.assign(document.createElement('p'), { className: 'pwa-empty', textContent: t('admin.stats.empty') }));
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'pwa-table';
+    const head = document.createElement('tr');
+    for (const k of ['time', 'bot', 'kind', 'ip', 'country', 'pages']) {
+      const th = document.createElement('th');
+      th.textContent = t('admin.stats.col.' + k);
+      head.appendChild(th);
+    }
+    const thead = document.createElement('thead');
+    thead.appendChild(head);
+    const tbody = document.createElement('tbody');
+    tbody.setAttribute('data-no-i18n', '');
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      [fmtTime(r.at), r.name, botKindIcon(r.kind) + ' ' + t('admin.stats.botKind.' + r.kind), r.ip, r.country, num(r.pages) + ' / ' + num(r.hits)].forEach((v, i) => {
+        const td = document.createElement('td');
+        td.textContent = v || '';
+        if (i === 1) td.className = 'pwa-td-wide';
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+    table.append(thead, tbody);
+    box.appendChild(table);
+  }
+
   // ---------- окна и галочки ----------
   const observers = new Map();
   function renderWindow(id) {
@@ -445,7 +492,7 @@
       return;
     }
     if (w.k === 'list') return drawList(box, listRows(id, data));
-    if (w.k === 'table') return drawRecent(box, data);
+    if (w.k === 'table') return id === 'recentBots' ? drawBots(box, data) : drawRecent(box, data);
   }
 
   function setShown(id, on) {
@@ -541,7 +588,7 @@
   };
   window.adResetLayout = async () => {
     if (!(await PW.confirm(t('admin.stats.resetConfirm')))) return;
-    layout = { shown: [...DEFAULT_SHOWN], panels: {} };
+    layout = { shown: [...DEFAULT_SHOWN], panels: {}, added: [...ADDED] };
     observers.forEach((ro) => ro.disconnect());
     observers.clear();
     win.ids().forEach((id) => win.close(id));

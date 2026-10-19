@@ -27,7 +27,8 @@ function parseUA(headers) {
   const ua = String(headers['user-agent'] || '');
   if (!ua) return { type: 'bot', os: '', browser: '', name: 'unknown' };
   if (BOT_RE.test(ua)) {
-    const b = (ua.match(/([A-Za-z][\w.-]*bot|curl|wget|python[\w.-]*|Go-http-client|okhttp|HeadlessChrome|Lighthouse)[/ ]?([\d.]*)/i) || [])[1] || 'bot';
+    // имя бота для админки («Последние боты»): первое узнаваемое слово, иначе просто «bot»
+    const b = (ua.match(/([A-Za-z][\w.-]*bot|facebookexternalhit|[\w-]*preview|embedly|[\w-]*crawler|[\w-]*spider|curl|wget|python[\w.-]*|Go-http-client|okhttp|axios|node-fetch|undici|Java|HeadlessChrome|Lighthouse|[\w-]*monitor[\w-]*|[\w-]*uptime[\w-]*)[/ ]?([\d.]*)/i) || [])[1] || 'bot';
     return { type: 'bot', os: '', browser: b, name: b };
   }
 

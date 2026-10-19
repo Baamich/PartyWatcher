@@ -38,6 +38,34 @@ function buckets(days, now) {
   return out;
 }
 
+// вид бота по имени из User-Agent (clientInfo.parseUA) — для окон «Последние боты» и «Какие боты»
+const BOT_KINDS = [
+  ['ai', /gptbot|chatgpt|oai-search|claudebot|claude-|anthropic|perplexity|ccbot|bytespider|amazonbot|meta-externalagent|cohere|diffbot|youbot|google-extended|applebot-extended/i],
+  ['search', /googlebot|google-inspectiontool|adsbot|bingbot|yandex|duckduck|baiduspider|applebot|petalbot|sogou|seznam|qwant|naver|yeti|mail\.ru|ia_archiver/i],
+  ['preview', /facebookexternalhit|facebot|twitterbot|telegrambot|discordbot|whatsapp|slackbot|linkedinbot|vkshare|skypeuripreview|embedly|redditbot|pinterest|preview|tumblr|viber|iframely|odklbot/i],
+  ['seo', /ahrefs|semrush|mj12|dotbot|blexbot|serpstat|dataforseo|barkrowler|seokicks|megaindex|screaming|sitebulb|rogerbot/i],
+  ['monitor', /uptime|monitor|pingdom|statuscake|site24x7|healthcheck|lighthouse|pagespeed/i],
+  ['script', /^(unknown|bot|curl|wget|python|go-http|okhttp|java|axios|node-fetch|undici|httpclient|headlesschrome|libwww|php|ruby|scrapy|postman|insomnia)/i],
+];
+const botKind = (name) => (BOT_KINDS.find(([, re]) => re.test(String(name || ''))) || ['other'])[0];
+
+// окна ботов: последние заходы (как «Последние посетители», только боты) и сводка по именам за период
+async function botsPart(since) {
+  const [recent, names] = await Promise.all([
+    VisitDay.find({ type: 'bot' }).sort({ lastAt: -1 }).limit(60).select('lastAt ip country name hits pages').lean(),
+    VisitDay.aggregate([
+      { $match: { lastAt: { $gte: since }, type: 'bot' } },
+      { $group: { _id: '$name', hits: { $sum: '$hits' }, n: { $sum: 1 } } },
+      { $sort: { hits: -1 } },
+      { $limit: 20 },
+    ]),
+  ]);
+  return {
+    recentBots: recent.map((x) => ({ at: x.lastAt, ip: x.ip, country: x.country, name: x.name || 'bot', kind: botKind(x.name), hits: x.hits, pages: x.pages })),
+    botNames: names.map((x) => ({ name: x._id || 'bot', kind: botKind(x._id), hits: x.hits, n: x.n })),
+  };
+}
+
 async function visitorsPart(since, chartDays, now) {
   const match = { lastAt: { $gte: since }, type: { $ne: 'bot' } };
   const [agg, bots, newVisitors, perDay, recent] = await Promise.all([
@@ -195,8 +223,9 @@ async function build(days) {
   const now = Date.now();
   const since = new Date(now - days * DAY);
   const chartDays = days === 1 ? 7 : days; // посетители и регистрации — по дням (за сутки — последняя неделя)
-  const [visitors, server, accounts, content, live] = await Promise.all([
+  const [visitors, bots, server, accounts, content, live] = await Promise.all([
     visitorsPart(since, chartDays, now),
+    botsPart(since),
     serverPart(since, days, now),
     accountsPart(since, chartDays, now),
     contentPart(since),
@@ -204,7 +233,7 @@ async function build(days) {
   ]);
   return {
     days, chartDays, at: new Date(now),
-    ...visitors, ...server, ...accounts, ...content,
+    ...visitors, ...bots, ...server, ...accounts, ...content,
     live: live
       ? {
           at: live.at, startedAt: live.startedAt, node: live.node, cores: live.cores,
