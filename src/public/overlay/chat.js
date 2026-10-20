@@ -129,8 +129,22 @@
     if (msg.source === 'raid') return addRaid(msg);
 
     const row = document.createElement('div');
-    row.className = 'msg' + (msg.highlight ? ' hl' : '');
+    row.className = 'msg' + (msg.highlight ? ' hl' : '') + (msg.streak ? ' streak' : '');
     row.dataset.id = msg._id;
+
+    // зритель поделился серией просмотров: строка «🔥 ник смотрит канал N эфиров подряд»
+    if (msg.streak) {
+      const head = document.createElement('div');
+      head.className = 'streak-head';
+      head.textContent = '🔥 ' + t('common.streak.shared', { n: msg.streak, name: msg.senderUsername });
+      row.appendChild(head);
+      if (!msg.text) {
+        if (layout === 'bar') while (box.firstChild) box.removeChild(box.firstChild);
+        box.appendChild(row);
+        while (box.children.length > maxMsgs) box.removeChild(box.firstChild);
+        return;
+      }
+    }
 
     if (msg.external && msg.source) {
       const s = document.createElement('span');

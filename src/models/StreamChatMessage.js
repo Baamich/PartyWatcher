@@ -6,7 +6,8 @@ const streamChatMessageSchema = new mongoose.Schema(
     // у сообщений из API (боты, мосты) юзера нет — senderId = null
     senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     senderUsername: { type: String, required: true },
-    text: { type: String, required: true, maxlength: 500 },
+    // у «поделился серией просмотров» текст может быть пустым
+    text: { type: String, required: function () { return !this.streak; }, default: '', maxlength: 500 },
     deleted: { type: Boolean, default: false },
 
     // ---- сообщения из API чата ----
@@ -15,6 +16,7 @@ const streamChatMessageSchema = new mongoose.Schema(
     nickColor: { type: String, default: null },
     raidViewers: { type: Number, default: undefined },
     highlight: { type: Boolean, default: undefined }, // выделенное сообщение (награда «Выделить сообщение»)
+    streak: { type: Number, default: undefined }, // зритель поделился серией просмотров: сколько эфиров подряд (services/streaks)
     emotes: { type: mongoose.Schema.Types.Mixed, default: undefined }, // { code: id } смайлов в тексте (services/emotes) // source 'raid': сколько зрителей пришло (сайт пишет «Рейд от …» на языке зрителя)
     createdAt: { type: Date, default: Date.now },
   },

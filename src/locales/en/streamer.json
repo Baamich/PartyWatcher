@@ -145,5 +145,33 @@
       "other": "Other"
     },
     "minorsNoFiles": "Do not attach screenshots here — just describe in words what happened on the stream and when. We will check it ourselves."
+  },
+  "streak": {
+    "notice": {
+      "one": "Your watch streak on {channel}: {n} stream in a row!",
+      "other": "Your watch streak on {channel}: {n} streams in a row!"
+    },
+    "onlyYou": "Only you can see this message",
+    "share": "Share in chat (+{points} SP)",
+    "sharing": {
+      "one": "You are sharing your watch streak: {n} stream in a row",
+      "other": "You are sharing your watch streak: {n} streams in a row"
+    },
+    "inputPh": "Add a message (optional) and press ➤",
+    "cancel": "Don’t share",
+    "gone": "The streak can’t be shared anymore: the stream ended or you already shared it today",
+    "points": "+{n} SP for your watch streak!",
+    "lost": {
+      "one": "Your watch streak on {channel} ({n} stream in a row) was broken. Restore it?",
+      "other": "Your watch streak on {channel} ({n} streams in a row) was broken. Restore it?"
+    },
+    "restoreLeft": "Restores left this month: {n} of {max}",
+    "restoreNone": "No restores left this month",
+    "restore": "Restore streak",
+    "restored": {
+      "one": "Streak restored: {n} stream in a row! Restores left this month: {left}",
+      "other": "Streak restored: {n} streams in a row! Restores left this month: {left}"
+    },
+    "restoreGone": "It can’t be restored anymore: only on the day the streak was broken"
   }
 }

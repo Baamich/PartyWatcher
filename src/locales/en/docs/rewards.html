@@ -20,6 +20,17 @@
   <figcaption>The bonus is ready: a gift above the balance</figcaption>
 </figure>
 
+<h2>🔥 Watch streak</h2>
+<p>A viewer who watches your streams in a row builds a <b>watch streak</b>. Each viewer has their own streak on every channel. <b>Stream days in Moscow time</b> are counted: several streams in a day are one day, a new day starts at 24:00 Moscow time. A stream started before midnight belongs entirely to its day. A day counts after a minute on the channel page while you're live. Days when you don't stream don't break the streak; a missed stream day does.</p>
+<ul>
+  <li>At the <b>3rd, 5th, 10th, 13th, 15th, 20th, 25th, 30th</b> stream in a row and every 5 after that, the viewer sees an “only you can see this” message in the chat with a <b>“Share in chat”</b> button.</li>
+  <li>After pressing it, a bar “You are sharing your watch streak” appears above the input (✕ — changed my mind). They can add a message or send it empty.</li>
+  <li>Everyone in the chat sees “🔥 name has watched the channel N streams in a row!”, and the viewer gets channel points: <b>100 SP</b> for 3, <b>200 SP</b> for 5 and <b>500 SP</b> from 10 on. A streak can be shared once a day.</li>
+  <li>This is the <b>🔥 Watch streak</b> event: show it as an OBS alert (🔔 Events), in the “Latest events” widget and with <code>{last_streak_user}</code> / <code>{last_streak}</code> in a custom widget.</li>
+  <li><b>Streak broken?</b> On the first day after the break the viewer sees “💔 Your streak was broken. Restore it?” and how many restores are left. The <b>“Restore streak”</b> button brings back the old count (plus today). There are <b>3 restores a month</b> on each channel, and only on that same day.</li>
+  <li>You don't build a streak on your own channel.</li>
+</ul>
+
 <h2>Name and icon</h2>
 <p>On the right of the “Rewards” page is the <b>“Channel stream points”</b> block. The name can be changed <b>once every 30 days</b> — that's the only limit; everything else (icon, rewards, prices, texts) you can change as often as you like. The “+50 SP” pop-up always says “SP”, even with a custom name.</p>
 

@@ -1156,7 +1156,12 @@ function buildLiveMessageHtml(msg) {
   const body = msg.masked && !msg.revealed
     ? `<span class="live-masked" data-act="reveal" title="${liveEscapeHtml(t('streamer.chat.maskedHint'))}">${PWEmotes.render(liveEscapeHtml(msg.masked), msg.emotes)}</span>`
     : PWEmotes.render(liveEscapeHtml(msg.text), msg.emotes);
-  return `${delBtn}${userBtns}${src}${PWBadges.html(msg.modLevel)}<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(I18N.sysName(msg.senderUsername))}</b>: ${body}`;
+  const nick = `<b class="${nickCls}"${nickStyle}>${liveEscapeHtml(I18N.sysName(msg.senderUsername))}</b>`;
+  if (msg.streak) {
+    const head = `<div class="live-streak-head">🔥 ${liveEscapeHtml(t('common.streak.shared', { n: msg.streak })).replace('{name}', nick)}</div>`;
+    return `${delBtn}${userBtns}${head}${msg.text ? `${PWBadges.html(msg.modLevel)}${nick}: ${body}` : ''}`;
+  }
+  return `${delBtn}${userBtns}${src}${PWBadges.html(msg.modLevel)}${nick}: ${body}`;
 }
 
 function renderLiveMessage(msg) {
@@ -1166,11 +1171,91 @@ function renderLiveMessage(msg) {
   row.dataset.id = msg._id;
   row._msg = msg; // для перерисовки, когда меняются права (стал модератором) или открыли скрытое фильтром
   if (msg.highlight) row.className = 'live-msg-hl';
+  if (msg.streak) row.className = 'live-msg-streak';
   row.innerHTML = buildLiveMessageHtml(msg);
   box.appendChild(row);
   // в живом чате за эфир набегают тысячи сообщений — держим последние
   while (box.childElementCount > 250) box.firstElementChild.remove();
   box.scrollTop = box.scrollHeight;
+}
+
+// ---------- серия просмотров ----------
+// сервер через минуту просмотра на рубеже серии присылает chat:streak — сообщение видно только мне, с кнопкой «Поделиться».
+// «Поделиться» — плашка над полем ввода: следующее сообщение (можно пустое) уйдёт в чат с серией, ✕ — передумал
+let streakShare = null; // { count, points } — серия, которой сейчас делюсь
+function showStreakNotice(n) {
+  const box = document.getElementById('liveMessages');
+  if (!box || !n?.count) return;
+  box.querySelectorAll('.live-streak-note').forEach((x) => x.remove());
+  const row = document.createElement('div');
+  row.className = 'live-streak-note';
+  const text = document.createElement('div');
+  text.textContent = '🔥 ' + t('streamer.streak.notice', { n: n.count, channel: currentStreamer?.streamerName || getNameFromUrl() });
+  const only = document.createElement('small');
+  only.textContent = t('streamer.streak.onlyYou');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'live-streak-share';
+  btn.textContent = t('streamer.streak.share', { points: n.points });
+  btn.addEventListener('click', () => startStreakShare(n));
+  row.append(text, only, btn);
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+// серия прервалась: «видно только вам» с кнопкой «Восстановить» (3 попытки в месяц на канал)
+function showStreakLost(l) {
+  const box = document.getElementById('liveMessages');
+  if (!box || !l?.lost) return;
+  box.querySelectorAll('.live-streak-lost').forEach((x) => x.remove());
+  const row = document.createElement('div');
+  row.className = 'live-streak-note live-streak-lost';
+  const text = document.createElement('div');
+  text.textContent = '💔 ' + t('streamer.streak.lost', { n: l.lost, channel: currentStreamer?.streamerName || getNameFromUrl() });
+  const left = document.createElement('small');
+  left.textContent = l.left > 0 ? t('streamer.streak.restoreLeft', { n: l.left, max: l.max || 3 }) : t('streamer.streak.restoreNone');
+  const only = document.createElement('small');
+  only.textContent = t('streamer.streak.onlyYou');
+  row.append(text, left, only);
+  if (l.left > 0) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'live-streak-share';
+    btn.textContent = t('streamer.streak.restore');
+    btn.addEventListener('click', () => { btn.disabled = true; liveSocket?.emit('chat:streak-restore'); setTimeout(() => { btn.disabled = false; }, 3000); });
+    row.appendChild(btn);
+  }
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function startStreakShare(n) {
+  streakShare = n;
+  let bar = document.getElementById('liveStreakBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'liveStreakBar';
+    bar.className = 'live-streak-bar';
+    const label = document.createElement('span');
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'live-streak-x';
+    x.textContent = '✕';
+    x.title = t('streamer.streak.cancel');
+    x.addEventListener('click', stopStreakShare);
+    bar.append(label, x);
+    const form = document.getElementById('liveChatForm');
+    form.parentNode.insertBefore(bar, form);
+  }
+  bar.firstChild.textContent = '🔥 ' + t('streamer.streak.sharing', { n: n.count });
+  const input = document.getElementById('liveChatInput');
+  input.placeholder = t('streamer.streak.inputPh');
+  input.focus();
+}
+function stopStreakShare() {
+  streakShare = null;
+  document.getElementById('liveStreakBar')?.remove();
+  const input = document.getElementById('liveChatInput');
+  if (input) input.placeholder = t('streamer.chat.placeholder');
 }
 
 function liveDeleteMessage(messageId) {
@@ -1593,10 +1678,26 @@ function connectLiveChat(nameLower) {
   liveSocket.on('chat:raided', (raid) => PWRaid.raided(document.getElementById('liveRaidSlot'), raid));
   liveSocket.on('chat:slow', ({ wait } = {}) => startSlowCountdown(wait));
   liveSocket.on('chat:cmd-result', ({ ok, text } = {}) => PW.toast(text || t('common.requestFailed'), ok ? 'success' : 'error'));
-  // стример начислил или списал мне поинты (/SP+ /SP-): свежий счёт и сколько
-  liveSocket.on('chat:points', ({ delta } = {}) => {
+  liveSocket.on('chat:streak', showStreakNotice);
+  liveSocket.on('chat:streak-lost', showStreakLost);
+  liveSocket.on('chat:streak-restored', ({ count, left } = {}) => {
+    document.querySelectorAll('.live-streak-lost').forEach((x) => x.remove());
+    PW.toast(t('streamer.streak.restored', { n: count, left }), 'success');
+  });
+  liveSocket.on('chat:streak-restore-failed', ({ reason } = {}) => {
+    document.querySelectorAll('.live-streak-lost').forEach((x) => x.remove());
+    PW.toast(t(reason === 'limit' ? 'streamer.streak.restoreNone' : 'streamer.streak.restoreGone'), 'info');
+  });
+  liveSocket.on('chat:streak-gone', () => {
+    stopStreakShare();
+    document.querySelectorAll('.live-streak-note').forEach((x) => x.remove());
+    PW.toast(t('streamer.streak.gone'), 'info');
+  });
+  // стример начислил или списал мне поинты (/SP+ /SP-) или награда за серию: свежий счёт и сколько
+  liveSocket.on('chat:points', ({ delta, reason } = {}) => {
     const n = Math.abs(Number(delta) || 0);
-    if (n) PW.toast(t(delta > 0 ? 'streamer.points.granted' : 'streamer.points.revoked', { n }), delta > 0 ? 'success' : 'info');
+    const key = reason === 'streak' ? 'streamer.streak.points' : delta > 0 ? 'streamer.points.granted' : 'streamer.points.revoked';
+    if (n) PW.toast(t(key, { n }), delta > 0 ? 'success' : 'info');
     if (delta > 0 && document.querySelector('.live-points-wrap')) floatPoints(n);
     loadPoints();
   });
@@ -1662,8 +1763,16 @@ document.getElementById('liveChatForm')?.addEventListener('submit', (e) => {
   if (!liveIsAuthed) { openLiveAuthModal(); return; }
   const input = document.getElementById('liveChatInput');
   const text = input.value.trim();
-  if (!text || !liveSocket) return;
+  if ((!text && !streakShare) || !liveSocket) return;
   if (liveRules) { input.blur(); showLiveRules(); return; } // текст остаётся в поле до согласия
+  if (streakShare) {
+    // делюсь серией: сообщение можно не писать
+    liveSocket.emit('chat:send', { text, streak: true });
+    stopStreakShare();
+    document.querySelectorAll('.live-streak-note').forEach((x) => x.remove());
+    input.value = '';
+    return;
+  }
   liveSocket.emit('chat:send', { text });
   liveLastSent = { text, at: Date.now() };
   input.value = '';

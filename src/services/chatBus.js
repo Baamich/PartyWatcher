@@ -71,6 +71,15 @@ function rulesChanged(streamerNameLower, text) {
   try { rulesRefresher(streamerNameLower, text); } catch (e) { console.warn('[chatBus] rulesChanged', e.message); }
 }
 
+// начался новый эфир (rtmpServer) — сокет-файл заведёт зрителям в чате отсчёт серии просмотров
+let liveStartHandler = () => {};
+function setLiveStartHandler(fn) {
+  liveStartHandler = fn;
+}
+function liveStarted(streamerNameLower) {
+  try { liveStartHandler(streamerNameLower); } catch (e) { console.warn('[chatBus] liveStarted', e.message); }
+}
+
 // журнал действий канала (студия → «Журнал действий»): пишем запись и сразу шлём её стримеру, если он в чате.
 // details — без слов (журнал читают на разных языках): «00:10:00», «chatSlowSec=30», название категории
 async function logAction(streamerNameLower, actorUsername, action, targetUsername, details) {
@@ -86,4 +95,4 @@ async function logAction(streamerNameLower, actorUsername, action, targetUsernam
 }
 const logActionQuiet = (...a) => logAction(...a).catch((e) => console.warn('[chatBus] logAction', e.message));
 
-module.exports = { init, emitMessage, emitToUser, logAction: logActionQuiet, setViewerCounter, viewerCount, chatStatsStart, countChatMessage, chatStatsTake, setRoleRefresher, refreshRoles, setRulesRefresher, rulesChanged };
+module.exports = { init, emitMessage, emitToUser, logAction: logActionQuiet, setViewerCounter, viewerCount, chatStatsStart, countChatMessage, chatStatsTake, setRoleRefresher, refreshRoles, setRulesRefresher, rulesChanged, setLiveStartHandler, liveStarted };

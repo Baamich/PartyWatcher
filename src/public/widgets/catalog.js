@@ -42,7 +42,7 @@
   const GOAL_SOURCES = ['manual', 'followers', 'followersStream', 'viewers'];
   const STAT_SOURCES = ['viewers', 'followers', 'followersStream', 'title', 'category'];
   // события, которые умеет «Последнее событие» (из каталога алертов)
-  const LAST_EVENTS = ['follow', 'reward', 'raid', 'firstChat', 'clip', 'command'];
+  const LAST_EVENTS = ['follow', 'reward', 'raid', 'firstChat', 'clip', 'command', 'streak'];
   const CREDIT_SECTIONS = ['followers', 'raiders', 'rewards', 'chatters', 'mods'];
   const SOUNDS = ['none', 'chime', 'fanfare', 'coin', 'pop', 'levelup', 'magic', 'bell', 'victory', 'siren', 'success', 'harp'];
 
@@ -297,6 +297,7 @@
     'n', 'text', 'uptime', 'uptime_hm', 'live', 'viewers', 'followers', 'followers_stream', 'title', 'category', 'streamer',
     'time', 'date', 'weekday', 'last_follower', 'last_reward', 'last_reward_user', 'last_reward_cost', 'last_reward_message',
     'last_raider', 'last_raid_viewers', 'last_chatter', 'last_clip', 'last_clip_user', 'last_command', 'last_command_user',
+    'last_streak_user', 'last_streak',
   ];
   // функции: пример вставки → ключ описания
   const CUSTOM_FUNCS = [
@@ -313,7 +314,7 @@
       last: {
         follow: { name: 'Viewer123' }, reward: { name: 'Neyrite', reward: 'Hydrate!', cost: 300, message: 'GG' },
         raid: { streamer: 'FriendStreamer', viewers: 25 }, firstChat: { name: 'NewViewer', message: 'hi' },
-        clip: { name: 'ClipMaster', title: 'Epic moment' }, command: { name: 'Viewer123', command: '!dice' },
+        clip: { name: 'ClipMaster', title: 'Epic moment' }, command: { name: 'Viewer123', command: '!dice' }, streak: { name: 'LoyalViewer', count: 10 },
       },
     };
   }

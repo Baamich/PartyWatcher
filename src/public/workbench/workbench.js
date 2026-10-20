@@ -728,8 +728,11 @@ function buildMessageHtml(msg) {
   const nickCls = 'wb-msg-author' + (msg.isOwner ? ' wb-msg-author--owner' : hasColor ? ' pw-nick' : '');
   const nickStyle = hasColor ? ` style="--nick:${msg.nickColor}"` : '';
 
+  // зритель поделился серией просмотров: строка сверху, текст — если написал
+  const streakHead = msg.streak ? `<div class="wb-streak-head">🔥 ${escapeHtml(t('common.streak.shared', { n: msg.streak })).replace('{name}', `<b>${escapeHtml(msg.senderUsername)}</b>`)}</div>` : '';
+  if (msg.streak && !msg.text) return `${delBtn}${userBtns}${streakHead}`;
   return `
-    ${delBtn}${userBtns}
+    ${delBtn}${userBtns}${streakHead}
     ${src}
     <span class="wb-msg-author-wrap">${window.PWBadges ? PWBadges.html(msg.modLevel) : ''}<span class="${nickCls}"${nickStyle}>${escapeHtml(I18N.sysName(msg.senderUsername))}</span>:</span>
     <span class="wb-msg-text${hl}">${window.PWEmotes ? PWEmotes.render(escapeHtml(msg.text), msg.emotes) : escapeHtml(msg.text)}</span>
@@ -739,7 +742,7 @@ function buildMessageHtml(msg) {
 function renderMessage(msg) {
   const box = document.getElementById('chatMessages');
   const row = document.createElement('div');
-  row.className = 'wb-chat-msg';
+  row.className = 'wb-chat-msg' + (msg.streak ? ' wb-chat-streak' : '');
   row.dataset.id = msg._id;
   row.innerHTML = buildMessageHtml(msg);
   box.appendChild(row);

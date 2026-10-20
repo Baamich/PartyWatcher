@@ -23,7 +23,7 @@
   <tr><td>🔢 Счётчик</td><td>Смерти, победы — что угодно. Шаблон вроде <code>Смерти: {n}</code></td><td>+ и −, <code>/count</code></td></tr>
   <tr><td>🎯 Цель</td><td>Полоса прогресса: подписчики всего, новые за эфир, зрители сейчас или своё число</td><td>Само или + и −, <code>/goal</code></td></tr>
   <tr><td>📊 Число / инфо</td><td>Зрители, подписчики, подписки за эфир, название или категория эфира</td><td>Само</td></tr>
-  <tr><td>🔔 Последние события</td><td>Последний подписчик, награда, рейд, клип, первое сообщение или команда — от 1 до 10 последних</td><td>Само</td></tr>
+  <tr><td>🔔 Последние события</td><td>Последний подписчик, награда, рейд, клип, первое сообщение, команда или серия просмотров — от 1 до 10 последних</td><td>Само</td></tr>
   <tr><td>🎬 Финальные титры</td><td>В конце эфира: новые подписчики, рейды, кто покупал награды, самые активные в чате и модераторы</td><td>Кнопка, <code>/credits</code></td></tr>
 </table>
 </div>
@@ -85,7 +85,7 @@
   <tr><td><code>{viewers}</code>, <code>{followers}</code>, <code>{followers_stream}</code></td><td>Зрители сейчас, подписчики, новые подписчики за эфир</td></tr>
   <tr><td><code>{title}</code>, <code>{category}</code>, <code>{streamer}</code></td><td>Название, категория эфира, имя канала</td></tr>
   <tr><td><code>{time}</code>, <code>{date}</code>, <code>{weekday}</code></td><td>Время, дата, день недели; часовой пояс — <code>{time:Europe/Berlin}</code> или сдвиг <code>{time:+3}</code></td></tr>
-  <tr><td><code>{last_follower}</code>, <code>{last_reward}</code>, <code>{last_reward_user}</code>, <code>{last_raider}</code>, <code>{last_raid_viewers}</code>, <code>{last_chatter}</code>, <code>{last_clip}</code>, <code>{last_command}</code> …</td><td>Последние события канала</td></tr>
+  <tr><td><code>{last_follower}</code>, <code>{last_reward}</code>, <code>{last_reward_user}</code>, <code>{last_raider}</code>, <code>{last_raid_viewers}</code>, <code>{last_chatter}</code>, <code>{last_clip}</code>, <code>{last_command}</code>, <code>{last_streak_user}</code>, <code>{last_streak}</code> …</td><td>Последние события канала</td></tr>
   <tr><td><code>{random:1-100}</code>, <code>{choice:a|b|c}</code>, <code>{dice}</code>, <code>{coin}</code></td><td>Случайное — не меняется, пока не нажмёшь 🎲 «Перебросить» (или <code>/w имя roll</code>, или награда)</td></tr>
   <tr><td><code>{calc:{followers}+10}</code>, <code>{percent:{followers_stream}:10}</code></td><td>Посчитать и процент</td></tr>
   <tr><td><code>{countdown:2026-12-31 23:59}</code>, <code>{countdown:20:00}</code></td><td>Сколько осталось до даты или до ближайшего времени (по часам компьютера с OBS)</td></tr>

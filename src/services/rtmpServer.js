@@ -161,6 +161,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
       console.log(`[rtmp] isLive=true, startedAt=keep-or-set, key=${key.slice(0, 8)}… mod=${r.modifiedCount}`);
       if (r.modifiedCount) searchIndex.notifyLater(entry.userId, 'start'); // новый эфир — поисковикам (если канал в поиске)
       if (entry.streamerNameLower) require('./widgets').liveChanged(entry.streamerNameLower).catch(() => {});
+      if (r.modifiedCount && entry.streamerNameLower) chatBus.liveStarted(entry.streamerNameLower); // серии просмотров
     } else {
       const r = await User.updateOne(
         { _id: entry.userId },

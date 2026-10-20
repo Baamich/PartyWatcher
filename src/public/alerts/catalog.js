@@ -20,6 +20,8 @@
     { id: 'ban', icon: '🔨', vars: ['name'], sample: { name: 'Spammer' }, on: false, anim: 'lightning', sound: 'thunder' },
     { id: 'pointsGoal', icon: '💰', vars: ['name', 'points'], sample: { name: 'Viewer123', points: 1000 }, on: false, anim: 'coins', sound: 'coin', param: { def: 1000, min: 100, max: 1000000 } },
     { id: 'mod', icon: '🛡', vars: ['name'], sample: { name: 'helper' }, on: false, anim: 'crown', sound: 'bell' },
+    // зритель поделился серией просмотров (services/streaks): count — сколько эфиров подряд
+    { id: 'streak', icon: '🔥', vars: ['name', 'count', 'message'], sample: { name: 'Viewer123', count: 10, message: 'GG!' }, on: true, anim: 'fire', sound: 'levelup' },
   ];
 
   // анимации: эмодзи-частицы и большой значок в центре. kind — как летят частицы

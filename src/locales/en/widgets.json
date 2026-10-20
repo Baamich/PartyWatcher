@@ -184,7 +184,8 @@
       "raid": "Raid",
       "firstChat": "First time in chat",
       "clip": "Clip",
-      "command": "Chat command"
+      "command": "Chat command",
+      "streak": "Watch streak"
     },
     "count": "How many latest to show",
     "empty": "Text while there are no events (empty — hide)",
@@ -276,7 +277,8 @@
       "raid": "🚀 {streamer} ({viewers})",
       "firstChat": "👋 {name}",
       "clip": "✂ {name}: {title}",
-      "command": "⌨ {name}: {command}"
+      "command": "⌨ {name}: {command}",
+      "streak": "🔥 {name}: {count} in a row"
     },
     "lastEmpty": "Empty for now — invisible in OBS",
     "creditsIdle": "The credits appear with “Roll credits” or the /credits command",
@@ -375,6 +377,8 @@
     "liveOff": "Offline",
     "heads": "Heads",
     "tails": "Tails",
-    "days": "{n} d"
+    "days": "{n} d",
+    "last_streak_user": "Who shared a watch streak last",
+    "last_streak": "Their streak — streams in a row"
   }
 }

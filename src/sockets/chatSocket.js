@@ -17,6 +17,7 @@ const chatRules = require('../services/chatRules');
 const emotes = require('../services/emotes');
 const alerts = require('../services/alerts');
 const points = require('../services/points');
+const streaks = require('../services/streaks');
 const widgets = require('../services/widgets');
 const WC = require('../public/widgets/catalog');
 const ChatCommand = require('../models/ChatCommand');
@@ -113,6 +114,32 @@ module.exports = function registerChatSocket(io) {
     }
   }
   chatBus.setRoleRefresher(refreshRoles);
+  // ---------- серия просмотров: через минуту просмотра эфира — засчитать эфир; на рубеже — «видно только вам» ----------
+  const STREAK_AFTER_MS = 60 * 1000;
+  function scheduleStreak(socket, room, delay = STREAK_AFTER_MS) {
+    clearTimeout(socket.data.streakTimer);
+    if (!socket.data.userId || socket.data.isOverlay || socket.data.isOwner || !socket.data.streamerId) return;
+    socket.data.streakTimer = setTimeout(() => checkStreak(socket, room).catch((e) => console.warn('[streak]', e.message)), delay);
+  }
+  async function checkStreak(socket, room) {
+    if (socket.disconnected || socket.data.room !== room) return;
+    const s = await User.findById(socket.data.streamerId).select('isLive liveStartedAt').lean();
+    if (!s?.isLive || !s.liveStartedAt) return;
+    const watched = points.watchedMs(room, socket.data.userId, s.liveStartedAt);
+    if (watched < STREAK_AFTER_MS - 2000) return scheduleStreak(socket, room, STREAK_AFTER_MS - watched + 1000);
+    const r = await streaks.touch(socket.data.streamerId, socket.data.userId, s.liveStartedAt);
+    if (socket.disconnected) return;
+    if (r.lost) socket.emit('chat:streak-lost', r.lost); // серия прервалась — предложить восстановить
+    if (r.notice) socket.emit('chat:streak', r.notice);
+  }
+  // эфир начался, пока зрители уже на странице канала
+  chatBus.setLiveStartHandler((room) => {
+    for (const sid of nsp.adapter.rooms.get(roomName(room)) || []) {
+      const s2 = nsp.sockets.get(sid);
+      if (s2) scheduleStreak(s2, room);
+    }
+  });
+
   chatBus.setRulesRefresher((room, text) => {
     const ids = nsp.adapter.rooms.get(roomName(room));
     if (!ids) return rulesMap.delete(room);
@@ -732,7 +759,7 @@ module.exports = function registerChatSocket(io) {
         const name = String(streamerName || '').toLowerCase();
         if (!name) return;
         currentStreamerNameLower = name;
-        streamer = await User.findOne({ streamerNameLower: name }).select('_id chatFollowMin chatFilter chatSlowSec chatRules').lean();
+        streamer = await User.findOne({ streamerNameLower: name }).select('_id chatFollowMin chatFilter chatSlowSec chatRules isLive').lean();
         socket.data.isOwner = !!(authUser && streamer && String(streamer._id) === String(authUser.id));
         if (streamer) {
           chatMode.set(name, { followMin: streamer.chatFollowMin ?? null, filter: streamer.chatFilter || 0, slowSec: streamer.chatSlowSec || 0 });
@@ -765,6 +792,8 @@ module.exports = function registerChatSocket(io) {
         socket.data.perms = rp.perms;
         socket.emit('chat:role', rp);
       }
+      socket.data.room = room;
+      if (streamer?.isLive) scheduleStreak(socket, room);
       const modsOf = await mods.load(room);
       if (!socket.data.isOverlay) socket.emit('chat:mode', modeOf(room));
       const raidNow = raids.get(room);
@@ -822,6 +851,21 @@ module.exports = function registerChatSocket(io) {
       }
     });
 
+    // восстановить прервавшуюся серию просмотров (3 раза в месяц на канал): → chat:streak-restored | chat:streak-restore-failed
+    let restoreAt = 0;
+    socket.on('chat:streak-restore', async () => {
+      const room = currentStreamerNameLower;
+      if (!authUser || !room || socket.data.isOverlay || socket.data.isOwner || !socket.data.streamerId) return;
+      if (Date.now() - restoreAt < 3000) return;
+      restoreAt = Date.now();
+      const s = await User.findById(socket.data.streamerId).select('isLive liveStartedAt').lean();
+      if (!s?.isLive || !s.liveStartedAt) return socket.emit('chat:streak-restore-failed', { reason: 'none' });
+      const r = await streaks.restore(socket.data.streamerId, socket.data.userId, s.liveStartedAt);
+      if (r.error) return socket.emit('chat:streak-restore-failed', { reason: r.error });
+      socket.emit('chat:streak-restored', { count: r.count, left: r.left });
+      if (r.notice) socket.emit('chat:streak', r.notice); // после восстановления оказался рубеж — можно поделиться
+    });
+
     // зритель только что подписался — проверить, можно ли уже писать
     socket.on('chat:check', async () => {
       if (!authUser || !currentStreamerNameLower || socket.data.isOverlay) return;
@@ -869,16 +913,18 @@ module.exports = function registerChatSocket(io) {
       ack({ users: [...out.values()] });
     });
 
-    socket.on('chat:send', async ({ text }) => {
+    // { text, streak: true } — зритель делится серией просмотров (текст можно не писать)
+    socket.on('chat:send', async ({ text, streak } = {}) => {
         if (!authUser || !currentStreamerNameLower || socket.data.isOverlay) return;
         const nowTs = Date.now();
         if (nowTs - lastSendAt < 700) return; // не чаще раза в 0,7 с
         lastSendAt = nowTs;
         const trimmed = String(text || '').trim().slice(0, 500);
-      if (!trimmed) return;
+      const wantStreak = streak === true && !socket.data.isOwner;
+      if (!trimmed && !wantStreak) return;
 
       // «/команда» от стримера или модератора — действие модерации, в чат не уходит
-      if (trimmed[0] === '/' && socket.data.role) return slashCommand(socket, currentStreamerNameLower, trimmed);
+      if (!wantStreak && trimmed[0] === '/' && socket.data.role) return slashCommand(socket, currentStreamerNameLower, trimmed);
 
       const restriction = await fullRestriction(currentStreamerNameLower, socket.data.streamerId, authUser.id, !!socket.data.role);
       if (restriction.type !== 'none') return socket.emit('chat:restriction', restriction);
@@ -900,6 +946,17 @@ module.exports = function registerChatSocket(io) {
       const canChannel = !!socket.data.role || followed;
       const usedEmotes = await emotes.resolve(trimmed, currentStreamerNameLower, canChannel).catch(() => null);
 
+      // серия: награда один раз за эфир (условие в базе — двойной клик не даст дважды)
+      let shared = null;
+      if (wantStreak) {
+        const s = await User.findById(socket.data.streamerId).select('isLive liveStartedAt').lean();
+        shared = s?.isLive && s.liveStartedAt ? await streaks.share(socket.data.streamerId, socket.data.userId, s.liveStartedAt) : null;
+        if (!shared) {
+          socket.emit('chat:streak-gone');
+          if (!trimmed) return;
+        }
+      }
+
       const nickColor = await chatColor.of(authUser.id).catch(() => null); // профиль → «Вид чата»
       const msg = await StreamChatMessage.create({
         streamerNameLower: currentStreamerNameLower,
@@ -908,6 +965,7 @@ module.exports = function registerChatSocket(io) {
         text: trimmed,
         nickColor,
         ...(usedEmotes && { emotes: usedEmotes }),
+        ...(shared && { streak: shared.count }),
       });
 
       nsp.to(roomName(currentStreamerNameLower)).emit('chat:message', {
@@ -922,7 +980,18 @@ module.exports = function registerChatSocket(io) {
         nickColor,
         isOwner: !!socket.data.isOwner,
         modLevel: socket.data.role === 'mod' || socket.data.role === 'senior' ? socket.data.role : null,
+        ...(shared && { streak: shared.count }),
       });
+
+      if (shared) {
+        const room = currentStreamerNameLower;
+        points.grant(socket.data.streamerId, socket.data.userId, shared.points)
+          .then((balance) => chatBus.emitToUser(room, socket.data.userId, 'chat:points', { delta: shared.points, balance, reason: 'streak' }))
+          .catch((e) => console.warn('[streak points]', e.message));
+        // в OBS и ботам — с маской фильтра слов канала
+        alerts.fire(room, 'streak', { name: authUser.username, count: shared.count, message: maskFor(room, trimmed) || trimmed }).catch(() => {});
+      }
+      if (!trimmed) return; // только серия — без статистики, команд и алертов чата
 
       chatBus.countChatMessage(currentStreamerNameLower, authUser.id); // статистика эфира
       // алерты: первый раз в чате, разогрев чата, комбо смайлов
@@ -968,6 +1037,7 @@ module.exports = function registerChatSocket(io) {
     });
 
     socket.on('disconnect', () => {
+      clearTimeout(socket.data.streakTimer);
       if (!currentStreamerNameLower) return;
       getRoomPresence(currentStreamerNameLower).delete(socket.id);
       if (!socket.data.isOverlay && authUser) points.watchLeave(currentStreamerNameLower, String(authUser.id));

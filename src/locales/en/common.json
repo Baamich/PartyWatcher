@@ -466,5 +466,11 @@
     "title": "Party Watcher — Streamer mini panel",
     "blocked": "The browser blocked the window — allow pop-ups for this site",
     "noPip": "This browser can’t keep a window above all apps — the mini panel opened as a regular window. Above all apps it works in Chrome, Edge, Opera or Yandex Browser on a computer"
+  },
+  "streak": {
+    "shared": {
+      "one": "{name} has watched the channel {n} stream in a row!",
+      "other": "{name} has watched the channel {n} streams in a row!"
+    }
   }
 }

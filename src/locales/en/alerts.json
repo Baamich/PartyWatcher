@@ -179,6 +179,10 @@
     "mod": {
       "name": "New moderator",
       "desc": "You assigned a channel moderator"
+    },
+    "streak": {
+      "name": "Watch streak",
+      "desc": "A viewer shared their streak: watched the channel several streams in a row"
     }
   },
   "default": {
@@ -194,6 +198,7 @@
     "command": "{name} uses {command}",
     "ban": "{name} gets the ban hammer 🔨",
     "pointsGoal": "{name} saved up {points} stream points! 💰",
-    "mod": "{name} is a new channel moderator 🛡"
+    "mod": "{name} is a new channel moderator 🛡",
+    "streak": "{name}: 🔥 watch streak — {count} in a row!"
   }
 }

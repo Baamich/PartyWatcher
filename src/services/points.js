@@ -40,6 +40,13 @@ function nextClaimAt(nameLower, userId, isLive, lastClaimAt, liveStartedAt) {
   return new Date(from + CLAIM_MS);
 }
 
+// сколько мс зритель смотрит текущий эфир (с позднего из: зашёл на страницу, начался эфир); 0 — не на странице
+function watchedMs(nameLower, userId, liveStartedAt) {
+  const w = watch.get(wkey(nameLower, String(userId)));
+  if (!w || !liveStartedAt) return 0;
+  return Math.max(0, Date.now() - Math.max(w.since, new Date(liveStartedAt).getTime() || 0));
+}
+
 async function account(streamerId, userId) {
   return (await ChannelPoints.findOne({ streamerId, userId }).select('balance total lastClaimAt').lean()) || { balance: 0, total: 0, lastClaimAt: null };
 }
@@ -124,4 +131,4 @@ async function seedStarters(streamer, lang) {
   }
 }
 
-module.exports = { CLAIM_MS, AMOUNT, watchJoin, watchLeave, nextClaimAt, account, claim, spend, refund, grant, take, seedStarters, Redemption };
+module.exports = { CLAIM_MS, AMOUNT, watchJoin, watchLeave, nextClaimAt, watchedMs, account, claim, spend, refund, grant, take, seedStarters, Redemption };

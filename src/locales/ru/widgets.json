@@ -184,7 +184,8 @@
       "raid": "Рейд",
       "firstChat": "Первый раз в чате",
       "clip": "Клип",
-      "command": "Команда чата"
+      "command": "Команда чата",
+      "streak": "Серия просмотров"
     },
     "count": "Сколько последних показывать",
     "empty": "Надпись, пока событий нет (пусто — спрятать)",
@@ -276,7 +277,8 @@
       "raid": "🚀 {streamer} ({viewers})",
       "firstChat": "👋 {name}",
       "clip": "✂ {name}: {title}",
-      "command": "⌨ {name}: {command}"
+      "command": "⌨ {name}: {command}",
+      "streak": "🔥 {name}: {count} подряд"
     },
     "lastEmpty": "Пока пусто — в OBS не видно",
     "creditsIdle": "Титры появятся по кнопке «Запустить» или команде /credits",
@@ -375,6 +377,8 @@
     "liveOff": "Не в эфире",
     "heads": "Орёл",
     "tails": "Решка",
-    "days": "{n} д"
+    "days": "{n} д",
+    "last_streak_user": "Кто последним поделился серией просмотров",
+    "last_streak": "Его серия — эфиров подряд"
   }
 }

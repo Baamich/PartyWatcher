@@ -148,6 +148,9 @@
     if (m._id) row.dataset.id = m._id;
     if (m.system) {
       row.textContent = m.text;
+    } else if (m.streak && !m.text) {
+      row.classList.add('hl');
+      row.textContent = '🔥 ' + t('common.streak.shared', { n: m.streak, name: m.senderUsername });
     } else if (m.source === 'raid') {
       row.textContent = '🚀 ' + t('common.raid.message', { name: m.raid?.from || m.senderUsername, n: m.raid?.viewers ?? 0 });
     } else {
@@ -160,6 +163,12 @@
       nick.className = 'fl-nick' + (m.isOwner ? ' own' : '');
       nick.textContent = I18N.sysName(m.senderUsername) + ': ';
       if (!m.isOwner) nick.style.color = /^#[0-9a-f]{6}$/i.test(m.nickColor || '') ? m.nickColor : autoColor(String(m.senderUsername || ''));
+      if (m.streak) {
+        row.classList.add('hl');
+        const head = document.createElement('div');
+        head.textContent = '🔥 ' + t('common.streak.shared', { n: m.streak, name: m.senderUsername });
+        row.prepend(head);
+      }
       const text = document.createElement('span');
       const plain = String(m.text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       text.innerHTML = window.PWEmotes ? PWEmotes.render(plain, m.emotes) : plain;

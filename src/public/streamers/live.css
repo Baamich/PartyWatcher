@@ -913,3 +913,18 @@
 .live-rules-note { margin: 0; font-size: 12px; color: var(--text-muted); }
 .live-chat-rules .auth-submit { margin: 0; flex-shrink: 0; }
 .live-strip-inner.fs-active .live-chat-rules { background: rgba(0, 0, 0, 0.75); border-top-color: rgba(255, 255, 255, 0.1); }
+
+/* серия просмотров: сообщение «видно только вам», плашка «вы делитесь» над полем, сообщение в чате у всех */
+#liveMessages > .live-streak-note { margin: 6px 0; padding: 8px 10px; border-radius: 10px; display: flex; flex-direction: column; gap: 4px;
+  background: color-mix(in srgb, #f97316 14%, transparent); border: 1px dashed color-mix(in srgb, #f97316 60%, transparent); }
+.live-streak-note > div { font-weight: 700; }
+.live-streak-note > small { color: var(--text-muted); font-size: 11px; }
+[data-theme] .live-streak-note .live-streak-share { align-self: flex-start; width: auto; margin: 2px 0 0; padding: 5px 12px; font-size: 13px;
+  background: linear-gradient(135deg, #f97316, #ef4444); color: #fff; border: 0; box-shadow: none; }
+.live-streak-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600;
+  background: color-mix(in srgb, #f97316 16%, var(--surface)); border-top: 1px solid var(--border); }
+.live-streak-bar > span { flex: 1; min-width: 0; }
+[data-theme] .live-streak-bar .live-streak-x { width: auto; margin: 0; padding: 2px 8px; background: transparent; border: 0; box-shadow: none; color: var(--text-muted); }
+#liveMessages > .live-msg-streak { margin: 4px 0; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, #f97316 14%, transparent); border-left: 3px solid #f97316; }
+.live-streak-head { font-weight: 700; }
+#liveMessages > .live-streak-lost { background: color-mix(in srgb, #64748b 16%, transparent); border-color: color-mix(in srgb, #94a3b8 60%, transparent); }

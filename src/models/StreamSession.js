@@ -21,5 +21,6 @@ const streamSessionSchema = new mongoose.Schema(
 
 streamSessionSchema.index({ endedAt: 1 }, { expireAfterSeconds: 40 * 24 * 3600 });
 streamSessionSchema.index({ streamerId: 1, endedAt: -1 });
+streamSessionSchema.index({ streamerId: 1, startedAt: -1 }); // прошлый эфирный день канала (services/streaks)
 
 module.exports = mongoose.model('StreamSession', streamSessionSchema);

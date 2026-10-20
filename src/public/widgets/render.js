@@ -339,6 +339,8 @@
           case 'last_clip_user': return lastOf('clip', 'name');
           case 'last_command': return lastOf('command', 'command');
           case 'last_command_user': return lastOf('command', 'name');
+          case 'last_streak_user': return lastOf('streak', 'name');
+          case 'last_streak': return lastOf('streak', 'count');
           case 'random': {
             const r = /^\s*(-?\d{1,9})\s*-\s*(-?\d{1,9})\s*$/.exec(p ?? '1-100') || (/^\s*(\d{1,9})\s*$/.test(p ?? '') ? [0, 1, p] : null);
             if (!r) return '?';
