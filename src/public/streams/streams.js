@@ -179,7 +179,7 @@ function goView(v) {
 function renderFollowing(list) {
   const box = document.getElementById('followList');
   if (list === null) {
-    box.innerHTML = `<p class="side-hint">${esc(t('streams.followGuest'))} <a href="/?returnTo=%2Fstreams.html">${esc(t('streams.signIn'))}</a></p>`;
+    box.innerHTML = `<p class="side-hint">${esc(t('streams.followGuest'))} <a href="/login?returnTo=%2Fstreams.html">${esc(t('streams.signIn'))}</a></p>`;
     return;
   }
   renderSideList(box, list, `<p class="side-hint">${esc(t('streams.followEmpty'))}</p>`);

@@ -1747,10 +1747,10 @@ document.getElementById('liveAuthModal')?.addEventListener('click', (e) => {
 });
 document.getElementById('liveAuthModalClose')?.addEventListener('click', closeLiveAuthModal);
 document.getElementById('liveAuthLoginBtn')?.addEventListener('click', () => {
-  location.href = '/?returnTo=' + encodeURIComponent(location.pathname);
+  location.href = '/login?returnTo=' + encodeURIComponent(location.pathname);
 });
 document.getElementById('liveAuthRegisterBtn')?.addEventListener('click', () => {
-  location.href = '/?mode=register&returnTo=' + encodeURIComponent(location.pathname);
+  location.href = '/login?mode=register&returnTo=' + encodeURIComponent(location.pathname);
 });
 
 document.getElementById('liveChatInput')?.addEventListener('focus', (e) => {

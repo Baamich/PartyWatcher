@@ -127,7 +127,8 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-router.get('/public', auth, async (req, res) => {
+// публичные комнаты видит и гость (главная без входа); в поисковики список не попадает — /api/rooms закрыт в robots.txt
+router.get('/public', auth.optional, async (req, res) => {
   const io = req.app.get('io');
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = 52;
@@ -137,21 +138,19 @@ router.get('/public', auth, async (req, res) => {
 
   const filter = {
     isPublic: true,
-    owner: { $ne: req.user.id },
-    $or: [
-      { 'video.ageRestricted': { $ne: true } },
-      { ageConfirmed: true },
-    ],
+    ...(req.user && { owner: { $ne: req.user.id } }),
   };
 
   if (onlyWithPeople) {
     filter.viewerCount = { $gt: 0 };
   }
 
-  // комнаты 18+ в публичный список не попадают никогда — только по ссылке (и после подтверждения возраста в комнате)
+  // комнаты 18+ в публичный список не попадают никогда — только по ссылке (и после подтверждения возраста в комнате):
+  // 18+ сайты и Kodik RX (video.adult) и YouTube 18+ (video.ageRestricted) — их всё равно смотрят только друзья владельца
   filter['video.adult'] = { $ne: true };
+  filter['video.ageRestricted'] = { $ne: true };
   // «Просмотр фильма» — только админ и друзья: остальным такие комнаты в списке не показываем
-  if (!(await isTrusted(req.user.id))) filter['video.type'] = { $ne: 'player_capture' };
+  if (!req.user || !(await isTrusted(req.user.id))) filter['video.type'] = { $ne: 'player_capture' };
 
   if (q) {
     filter.name = { $regex: escapeRegex(q), $options: 'i' };
@@ -164,7 +163,7 @@ router.get('/public', auth, async (req, res) => {
 
   const [total, rooms] = await Promise.all([
     Room.countDocuments(filter),
-    Room.find(filter).select('-bannedUsers').sort(sortOption).skip((page - 1) * limit).limit(limit).lean(),
+    Room.find(filter).select('-bannedUsers -video.directUrl').sort(sortOption).skip((page - 1) * limit).limit(limit).lean(),
   ]);
 
   // подстраховка: если вдруг кэш устарел — берём актуальный из сокетов

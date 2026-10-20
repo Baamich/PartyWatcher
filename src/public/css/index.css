@@ -435,6 +435,10 @@ button {
   content: '✓';
 }
 
+#appBox:not(.hidden) {
+  display: block;
+  min-height: 100vh;
+}
 
 #authBox.hidden {
   display: none !important;
@@ -672,6 +676,87 @@ button {
   padding-right: 42px;
 }
 
+.intro {
+  position: absolute;
+  top: 50%;
+  right: calc(50% + 248px); 
+  transform: translateY(-50%);
+  width: 340px;
+  text-align: left;
+  box-sizing: border-box;
+}
+.intro-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.intro-brand .brand-mark {
+  width: 48px;
+  height: 48px;
+}
+.intro-brand .brand-text {
+  font-size: 34px;
+}
+.intro h1 {
+  font-size: 24px;
+  line-height: 1.25;
+  margin: 0 0 10px;
+}
+.intro p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* узкие экраны: блок над карточкой в обычном потоке, а не поверх неё */
+@media (max-width: 1300px) {
+  #authBox {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 20px;
+    padding-top: 28px;
+  }
+  .intro {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: 400px;
+    padding: 0;
+    text-align: center;
+  }
+  .intro-brand {
+    margin-bottom: 12px;
+  }
+  .intro-brand .brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+  .intro-brand .brand-text {
+    font-size: 26px;
+  }
+  .intro h1 {
+    font-size: 20px;
+  }
+  .intro p {
+    font-size: 13px;
+  }
+}
+/* логотип + переключатель языка на экране входа */
+.intro-brand-row {
+  margin: 0 0 20px;
+}
+.intro-brand-row .intro-brand {
+  margin: 0;
+}
+@media (max-width: 1300px) {
+  .intro-brand-row {
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+}
 .reset-title-row {
   justify-content: space-between;
   margin-bottom: 18px;
@@ -680,9 +765,6 @@ button {
   margin: 0;
 }
 
-/* гость или вошёл (класс на <html>: заранее — auth-hint.js по прошлому входу, точно — index.js после /auth/me) */
-html.pw-authed .guest-only { display: none !important; }
-html:not(.pw-authed) .authed-only { display: none !important; }
 
 /* комната 18+ в списке */
 .adult-badge {
@@ -722,9 +804,9 @@ html:not(.pw-authed) .authed-only { display: none !important; }
 .forgot-hint { margin: 0 0 10px; font-size: 13px; color: var(--text-muted); }
 .verify-actions .auth-link:disabled { opacity: 0.6; cursor: default; }
 
-/* «Что такое Party Watcher» внизу главной (только гостю) */
+/* «Что такое Party Watcher» под экраном входа (login.html) */
 .about {
-  max-width: 1100px; /* как у .public-section: под заголовком «Публичные комнаты» */
+  max-width: 760px;
   margin: 0 auto 48px;
   padding: 0 16px;
   box-sizing: border-box;
@@ -741,7 +823,6 @@ html:not(.pw-authed) .authed-only { display: none !important; }
   margin: 18px 0 6px;
 }
 .about p {
-  max-width: 760px;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text-muted);
@@ -754,46 +835,15 @@ html:not(.pw-authed) .authed-only { display: none !important; }
   gap: 8px;
 }
 
-/* ===== главная для гостя ===== */
-.guest-auth {
-  display: flex;
-  gap: 6px;
-}
-.guest-auth .icon-btn { margin: 0; }
-[data-theme] .guest-auth .guest-reg {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-.guest-hero {
-  max-width: 1100px; /* как у .page-header: текст ровно под логотипом */
-  margin: 0 auto;
-  padding: 12px 16px 4px;
-  box-sizing: border-box;
-}
-.guest-hero h1 {
-  font-size: 24px;
-  line-height: 1.25;
-  margin: 0 0 8px;
-}
-.guest-hero p {
-  max-width: 760px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--text-muted);
-  margin: 0;
-}
+/* главная без входа (index.js ставит html.pw-guest): подсказки «Войди» и «О сервисе» */
+.guest-only { display: none; }
+html.pw-guest .guest-only { display: block; }
 .guest-hint {
   font-size: 14px;
   color: var(--text-muted);
   margin: 6px 0 0;
 }
-
-/* окно входа: та же карточка, поверх страницы; на телефоне — с прокруткой */
-.auth-modal { padding: 16px; box-sizing: border-box; }
-.auth-modal .auth-card {
-  position: relative;
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
-  box-sizing: border-box;
+.about h1 {
+  font-size: 20px;
+  margin: 0 0 10px;
 }

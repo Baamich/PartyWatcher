@@ -1,44 +1,19 @@
-function getReturnTo() {
-  const v = new URLSearchParams(location.search).get('returnTo');
-  // разрешаем только относительные внутренние пути — защита от открытого редиректа на чужой домен
-  if (v && v.startsWith('/') && !v.startsWith('//') && !v.includes('\\')) return v;
-  return null;
-}
-
-// вошёл ли человек — класс pw-authed на <html> (заранее ставит auth-hint.js по прошлому входу): по нему CSS
-// прячет гостевые блоки (.guest-only) или блоки для вошедших (.authed-only). Гость видит главную как есть,
-// а вход и регистрация — окном (#authModal)
+// Главная с комнатами — для всех. Гость видит публичные комнаты (класс pw-guest на <html> показывает подсказки
+// .guest-only), а «Мои комнаты», создание и вход по ключу — после входа на /login (оттуда обратно)
 async function checkAuth() {
-  const root = document.documentElement;
   let me;
   try {
     me = await api('/auth/me');
   } catch (err) {
-    console.warn('[checkAuth] не авторизован:', err?.message || err);
     window.__pwAuthed = false;
     try { localStorage.removeItem('pw_authed'); } catch {}
-    root.classList.remove('pw-authed'); // подсказка ошиблась (вышел на другой вкладке и т.п.)
-    stopAutoRefresh();
-    document.getElementById('roomList').innerHTML = '';
-    document.getElementById('publicRoomList').innerHTML = '';
-    document.getElementById('publicPagination')?.classList.add('hidden');
-    lastRender.mine = lastRender.public = '';
-    // пришёл по ссылке «Войти»/«Регистрация» с другой страницы — сразу окно
-    const mode = new URLSearchParams(location.search).get('mode');
-    if (mode === 'register') openAuth('register');
-    else if (getReturnTo()) openAuth('login');
+    document.documentElement.classList.add('pw-guest');
+    loadPublicRooms();
+    startAutoRefresh(); // без сокета лобби (он только со входом) — список обновляет таймер
     return;
   }
-
-  // дальше человек точно вошёл: сбой списка или сокета не должен показать ему экран гостя
+  window.__pwAuthed = true;
   try {
-    const returnTo = getReturnTo();
-    if (returnTo) {
-      location.href = returnTo;
-      return;
-    }
-
-    window.__pwAuthed = true;
     // «Просмотр фильма / сериала» — только админу и друзьям (сервер проверяет сам)
     const capOpt = document.querySelector('option[value="player_capture"]');
     if (capOpt) {
@@ -47,15 +22,13 @@ async function checkAuth() {
       capOpt.classList.toggle('hidden', !can);
     }
     try { localStorage.setItem('pw_authed', '1'); } catch {}
-    root.classList.add('pw-authed');
-    closeAuth();
 
     const adminLink = document.getElementById('adminLink');
     if (adminLink) {
       adminLink.classList.toggle('hidden', me.role !== 'admin' && me.role !== 'owner');
     }
 
-    // Kodik выбран по умолчанию: после входа спрашиваем, есть ли поиск (до входа /kodik/config недоступен)
+    // Kodik выбран по умолчанию: есть ли поиск по каталогу — спрашиваем сервер
     if (isKodikType()) updateKodikMode();
     initLobbySocket(); // сокет и оба списка — параллельно: каждый запрос к серверу — полсекунды дороги
     await Promise.all([loadMyRooms(), loadPublicRooms()]);
@@ -64,388 +37,6 @@ async function checkAuth() {
     console.error('[checkAuth] после входа', err);
   }
 }
-
-// ---- окно входа ----
-function openAuth(mode) {
-  const modal = document.getElementById('authModal');
-  if (!modal) return;
-  if (mode === 'register') showRegisterPanel();
-  else showLoginPanel();
-  modal.classList.remove('hidden');
-  const first = document.getElementById(mode === 'register' ? 'regUsername' : 'loginInput');
-  setTimeout(() => first?.focus(), 0);
-}
-
-function closeAuth() {
-  document.getElementById('authModal')?.classList.add('hidden');
-}
-
-document.getElementById('authModal')?.addEventListener('click', (e) => {
-  if (e.target.id === 'authModal') closeAuth();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeAuth();
-});
-// вход, сброс пароля и регистрация — отдельные <form>: Enter отправляет, а менеджер паролей вписывает логин
-// в поле входа, а не в первое попавшееся поле страницы (раньше почта попадала в «Ключ комнаты»)
-function submitAuth(e, which) {
-  e.preventDefault();
-  if (which === 'login') login();
-  else if (which === 'forgot') sendForgot();
-  else if (which === 'register') register();
-}
-
-// действие, для которого нужен аккаунт: гостю — подсказка и окно входа
-function requireAuth() {
-  if (window.__pwAuthed !== false) return true; // ещё не знаем (ответ /auth/me в пути) — решит сервер
-  PW.toast(t('index.guest.needLogin'), 'info');
-  openAuth('login');
-  return false;
-}
-
-function showAuthPanel(id) {
-  ['loginPanel', 'registerPanel', 'forgotPanel'].forEach((p) => {
-    document.getElementById(p)?.classList.toggle('hidden', p !== id);
-  });
-}
-
-function showLoginPanel() {
-  showAuthPanel('loginPanel');
-  hideAuthError('loginError');
-}
-
-function showRegisterPanel() {
-  showAuthPanel('registerPanel');
-  hideAuthError('registerError');
-  validateRegisterForm();
-}
-
-function showForgotPanel() {
-  showAuthPanel('forgotPanel');
-  hideAuthError('forgotError');
-  document.getElementById('forgotOk')?.classList.add('hidden');
-  const loginVal = document.getElementById('loginInput')?.value.trim() || '';
-  const emailInput = document.getElementById('forgotEmail');
-  if (emailInput && !emailInput.value && loginVal.includes('@')) emailInput.value = loginVal;
-}
-
-// ---- кнопки писем с отсчётом: «Отправить ещё раз (1:59)», пока сервер не разрешит повтор ----
-const cooldowns = new Map(); // кнопка → таймер
-function startCooldown(btn, sec, labelKey) {
-  if (!btn) return;
-  clearInterval(cooldowns.get(btn));
-  cooldowns.delete(btn);
-  let left = Math.max(0, Math.round(Number(sec) || 0));
-  const draw = () => {
-    const label = t(labelKey);
-    btn.textContent = left > 0 ? t('index.mail.wait', { label, time: Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') }) : label;
-    btn.disabled = left > 0;
-  };
-  draw();
-  if (!left) return;
-  cooldowns.set(btn, setInterval(() => {
-    left -= 1;
-    draw();
-    if (left <= 0) { clearInterval(cooldowns.get(btn)); cooldowns.delete(btn); }
-  }, 1000));
-}
-
-async function sendForgot() {
-  hideAuthError('forgotError');
-  const okEl = document.getElementById('forgotOk');
-  okEl?.classList.add('hidden');
-  const email = (document.getElementById('forgotEmail')?.value || '').trim();
-  const err = getEmailError(email);
-  if (err) return showAuthError('forgotError', err);
-
-  const btn = document.getElementById('forgotBtn');
-  if (btn) btn.disabled = true;
-  try {
-    const data = await api('/auth/forgot', { method: 'POST', body: { email } });
-    if (okEl) {
-      okEl.textContent = data.message || t('index.forgot.checkMail');
-      okEl.classList.remove('hidden');
-    }
-    document.getElementById('forgotHint')?.classList.remove('hidden');
-    // повтор на этот же адрес — через 2 минуты (раньше сервер не примет); исправил адрес — можно сразу
-    startCooldown(btn, data.retryIn || 120, 'index.forgot.again');
-  } catch (e) {
-    showAuthError('forgotError', e.message || t('index.sendFailed'));
-    if (e.retryIn) startCooldown(btn, e.retryIn, 'index.forgot.again');
-    else if (btn) btn.disabled = false;
-  }
-}
-// исправил почту — на новый адрес можно отправить сразу (лимит у сервера — на аккаунт)
-document.getElementById('forgotEmail')?.addEventListener('input', () => {
-  const btn = document.getElementById('forgotBtn');
-  if (btn && cooldowns.has(btn)) startCooldown(btn, 0, 'index.forgot.again');
-});
-
-function showAuthError(id, message) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = message;
-  el.classList.remove('hidden');
-}
-
-function hideAuthError(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = '';
-  el.classList.add('hidden');
-}
-
-function togglePasswordVisibility(inputId, btn) {
-  const input = document.getElementById(inputId);
-  if (!input) return;
-  const show = input.type === 'password';
-  input.type = show ? 'text' : 'password';
-  btn.textContent = show ? '🙈' : '👁';
-  btn.setAttribute('aria-label', show ? t('index.password.hide') : t('index.password.show'));
-}
-
-function isValidEmail(email) {
-  // практичная проверка: есть @, домен с точкой, без пробелов
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(email).trim());
-}
-
-function getEmailError(email) {
-  const v = String(email).trim();
-  if (!v) return t('index.email.empty');
-  if (v.includes(' ')) return t('index.email.spaces');
-  if (!v.includes('@')) return t('index.email.noAt');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return t('index.email.format');
-  return null;
-}
-
-function updateEmailStatus() {
-  const input = document.getElementById('regEmail');
-  const status = document.getElementById('emailStatus');
-  const hint = document.getElementById('emailHint');
-  if (!input || !status || !hint) return;
-
-  const err = getEmailError(input.value);
-  if (!input.value.trim()) {
-    status.textContent = '';
-    status.className = 'field-status';
-    status.title = '';
-    hint.classList.add('hidden');
-    hint.textContent = '';
-    return;
-  }
-
-  if (err) {
-    status.textContent = '!';
-    status.className = 'field-status bad';
-    status.title = t('index.email.showError');
-    status.onclick = () => {
-      hint.textContent = err;
-      hint.classList.remove('hidden');
-    };
-  } else {
-    status.textContent = '✓';
-    status.className = 'field-status ok';
-    status.title = t('index.email.ok');
-    status.onclick = null;
-    hint.classList.add('hidden');
-    hint.textContent = '';
-  }
-}
-
-function getPasswordChecks(password) {
-  const p = String(password || '');
-  return {
-    length: p.length >= 8,
-    upper: /^[A-Z]/.test(p),
-    letter: /[A-Za-z]/.test(p),
-    digit: /\d/.test(p),
-  };
-}
-
-function updatePasswordRules() {
-  const password = document.getElementById('regPassword')?.value || '';
-  const confirm = document.getElementById('regPasswordConfirm')?.value || '';
-  const checks = getPasswordChecks(password);
-  const match = password.length > 0 && password === confirm;
-
-  const map = [
-    ['ruleLength', checks.length],
-    ['ruleUpper', checks.upper],
-    ['ruleLetter', checks.letter],
-    ['ruleDigit', checks.digit],
-    ['ruleMatch', match],
-  ];
-
-  map.forEach(([id, ok]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.classList.toggle('rule-ok', ok);
-    el.classList.toggle('rule-bad', !ok);
-  });
-
-  return checks.length && checks.upper && checks.letter && checks.digit && match;
-}
-
-function validateRegisterForm() {
-  const username = document.getElementById('regUsername')?.value.trim() || '';
-  const emailOk = !getEmailError(document.getElementById('regEmail')?.value || '');
-  const passwordOk = updatePasswordRules();
-  const termsOk = !!document.getElementById('regTerms')?.checked;
-  const btn = document.getElementById('registerBtn');
-  if (btn) btn.disabled = !(username && emailOk && passwordOk && termsOk);
-}
-
-async function login() {
-  hideAuthError('loginError');
-  const loginVal = document.getElementById('loginInput').value.trim();
-  const password = document.getElementById('passwordInput').value;
-  if (!loginVal || !password) {
-    showAuthError('loginError', t('index.login.empty'));
-    return;
-  }
-  const send = (cancelDeletion) => api('/auth/login', { method: 'POST', body: { login: loginVal, password, cancelDeletion } });
-  try {
-    try {
-      await send(false);
-    } catch (err) {
-      // аккаунт ждёт удаления (сам попросил в профиле): войти — значит отменить удаление
-      if (err.code !== 'deletionPending') throw err;
-      if (!(await PW.confirm(err.message, { okText: t('index.login.cancelDeletion') }))) return;
-      await send(true);
-      PW.toast(t('index.login.deletionCancelled'), 'success');
-    }
-    const returnTo = getReturnTo();
-    if (returnTo) {
-      location.href = returnTo;
-      return;
-    }
-    await checkAuth();
-  } catch (err) {
-    showAuthError('loginError', err.message || t('index.login.failed'));
-    document.getElementById('verifyBox')?.classList.toggle('hidden', err.code !== 'unverified');
-    if (err.code === 'queued') document.getElementById('verifyBox')?.classList.remove('hidden');
-    setQueued(err.code === 'queued');
-    if (err.code === 'unverified') startCooldown(document.getElementById('verifyResendBtn'), err.retryIn, 'index.verify.resend');
-  }
-}
-
-// ---- неподтверждённая почта: письмо ещё раз или другая почта (логин и пароль — из формы входа) ----
-function verifyCreds() {
-  return { login: document.getElementById('loginInput').value.trim(), password: document.getElementById('passwordInput').value };
-}
-// в очереди на письмо (дневной лимит писем исчерпан): «отправить ещё раз» не нужно, почту сменить можно
-function setQueued(on) {
-  document.getElementById('verifyResendBtn')?.classList.toggle('hidden', !!on);
-}
-function showVerifyOk(text) {
-  const el = document.getElementById('verifyOk');
-  el.textContent = text;
-  el.classList.remove('hidden');
-}
-async function resendVerify() {
-  hideAuthError('loginError');
-  const btn = document.getElementById('verifyResendBtn');
-  try {
-    const r = await api('/auth/verify/resend', { method: 'POST', body: verifyCreds() });
-    showVerifyOk(r.message || t('index.verify.sent'));
-    setQueued(r.queued);
-    if (!r.queued) startCooldown(btn, r.retryIn || 120, 'index.verify.resend');
-  } catch (e) {
-    showAuthError('loginError', e.message);
-    if (e.retryIn) startCooldown(btn, e.retryIn, 'index.verify.resend');
-  }
-}
-function toggleVerifyEmail() {
-  const row = document.getElementById('verifyEmailRow');
-  row.classList.toggle('hidden');
-  if (!row.classList.contains('hidden')) document.getElementById('verifyEmailInput').focus();
-}
-async function changeVerifyEmail() {
-  hideAuthError('loginError');
-  const email = document.getElementById('verifyEmailInput').value.trim();
-  const err = getEmailError(email);
-  if (err) return showAuthError('loginError', err);
-  try {
-    const r = await api('/auth/verify/change-email', { method: 'POST', body: { ...verifyCreds(), email } });
-    document.getElementById('verifyEmailRow').classList.add('hidden');
-    showVerifyOk(r.message || t('index.verify.sent'));
-    setQueued(r.queued);
-    if (!r.queued) startCooldown(document.getElementById('verifyResendBtn'), r.retryIn || 120, 'index.verify.resend');
-  } catch (e) {
-    showAuthError('loginError', e.message);
-    if (e.retryIn) startCooldown(document.getElementById('verifyResendBtn'), e.retryIn, 'index.verify.resend');
-  }
-}
-
-async function register() {
-  hideAuthError('registerError');
-  const username = document.getElementById('regUsername').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
-  const password = document.getElementById('regPassword').value;
-  const confirm = document.getElementById('regPasswordConfirm').value;
-
-  if (!username) {
-    showAuthError('registerError', t('index.register.noUsername'));
-    return;
-  }
-  const emailErr = getEmailError(email);
-  if (emailErr) {
-    showAuthError('registerError', emailErr);
-    updateEmailStatus();
-    return;
-  }
-  if (!updatePasswordRules()) {
-    if (password !== confirm) {
-      showAuthError('registerError', t('index.register.mismatch'));
-    } else {
-      showAuthError('registerError', t('index.register.weak'));
-    }
-    return;
-  }
-  if (!document.getElementById('regTerms')?.checked) {
-    showAuthError('registerError', t('index.register.termsNeeded'));
-    return;
-  }
-
-  try {
-    const reg = await api('/auth/register', {
-      method: 'POST',
-      body: { username, email, password, acceptTerms: true },
-    });
-    if (reg.pending) {
-      // вход только после подтверждения почты: экран входа с уже вписанными логином и паролем, куда ушло письмо,
-      // «Отправить ещё раз» (с отсчётом) и «Сменить почту» (ошибся адресом — исправил и отправил)
-      showLoginPanel();
-      document.getElementById('loginInput').value = username;
-      document.getElementById('passwordInput').value = password;
-      document.getElementById('verifyBox')?.classList.remove('hidden');
-      const emailInput = document.getElementById('verifyEmailInput');
-      if (emailInput) emailInput.value = email;
-      showVerifyOk(reg.message);
-      setQueued(reg.queued); // в очереди — письмо придёт само, когда откроется дневной лимит
-      if (!reg.queued) startCooldown(document.getElementById('verifyResendBtn'), reg.retryIn || 120, 'index.verify.resend');
-      return;
-    }
-    const returnTo = getReturnTo();
-    if (returnTo) {
-      location.href = returnTo;
-      return;
-    }
-    await checkAuth();
-  } catch (err) {
-    showAuthError('registerError', err.message || t('index.register.failed'));
-  }
-}
-
-document.getElementById('regEmail')?.addEventListener('blur', updateEmailStatus);
-document.getElementById('regEmail')?.addEventListener('input', () => {
-  document.getElementById('emailHint')?.classList.add('hidden');
-  validateRegisterForm();
-});
-document.getElementById('regPassword')?.addEventListener('input', validateRegisterForm);
-document.getElementById('regPasswordConfirm')?.addEventListener('input', validateRegisterForm);
-document.getElementById('regUsername')?.addEventListener('input', validateRegisterForm);
-document.getElementById('regTerms')?.addEventListener('change', validateRegisterForm);
 
 // ---- тип видео + приватность — один общий инфо-попап на двоих ----
 
@@ -631,9 +222,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (isKodikType() && window.__pwAuthed !== false) updateKodikMode();
 });
 
+// гость → страница входа, после неё — на returnTo
+function goLogin(returnTo) {
+  location.href = '/login?returnTo=' + encodeURIComponent(returnTo || '/');
+}
+
 let creatingRoom = false; // двойной клик не должен создать две комнаты (и обойти лимит)
 async function createRoom() {
-  if (!requireAuth() || creatingRoom) return;
+  if (window.__pwAuthed === false) return goLogin('/');
+  if (creatingRoom) return;
   creatingRoom = true;
   let leaving = false;
   try {
@@ -725,7 +322,8 @@ async function createRoom() {
 
 async function joinByCode() {
   const code = document.getElementById('joinCodeInput').value.trim();
-  if (!code || !requireAuth()) return;
+  if (!code) return;
+  if (window.__pwAuthed === false) return goLogin('/room.html?code=' + encodeURIComponent(code));
   try {
     await api('/rooms/' + encodeURIComponent(code));
     location.href = `/room.html?code=${encodeURIComponent(code)}`;
@@ -877,7 +475,7 @@ function handlePublicSearchKey(e) {
 async function loadPublicRooms() {
   const list = document.getElementById('publicRoomList');
   const paginationEl = document.getElementById('publicPagination');
-  if (!list || !window.__pwAuthed) return; // гостю список не показываем (и сервер без входа не отдаёт)
+  if (!list) return;
 
   const params = new URLSearchParams({
     page: publicState.page,
@@ -1033,74 +631,4 @@ function stopAutoRefresh() {
   }
 }
 
-
-// ---- Служба поддержки ----
-(function initSupport() {
-  const fab = document.getElementById('supportFab');
-  const modal = document.getElementById('supportModal');
-  const closeBtn = document.getElementById('supportModalClose');
-  const sendBtn = document.getElementById('supportSendBtn');
-  if (!fab || !modal) return;
-  const attachBox = document.getElementById('supportAttach');
-  const attach = attachBox && window.PWAttach ? PWAttach.create(attachBox, { max: 5, pasteRoot: modal }) : null;
-
-  function openSupport() {
-    // без входа отвечаем только на почту, поэтому она обязательна
-    const label = document.getElementById('supportEmailLabel');
-    if (label) label.textContent = window.__pwAuthed ? t('index.support.emailOptional') : t('index.support.emailRequired');
-    modal.classList.remove('hidden');
-    document.getElementById('supportError')?.classList.add('hidden');
-    document.getElementById('supportOk')?.classList.add('hidden');
-  }
-  function closeSupport() {
-    modal.classList.add('hidden');
-  }
-
-  fab.addEventListener('click', openSupport);
-  closeBtn?.addEventListener('click', closeSupport);
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeSupport();
-  });
-
-  sendBtn?.addEventListener('click', async () => {
-    const name = (document.getElementById('supportName')?.value || '').trim().slice(0, 12);
-    const email = (document.getElementById('supportEmail')?.value || '').trim().slice(0, 100);
-    const description = (document.getElementById('supportDesc')?.value || '').trim().slice(0, 1000);
-    const errEl = document.getElementById('supportError');
-    const okEl = document.getElementById('supportOk');
-    errEl?.classList.add('hidden');
-    okEl?.classList.add('hidden');
-
-    const fail = (text) => {
-      if (errEl) {
-        errEl.textContent = text;
-        errEl.classList.remove('hidden');
-      }
-    };
-    if (!window.__pwAuthed && !email) return fail(t('index.support.needEmail'));
-    if (email && getEmailError(email)) return fail(t('index.support.badEmail'));
-    if (!description || description.length < 5) return fail(t('index.support.shortDesc'));
-    if (attach?.busy()) return fail(t('common.attach.wait'));
-
-    sendBtn.disabled = true;
-    try {
-      await api('/support', {
-        method: 'POST',
-        body: { name, email, description, files: attach ? attach.files() : [] },
-      });
-      if (okEl) okEl.classList.remove('hidden');
-      const desc = document.getElementById('supportDesc');
-      if (desc) desc.value = '';
-      attach?.clear();
-      setTimeout(closeSupport, 1200);
-    } catch (e) {
-      if (errEl) {
-        errEl.textContent = e.message || t('index.sendFailed');
-        errEl.classList.remove('hidden');
-      }
-    } finally {
-      sendBtn.disabled = false;
-    }
-  });
-})();
 checkAuth();

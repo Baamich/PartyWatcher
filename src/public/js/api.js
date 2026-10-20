@@ -50,12 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ник в шапке (#meLink > #meName) — кнопка «Мой профиль» (/u/<ник>); гостю на её месте — «Войти»
-// (окно входа на главной, после входа — обратно сюда). Показывается сама после любого /auth/me
+// (страница /login, после входа — обратно сюда). Показывается сама после любого /auth/me
 const pwProfileHref = (name) => '/u/' + encodeURIComponent(String(name).toLowerCase());
 function pwLoginLink(link, show) {
   let a = document.getElementById('pwLoginLink');
-  // на главной свои кнопки «Войти» и «Регистрация» (.guest-auth)
-  if (!show || document.querySelector('.guest-auth')) {
+  if (!show) {
     if (a) a.classList.add('hidden');
     return;
   }
@@ -67,7 +66,7 @@ function pwLoginLink(link, show) {
     a.textContent = window.t ? t('common.header.login') : 'Sign in';
     link.parentNode.insertBefore(a, link);
   }
-  a.href = '/?returnTo=' + encodeURIComponent(location.pathname + location.search);
+  a.href = '/login?returnTo=' + encodeURIComponent(location.pathname + location.search);
   a.classList.remove('hidden');
 }
 function pwShowMe(me) {

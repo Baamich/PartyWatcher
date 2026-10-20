@@ -5,19 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="/js/i18n.js?v=5" data-ns="index"></script>
   <script src="/js/theme.js?v=2"></script>
-  <script src="/js/auth-hint.js?v=1"></script>
   <script src="/js/favicon.js"></script>
   <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-dark.svg" />
   <link rel="stylesheet" href="/css/common.css?v=2" />
   <link rel="stylesheet" href="/css/index.css?v=7" />
   <title data-i18n="index.meta.title">Party Watcher — смотри YouTube вместе и стримь с друзьями</title>
   <meta name="description" data-i18n-content="index.meta.description" content="Party Watcher — бесплатный сервис для совместного просмотра. Создай комнату, отправь ссылку друзьям и смотри YouTube, Twitch и другие видео синхронно, с чатом и голосом.">
-  <link rel="canonical" href="https://partywatcher.de/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Party Watcher" />
   <meta property="og:title" data-i18n-content="index.meta.title" content="Party Watcher — смотри YouTube вместе и стримь с друзьями" />
   <meta property="og:description" data-i18n-content="index.meta.ogDescription" content="Создай комнату, отправь ссылку друзьям и смотри видео синхронно с чатом и голосом." />
-  <meta property="og:url" content="https://partywatcher.de/" />
 </head>
 <body>
   <div id="appBox">
@@ -41,21 +38,12 @@
 
       <div class="header-right">
         <div class="corner-menu">
-          <div class="guest-auth guest-only">
-            <button type="button" class="icon-btn" data-click="openAuth" data-arg="login" data-i18n="index.login.submit">Войти</button>
-            <button type="button" class="icon-btn guest-reg" data-click="openAuth" data-arg="register" data-i18n="index.guest.register">Регистрация</button>
-          </div>
           <a class="icon-btn profile-btn hidden" id="meLink" href="/" data-i18n-title="common.header.profile"><span id="meName" data-no-i18n></span></a>
           <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
         </div>
         <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn" data-i18n="common.header.admin">Админ</button></a>
       </div>
     </div>
-
-    <section class="guest-hero guest-only">
-      <h1 data-i18n="index.intro.title">Смотри видео вместе с друзьями — и стримь сам</h1>
-      <p data-i18n="index.intro.text">Party Watcher — сервис для совместного просмотра онлайн.</p>
-    </section>
 
     <div class="layout">
       <nav class="nav-sidebar">
@@ -89,24 +77,23 @@
         <button class="btn-mono" data-click="joinByCode" data-i18n="index.join.submit">Войти</button>
         </div>
 
-        <div class="col-right" data-nosnippet>
+        <div class="col-right">
           <h2 data-i18n="index.mine.title">Мои комнаты</h2>
-          <p class="guest-hint guest-only"><span data-i18n="index.guest.mine">Войди, чтобы создавать комнаты и видеть свои.</span> <button type="button" class="auth-link" data-click="openAuth" data-arg="login" data-i18n="index.login.submit">Войти</button></p>
+          <p class="guest-hint guest-only"><span data-i18n="index.guest.mine">Войди, чтобы создавать комнаты и видеть свои.</span> <a href="/login" data-i18n="index.login.submit">Войти</a></p>
           <div id="roomList"></div>
         </div>
       </div>
 
       <!-- Публичные комнаты — на всю ширину -->
-      <section class="public-section" data-nosnippet>
+      <section class="public-section">
         <h2 data-i18n="index.public.title">Публичные комнаты</h2>
-        <p class="guest-hint guest-only"><span data-i18n="index.guest.public">Публичные комнаты видны после входа.</span> <button type="button" class="auth-link" data-click="openAuth" data-arg="register" data-i18n="index.guest.register">Регистрация</button></p>
 
-        <div class="public-search-wrap authed-only">
+        <div class="public-search-wrap">
           <input id="publicSearchInput" type="text" autocomplete="off" placeholder="Поиск по названию" data-i18n-placeholder="index.public.search" data-keydown="handlePublicSearchKey" data-event />
           <button type="button" class="search-icon-btn" data-click="onPublicFilterChange" aria-label="Искать" data-i18n-aria-label="common.search">🔍</button>
         </div>
 
-        <div class="public-controls authed-only">
+        <div class="public-controls">
           <div class="public-filters">
             <select id="publicSort" data-change="onPublicFilterChange">
               <option value="newest" data-i18n="index.public.sort.newest">Новые</option>
@@ -130,7 +117,7 @@
 
   <!-- о сервисе: видимый текст для гостя и поисковиков (варианты названия и частые вопросы) -->
   <section class="about guest-only">
-    <h2 data-i18n="index.about.title">Что такое Party Watcher</h2>
+    <h1 data-i18n="index.about.title">Что такое Party Watcher</h1>
     <p data-i18n="index.about.text">Party Watcher (пати вотчер) — сайт для совместного просмотра видео и прямых трансляций.</p>
     <h3 data-i18n="index.about.q1">Как смотреть видео вместе с друзьями?</h3>
     <p data-i18n="index.about.a1"></p>
@@ -146,114 +133,6 @@
       <a href="/news" data-i18n="index.about.news">Новости сервиса</a>
     </p>
   </section>
-
-  <!-- вход и регистрация — окном поверх главной (кнопки в шапке, ?returnTo=, ?mode=register, действия гостя) -->
-  <div id="authModal" class="modal hidden auth-modal" data-nosnippet>
-    <div class="auth-card" role="dialog" aria-modal="true">
-      <button type="button" class="modal-close" data-click="closeAuth" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
-      <!-- ВХОД -->
-      <form id="loginPanel" data-submit="submitAuth" data-arg="login" data-event>
-        <h2 class="auth-title" data-i18n="index.login.title">Вход</h2>
-        <div id="loginError" class="auth-error hidden"></div>
-        <!-- аккаунт не подтверждён: письмо ещё раз или другая почта (ошибся при регистрации) -->
-        <div id="verifyBox" class="verify-box hidden">
-          <div class="verify-actions">
-            <button type="button" id="verifyResendBtn" class="auth-link" data-click="resendVerify" data-i18n="index.verify.resend">📨 Отправить письмо ещё раз</button>
-            <button type="button" class="auth-link" data-click="toggleVerifyEmail" data-i18n="index.verify.change">✏️ Сменить почту</button>
-          </div>
-          <div id="verifyEmailRow" class="verify-email-row hidden">
-            <input id="verifyEmailInput" type="email" autocomplete="email" maxlength="100" placeholder="email@example.com" />
-            <button type="button" class="auth-submit" data-click="changeVerifyEmail" data-i18n="index.verify.send">Отправить на новую почту</button>
-          </div>
-          <div id="verifyOk" class="support-ok hidden"></div>
-        </div>
-
-        <label class="auth-label" for="loginInput" data-i18n="index.login.login">Логин или email</label>
-        <input id="loginInput" autocomplete="username" placeholder="Логин или email" data-i18n-placeholder="index.login.login" />
-
-        <label class="auth-label" for="passwordInput" data-i18n="index.login.password">Пароль</label>
-        <div class="password-wrap">
-          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Пароль" data-i18n-placeholder="index.login.password" />
-          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="passwordInput" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
-        </div>
-
-        <button type="submit" class="auth-submit" data-i18n="index.login.submit">Войти</button>
-
-        <p class="auth-switch">
-          <button type="button" class="auth-link" data-click="showForgotPanel" data-i18n="index.login.forgot">Забыли пароль?</button>
-        </p>
-        <p class="auth-switch">
-          <span data-i18n="index.login.noAccount">Нет аккаунта?</span>
-          <button type="button" class="auth-link" data-click="showRegisterPanel" data-i18n="index.login.toRegister">Зарегистрироваться</button>
-        </p>
-      </form>
-
-      <!-- СБРОС ПАРОЛЯ -->
-      <form id="forgotPanel" class="hidden" data-submit="submitAuth" data-arg="forgot" data-event>
-        <h2 class="auth-title" data-i18n="index.forgot.title">Сброс пароля</h2>
-        <div id="forgotError" class="auth-error hidden"></div>
-        <div id="forgotOk" class="support-ok hidden"></div>
-        <p id="forgotHint" class="forgot-hint hidden" data-i18n="index.forgot.notArrived">Письма нет? Загляни в «Спам». Ошибся адресом — исправь его ниже и отправь снова.</p>
-
-        <label class="auth-label" for="forgotEmail" data-i18n="index.forgot.email">Почта аккаунта</label>
-        <input id="forgotEmail" type="email" autocomplete="email" placeholder="email@example.com" />
-
-        <button type="submit" id="forgotBtn" class="auth-submit" data-i18n="index.forgot.submit">Прислать ссылку</button>
-
-        <p class="auth-switch">
-          <button type="button" class="auth-link" data-click="showLoginPanel" data-i18n="index.forgot.back">Вернуться ко входу</button>
-        </p>
-      </form>
-
-      <!-- РЕГИСТРАЦИЯ -->
-      <form id="registerPanel" class="hidden" data-submit="submitAuth" data-arg="register" data-event>
-        <h2 class="auth-title" data-i18n="index.register.title">Регистрация</h2>
-        <div id="registerError" class="auth-error hidden"></div>
-
-        <label class="auth-label" for="regUsername" data-i18n="index.register.username">Логин</label>
-        <input id="regUsername" autocomplete="username" placeholder="Логин" data-i18n-placeholder="index.register.username" />
-
-        <label class="auth-label" for="regEmail" data-i18n="index.register.email">Почта</label>
-        <div class="field-wrap">
-          <input id="regEmail" type="email" autocomplete="email" placeholder="email@example.com" />
-          <span id="emailStatus" class="field-status" title=""></span>
-        </div>
-        <div id="emailHint" class="field-hint hidden"></div>
-
-        <label class="auth-label" for="regPassword" data-i18n="index.login.password">Пароль</label>
-        <div class="password-wrap">
-          <input id="regPassword" type="password" autocomplete="new-password" placeholder="Пароль" data-i18n-placeholder="index.login.password" />
-          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPassword" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
-        </div>
-
-        <ul id="passwordRules" class="password-rules">
-          <li id="ruleLength" class="rule-bad" data-i18n="index.rules.length">Минимум 8 символов</li>
-          <li id="ruleUpper" class="rule-bad" data-i18n="index.rules.upper">Первая буква — заглавная латиница (A–Z)</li>
-          <li id="ruleLetter" class="rule-bad" data-i18n="index.rules.letter">Есть буквы</li>
-          <li id="ruleDigit" class="rule-bad" data-i18n="index.rules.digit">Есть цифры</li>
-          <li id="ruleMatch" class="rule-bad" data-i18n="index.rules.match">Пароли совпадают</li>
-        </ul>
-
-        <label class="auth-label" for="regPasswordConfirm" data-i18n="index.register.confirm">Повторите пароль</label>
-        <div class="password-wrap">
-          <input id="regPasswordConfirm" type="password" autocomplete="new-password" placeholder="Повторите пароль" data-i18n-placeholder="index.register.confirm" />
-          <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="regPasswordConfirm" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
-        </div>
-
-        <label class="auth-terms" for="regTerms">
-          <input type="checkbox" id="regTerms" />
-          <span><span data-i18n="index.register.termsAgree">Я прочитал(а) и принимаю</span> <a href="/terms" target="_blank" rel="noopener" data-i18n="index.register.termsLink">условия пользования</a></span>
-        </label>
-
-        <button type="submit" id="registerBtn" class="auth-submit" disabled data-i18n="index.register.submit">Зарегистрироваться</button>
-
-        <p class="auth-switch">
-          <span data-i18n="index.register.haveAccount">Уже есть аккаунт?</span>
-          <button type="button" class="auth-link" data-click="showLoginPanel" data-i18n="index.login.submit">Войти</button>
-        </p>
-      </form>
-    </div><!-- /auth-card -->
-  </div>
 
     <!-- Служба поддержки FAB -->
   <!-- юридические ссылки: видны и гостю, и вошедшему (Impressum — обязателен для сайта из Германии) -->
@@ -298,6 +177,7 @@
   <script src="/js/page-transition.js"></script>
   <script src="/js/recent-urls.js?v=1"></script>
   <script src="/js/attach-images.js?v=1"></script>
+  <script src="/js/support.js"></script>
   <script src="/js/index.js?v=12"></script>
   <script src="/js/live-notify.js?v=1"></script>
 </body>

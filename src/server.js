@@ -237,6 +237,11 @@ async function start() {
     seo.categoryPage(req.lang, slug).then(({ page }) => pages.send(req, res, 'streams.html', { seo: page })).catch(next);
   });
 
+  // страница входа: кнопка «Войти» в шапке, действия гостя (?returnTo=, ?mode=register); вошедшего login.js отправит дальше
+  app.get(['/login', '/login/'], (req, res, next) => {
+    pages.send(req, res, 'login.html').catch(next);
+  });
+
   app.use(pages.middleware); // HTML-страницы: версии файлов, словарь, перевод и данные входа сразу в разметке
   app.use(assets.middleware(pages.absOf, pages.staticHeaders)); // свои js/css: минифицированы и сжаты заранее
   assets.warm([pages.PUBLIC, ...Object.values(pages.VENDOR), ...(() => { try { return [require.resolve('hls.js/dist/hls.min.js')]; } catch { return []; } })()]);

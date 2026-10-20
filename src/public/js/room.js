@@ -1970,7 +1970,8 @@ let myTrusted = false;
 
 async function init() {
   const me = await api('/auth/me').catch(() => null);
-  if (!me) return (location.href = '/');
+  // гость по ссылке на комнату — вход, а после него обратно в эту комнату
+  if (!me) return (location.href = '/login?returnTo=' + encodeURIComponent(location.pathname + location.search));
   myUsername = me.username || me.user?.username || null;
   myTrusted = ['friend', 'admin', 'owner'].includes(me.role); // друзья владельца и админы: YouTube 18+, «Просмотр фильма»
   myAdult = !!me.adultConfirmed;
