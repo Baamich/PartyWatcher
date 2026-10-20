@@ -44,19 +44,39 @@ function pwWatchMe(me) {
 }
 document.addEventListener('DOMContentLoaded', () => {
   if (pwBoot && pwBoot.data && pwBoot.data.me) pwWatchMe(pwBoot.data.me);
+  else if (pwBoot) pwShowMe(null); // гость — кнопка «Войти» вместо ника
   // нет вшитого ответа (упреждающая загрузка) — спросим сами, чтобы показать ник в шапке
-  else if (!pwBoot && document.getElementById('meLink')) api('/auth/me').catch(() => {});
+  else if (document.getElementById('meLink')) api('/auth/me').catch(() => pwShowMe(null));
 });
 
-// ник в шапке (#meLink > #meName) — кнопка «Мой профиль» (/u/<ник>); гостю кнопки нет.
-// Показывается сама после любого /auth/me — страницам ничего вызывать не нужно
+// ник в шапке (#meLink > #meName) — кнопка «Мой профиль» (/u/<ник>); гостю на её месте — «Войти»
+// (окно входа на главной, после входа — обратно сюда). Показывается сама после любого /auth/me
 const pwProfileHref = (name) => '/u/' + encodeURIComponent(String(name).toLowerCase());
+function pwLoginLink(link, show) {
+  let a = document.getElementById('pwLoginLink');
+  // на главной свои кнопки «Войти» и «Регистрация» (.guest-auth)
+  if (!show || document.querySelector('.guest-auth')) {
+    if (a) a.classList.add('hidden');
+    return;
+  }
+  if (!a) {
+    a = document.createElement('a');
+    a.id = 'pwLoginLink';
+    a.className = 'icon-btn pw-login';
+    a.setAttribute('data-i18n', 'common.header.login');
+    a.textContent = window.t ? t('common.header.login') : 'Sign in';
+    link.parentNode.insertBefore(a, link);
+  }
+  a.href = '/?returnTo=' + encodeURIComponent(location.pathname + location.search);
+  a.classList.remove('hidden');
+}
 function pwShowMe(me) {
   pwBell(me);
   const link = document.getElementById('meLink');
   if (!link) return;
   const name = me && me.username;
   link.classList.toggle('hidden', !name);
+  pwLoginLink(link, !name);
   if (!name) return;
   link.href = pwProfileHref(name);
   const el = document.getElementById('meName');

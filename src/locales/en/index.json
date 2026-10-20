@@ -191,5 +191,11 @@
     "a4": "Yes. Party Watcher is free and has no ads.",
     "streams": "Watch live streams",
     "news": "Service news"
+  },
+  "guest": {
+    "register": "Sign up",
+    "mine": "Sign in to create rooms and see your own.",
+    "public": "Public rooms are visible after you sign in.",
+    "needLogin": "Sign in or sign up first"
   }
 }

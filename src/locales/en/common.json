@@ -7,7 +7,8 @@
     "profile": "My profile",
     "admin": "Admin",
     "streamProfile": "👤 Stream profile",
-    "studio": "🛠️ Creator studio"
+    "studio": "🛠️ Creator studio",
+    "login": "Sign in"
   },
   "nav": {
     "rooms": "🏠 Rooms",

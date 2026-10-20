@@ -829,3 +829,12 @@ button:disabled {
 [data-theme="light"] .pw-nick { color: color-mix(in srgb, var(--nick) 58%, #000); }
 /* полноэкранный чат эфира — тёмная подложка поверх видео: там цвет как есть */
 [data-theme="light"] .fs-active .pw-nick { color: var(--nick); }
+
+/* «Войти» в шапке у гостя (api.js, на месте кнопки профиля) */
+[data-theme] .corner-menu .pw-login,
+[data-theme] .header-right .pw-login {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  text-decoration: none;
+}

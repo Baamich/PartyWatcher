@@ -20,23 +20,137 @@
   <meta property="og:url" content="https://partywatcher.de/" />
 </head>
 <body>
-  <div id="authBox">
-    <section class="intro">
-      <div class="brand-row intro-brand-row">
-      <div class="brand intro-brand">
+  <div id="appBox">
+    <div class="page-header">
+      <div class="brand-row">
+      <div class="brand">
         <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="var(--border)" stroke-width="2" />
-          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18" fill="none" stroke="var(--logo-alt)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <rect x="1" y="1" width="62" height="62" rx="15"
+                fill="none" stroke="var(--border)" stroke-width="2" />
+          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9"
+                fill="none" stroke="var(--accent)" stroke-width="6"
+                stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18"
+                fill="none" stroke="var(--logo-alt)" stroke-width="6"
+                stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         <span class="brand-text"><span class="brand-party">Party</span> <span class="brand-watcher">Watcher</span></span>
       </div>
-      <div data-lang-switch></div>
+        <div data-lang-switch></div>
       </div>
+
+      <div class="header-right">
+        <div class="corner-menu">
+          <div class="guest-auth guest-only">
+            <button type="button" class="icon-btn" data-click="openAuth" data-arg="login" data-i18n="index.login.submit">Войти</button>
+            <button type="button" class="icon-btn guest-reg" data-click="openAuth" data-arg="register" data-i18n="index.guest.register">Регистрация</button>
+          </div>
+          <a class="icon-btn profile-btn hidden" id="meLink" href="/" data-i18n-title="common.header.profile"><span id="meName" data-no-i18n></span></a>
+          <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
+        </div>
+        <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn" data-i18n="common.header.admin">Админ</button></a>
+      </div>
+    </div>
+
+    <section class="guest-hero guest-only">
       <h1 data-i18n="index.intro.title">Смотри видео вместе с друзьями — и стримь сам</h1>
-      <p data-i18n="index.intro.text">Party Watcher — сервис для совместного просмотра онлайн. Создай комнату, отправь ссылку, и все будут смотреть одно и то же видео синхронно: YouTube, Twitch, Google Диск и другие источники. В комнате есть чат и голосовая связь.</p>
+      <p data-i18n="index.intro.text">Party Watcher — сервис для совместного просмотра онлайн.</p>
     </section>
-    <div class="auth-card">
+
+    <div class="layout">
+      <nav class="nav-sidebar">
+        <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/news" data-i18n="common.nav.news">📰 Новости</button>
+        <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/" data-i18n="common.nav.rooms">🏠 Комнаты</button>
+        <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/streams.html" data-i18n="common.nav.streams">📡 Прямые трансляции</button>
+      </nav>
+
+      <div class="col-left">
+        <h2 data-i18n="index.create.title">Создать комнату</h2>
+        <input id="roomName" placeholder="Название комнаты" data-i18n-placeholder="index.create.name" autocomplete="off" />
+        <div class="type-row">
+          <select id="videoType" data-change="onVideoTypeChange">
+            <option value="kodik" data-i18n="index.type.kodik" selected>Kodik (аниме, дорамы, азиатские и турецкие сериалы)</option>
+            <option value="youtube_twitch" data-i18n="index.type.youtube_twitch">YouTube / Twitch / VK Видео</option>
+            <option value="drive" data-i18n="index.type.drive">Google Диск</option>
+            <option value="player_capture" class="hidden" hidden data-i18n="index.type.player_capture">Просмотр фильма / сериала</option>
+            <option value="direct" data-i18n="index.type.direct">Прямая ссылка на видео</option>
+          </select>
+          <button type="button" class="info-btn" data-click="toggleInfoPopup" data-i18n-title="index.create.info" data-i18n-aria-label="index.create.info">i</button>
+          <button type="button" class="lock-btn lock-private" id="privacyToggle" data-click="togglePrivacy" data-i18n-title="index.create.privacy" data-i18n-aria-label="index.create.privacy">🔒</button>
+        </div>
+        <div id="infoPopup" class="info-popup hidden"></div>
+        <input id="videoUrl" placeholder="Ссылка на видео" data-i18n-placeholder="index.create.url" data-input="onVideoUrlInput" data-keydown="onVideoUrlKeydown" autocomplete="off" list="recentVideoUrls" />
+        <datalist id="recentVideoUrls"></datalist>
+        <div id="kodikResults" class="kodik-results hidden"></div>
+        <button data-click="createRoom" data-i18n="index.create.submit">Создать</button>
+
+        <h2 data-i18n="index.join.title">Войти по ключу</h2>
+        <input id="joinCodeInput" placeholder="Ключ комнаты" data-i18n-placeholder="index.join.code" autocomplete="off" />
+        <button class="btn-mono" data-click="joinByCode" data-i18n="index.join.submit">Войти</button>
+        </div>
+
+        <div class="col-right" data-nosnippet>
+          <h2 data-i18n="index.mine.title">Мои комнаты</h2>
+          <p class="guest-hint guest-only"><span data-i18n="index.guest.mine">Войди, чтобы создавать комнаты и видеть свои.</span> <button type="button" class="auth-link" data-click="openAuth" data-arg="login" data-i18n="index.login.submit">Войти</button></p>
+          <div id="roomList"></div>
+        </div>
+      </div>
+
+      <!-- Публичные комнаты — на всю ширину -->
+      <section class="public-section" data-nosnippet>
+        <h2 data-i18n="index.public.title">Публичные комнаты</h2>
+        <p class="guest-hint guest-only"><span data-i18n="index.guest.public">Публичные комнаты видны после входа.</span> <button type="button" class="auth-link" data-click="openAuth" data-arg="register" data-i18n="index.guest.register">Регистрация</button></p>
+
+        <div class="public-search-wrap authed-only">
+          <input id="publicSearchInput" type="text" autocomplete="off" placeholder="Поиск по названию" data-i18n-placeholder="index.public.search" data-keydown="handlePublicSearchKey" data-event />
+          <button type="button" class="search-icon-btn" data-click="onPublicFilterChange" aria-label="Искать" data-i18n-aria-label="common.search">🔍</button>
+        </div>
+
+        <div class="public-controls authed-only">
+          <div class="public-filters">
+            <select id="publicSort" data-change="onPublicFilterChange">
+              <option value="newest" data-i18n="index.public.sort.newest">Новые</option>
+              <option value="oldest" data-i18n="index.public.sort.oldest">Старые</option>
+              <option value="most" data-i18n="index.public.sort.most">Больше людей</option>
+              <option value="least" data-i18n="index.public.sort.least">Меньше людей</option>
+            </select>
+
+            <label class="filter-check">
+              <input type="checkbox" id="onlyWithPeople" data-change="onPublicFilterChange" />
+              <span data-i18n="index.public.withPeople">С людьми</span>
+            </label>
+            <!-- появляется только у тех, кто хоть раз подтвердил возраст 18+ -->
+          </div>
+        </div>
+
+        <div id="publicRoomList"></div>
+        <div id="publicPagination" class="pagination hidden"></div>
+      </section>
+    </div><!-- /appBox -->
+
+  <!-- о сервисе: видимый текст для гостя и поисковиков (варианты названия и частые вопросы) -->
+  <section class="about guest-only">
+    <h2 data-i18n="index.about.title">Что такое Party Watcher</h2>
+    <p data-i18n="index.about.text">Party Watcher (пати вотчер) — сайт для совместного просмотра видео и прямых трансляций.</p>
+    <h3 data-i18n="index.about.q1">Как смотреть видео вместе с друзьями?</h3>
+    <p data-i18n="index.about.a1"></p>
+    <h3 data-i18n="index.about.q2">Где смотреть стримы онлайн?</h3>
+    <p data-i18n="index.about.a2"></p>
+    <h3 data-i18n="index.about.q3">Как начать свой стрим?</h3>
+    <p data-i18n="index.about.a3"></p>
+    <h3 data-i18n="index.about.q4">Это бесплатно?</h3>
+    <p data-i18n="index.about.a4"></p>
+    <p class="about-links">
+      <a href="/streams.html" data-i18n="index.about.streams">Смотреть прямые трансляции</a>
+      <span aria-hidden="true">·</span>
+      <a href="/news" data-i18n="index.about.news">Новости сервиса</a>
+    </p>
+  </section>
+
+  <!-- вход и регистрация — окном поверх главной (кнопки в шапке, ?returnTo=, ?mode=register, действия гостя) -->
+  <div id="authModal" class="modal hidden auth-modal" data-nosnippet>
+    <div class="auth-card" role="dialog" aria-modal="true">
+      <button type="button" class="modal-close" data-click="closeAuth" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
       <!-- ВХОД -->
       <div id="loginPanel">
         <h2 class="auth-title" data-i18n="index.login.title">Вход</h2>
@@ -139,121 +253,7 @@
         </p>
       </div>
     </div><!-- /auth-card -->
-  </div><!-- /authBox -->
-  <!-- о сервисе: видимый текст для гостя и поисковиков (варианты названия и частые вопросы) -->
-  <section class="about">
-    <h2 data-i18n="index.about.title">Что такое Party Watcher</h2>
-    <p data-i18n="index.about.text">Party Watcher (пати вотчер) — сайт для совместного просмотра видео и прямых трансляций.</p>
-    <h3 data-i18n="index.about.q1">Как смотреть видео вместе с друзьями?</h3>
-    <p data-i18n="index.about.a1"></p>
-    <h3 data-i18n="index.about.q2">Где смотреть стримы онлайн?</h3>
-    <p data-i18n="index.about.a2"></p>
-    <h3 data-i18n="index.about.q3">Как начать свой стрим?</h3>
-    <p data-i18n="index.about.a3"></p>
-    <h3 data-i18n="index.about.q4">Это бесплатно?</h3>
-    <p data-i18n="index.about.a4"></p>
-    <p class="about-links">
-      <a href="/streams.html" data-i18n="index.about.streams">Смотреть прямые трансляции</a>
-      <span aria-hidden="true">·</span>
-      <a href="/news" data-i18n="index.about.news">Новости сервиса</a>
-    </p>
-  </section>
-  <div id="appBox" class="hidden" data-nosnippet>
-    <div class="page-header">
-      <div class="brand-row">
-      <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect x="1" y="1" width="62" height="62" rx="15"
-                fill="none" stroke="var(--border)" stroke-width="2" />
-          <path d="M16 46 V18 h9 a8 8 0 0 1 0 16 h-9"
-                fill="none" stroke="var(--accent)" stroke-width="6"
-                stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M30 28 l5 18 l6.5-13 l6.5 13 l5-18"
-                fill="none" stroke="var(--logo-alt)" stroke-width="6"
-                stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        <span class="brand-text"><span class="brand-party">Party</span> <span class="brand-watcher">Watcher</span></span>
-      </div>
-        <div data-lang-switch></div>
-      </div>
-
-      <div class="header-right">
-        <div class="corner-menu">
-          <a class="icon-btn profile-btn hidden" id="meLink" href="/" data-i18n-title="common.header.profile"><span id="meName" data-no-i18n></span></a>
-          <button class="icon-btn theme-toggle" data-click="toggleTheme" data-i18n-title="common.header.theme">🌙</button>
-        </div>
-        <a id="adminLink" href="/admin.html" class="hidden"><button class="icon-btn" data-i18n="common.header.admin">Админ</button></a>
-      </div>
-    </div>
-
-    <div class="layout">
-      <nav class="nav-sidebar">
-        <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/news" data-i18n="common.nav.news">📰 Новости</button>
-        <button type="button" class="page-nav-btn active" data-click="navigateWithFade" data-arg="/" data-i18n="common.nav.rooms">🏠 Комнаты</button>
-        <button type="button" class="page-nav-btn" data-click="navigateWithFade" data-arg="/streams.html" data-i18n="common.nav.streams">📡 Прямые трансляции</button>
-      </nav>
-
-      <div class="col-left">
-        <h2 data-i18n="index.create.title">Создать комнату</h2>
-        <input id="roomName" placeholder="Название комнаты" data-i18n-placeholder="index.create.name" autocomplete="off" />
-        <div class="type-row">
-          <select id="videoType" data-change="onVideoTypeChange">
-            <option value="kodik" data-i18n="index.type.kodik" selected>Kodik (аниме, дорамы, азиатские и турецкие сериалы)</option>
-            <option value="youtube_twitch" data-i18n="index.type.youtube_twitch">YouTube / Twitch / VK Видео</option>
-            <option value="drive" data-i18n="index.type.drive">Google Диск</option>
-            <option value="player_capture" class="hidden" hidden data-i18n="index.type.player_capture">Просмотр фильма / сериала</option>
-            <option value="direct" data-i18n="index.type.direct">Прямая ссылка на видео</option>
-          </select>
-          <button type="button" class="info-btn" data-click="toggleInfoPopup" data-i18n-title="index.create.info" data-i18n-aria-label="index.create.info">i</button>
-          <button type="button" class="lock-btn lock-private" id="privacyToggle" data-click="togglePrivacy" data-i18n-title="index.create.privacy" data-i18n-aria-label="index.create.privacy">🔒</button>
-        </div>
-        <div id="infoPopup" class="info-popup hidden"></div>
-        <input id="videoUrl" placeholder="Ссылка на видео" data-i18n-placeholder="index.create.url" data-input="onVideoUrlInput" data-keydown="onVideoUrlKeydown" autocomplete="off" list="recentVideoUrls" />
-        <datalist id="recentVideoUrls"></datalist>
-        <div id="kodikResults" class="kodik-results hidden"></div>
-        <button data-click="createRoom" data-i18n="index.create.submit">Создать</button>
-
-        <h2 data-i18n="index.join.title">Войти по ключу</h2>
-        <input id="joinCodeInput" placeholder="Ключ комнаты" data-i18n-placeholder="index.join.code" autocomplete="off" />
-        <button class="btn-mono" data-click="joinByCode" data-i18n="index.join.submit">Войти</button>
-        </div>
-
-        <div class="col-right">
-          <h2 data-i18n="index.mine.title">Мои комнаты</h2>
-          <div id="roomList"></div>
-        </div>
-      </div>
-
-      <!-- Публичные комнаты — на всю ширину -->
-      <section class="public-section">
-        <h2 data-i18n="index.public.title">Публичные комнаты</h2>
-
-        <div class="public-search-wrap">
-          <input id="publicSearchInput" type="text" autocomplete="off" placeholder="Поиск по названию" data-i18n-placeholder="index.public.search" data-keydown="handlePublicSearchKey" data-event />
-          <button type="button" class="search-icon-btn" data-click="onPublicFilterChange" aria-label="Искать" data-i18n-aria-label="common.search">🔍</button>
-        </div>
-
-        <div class="public-controls">
-          <div class="public-filters">
-            <select id="publicSort" data-change="onPublicFilterChange">
-              <option value="newest" data-i18n="index.public.sort.newest">Новые</option>
-              <option value="oldest" data-i18n="index.public.sort.oldest">Старые</option>
-              <option value="most" data-i18n="index.public.sort.most">Больше людей</option>
-              <option value="least" data-i18n="index.public.sort.least">Меньше людей</option>
-            </select>
-
-            <label class="filter-check">
-              <input type="checkbox" id="onlyWithPeople" data-change="onPublicFilterChange" />
-              <span data-i18n="index.public.withPeople">С людьми</span>
-            </label>
-            <!-- появляется только у тех, кто хоть раз подтвердил возраст 18+ -->
-          </div>
-        </div>
-
-        <div id="publicRoomList"></div>
-        <div id="publicPagination" class="pagination hidden"></div>
-      </section>
-    </div><!-- /appBox -->
+  </div>
 
     <!-- Служба поддержки FAB -->
   <!-- юридические ссылки: видны и гостю, и вошедшему (Impressum — обязателен для сайта из Германии) -->

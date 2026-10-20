@@ -436,11 +436,14 @@ async function confirmDelNews() {
 // ---------- старт ----------
 
 async function init() {
-  try {
-    await api('/auth/me');
-  } catch {
-    location.href = '/';
-    return;
+  // /news читают и гости (и поисковики); студийный адрес — только со входом
+  if (!/^\/news\/?$/.test(location.pathname)) {
+    try {
+      await api('/auth/me');
+    } catch {
+      location.href = '/';
+      return;
+    }
   }
 
   titleSpell = setupSpell($('newsTitleInput'), $('newsTitleSpell'));

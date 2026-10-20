@@ -5,10 +5,11 @@ function getReturnTo() {
   return null;
 }
 
+// вошёл ли человек — класс pw-authed на <html> (заранее ставит auth-hint.js по прошлому входу): по нему CSS
+// прячет гостевые блоки (.guest-only) или блоки для вошедших (.authed-only). Гость видит главную как есть,
+// а вход и регистрация — окном (#authModal)
 async function checkAuth() {
-  const authBox = document.getElementById('authBox');
-  const appBox = document.getElementById('appBox');
-
+  const root = document.documentElement;
   try {
     const me = await api('/auth/me');
 
@@ -27,9 +28,8 @@ async function checkAuth() {
       capOpt.classList.toggle('hidden', !can);
     }
     try { localStorage.setItem('pw_authed', '1'); } catch {}
-    if (authBox) authBox.classList.add('hidden');
-    if (appBox) appBox.classList.remove('hidden');
-    document.documentElement.classList.remove('pw-authed');
+    root.classList.add('pw-authed');
+    closeAuth();
 
     const adminLink = document.getElementById('adminLink');
     if (adminLink) {
@@ -45,16 +45,53 @@ async function checkAuth() {
     console.warn('[checkAuth] не авторизован:', err?.message || err);
     window.__pwAuthed = false;
     try { localStorage.removeItem('pw_authed'); } catch {}
-    document.documentElement.classList.remove('pw-authed'); // подсказка ошиблась (вышел на другой вкладке и т.п.)
-    if (authBox) authBox.classList.remove('hidden');
-    if (appBox) appBox.classList.add('hidden');
+    root.classList.remove('pw-authed'); // подсказка ошиблась (вышел на другой вкладке и т.п.)
     stopAutoRefresh();
-    if (new URLSearchParams(location.search).get('mode') === 'register') {
-      showRegisterPanel();
-    } else {
-      showLoginPanel();
-    }
+    document.getElementById('roomList').innerHTML = '';
+    document.getElementById('publicRoomList').innerHTML = '';
+    document.getElementById('publicPagination')?.classList.add('hidden');
+    lastRender.mine = lastRender.public = '';
+    // пришёл по ссылке «Войти»/«Регистрация» с другой страницы — сразу окно
+    const mode = new URLSearchParams(location.search).get('mode');
+    if (mode === 'register') openAuth('register');
+    else if (getReturnTo()) openAuth('login');
   }
+}
+
+// ---- окно входа ----
+function openAuth(mode) {
+  const modal = document.getElementById('authModal');
+  if (!modal) return;
+  if (mode === 'register') showRegisterPanel();
+  else showLoginPanel();
+  modal.classList.remove('hidden');
+  const first = document.getElementById(mode === 'register' ? 'regUsername' : 'loginInput');
+  setTimeout(() => first?.focus(), 0);
+}
+
+function closeAuth() {
+  document.getElementById('authModal')?.classList.add('hidden');
+}
+
+document.getElementById('authModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'authModal') closeAuth();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAuth();
+});
+// Enter в полях входа — как кнопка «Войти»
+['loginInput', 'passwordInput'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); login(); }
+  });
+});
+
+// действие, для которого нужен аккаунт: гостю — подсказка и окно входа
+function requireAuth() {
+  if (window.__pwAuthed !== false) return true; // ещё не знаем (ответ /auth/me в пути) — решит сервер
+  PW.toast(t('index.guest.needLogin'), 'info');
+  openAuth('login');
+  return false;
 }
 
 function showAuthPanel(id) {
@@ -587,7 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let creatingRoom = false; // двойной клик не должен создать две комнаты (и обойти лимит)
 async function createRoom() {
-  if (creatingRoom) return;
+  if (!requireAuth() || creatingRoom) return;
   creatingRoom = true;
   let leaving = false;
   try {
@@ -679,7 +716,7 @@ async function createRoom() {
 
 async function joinByCode() {
   const code = document.getElementById('joinCodeInput').value.trim();
-  if (!code) return;
+  if (!code || !requireAuth()) return;
   try {
     await api('/rooms/' + encodeURIComponent(code));
     location.href = `/room.html?code=${encodeURIComponent(code)}`;
@@ -786,6 +823,7 @@ function renderRoomList(list, rooms, opts, cacheKey) {
 }
 
 async function loadMyRooms() {
+  if (!window.__pwAuthed) return;
   try {
     const rooms = await api('/rooms/mine');
     const list = document.getElementById('roomList');
@@ -830,7 +868,7 @@ function handlePublicSearchKey(e) {
 async function loadPublicRooms() {
   const list = document.getElementById('publicRoomList');
   const paginationEl = document.getElementById('publicPagination');
-  if (!list) return;
+  if (!list || !window.__pwAuthed) return; // гостю список не показываем (и сервер без входа не отдаёт)
 
   const params = new URLSearchParams({
     page: publicState.page,
