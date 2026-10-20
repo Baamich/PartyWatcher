@@ -830,11 +830,15 @@ button:disabled {
 /* полноэкранный чат эфира — тёмная подложка поверх видео: там цвет как есть */
 [data-theme="light"] .fs-active .pw-nick { color: var(--nick); }
 
-/* «Войти» в шапке у гостя (api.js, на месте кнопки профиля) */
+/* «Войти» в шапке у гостя (api.js, на месте кнопки профиля) — фирменный градиент, как у главных кнопок */
 [data-theme] .corner-menu .pw-login,
 [data-theme] .header-right .pw-login {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-  text-decoration: none;
+  background: var(--btn-grad-start) linear-gradient(120deg, var(--btn-grad-start) 0%, var(--btn-grad-end) 50%, var(--btn-grad-start-hover) 100%) 0 0 / 200% 100%;
+  border-color: transparent;
+  color: #fff;
+  transition: background-position 0.4s ease;
+}
+[data-theme] .corner-menu .pw-login:hover,
+[data-theme] .header-right .pw-login:hover {
+  background-position: 100% 0;
 }
