@@ -97,7 +97,7 @@
     },
     "widgets": {
       "title": "OBS widgets and the mini panel",
-      "desc": "Timers, counters, goals, credits, always-on-top window"
+      "desc": "Timers, counters, goals, credits, streamer mini panel"
     },
     "chat-bridge": {
       "title": "Your own Twitch / VK bot",

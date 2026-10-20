@@ -77,7 +77,7 @@
     "publish": "Publish to presets"
   },
   "float": {
-    "dock": "🧩 OBS dock link",
+    "dock": "🧩 Mini panel in OBS (dock)",
     "dockCopied": "Link copied. In OBS: Docks → Custom Browser Docks",
     "live": "Live",
     "offline": "Offline",

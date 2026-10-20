@@ -461,10 +461,10 @@
     }
   },
   "float": {
-    "open": "📌 Always on top",
-    "hint": "Mini panel: stream uptime, chat, events and widget buttons in a window above all apps (Chrome, Edge, Opera, Yandex on a computer)",
-    "title": "Party Watcher — Mini panel",
+    "open": "📌 Streamer mini panel",
+    "hint": "A small window with the chat, stream uptime, events and widget buttons — stays above all apps, even a windowed game (Chrome, Edge, Opera, Yandex on a computer)",
+    "title": "Party Watcher — Streamer mini panel",
     "blocked": "The browser blocked the window — allow pop-ups for this site",
-    "noPip": "This browser can’t keep a window above all apps — a regular window was opened. Always on top works in Chrome, Edge, Opera or Yandex Browser on a computer"
+    "noPip": "This browser can’t keep a window above all apps — the mini panel opened as a regular window. Above all apps it works in Chrome, Edge, Opera or Yandex Browser on a computer"
   }
 }

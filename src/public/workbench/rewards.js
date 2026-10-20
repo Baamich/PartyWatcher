@@ -14,10 +14,21 @@ const rewardById = (id) => st.rewards.find((r) => r.id === id);
 const apiPath = (r) => `/api/rewards/${channel}/${r.slug}`;
 
 // ---------- сохранение раскладки ----------
+// раскладка = места карточек + скрыта ли карточка «Покупки» (галочка справа запоминается)
 let layoutTimer = null;
+let panelsNow = {};
+let queueHidden = false;
 function saveLayout(panels) {
+  if (panels) panelsNow = panels;
   clearTimeout(layoutTimer);
-  layoutTimer = setTimeout(() => api('/rewards/studio-layout', { method: 'PUT', body: { panels } }).catch(() => {}), 500);
+  layoutTimer = setTimeout(() => api('/rewards/studio-layout', { method: 'PUT', body: { panels: panelsNow, queueHidden } }).catch(() => {}), 500);
+}
+function setQueueShown(on) {
+  queueHidden = !on;
+  if (on) renderQueue();
+  else win.close(QUEUE);
+  renderPicker();
+  saveLayout();
 }
 
 // значок награды: своё фото или цветной квадрат с первой буквой
@@ -519,7 +530,7 @@ function renderPicker() {
   for (const r of st.rewards) {
     line(r.id, `${tileHtml(r, 18)} ${esc(r.title)} <small>${esc(r.cost)}</small>`, r.enabled, (on) => setEnabled(r.id, on), () => openEditor(r.id));
   }
-  line(QUEUE, '🧾 ' + esc(t('rewards.queue.title')), win.has(QUEUE), (on) => (on ? renderQueue() : win.close(QUEUE)));
+  line(QUEUE, '🧾 ' + esc(t('rewards.queue.title')), win.has(QUEUE), setQueueShown);
   document.getElementById('rwCreate').disabled = st.rewards.length >= st.max;
 }
 
@@ -582,6 +593,9 @@ async function resetCardsLayout() {
   const ok = await PW.confirm(t('rewards.layoutReset'));
   if (!ok) return;
   win.resetPanels();
+  panelsNow = {};
+  queueHidden = false;
+  if (!win.has(QUEUE)) { renderQueue(); renderPicker(); }
   api('/rewards/studio-layout', { method: 'DELETE' }).catch(() => {});
 }
 
@@ -604,7 +618,7 @@ async function goProfile() {
     canvas, picker, topBar, minW: 240, minH: 220,
     defRect: (id) => PWCanvasWindows.gridRect({ index: order(id), picker, topBar, w: 300, h: id === QUEUE ? 420 : 400 }),
     onLayout: saveLayout,
-    onClose: (id) => (id === QUEUE ? (win.close(QUEUE), renderPicker()) : setEnabled(id, false)),
+    onClose: (id) => (id === QUEUE ? setQueueShown(false) : setEnabled(id, false)),
   });
   try {
     const [me, d, media] = await Promise.all([api('/auth/me'), api('/rewards/studio'), api('/alerts/settings').catch(() => ({ media: [] }))]);
@@ -616,9 +630,11 @@ async function goProfile() {
   }
   document.getElementById('rwApiBase').textContent = `/api/rewards/${channel}/<…>`;
   win.setPanels(st.layout?.panels);
-  renderQueue();
+  panelsNow = { ...(st.layout?.panels || {}) };
+  queueHidden = !!st.layout?.queueHidden;
+  if (!queueHidden) renderQueue();
   for (const r of st.rewards) renderCard(r.id);
   renderPoints();
   renderPicker();
-  window.addEventListener('pw:langchange', () => { renderPoints(); renderPicker(); renderQueue(); st.rewards.forEach((r) => renderCard(r.id)); });
+  window.addEventListener('pw:langchange', () => { renderPoints(); renderPicker(); if (win.has(QUEUE)) renderQueue(); st.rewards.forEach((r) => renderCard(r.id)); });
 })();

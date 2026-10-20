@@ -394,7 +394,7 @@ rewardsRouter.put('/studio-points', auth, requireStreamer, async (req, res) => {
   res.json({ status: 'ok', name: set.pointsName, icon: set.pointsIcon !== undefined ? iconUrl(set.pointsIcon) : undefined });
 });
 
-// раскладка карточек наград
+// раскладка карточек наград и скрыта ли карточка «Покупки»
 rewardsRouter.put('/studio-layout', auth, requireStreamer, async (req, res) => {
   const panels = {};
   for (const [id, r] of Object.entries(req.body?.panels || {}).slice(0, MAX_REWARDS + 2)) {
@@ -402,7 +402,7 @@ rewardsRouter.put('/studio-layout', auth, requireStreamer, async (req, res) => {
     const n = (v, min, max) => Math.round(Math.min(max, Math.max(min, Number(v) || 0)));
     panels[id] = { x: n(r.x, 0, 4000), y: n(r.y, 0, 8000), w: n(r.w, 220, 1200), h: n(r.h, 200, 1200) };
   }
-  await AlertSettings.updateOne({ userId: req.me._id }, { $set: { rewardsLayout: { panels } }, $setOnInsert: { streamerNameLower: req.me.streamerNameLower } }, { upsert: true });
+  await AlertSettings.updateOne({ userId: req.me._id }, { $set: { rewardsLayout: { panels, queueHidden: !!req.body?.queueHidden } }, $setOnInsert: { streamerNameLower: req.me.streamerNameLower } }, { upsert: true });
   res.json({ status: 'ok' });
 });
 rewardsRouter.delete('/studio-layout', auth, requireStreamer, async (req, res) => {
