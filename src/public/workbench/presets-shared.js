@@ -25,7 +25,7 @@
 
   const escH = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const COLOR_RE = /^#[0-9a-f]{6}$/i;
-  const TYPE_LABEL = { style: 'presets.typeStyle', command: 'presets.typeCommand', reward: 'presets.typeReward' };
+  const TYPE_LABEL = { style: 'presets.typeStyle', command: 'presets.typeCommand', reward: 'presets.typeReward', widget: 'presets.typeWidget' };
 
   const usageText = (args) => (args || []).map((a) => (a.optional ? `[${a.name}]` : `<${a.name}>`)).join(' ');
 
@@ -78,6 +78,36 @@
     return box;
   }
 
+  // виджет OBS: живое превью на примерах данных (widgets/render.js; страницы без него показывают только название)
+  function widgetBox(data) {
+    const box = el('div', 'pst-wg');
+    const WC = window.PWWidgetCatalog;
+    const WR = window.PWWidgetRender;
+    if (!WC || !WR) return box;
+    const w = WC.cleanWidget({ ...data, id: 'preset00' });
+    if (!w) return box;
+    if (w.type === 'countdown') w.state = WC.cleanState('countdown', { run: true, end: Date.now() + 263000, left: 0, total: w.opts.sec * 1000 });
+    if (w.type === 'counter' || w.type === 'goal') w.state.n = w.type === 'goal' ? Math.round(w.opts.target * 0.6) : 7;
+    if (w.type === 'stopwatch') w.state = { run: true, start: Date.now() - 754000, acc: 0 };
+    if (w.type === 'last') w.state = { items: [{ vars: WC.sampleCtx().last[w.opts.event] || {}, at: 1 }] };
+    if (w.type === 'text' && !w.state.text) w.state.text = tr('widgets.type.text.name');
+    const view = WR.create(box, { preview: true });
+    view.ctx(WC.sampleCtx());
+    view.set(w);
+    // крупный шрифт — уменьшаем под карточку (когда карточка уже на странице и у неё есть размер)
+    const fit = () => {
+      if (!box.clientWidth) return;
+      view.root.style.transform = '';
+      const k = Math.min(1, (box.clientWidth - 12) / (view.root.scrollWidth || 1), (box.clientHeight - 12) / (view.root.scrollHeight || 1));
+      if (k > 0 && k < 1) view.root.style.transform = `scale(${k})`;
+    };
+    if (typeof ResizeObserver !== 'undefined') { const ro = new ResizeObserver(fit); ro.observe(box); ro.observe(view.root); }
+    else requestAnimationFrame(fit);
+    const typeIcon = WC.typeById(w.type)?.icon || '';
+    box.title = typeIcon + ' ' + tr('widgets.type.' + w.type + '.name');
+    return box;
+  }
+
   // ---------- карточка ----------
   // o: { onLike, onAdd, onTrash, readonly }
   function buildCard(item, o = {}) {
@@ -95,7 +125,8 @@
     }
 
     const main = el('div', 'pst-main');
-    main.appendChild(item.type === 'style' ? styleStage(item.data, item.authorName) : item.type === 'reward' ? rewardBox(item) : commandBox(item));
+    main.appendChild(item.type === 'style' ? styleStage(item.data, item.authorName) : item.type === 'reward' ? rewardBox(item)
+      : item.type === 'widget' ? widgetBox(item.data) : commandBox(item));
     main.appendChild(el('h3', 'pst-name', item.name));
     if (item.description) main.appendChild(el('p', 'pst-desc', item.description));
     const tag = item.mine ? ' · ' + tr('presets.tagMine') : item.added ? ' · ' + tr('presets.tagAdded') : '';
@@ -208,7 +239,8 @@
 
   async function unaddItem(item, after) {
     const extra = ' ' + (item.type === 'command' ? tr('presets.unaddCmd', { name: item.data.name })
-      : item.type === 'reward' ? tr('presets.unaddReward', { name: item.data.title }) : tr('presets.unaddStyle'));
+      : item.type === 'reward' ? tr('presets.unaddReward', { name: item.data.title })
+        : item.type === 'widget' ? tr('presets.unaddWidget') : tr('presets.unaddStyle'));
     const ok = await PW.confirm(tr('presets.unaddText', { name: item.name }) + extra,
       { title: tr('presets.unaddTitle'), okText: tr('presets.yes'), cancelText: tr('presets.no'), danger: true });
     if (!ok) return;
@@ -223,8 +255,10 @@
 
   // ---------- окно «Опубликовать пре-сет» ----------
   // type — сразу нужный тип без переключателя; rewardId — какую награду выбрать (из студии «Награды»)
-  async function openPublish({ type, rewardId, onDone } = {}) {
+  async function openPublish({ type, rewardId, widgetId, onDone } = {}) {
     let t = type || 'style';
+    let wgs = [];
+    let wgsLoaded = false;
     let cmds = [];
     let cmdsLoaded = false;
     let rewards = [];
@@ -258,15 +292,17 @@
     const body = el('div', 'pst-pub-body');
     const select = el('select');
     select.addEventListener('change', drawBody);
+    const wgSelect = el('select');
+    wgSelect.addEventListener('change', () => { const w = wgs[parseInt(wgSelect.value, 10) || 0]; if (w?.name) name.value = w.name; drawBody(); });
     const rwSelect = el('select');
     rwSelect.addEventListener('change', () => { name.value = (rewards[parseInt(rwSelect.value, 10) || 0] || {}).title || name.value; drawBody(); });
 
     function drawTypeRow() {
       typeRow.replaceChildren();
-      [['style', tr('presets.pub.typeStyle')], ['command', tr('presets.typeCommand')], ['reward', tr('presets.typeReward')]].forEach(([k, label]) => {
+      [['style', tr('presets.pub.typeStyle')], ['command', tr('presets.typeCommand')], ['reward', tr('presets.typeReward')], ['widget', tr('presets.typeWidget')]].forEach(([k, label]) => {
         const b = el('button', k === t ? 'active' : '', label);
         b.type = 'button';
-        b.addEventListener('click', async () => { t = k; drawTypeRow(); await ensureCmds(); await ensureRewards(); drawBody(); });
+        b.addEventListener('click', async () => { t = k; drawTypeRow(); await ensureCmds(); await ensureRewards(); await ensureWidgets(); drawBody(); });
         typeRow.appendChild(b);
       });
     }
@@ -298,9 +334,36 @@
       if (!name.value) name.value = (rewards[parseInt(rwSelect.value, 10) || 0] || {}).title || '';
     }
 
+    // свои виджеты OBS (студия → ⏱️ Виджеты)
+    async function ensureWidgets() {
+      if (t !== 'widget' || wgsLoaded) return;
+      try { wgs = (await api('/widgets')).widgets || []; } catch (_) { wgs = []; }
+      wgsLoaded = true;
+      wgSelect.replaceChildren();
+      const WC = window.PWWidgetCatalog;
+      wgs.forEach((w, i) => {
+        const o = el('option', null, (WC?.typeById(w.type)?.icon || '') + ' ' + (w.name || tr('widgets.type.' + w.type + '.name')));
+        o.value = String(i);
+        if (w.id === widgetId) o.selected = true;
+        wgSelect.appendChild(o);
+      });
+      if (!name.value) { const w = wgs[parseInt(wgSelect.value, 10) || 0]; name.value = w ? w.name || tr('widgets.type.' + w.type + '.name') : ''; }
+    }
+
     function drawBody() {
       body.replaceChildren();
       err.classList.add('hidden');
+      if (t === 'widget') {
+        if (!wgs.length) {
+          body.appendChild(el('p', 'wb-hint', tr('presets.pub.noWidgets')));
+          submit.disabled = true;
+          return;
+        }
+        const w = wgs[parseInt(wgSelect.value, 10) || 0];
+        body.append(el('div', 'auth-label', tr('presets.pub.whichWidget')), wgSelect, widgetBox(w), el('p', 'wb-hint', tr('presets.pub.widgetHint')));
+        submit.disabled = false;
+        return;
+      }
       if (t === 'reward') {
         if (!rewards.length) {
           body.appendChild(el('p', 'wb-hint', tr('presets.pub.noRewards')));
@@ -338,10 +401,17 @@
       err.classList.add('hidden');
       const payload = { type: t, name: name.value, description: desc.value };
       if (t === 'style') payload.data = currentStyle();
-      else if (t === 'reward') {
+      else if (t === 'widget') {
+        const w = wgs[parseInt(wgSelect.value, 10) || 0];
+        if (!w) return;
+        payload.data = { type: w.type, name: w.name, slug: w.slug, style: w.style, opts: w.opts, state: w.state };
+      } else if (t === 'reward') {
         const r = rewards[parseInt(rwSelect.value, 10) || 0];
         if (!r) return;
-        payload.data = { title: r.title, description: r.description, cost: r.cost, color: r.color, needInput: r.needInput, reply: r.reply || '' };
+        payload.data = {
+          title: r.title, description: r.description, cost: r.cost, color: r.color, needInput: r.needInput, reply: r.reply || '',
+          cooldownSec: r.cooldownSec || 0, perStream: r.perStream || 0, perUserStream: r.perUserStream || 0, onlyLive: !!r.onlyLive, action: r.action || null,
+        };
       } else {
         const c = cmds[parseInt(select.value, 10) || 0];
         if (!c) return;
@@ -367,6 +437,7 @@
     drawTypeRow();
     await ensureCmds();
     await ensureRewards();
+    await ensureWidgets();
     drawBody();
     document.body.appendChild(back);
     name.focus();

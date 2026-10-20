@@ -13,7 +13,8 @@
     "docs": "📚 Docs",
     "stats": "📊 Statistics",
     "events": "🔔 Events",
-    "rewards": "🎁 Rewards"
+    "rewards": "🎁 Rewards",
+    "widgets": "⏱️ Widgets"
   },
   "key": {
     "title": "Stream key",
@@ -93,7 +94,8 @@
       "filterOff": "turned off the word filter"
     },
     "points_add": "gave {name} channel points: {details}",
-    "points_sub": "took channel points from {name}: {details}"
+    "points_sub": "took channel points from {name}: {details}",
+    "widget": "widget command: {details}"
   },
   "chat": {
     "title": "Chat",

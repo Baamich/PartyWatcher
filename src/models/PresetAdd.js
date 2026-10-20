@@ -6,6 +6,7 @@ const presetAddSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     commandId: { type: mongoose.Schema.Types.ObjectId, default: null }, // команда, созданная этим добавлением
     rewardId: { type: mongoose.Schema.Types.ObjectId, default: null }, // награда, созданная этим добавлением
+    widgetId: { type: String, default: null }, // виджет OBS, созданный этим добавлением (id в ChannelWidgets)
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

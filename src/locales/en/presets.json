@@ -6,7 +6,8 @@
     "all": "All",
     "style": "Styles",
     "command": "Commands",
-    "reward": "Rewards"
+    "reward": "Rewards",
+    "widget": "Widgets"
   },
   "sort": {
     "likes": "Most liked",
@@ -79,7 +80,10 @@
     "failed": "Could not publish",
     "noRewards": "You don’t have your own rewards yet. Create one in “Rewards”, then publish it (starter rewards can’t be published).",
     "whichReward": "Which reward to publish",
-    "rewardHint": "The reward picture isn’t published — others get a color with a letter."
+    "rewardHint": "The reward picture isn’t published — others get a color with a letter.",
+    "noWidgets": "You have no widgets yet — create them in the studio, “⏱️ Widgets”.",
+    "whichWidget": "Which widget",
+    "widgetHint": "The type, look and settings are shared. Your OBS link and key are not."
   },
   "typeReward": "Reward",
   "rewardCost": "Cost: {n}",
@@ -107,5 +111,12 @@
     "textPh": "For example: the bot reply links to a casino",
     "send": "Send report",
     "sent": "Report sent — thank you!"
+  },
+  "typeWidget": "OBS widget",
+  "unaddWidget": "The widget will be removed from “⏱️ Widgets” and its OBS link will stop working.",
+  "addWidget": {
+    "title": "Add widget",
+    "text": "Add the widget “{name}” to “⏱️ Widgets”? Then copy its link for OBS.",
+    "done": "Widget added — it’s in the studio, “⏱️ Widgets”"
   }
 }

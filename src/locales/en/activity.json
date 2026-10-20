@@ -45,6 +45,7 @@
     "chatSettings": "Chat settings (followers, slow mode, filter)",
     "editTitle": "Change stream title and description",
     "editCategory": "Change category",
-    "raid": "Start a raid"
+    "raid": "Start a raid",
+    "widgets": "Control OBS widgets with chat commands (/timer, /count…)"
   }
 }

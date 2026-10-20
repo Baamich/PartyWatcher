@@ -467,6 +467,7 @@ router.post('/:name/follow', auth, followLimiter, async (req, res) => {
       const nameLower = String(req.params.name || '').trim().toLowerCase();
       alerts.fire(nameLower, 'follow', { name: req.user.username }).catch(() => {});
       alerts.followers(nameLower, s._id, followers).catch(() => {});
+      require('../../services/widgets').followers(nameLower, followers, true); // виджеты OBS: подписчики
       // в колокольчик стримеру: подписки подряд копятся в одно «ник и ещё N»
       require('../../services/notify').send(s._id, 'channel.follow', { name: req.user.username }, { group: 'follow', link: '/workbench/channel-activity.html' });
     }
@@ -492,6 +493,7 @@ router.delete('/:name/follow', auth, followLimiter, async (req, res) => {
         { new: true }
       ).select('followersCount').lean();
       followers = u ? u.followersCount : 0;
+      require('../../services/widgets').followers(String(req.params.name || '').trim().toLowerCase(), followers, false);
     }
     res.json({ followers, following: false, self: String(s._id) === String(req.user.id) });
   } catch (err) {

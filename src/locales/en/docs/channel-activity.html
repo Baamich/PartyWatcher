@@ -19,6 +19,7 @@
   <tr><td>Clear the whole chat</td><td>🧹 in the chat header</td></tr>
   <tr><td>Chat settings</td><td>⚙ in the chat header: followers only, slow mode, word filter</td></tr>
   <tr><td>Title and description, category, raid</td><td>🛠 “Stream management” in the chat header — <b>senior only</b> (🔒 for regular moderators)</td></tr>
+  <tr><td>Control OBS widgets</td><td>The <code>/timer</code>, <code>/count</code> and other commands (below) — <b>senior only</b>; off by default</td></tr>
 </table>
 </div>
 <p>Only lower ranks can be punished: a moderator can't ban a moderator, a senior can't ban a senior, and nobody can touch you. “Followers only” and slow mode don't apply to you and your moderators.</p>
@@ -40,13 +41,18 @@
   <tr><td><code>/filter 0–4</code></td><td>Word filter: 0 — off, 4 — maximum</td><td>Chat settings</td></tr>
   <tr><td><code>/raid channel [seconds]</code>, <code>/unraid</code></td><td>Raid another stream (in 15 s, 5–120 allowed) / cancel</td><td>Raid</td></tr>
   <tr><td><code>/title text</code></td><td>Change the stream title</td><td>Title</td></tr>
+  <tr><td><code>/timer [name] 5</code>, <code>/timer pause</code>, <code>/timer reset</code>, <code>/timer +1m</code></td><td>Countdown: start for 5 minutes (also <code>90s</code>, <code>1h30m</code>, <code>10:00</code>), pause, reset, add or remove time</td><td>Widgets</td></tr>
+  <tr><td><code>/sw [name] [start|pause|reset]</code></td><td>Stopwatch; no word — start or pause</td><td>Widgets</td></tr>
+  <tr><td><code>/count [name] [+|-|+5|=10|reset]</code>, <code>/goal …</code></td><td>Counter and a goal with your own number; no word — +1</td><td>Widgets</td></tr>
+  <tr><td><code>/text [name] text</code>, <code>/ticker [name] text</code></td><td>Change the text widget or the ticker; no text — clear it</td><td>Widgets</td></tr>
+  <tr><td><code>/credits [name] [stop]</code></td><td>Roll the end credits / stop them</td><td>Widgets</td></tr>
   <tr><td><code>/SP+ name amount</code>, <code>/SP- name amount</code></td><td>Give a viewer channel points / take them away (not below zero). The viewer sees the new balance right away and a message saying how much they got or lost</td><td>Only you</td></tr>
 </table>
 </div>
 <p>The name can be written with <code>@</code> and in any case. The rank rule is the same as for the buttons: a moderator can't ban a moderator. <code>/SP+</code> and <code>/SP-</code> are only for the channel owner — they can't be given to moderators; up to 1,000,000 points at a time, and there's no need to give points to yourself (yours are unlimited).</p>
 
 <h2>Action log</h2>
-<p>Everything your moderators and you do is written to the <b>“Action log”</b> on the main studio page: bans and unbans, timeouts and lifting them, deleted messages, clearing the chat, chat mode changes (followers only, slow mode, filter), raids and cancelling them, changes of the stream title, description and category, giving and taking channel points (how many and the new balance). You see who did it and when. Entries are kept for 7 days.</p>
+<p>Everything your moderators and you do is written to the <b>“Action log”</b> on the main studio page: bans and unbans, timeouts and lifting them, deleted messages, clearing the chat, chat mode changes (followers only, slow mode, filter), raids and cancelling them, changes of the stream title, description and category, giving and taking channel points (how many and the new balance), widget commands from moderators. You see who did it and when. Entries are kept for 7 days.</p>
 
 <h2>Banned</h2>
 <p>Everyone banned in chat. <b>Unban</b> lets the person write again.</p>

@@ -88,15 +88,68 @@ function pickImage(titleKey, current, onPick, allowNone = true) {
 
 // ---------- карточка награды (просмотр) и окно-редактор ----------
 const CHANGE_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 0 1-13.7 5.6M4 12a8 8 0 0 1 13.7-5.6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M18.5 2.5v4.5H14M5.5 21.5V17H10" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-// переменные ответа бота (сервер: REPLY_VARS в rewards.routes.js)
-const REPLY_VARS = ['user', 'reward', 'cost', 'message', 'points', 'balance'];
+// переменные ответа бота (сервер: REPLY_VARS в rewards.routes.js) и функции (как в командах чата)
+const REPLY_VARS = ['user', 'reward', 'cost', 'message', 'points', 'balance', 'target', 'streamer', 'viewers', 'uptime', 'title', 'followers', 'count', 'count_user', 'followage'];
+const REPLY_FUNCS = [['{random:1-100}', 'random'], ['{choice:A|B|C}', 'choice'], ['{dice}', 'dice'], ['{coin}', 'coin'], ['{calc:{cost}*2}', 'calc'],
+  ['{time}', 'time'], ['{upper:{user}}', 'upper'], ['{widget:deaths}', 'widget']];
+const COOLDOWNS = [0, 30, 60, 120, 300, 600, 1800, 3600, 7200, 21600, 86400];
+// что награда может сделать с виджетом каждого типа (сервер: widgets.actBySlug)
+const ACTION_OPS = {
+  countdown: ['add', 'set', 'start'], stopwatch: ['start'], counter: ['add', 'set'], goal: ['add', 'set'],
+  text: ['text'], ticker: ['text'], custom: ['add', 'set', 'text', 'roll'], credits: ['run'],
+};
+let widgetsList = null; // виджеты канала для «Действия с виджетом» (грузятся при первом открытии редактора)
+async function loadWidgetsList() {
+  if (widgetsList) return widgetsList;
+  try { widgetsList = (await api('/widgets')).widgets || []; } catch (_) { widgetsList = []; }
+  return widgetsList;
+}
 const NEED_TEXT = ['highlight', 'hello']; // без текста зрителя эти стартовые награды не работают
 const isStarter = (r) => r.kind !== 'custom';
 
 // ответ бота с примерами вместо переменных — для превью в карточке и редакторе
 function replySample(tpl, r) {
-  const ex = { user: 'Viewer1', reward: r.title || '…', cost: r.cost, message: t('rewards.vars.sampleMessage'), points: pointsName(), balance: 1250 };
-  return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (REPLY_VARS.includes(k) ? String(ex[k]) : m));
+  const msg = t('rewards.vars.sampleMessage');
+  const ex = {
+    user: 'Viewer1', reward: r.title || '…', cost: r.cost, message: msg, points: pointsName(), balance: 1250, target: msg.split(' ')[0],
+    streamer: 'Streamer', viewers: 42, uptime: '1:05', title: 'Speedrun', followers: 128, count: 17, count_user: 3, followage: t('rewards.vars.sampleFollowage'),
+  };
+  const C = window.PWWidgetCatalog;
+  if (!C) return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (REPLY_VARS.includes(k) ? String(ex[k]) : m));
+  // функции — правдоподобным примером (на эфире считает сервер)
+  return C.renderTpl(tpl, (k, p) => {
+    if (p === null && REPLY_VARS.includes(k)) return String(ex[k]);
+    switch (k) {
+      case 'random': { const m = /(-?\d+)\s*-\s*(-?\d+)/.exec(p || '1-100'); return m ? String(Math.round((+m[1] + +m[2]) / 2)) : '50'; }
+      case 'choice': return String(p || '').split('|')[0] || '?';
+      case 'dice': return '4';
+      case 'coin': return t('rewards.vars.heads');
+      case 'calc': return C.calc(p);
+      case 'time': return '21:30';
+      case 'date': return new Date().toLocaleDateString(I18N.locale);
+      case 'upper': return String(p ?? '').toLocaleUpperCase(I18N.locale);
+      case 'lower': return String(p ?? '').toLocaleLowerCase(I18N.locale);
+      case 'widget': return '7';
+      default: return null;
+    }
+  });
+}
+
+// метки ограничений и действия на карточке
+function limitTags(r) {
+  const tags = [];
+  if (r.onlyLive) tags.push('📡 ' + t('rewards.limits.onlyLiveTag'));
+  if (r.cooldownSec) tags.push('⏳ ' + fmtCooldown(r.cooldownSec));
+  if (r.perStream) tags.push(t('rewards.limits.perStreamTag', { n: r.perStream }));
+  if (r.perUserStream) tags.push(t('rewards.limits.perUserTag', { n: r.perUserStream }));
+  if (r.action?.widget) tags.push('🎛 ' + t('rewards.action.tag', { name: r.action.widget }));
+  return tags;
+}
+function fmtCooldown(sec) {
+  if (!sec) return t('rewards.limits.cdNone');
+  if (sec < 60) return t('rewards.limits.cdSec', { n: sec });
+  if (sec < 3600) return t('rewards.limits.cdMin', { n: Math.round(sec / 60) });
+  return t('rewards.limits.cdHour', { n: Math.round(sec / 360) / 10 });
 }
 
 function updateCardHead(id) {
@@ -118,6 +171,7 @@ function renderCard(id) {
         <b class="rw-v-title" data-no-i18n>${esc(r.title)}</b>
         <span class="rw-v-cost">${esc(t('rewards.card.costShort', { n: r.cost }))}</span>
         ${r.needInput ? `<span class="rw-v-tag">✍ ${esc(t('rewards.card.needInput'))}</span>` : ''}
+        ${limitTags(r).map((x) => `<span class="rw-v-tag" data-no-i18n>${esc(x)}</span>`).join('')}
       </div>
     </div>
     <p class="rw-v-desc${r.description ? '' : ' muted'}" data-no-i18n>${esc(r.description || t('rewards.card.noDesc'))}</p>
@@ -166,8 +220,9 @@ function publishReward(id) {
 function openEditor(id) {
   const old = id ? rewardById(id) : null;
   const d = old
-    ? { title: old.title, description: old.description || '', cost: old.cost, color: old.color, needInput: !!old.needInput, reply: old.reply || '', imageRef: old.imageRef || null, image: old.image || null, kind: old.kind }
-    : { title: '', description: '', cost: 100, color: '#7c3aed', needInput: false, reply: '', imageRef: null, image: null, kind: 'custom' };
+    ? { title: old.title, description: old.description || '', cost: old.cost, color: old.color, needInput: !!old.needInput, reply: old.reply || '', imageRef: old.imageRef || null, image: old.image || null, kind: old.kind,
+      cooldownSec: old.cooldownSec || 0, perStream: old.perStream || 0, perUserStream: old.perUserStream || 0, onlyLive: !!old.onlyLive, action: old.action || null }
+    : { title: '', description: '', cost: 100, color: '#7c3aed', needInput: false, reply: '', imageRef: null, image: null, kind: 'custom', cooldownSec: 0, perStream: 0, perUserStream: 0, onlyLive: false, action: null };
   const lockInput = NEED_TEXT.includes(d.kind);
   const wrap = document.createElement('div');
   wrap.className = 'cw-modal';
@@ -190,7 +245,27 @@ function openEditor(id) {
       <label class="rw-field"><span>${esc(t('rewards.edit.reply'))} <small>${esc(t('rewards.edit.replyHint'))}</small></span>
         <textarea class="rw-reply" rows="2" maxlength="200" placeholder="${esc(t('rewards.edit.replyPh'))}"></textarea></label>
       <div class="rw-vars"></div>
+      <div class="rw-funcs"></div>
       <div class="rw-reply-prev"></div>
+      <details class="rw-more"${d.cooldownSec || d.perStream || d.perUserStream || d.onlyLive ? ' open' : ''}>
+        <summary>${esc(t('rewards.limits.title'))}</summary>
+        <div class="rw-row rw-limits">
+          <label class="rw-field"><span>${esc(t('rewards.limits.cooldown'))}</span><select class="rw-cd"></select></label>
+          <label class="rw-field"><span>${esc(t('rewards.limits.perStream'))}</span><input type="number" class="rw-ps" min="0" max="10000" /></label>
+          <label class="rw-field"><span>${esc(t('rewards.limits.perUser'))}</span><input type="number" class="rw-pu" min="0" max="1000" /></label>
+        </div>
+        <label class="rw-check"><input type="checkbox" class="rw-live" /> <span>${esc(t('rewards.limits.onlyLive'))}</span></label>
+        <p class="rw-hint">${esc(t('rewards.limits.hint'))}</p>
+      </details>
+      <details class="rw-more"${d.action ? ' open' : ''}>
+        <summary>${esc(t('rewards.action.title'))}</summary>
+        <div class="rw-row rw-action">
+          <label class="rw-field"><span>${esc(t('rewards.action.widget'))}</span><select class="rw-aw"></select></label>
+          <label class="rw-field"><span>${esc(t('rewards.action.op'))}</span><select class="rw-ao"></select></label>
+        </div>
+        <label class="rw-field rw-av-wrap"><span>${esc(t('rewards.action.value'))}</span><input class="rw-av" maxlength="200" /></label>
+        <p class="rw-hint rw-ahint">${esc(t('rewards.action.hint'))}</p>
+      </details>
       <p class="rw-err hidden"></p>
       <div class="rw-editor-btns">
         <button type="button" class="icon-btn rw-cancel">${esc(t('rewards.edit.cancel'))}</button>
@@ -231,6 +306,89 @@ function openEditor(id) {
     });
     vars.appendChild(b);
   }
+  const funcs = $('.rw-funcs');
+  for (const [ins, k] of REPLY_FUNCS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'rw-var rw-func';
+    b.innerHTML = `<code>${esc(ins)}</code><span>${esc(t('rewards.funcs.' + k))}</span>`;
+    b.addEventListener('click', () => {
+      const s = reply.selectionStart ?? reply.value.length, e = reply.selectionEnd ?? s;
+      if (reply.value.length - (e - s) + ins.length > 200) return;
+      reply.value = reply.value.slice(0, s) + ins + reply.value.slice(e);
+      reply.focus();
+      drawPreview();
+    });
+    funcs.appendChild(b);
+  }
+
+  // ограничения
+  const cd = $('.rw-cd');
+  const cds = COOLDOWNS.includes(d.cooldownSec) ? COOLDOWNS : [...COOLDOWNS, d.cooldownSec].sort((a, b) => a - b);
+  for (const v of cds) {
+    const o = document.createElement('option');
+    o.value = String(v);
+    o.textContent = fmtCooldown(v);
+    o.selected = v === d.cooldownSec;
+    cd.appendChild(o);
+  }
+  $('.rw-ps').value = d.perStream || '';
+  $('.rw-pu').value = d.perUserStream || '';
+  $('.rw-ps').placeholder = $('.rw-pu').placeholder = t('rewards.limits.unlimited');
+  $('.rw-live').checked = d.onlyLive;
+
+  // действие с виджетом: список виджетов канала → что можно сделать с выбранным
+  const aw = $('.rw-aw'), ao = $('.rw-ao'), av = $('.rw-av');
+  av.value = d.action?.value || '';
+  const curWidget = () => (widgetsList || []).find((x) => x.slug === aw.value);
+  // поле значения — только для действий, которым оно нужно
+  const drawValue = () => {
+    $('.rw-av-wrap').hidden = !curWidget() || !['add', 'set', 'text', 'start'].includes(ao.value);
+    av.placeholder = t('rewards.action.ph.' + (ao.value || 'add'));
+  };
+  // сменили виджет — список действий под его тип (прежний выбор остаётся, если подходит)
+  const drawOps = () => {
+    const w = curWidget();
+    const ops = w ? ACTION_OPS[w.type] || [] : [];
+    const keep = ao.value || d.action?.op;
+    ao.replaceChildren();
+    for (const op of ops) {
+      const o = document.createElement('option');
+      o.value = op;
+      o.textContent = t('rewards.action.ops.' + op);
+      o.selected = op === keep;
+      ao.appendChild(o);
+    }
+    ao.disabled = !ops.length;
+    drawValue();
+  };
+  ao.addEventListener('change', drawValue);
+  aw.addEventListener('change', drawOps);
+  loadWidgetsList().then((list) => {
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = t('rewards.action.none');
+    aw.appendChild(none);
+    for (const w of list) {
+      if (!ACTION_OPS[w.type]) continue;
+      const o = document.createElement('option');
+      o.value = w.slug;
+      o.textContent = (window.PWWidgetCatalog?.typeById(w.type)?.icon || '') + ' ' + (w.name || t('widgets.type.' + w.type + '.name')) + ' (' + w.slug + ')';
+      o.selected = w.slug === d.action?.widget;
+      aw.appendChild(o);
+    }
+    // виджет из действия удалили — показываем имя, чтобы не потерять настройку молча
+    if (d.action?.widget && !list.some((w) => w.slug === d.action.widget)) {
+      const o = document.createElement('option');
+      o.value = d.action.widget;
+      o.textContent = '⚠ ' + d.action.widget;
+      o.selected = true;
+      aw.appendChild(o);
+    }
+    if (!list.length) $('.rw-ahint').textContent = t('rewards.action.noWidgets');
+    drawOps();
+  });
+
   title.addEventListener('input', () => { drawTile(); drawPreview(); });
   color.addEventListener('input', drawTile);
   cost.addEventListener('input', drawPreview);
@@ -255,6 +413,9 @@ function openEditor(id) {
     const body = {
       title: title.value, description: desc.value, cost: Number.isFinite(c) ? c : 0, color: color.value,
       needInput: needInput.checked, reply: reply.value, image: d.imageRef,
+      cooldownSec: Number(cd.value) || 0, perStream: Math.max(0, Math.round(Number($('.rw-ps').value) || 0)),
+      perUserStream: Math.max(0, Math.round(Number($('.rw-pu').value) || 0)), onlyLive: $('.rw-live').checked,
+      action: aw.value && ao.value ? { widget: aw.value, op: ao.value, value: av.value } : null,
     };
     save.disabled = true;
     try {

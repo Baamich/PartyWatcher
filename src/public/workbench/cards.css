@@ -269,3 +269,15 @@ body > .modal { z-index: 4000; }
 .rw-q-btns .icon-btn { width: auto; margin: 0; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
 .rw-q-status { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .rw-q-done, .rw-q-refunded { opacity: .6; }
+
+/* редактор награды: функции, ограничения, действие с виджетом */
+.rw-funcs { display: flex; flex-wrap: wrap; gap: 6px; }
+.rw-func code { color: #f0abfc; }
+.rw-more { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; }
+.rw-more summary { cursor: pointer; font-weight: 700; font-size: 13px; padding: 2px 0; }
+.rw-more[open] summary { margin-bottom: 8px; }
+.rw-more .rw-row { align-items: flex-end; }
+.rw-more .rw-field { flex: 1; min-width: 120px; }
+.rw-more select, .rw-more input[type="number"], .rw-av { width: 100%; box-sizing: border-box; margin: 0; }
+.rw-hint { margin: 6px 0 0; font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+.rw-av-wrap[hidden] { display: none; }

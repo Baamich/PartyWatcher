@@ -118,6 +118,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
       viewerStats.delete(key);
       const chat = chatBus.chatStatsTake(entry.streamerNameLower);
       alerts.resetStream(entry.streamerNameLower); // эфир закончился — рубежи зрителей в следующем эфире заново
+      require('./widgets').liveChanged(entry.streamerNameLower).catch(() => {}); // виджеты OBS: время эфира
       const adult = isAdultStream(prev);
       if (startedAt) { // повторная остановка (эфира уже нет) — не считаем
         // счётчик эфиров для поисковиков (services/searchIndex), потом — «эфир закончился» им же
@@ -159,6 +160,7 @@ async function setLiveState(key, { isLive, touchStartedAt }) {
       );
       console.log(`[rtmp] isLive=true, startedAt=keep-or-set, key=${key.slice(0, 8)}… mod=${r.modifiedCount}`);
       if (r.modifiedCount) searchIndex.notifyLater(entry.userId, 'start'); // новый эфир — поисковикам (если канал в поиске)
+      if (entry.streamerNameLower) require('./widgets').liveChanged(entry.streamerNameLower).catch(() => {});
     } else {
       const r = await User.updateOne(
         { _id: entry.userId },

@@ -82,6 +82,69 @@
     "message": "viewer’s text",
     "points": "points name",
     "balance": "points left",
-    "sampleMessage": "hi!"
+    "sampleMessage": "hi!",
+    "target": "first word of the text (a nickname)",
+    "streamer": "channel name",
+    "viewers": "viewers now",
+    "uptime": "stream uptime",
+    "title": "stream title",
+    "followers": "followers",
+    "count": "how many times the reward was bought",
+    "count_user": "how many times this viewer bought it",
+    "followage": "how long the viewer follows",
+    "sampleFollowage": "41 d 3 h",
+    "heads": "Heads"
+  },
+  "funcs": {
+    "random": "random number",
+    "choice": "random option",
+    "dice": "dice",
+    "coin": "heads/tails",
+    "calc": "calculate",
+    "time": "Moscow time",
+    "upper": "UPPERCASE",
+    "widget": "number or text of an OBS widget"
+  },
+  "limits": {
+    "title": "⏳ Limits",
+    "cooldown": "Cooldown",
+    "perStream": "Total per stream",
+    "perUser": "Per viewer per stream",
+    "onlyLive": "Only while live",
+    "hint": "Empty or 0 — no limit. Your own tests (buying from the channel account) ignore the limits.",
+    "unlimited": "no limit",
+    "onlyLiveTag": "live only",
+    "perStreamTag": "{n}/stream",
+    "perUserTag": "{n} per viewer",
+    "cdNone": "No cooldown",
+    "cdSec": "{n} s",
+    "cdMin": "{n} min",
+    "cdHour": "{n} h"
+  },
+  "action": {
+    "title": "🎛 OBS widget action",
+    "widget": "Widget",
+    "op": "What to do",
+    "value": "Value",
+    "hint": "After a purchase the reward changes the widget by itself: adds time to a timer, +1 to a counter, shows the viewer text, spins a wheel. The value supports the same {variables} as the bot reply.",
+    "none": "— none —",
+    "noWidgets": "No widgets yet — create them in the studio, “⏱️ Widgets”.",
+    "tag": "widget {name}",
+    "ops": {
+      "add": "Add",
+      "set": "Set value",
+      "start": "Start",
+      "text": "Show text",
+      "roll": "Reroll (wheel)",
+      "run": "Roll credits"
+    },
+    "ph": {
+      "add": "E.g.: 1 or 60 (seconds for a timer)",
+      "set": "E.g.: 0",
+      "start": "Time, e.g. 5m (empty — continue)",
+      "text": "E.g.: {user}: {message}",
+      "roll": "",
+      "run": ""
+    }
   }
 }

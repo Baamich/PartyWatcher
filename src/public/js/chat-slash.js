@@ -12,6 +12,8 @@
     ['slow', 'chatSettings'], ['slowoff', 'chatSettings'], ['followers', 'chatSettings'], ['followersoff', 'chatSettings'],
     ['filter', 'chatSettings'], ['raid', 'raid'], ['unraid', 'raid'], ['title', 'editTitle'],
     ['sp+', 'points', 'spAdd', 'SP+'], ['sp-', 'points', 'spSub', 'SP-'],
+    // виджеты OBS (право widgets): те же, что WIDGET_CMD в chatSocket
+    ['timer', 'widgets'], ['sw', 'widgets'], ['count', 'widgets'], ['goal', 'widgets'], ['text', 'widgets'], ['ticker', 'widgets'], ['credits', 'widgets'], ['w', 'widgets'],
   ];
   const keyOf = (name) => (CMDS.find((c) => c[0] === name) || [])[2] || name;
   // команды, первый аргумент которых — ник: «/ban @ник», «/SP+ ник»

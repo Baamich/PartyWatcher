@@ -93,6 +93,13 @@ async function onAdd(item) {
       item.added = true;
       item.adds = r.adds ?? item.adds + 1;
       PW.toast(t('presets.addReward.done', { name: item.data.title }), 'success');
+    } else if (item.type === 'widget') {
+      const ok = await PW.confirm(t('presets.addWidget.text', { name: item.name }), { title: t('presets.addWidget.title'), okText: t('presets.addOk') });
+      if (!ok) return;
+      const r = await api(`/presets/${item.id}/add`, { method: 'POST', body: {} });
+      item.added = true;
+      item.adds = r.adds ?? item.adds + 1;
+      PW.toast(t('presets.addWidget.done'), 'success');
     } else if (item.type === 'style') {
       const ok = await PW.confirm(t('presets.addStyle.text', { name: item.name }),
         { title: t('presets.addStyle.title'), okText: t('presets.addOk') });

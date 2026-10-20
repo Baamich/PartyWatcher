@@ -115,7 +115,20 @@
     "choice": "random option from a list separated by |",
     "calc": "calculator: + - * / % and parentheses",
     "time": "Moscow time; {time:+1} — another time zone",
-    "date": "Moscow date"
+    "date": "Moscow date",
+    "followers": "Channel followers",
+    "category": "Stream category (game)",
+    "followage": "How long the sender follows the channel",
+    "points": "The sender’s channel points balance",
+    "pointsName": "Name of the channel points",
+    "randomUser": "A random viewer from the channel page",
+    "lastFollower": "Latest follower",
+    "accountAge": "Age of the sender’s account",
+    "messages": "How many chat messages the sender left (last 3 days)",
+    "weekday": "Day of the week (Moscow, or {weekday:+2})",
+    "countdown": "Time left until a date (Moscow time)",
+    "upper": "UPPERCASE letters",
+    "widget": "Number or text of an OBS widget by its command name"
   },
   "pageTitle": "Party Watcher — Builder",
   "chatTitle": "🧩 Chat builder",
@@ -232,6 +245,41 @@
       "label": "Stream",
       "name": "stream",
       "response": "Now playing “{title}”. Uptime: {uptime}. Viewers: {viewers}"
+    },
+    "followage": {
+      "label": "Followage",
+      "name": "followage",
+      "response": "❤ {user}, you have been following for {followage}!"
+    },
+    "points": {
+      "label": "My points",
+      "name": "points",
+      "response": "💰 {user}, you have {points} {points_name}"
+    },
+    "winner": {
+      "label": "Giveaway",
+      "name": "winner",
+      "response": "🎉 The giveaway winner is {random_user}!"
+    },
+    "deaths": {
+      "label": "Deaths (widget)",
+      "name": "deaths",
+      "response": "💀 The streamer has died {widget:deaths} times this stream"
+    },
+    "countdown": {
+      "label": "Until event",
+      "name": "when",
+      "response": "⏳ Time left until the big stream: {countdown:2026-12-31 20:00}"
+    },
+    "stats": {
+      "label": "Channel",
+      "name": "channel",
+      "response": "📊 {streamer}: {followers} followers, {viewers} watching, playing {category}"
+    },
+    "me": {
+      "label": "About me",
+      "name": "me",
+      "response": "🪪 {user}: account age {account_age}, following for {followage}, chat messages — {messages}"
     }
   }
 }

@@ -43,6 +43,16 @@ Reply:     Random number up to {number}: {random:{number}}</code></pre>
   <tr><td><code>{choice:yes|no|maybe}</code></td><td>A random option from a list (separated by <code>|</code>)</td></tr>
   <tr><td><code>{calc:2+2*3}</code></td><td>Calculator: <code>+ - * / %</code> and parentheses</td></tr>
   <tr><td><code>{time}</code>, <code>{date}</code></td><td>Moscow time and date. Another time zone — an offset from UTC (−14 to +14): <code>{time:+1}</code> — Germany in winter, <code>{time:+2}</code> — in summer, <code>{time:+3}</code> — Moscow</td></tr>
+  <tr><td><code>{followers}</code>, <code>{category}</code></td><td>Channel followers and the stream category (game)</td></tr>
+  <tr><td><code>{followage}</code></td><td>How long the sender has followed the channel: “41 d 3 h”</td></tr>
+  <tr><td><code>{points}</code>, <code>{points_name}</code></td><td>The sender's channel points balance and the name of the points</td></tr>
+  <tr><td><code>{account_age}</code>, <code>{messages}</code></td><td>Age of the sender's account and how many messages they left in the channel chat in 3 days</td></tr>
+  <tr><td><code>{random_user}</code></td><td>A random viewer currently on the channel page (for giveaways)</td></tr>
+  <tr><td><code>{last_follower}</code></td><td>The channel's latest follower</td></tr>
+  <tr><td><code>{weekday}</code></td><td>Day of the week, Moscow time (or shifted: <code>{weekday:+2}</code>)</td></tr>
+  <tr><td><code>{countdown:2026-12-31 20:00}</code></td><td>Time left until a date (Moscow time): “72 d 10 h”</td></tr>
+  <tr><td><code>{upper:…}</code>, <code>{lower:…}</code></td><td>Text in UPPERCASE or lowercase: <code>{upper:{user}}</code></td></tr>
+  <tr><td><code>{widget:name}</code></td><td>Number or text of an OBS widget by its command name: <code>{widget:deaths}</code> — how many times the streamer died</td></tr>
 </table>
 </div>
 <p>Variables can be nested: <code>{random:{number}}</code>, <code>{calc:{args}}</code>.</p>

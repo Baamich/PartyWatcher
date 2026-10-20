@@ -19,7 +19,8 @@
     "presets": "Presets",
     "events": "Events",
     "rewards": "Rewards",
-    "activity": "Channel activity"
+    "activity": "Channel activity",
+    "widgets": "Widgets"
   },
   "page": {
     "stream-obs": {
@@ -93,6 +94,14 @@
     "presets-rewards": {
       "title": "Reward presets",
       "desc": "Ready-made stream point rewards: add and share"
+    },
+    "widgets": {
+      "title": "OBS widgets and the mini panel",
+      "desc": "Timers, counters, goals, credits, always-on-top window"
+    },
+    "chat-bridge": {
+      "title": "Your own Twitch / VK bot",
+      "desc": "Forward an existing chat to ours and back"
     }
   }
 }

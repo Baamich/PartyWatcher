@@ -11,8 +11,10 @@ const Reward = require('../../models/Reward');
 const rewardsApi = require('./rewards.routes');
 const { hasProfanity } = require('../../services/profanity');
 const PWStyle = require('../../public/js/pwstyle.js');
-const { parseArgsInput, parseCommandLine, buildReply } = require('../../services/chatCommands');
+const { parseArgsInput, parseCommandLine, buildReply, sampleExtras } = require('../../services/chatCommands');
 const notify = require('../../services/notify');
+const widgets = require('../../services/widgets');
+const WC = require('../../public/widgets/catalog');
 
 const PAGE_LIMIT = 24;
 const MAX_PUBLISHED = 20;
@@ -20,7 +22,7 @@ const MAX_COMMANDS = 50;
 const LIKE_MIN_AGE_MS = 24 * 60 * 60 * 1000; // лайкать можно аккаунтам старше суток
 const COMMAND_NAME_RE = /^[a-zA-Z0-9_а-яА-ЯёЁ]{1,20}$/;
 
-const TYPES = ['style', 'command', 'reward'];
+const TYPES = ['style', 'command', 'reward', 'widget'];
 const isId = (s) => /^[a-f0-9]{24}$/i.test(String(s));
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 64);
 const cleanCmdName = (v) => String(v ?? '').trim().replace(/^!+/, '').toLowerCase();
@@ -74,11 +76,34 @@ function cleanReward(data) {
   if (reply.length > rewardsApi.REPLY_MAX) return { error: 'server.rewards.replyLen', vars: { n: rewardsApi.REPLY_MAX } };
   if (hasProfanity(reply.replace(/\{\w+\}/g, ' '))) return { error: 'server.rewards.replyBad' };
   const color = rewardsApi.COLOR_RE.test(data?.color) ? data.color : '#7c3aed';
-  return { data: { title, description, cost, color, needInput: !!data?.needInput, reply } };
+  let extras;
+  try {
+    extras = rewardsApi.cleanExtras(data || {}, false); // перезарядка, лимиты, «только в эфире», действие с виджетом
+  } catch (e) {
+    return { error: e.i18nKey || 'server.error' };
+  }
+  return { data: { title, description, cost, color, needInput: !!data?.needInput, reply, ...extras } };
+}
+
+// виджет: всё через каталог (лишнее отбрасывается), state — только текст надписи; весь текст — без мата
+function cleanWidgetPreset(data) {
+  const w = WC.cleanWidget(data);
+  if (!w) return { error: 'server.widgets.badType' };
+  const strings = [];
+  const walk = (v) => {
+    if (typeof v === 'string') strings.push(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+  };
+  walk([w.name, w.opts, w.state]);
+  if (strings.some((x) => hasProfanity(String(x).replace(/\{[^{}]*\}/g, ' ')))) return { error: 'server.presets.widgetBad' };
+  const out = widgets.presetData(w);
+  return out ? { data: out } : { error: 'server.widgets.badType' };
 }
 
 function cleanData(type, data) {
   if (type === 'reward') return cleanReward(data);
+  if (type === 'widget') return cleanWidgetPreset(data);
   if (type === 'style') {
     const s = PWStyle.sanitize(data);
     if (PWStyle.isDefault(s)) return { error: 'server.presets.defaultStyle' };
@@ -102,10 +127,13 @@ function sampleArgs(args, lang) {
 // пример ответа бота награды: переменные — как у настоящей покупки
 function rewardPreview(p, lang) {
   const d = p.data || {};
+  const message = d.needInput ? i18n.t(lang, 'server.cmd.sampleArg') : '';
   return d.reply ? rewardsApi.fillReply(d.reply, {
-    user: 'Viewer1', reward: d.title, cost: d.cost, message: d.needInput ? i18n.t(lang, 'server.cmd.sampleArg') : '',
-    points: i18n.t(lang, 'server.rewards.pointsDefault'), balance: 1250,
-  }) : '';
+    user: 'Viewer1', reward: d.title, cost: d.cost, message, target: message.split(' ')[0] || 'Viewer1',
+    points: i18n.t(lang, 'server.rewards.pointsDefault'), balance: 1250, streamer: p.authorName, viewers: 42, followers: 128,
+    uptime: i18n.t(lang, 'server.cmd.uptimeHM', { h: 1, m: '05' }), title: i18n.t(lang, 'server.cmd.sampleTitle'), count: 17, count_user: 3,
+    followage: '41 d', __widgets: new Proxy({}, { get: () => '7' }),
+  }, lang) : '';
 }
 
 function cmdPreview(p, lang) {
@@ -116,7 +144,7 @@ function cmdPreview(p, lang) {
     const parsed = parseCommandLine(line) || { name: d.name, argv: [] };
     text = buildReply({ name: d.name, args: d.args, response: d.response }, parsed.argv, {
       user: 'Viewer1', streamer: p.authorName, title: i18n.t(lang, 'server.cmd.sampleTitle'), viewers: 12,
-      uptime: i18n.t(lang, 'server.cmd.uptimeHM', { h: 1, m: '05' }), count: 7, lang,
+      uptime: i18n.t(lang, 'server.cmd.uptimeHM', { h: 1, m: '05' }), count: 7, lang, extra: sampleExtras(lang),
     }).text;
   } catch (_) {}
   return { line, text };
@@ -272,7 +300,17 @@ router.post('/:id/add', auth, requireStreamer, rate, async (req, res) => {
 
   let commandId = null;
   let rewardId = null;
-  if (p.type === 'reward') {
+  let widgetId = null;
+  if (p.type === 'widget') {
+    const d = cleanWidgetPreset(p.data);
+    if (d.error) return res.status(400).json({ error: req.t(d.error, d.vars) });
+    try {
+      widgetId = (await widgets.createFrom(req.me, d.data)).id;
+    } catch (e) {
+      if (!e.i18nKey) throw e;
+      return res.status(400).json({ error: i18n.errText(req, e) });
+    }
+  } else if (p.type === 'reward') {
     const d = cleanReward(p.data); // данные старого пре-сета проверяем заново
     if (d.error) return res.status(400).json({ error: req.t(d.error, d.vars) });
     if ((await Reward.countDocuments({ streamerId: req.me._id })) >= rewardsApi.MAX_REWARDS) {
@@ -302,17 +340,18 @@ router.post('/:id/add', auth, requireStreamer, rate, async (req, res) => {
   }
 
   try {
-    await PresetAdd.create({ presetId: p._id, userId: req.me._id, commandId, rewardId });
+    await PresetAdd.create({ presetId: p._id, userId: req.me._id, commandId, rewardId, widgetId });
     notify.send(p.authorId, 'preset.add', { name: req.me.streamerName, preset: p.name }, { group: 'padd:' + p._id, link: '/workbench/presets.html' });
   } catch (e) {
     if (commandId) await ChatCommand.deleteOne({ _id: commandId });
     if (rewardId) await Reward.deleteOne({ _id: rewardId });
+    if (widgetId) await widgets.remove(req.me, widgetId).catch(() => {});
     if (e.code === 11000) return res.status(409).json({ error: req.t('server.presets.alreadyAdded') });
     throw e;
   }
 
   const upd = await Preset.findByIdAndUpdate(p._id, { $inc: { adds: 1 } }, { new: true }).select('adds');
-  res.status(201).json({ added: true, adds: upd ? upd.adds : (p.adds || 0) + 1, data: p.type === 'style' ? p.data : undefined, rewardId: rewardId ? String(rewardId) : undefined });
+  res.status(201).json({ added: true, adds: upd ? upd.adds : (p.adds || 0) + 1, data: p.type === 'style' ? p.data : undefined, rewardId: rewardId ? String(rewardId) : undefined, widgetId: widgetId || undefined });
 });
 
 // ---------- убрать у себя ----------
@@ -325,6 +364,7 @@ router.delete('/:id/add', auth, requireStreamer, rate, async (req, res) => {
     await ChatCommand.deleteOne({ _id: rec.commandId, streamerNameLower: req.me.streamerNameLower });
   }
   if (rec.rewardId) await Reward.deleteOne({ _id: rec.rewardId, streamerId: req.me._id });
+  if (rec.widgetId) await widgets.remove(req.me, rec.widgetId).catch(() => {});
   const upd = await Preset.findByIdAndUpdate(req.params.id, { $inc: { adds: -1 } }, { new: true }).select('adds');
   res.json({ added: false, adds: Math.max(0, upd?.adds || 0) });
 });

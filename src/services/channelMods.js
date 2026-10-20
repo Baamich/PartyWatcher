@@ -6,7 +6,8 @@ const User = require('../models/User');
 const ChannelMod = require('../models/ChannelMod');
 
 const CHAT_PERMS = ['deleteMsg', 'timeout', 'ban', 'clearChat', 'chatSettings'];
-const STREAM_PERMS = ['editTitle', 'editCategory', 'raid'];
+// widgets — управлять виджетами OBS командами чата (/timer, /count …); по умолчанию выключено, включает стример
+const STREAM_PERMS = ['editTitle', 'editCategory', 'raid', 'widgets'];
 const ALL_PERMS = [...CHAT_PERMS, ...STREAM_PERMS];
 // только у владельца канала, модераторам не выдаётся: начислить/списать стрим-поинты (/SP+ /SP-)
 const OWNER_PERMS = ['points'];

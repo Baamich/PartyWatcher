@@ -40,7 +40,7 @@ function buildDirectives() {
     // Socket.IO и playlist из blob: для hls.js; домен плеера Kodik — проверка, не режет ли его провайдер зрителя
     connectSrc: ["'self'", 'blob:', ...(ws ? [ws] : []), `https://${config.kodik.playerHost}`],
     fontSrc: ["'self'", 'data:'],
-    frameSrc: ['https:'],                    // YouTube, Twitch и сторонние плееры; список заранее неизвестен
+    frameSrc: ['https:', "'self'"],        // YouTube, Twitch и сторонние плееры; свои страницы (мини-пульт в окне поверх окон)
     workerSrc: ["'self'", 'blob:'],          // воркер hls.js
     objectSrc: ["'none'"],
     baseUri: ["'self'"],

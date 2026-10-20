@@ -1,0 +1,380 @@
+{
+  "pageTitle": "Party Watcher — Widgets",
+  "overlayTitle": "Party Watcher — Widget",
+  "layoutReset": "Put the widget cards back in their default places?",
+  "copyManual": "Copy the link:",
+  "overlay": {
+    "noKey": "The link has no key or widget — copy it again in the studio (⏱️ Widgets → 📋 Link for OBS)",
+    "badKey": "The key doesn't match — copy the link again in the studio",
+    "gone": "This widget no longer exists — it was deleted in the studio"
+  },
+  "key": {
+    "label": "Events key",
+    "manage": "🔑 Change key",
+    "docs": "📖 How to connect"
+  },
+  "picker": {
+    "title": "Add a widget",
+    "count": "Widgets: {n} of {max}. Each one is a separate “Browser” source in OBS."
+  },
+  "type": {
+    "uptime": {
+      "name": "Stream uptime",
+      "desc": "How long the stream has been running"
+    },
+    "countdown": {
+      "name": "Countdown",
+      "desc": "“Starting in 5:00”, a break, a challenge"
+    },
+    "stopwatch": {
+      "name": "Stopwatch",
+      "desc": "Start, pause, reset"
+    },
+    "clock": {
+      "name": "Clock",
+      "desc": "Time and date in any time zone"
+    },
+    "text": {
+      "name": "Text",
+      "desc": "A line you change on the fly"
+    },
+    "ticker": {
+      "name": "Ticker",
+      "desc": "Announcements scrolling at the bottom"
+    },
+    "counter": {
+      "name": "Counter",
+      "desc": "Deaths, wins, anything: +1 by button or command"
+    },
+    "goal": {
+      "name": "Goal",
+      "desc": "Progress bar: followers, viewers or your own number"
+    },
+    "stat": {
+      "name": "Number / info",
+      "desc": "Viewers, followers, stream title or category"
+    },
+    "last": {
+      "name": "Latest events",
+      "desc": "Latest follower, reward, raid…"
+    },
+    "credits": {
+      "name": "End credits",
+      "desc": "Followers, raiders, chat and mods of the stream"
+    },
+    "custom": {
+      "name": "Custom widget",
+      "desc": "Lines with variables"
+    }
+  },
+  "card": {
+    "delete": "Delete widget",
+    "deleteConfirm": "Delete the widget “{name}”? Its link in OBS will stop working.",
+    "settings": "⚙ Settings",
+    "copy": "📋 Link for OBS",
+    "copied": "Link copied. In OBS: “+” → “Browser” → paste the link",
+    "cmd": "In chat: {cmd}",
+    "publish": "Publish to presets"
+  },
+  "float": {
+    "dock": "🧩 OBS dock link",
+    "dockCopied": "Link copied. In OBS: Docks → Custom Browser Docks",
+    "live": "Live",
+    "offline": "Offline",
+    "viewers": "Viewers",
+    "followers": "Followers",
+    "tabChat": "Chat",
+    "tabWidgets": "Widgets",
+    "tabEvents": "Events",
+    "chatPh": "Message or /command",
+    "send": "Send",
+    "noWidgets": "Buttons for timers, counters and text will appear here — create widgets in the studio.",
+    "toStudio": "⏱️ Open widgets",
+    "login": "Log in with your streamer account, then open the mini panel again.",
+    "loginBtn": "Log in",
+    "noStreamer": "The mini panel is for streamers: create a streamer profile first."
+  },
+  "ctl": {
+    "start": "Start",
+    "pause": "Pause",
+    "reset": "Reset",
+    "minus1m": "Minus one minute",
+    "plus1m": "Plus one minute",
+    "timePh": "5, 90s, 1h30m, 10:00",
+    "badTime": "Couldn't read the time: e.g. 5 (minutes), 90s, 1h30m or 10:00",
+    "startFor": "Start for this time",
+    "setValue": "Set the number",
+    "badNumber": "A number is needed",
+    "textPh": "Text to show",
+    "tickerPh": "Each line is a separate announcement",
+    "show": "Show",
+    "clear": "Clear",
+    "creditsRun": "▶ Roll credits",
+    "creditsStop": "■ Stop",
+    "clearList": "Clear the list",
+    "goalAuto": "Counted automatically: {source}",
+    "auto": {
+      "uptime": "Counted automatically while you're live",
+      "clock": "Runs by itself",
+      "stat": "Updates by itself",
+      "custom": "Updates by itself"
+    },
+    "roll": "Reroll"
+  },
+  "opt": {
+    "section": "Settings",
+    "name": "Name (only you see it)",
+    "slug": "Name for chat commands",
+    "slugHint": "Example: {cmd}. Latin letters, digits, - and _",
+    "slugBad": "Command name: Latin letters, digits, - and _, up to 20 characters",
+    "vars": "You can insert: {vars}",
+    "secHint": "5 means 5 minutes; 90s, 1h30m, 10:00 also work",
+    "soundNone": "No sound",
+    "listen": "Listen",
+    "tzLocal": "Same as the OBS computer",
+    "creditsPreview": "▶ Roll the credits in the preview",
+    "templatePh": "{n}",
+    "prefixPh": "For example: Live for",
+    "endTextPh": "For example: Goal reached!",
+    "prefix": "Text before the time",
+    "format": "Format",
+    "formatOpt": {
+      "hms": "hours:minutes:seconds",
+      "hm": "hours:minutes"
+    },
+    "offline": "When you're offline",
+    "offlineOpt": {
+      "text": "Show a text",
+      "hide": "Hide",
+      "zero": "Show 0:00:00"
+    },
+    "offlineText": "Text when offline",
+    "sec": "Duration",
+    "endText": "Text at the end",
+    "endHide": "Hide when the countdown is over",
+    "bar": "Progress bar",
+    "sound": "Sound at the end",
+    "volume": "Volume",
+    "h12": "12-hour format (AM/PM)",
+    "seconds": "Show seconds",
+    "date": "Show the date",
+    "tz": "Time zone",
+    "speed": "Speed (pixels per second)",
+    "sep": "Separator",
+    "template": "Text template",
+    "step": "Step (+ and −)",
+    "negative": "Can go below zero",
+    "source": "What to count",
+    "sourceOpt": {
+      "manual": "Your own number (buttons and /goal)",
+      "followers": "Total followers",
+      "followersStream": "New followers this stream",
+      "viewers": "Viewers now",
+      "title": "Stream title",
+      "category": "Stream category"
+    },
+    "title": "Title",
+    "target": "Goal (number)",
+    "numbers": "Show “now / goal”",
+    "barH": "Bar thickness",
+    "event": "Event",
+    "eventOpt": {
+      "follow": "New follower",
+      "reward": "Channel points reward",
+      "raid": "Raid",
+      "firstChat": "First time in chat",
+      "clip": "Clip",
+      "command": "Chat command"
+    },
+    "count": "How many latest to show",
+    "empty": "Text while there are no events (empty — hide)",
+    "auto": "Start by themselves when the OBS source opens",
+    "loop": "Loop",
+    "sections": "Credit sections",
+    "mode": "How to show the lines",
+    "modeOpt": {
+      "all": "All at once",
+      "rotate": "One by one"
+    },
+    "rotateSec": "Switch line every, seconds",
+    "layout": "Layout",
+    "layoutOpt": {
+      "column": "Stacked",
+      "row": "In one row"
+    },
+    "showWhen": "When to show",
+    "showWhenOpt": {
+      "always": "Always",
+      "live": "Only while live",
+      "offline": "Only when offline"
+    },
+    "hideEmpty": "Hide a line while its variable has no value yet (offline, no followers yet)",
+    "anim": "Animation when the text changes",
+    "animOpt": {
+      "none": "None",
+      "pulse": "Pulse",
+      "fade": "Fade in",
+      "slide": "Slide up",
+      "pop": "Pop"
+    },
+    "barValue": "Bar: value",
+    "barMax": "Bar: maximum",
+    "barValuePh": "E.g.: {followers_stream}",
+    "barMaxPh": "E.g.: 10"
+  },
+  "style": {
+    "section": "Look",
+    "font": "Font",
+    "fontSystem": "System",
+    "size": "Size",
+    "weight": "Weight",
+    "weightOpt": {
+      "400": "Regular",
+      "600": "Semibold",
+      "700": "Bold",
+      "900": "Black"
+    },
+    "align": "Alignment",
+    "alignOpt": {
+      "left": "Left",
+      "center": "Center",
+      "right": "Right"
+    },
+    "color": "Text color",
+    "accent": "Accent color",
+    "bg": "Background color",
+    "bgAlpha": "Background, %",
+    "pad": "Padding",
+    "radius": "Rounding",
+    "stroke": "Outline",
+    "strokeColor": "Outline color",
+    "shadow": "Shadow",
+    "upper": "UPPERCASE"
+  },
+  "def": {
+    "offline": "Stream starting soon",
+    "countdownEnd": "Let's go!",
+    "textEmpty": "Empty text — invisible in OBS",
+    "tickerEmpty": "Add announcements — an empty ticker is invisible in OBS",
+    "stat": {
+      "viewers": "👀 {n}",
+      "followers": "❤ {n}",
+      "followersStream": "❤ +{n} this stream",
+      "title": "{n}",
+      "category": "🎮 {n}"
+    },
+    "statEmpty": "Not set",
+    "goal": {
+      "manual": "Goal",
+      "followers": "Follower goal",
+      "followersStream": "Followers this stream",
+      "viewers": "Viewers"
+    },
+    "last": {
+      "follow": "❤ {name}",
+      "reward": "🎁 {name}: {reward}",
+      "raid": "🚀 {streamer} ({viewers})",
+      "firstChat": "👋 {name}",
+      "clip": "✂ {name}: {title}",
+      "command": "⌨ {name}: {command}"
+    },
+    "lastEmpty": "Empty for now — invisible in OBS",
+    "creditsIdle": "The credits appear with “Roll credits” or the /credits command",
+    "creditsTitle": "Thanks for watching!",
+    "creditsEnd": "See you next time!"
+  },
+  "credits": {
+    "followers": "New followers",
+    "raiders": "Raids",
+    "rewards": "Channel points rewards",
+    "chatters": "Most active in chat",
+    "mods": "Moderators"
+  },
+  "create": {
+    "btn": "✨ Create your own widget",
+    "desc": "Lines with variables: game, viewers, latest follower, countdown to an event, a wheel of fortune…",
+    "linePh": "Line text, e.g.: 👀 {viewers} viewers",
+    "lineSize": "Line size",
+    "lineBold": "Bold",
+    "lineColor": "Line color",
+    "lineColorReset": "Same color as the widget",
+    "lineDelete": "Delete line",
+    "lineAdd": "＋ Line",
+    "vars": "Variables (click to insert into a line)",
+    "funcs": "Functions",
+    "examples": "Templates (replace the lines)"
+  },
+  "ex": {
+    "info": {
+      "name": "Info panel",
+      "lines": "🎮 Playing: {category}\n👀 Watching now: {viewers}\n❤ Latest follower: {last_follower}\n⏱ Live for {uptime}"
+    },
+    "lastAll": {
+      "name": "Latest events",
+      "lines": "❤ {last_follower}\n🎁 {last_reward_user} — {last_reward}\n🚀 {last_raider} ({last_raid_viewers})"
+    },
+    "wheel": {
+      "name": "Wheel of fortune",
+      "lines": "🎡 Wheel of fortune\n{choice:10 push-ups|No sound for 5 minutes|Chat picks|Drink water!|Compliment the chat}"
+    },
+    "newYear": {
+      "name": "Until New Year",
+      "lines": "🎄 Until New Year\n{countdown:{date}}"
+    },
+    "subGoal": {
+      "name": "Follower goal",
+      "lines": "❤ New followers this stream: {followers_stream} of 10"
+    },
+    "nowPlaying": {
+      "name": "Now…",
+      "lines": "Now: {text}"
+    },
+    "worldClock": {
+      "name": "World clock",
+      "lines": "Moscow {time:Europe/Moscow}\nBerlin {time:Europe/Berlin}\nNew York {time:America/New_York}"
+    }
+  },
+  "var": {
+    "n": "Your own number (+ and − buttons, /w name +1)",
+    "text": "Your own text (field on the card, /w name text …)",
+    "uptime": "Stream uptime 1:02:03",
+    "uptime_hm": "Stream uptime 1:02",
+    "live": "“Live” or “Offline”",
+    "viewers": "Viewers now",
+    "followers": "Total followers",
+    "followers_stream": "New followers this stream",
+    "title": "Stream title",
+    "category": "Category (game)",
+    "streamer": "Channel name",
+    "time": "Time (also {time:Europe/Berlin} or {time:+3})",
+    "date": "Date",
+    "weekday": "Day of the week",
+    "last_follower": "Latest follower",
+    "last_reward": "Latest reward bought",
+    "last_reward_user": "Who bought it",
+    "last_reward_cost": "Its price",
+    "last_reward_message": "Viewer text with it",
+    "last_raider": "Latest raider",
+    "last_raid_viewers": "How many viewers they brought",
+    "last_chatter": "Latest new viewer in chat",
+    "last_clip": "Latest clip title",
+    "last_clip_user": "Who made the clip",
+    "last_command": "Latest chat command",
+    "last_command_user": "Who used it",
+    "random": "Random number in a range (changes on 🎲)",
+    "choice": "Random option from a list (changes on 🎲)",
+    "dice": "Dice 1–6",
+    "coin": "Heads or tails",
+    "calc": "Calculate: + − × ÷ and brackets, variables allowed",
+    "percent": "Percent: value and maximum separated by a colon",
+    "countdown": "Time left until a date or a time {countdown:20:00}",
+    "timeTz": "Time in a time zone",
+    "upper": "UPPERCASE",
+    "lower": "lowercase",
+    "liveOn": "Live",
+    "liveOff": "Offline",
+    "heads": "Heads",
+    "tails": "Tails",
+    "days": "{n} d"
+  }
+}

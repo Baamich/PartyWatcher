@@ -1,0 +1,84 @@
+/* Студия → ⏱️ Виджеты: карточки, превью, окно настроек; кнопки управления .pwwc-* (общие с мини-пультом) */
+.wg-float-btn { font-weight: 700; }
+
+.wg-types { display: flex; flex-direction: column; gap: 4px; }
+[data-theme] .wg-types .wg-type { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin: 0; padding: 6px 8px; text-align: left;
+  background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--text); box-shadow: none; font-weight: 400; }
+[data-theme] .wg-types .wg-type:hover:not(:disabled) { background: var(--surface-alt); border-color: var(--border); transform: none; }
+.wg-type:disabled { opacity: .5; cursor: not-allowed; }
+.wg-type-icon { font-size: 18px; line-height: 1.2; flex-shrink: 0; }
+.wg-type b { display: block; font-size: 13px; }
+.wg-type small { display: block; font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+
+/* превью: «шахматка», как прозрачный фон в OBS */
+.wg-preview, .wg-modal-preview {
+  position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--radius-sm);
+  background-color: #1b1b22; background-image: linear-gradient(45deg, #24242c 25%, transparent 25%), linear-gradient(-45deg, #24242c 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #24242c 75%), linear-gradient(-45deg, transparent 75%, #24242c 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+.wg-preview { height: 110px; flex-shrink: 0; }
+.wg-modal-preview { height: 150px; margin-bottom: 4px; }
+.wg-preview > .pww, .wg-modal-preview > .pww { transform-origin: center; flex-shrink: 0; }
+.wg-preview > .pww.pww-wide, .wg-modal-preview > .pww.pww-wide { width: calc(100% - 16px); }
+.wg-preview > .pww.pww-fill, .wg-modal-preview > .pww.pww-fill { height: calc(100% - 8px); }
+
+.wg-cmd { font-size: 12px; color: var(--text-muted); font-family: Consolas, Menlo, monospace; }
+.wg-cmd[hidden] { display: none; }
+.wg-bottom { margin-top: auto; display: flex; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.wg-bottom .icon-btn { flex: 1; width: auto; margin: 0; font-size: 12px; }
+
+/* кнопки управления (студия и мини-пульт) */
+.pwwc { display: flex; flex-direction: column; gap: 6px; }
+.pwwc-row { display: flex; gap: 6px; align-items: center; }
+.pwwc-row .icon-btn { width: auto; margin: 0; padding: 6px 10px; font-size: 13px; white-space: nowrap; }
+.pwwc-row .pwwc-main { flex: 1; font-weight: 700; }
+.pwwc-input { flex: 1; min-width: 0; margin: 0; padding: 6px 8px; }
+.pwwc-value { flex: 1; text-align: center; font-size: 20px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.pwwc-text { width: 100%; box-sizing: border-box; margin: 0; resize: vertical; font-size: 13px; }
+.pwwc-info { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+/* окно настроек */
+.wg-modal { width: min(560px, 100%); }
+.wg-form { display: flex; flex-direction: column; gap: 8px; }
+.wg-field { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.wg-field > span { font-weight: 600; }
+.wg-field > small { font-size: 11px; color: var(--text-muted); }
+.wg-field input[type="text"], .wg-field input[type="number"], .wg-field select { margin: 0; width: 100%; box-sizing: border-box; }
+.wg-field input[type="color"] { width: 44px; height: 28px; padding: 0; margin: 0; }
+.wg-field.wg-check { flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: 8px; }
+.wg-field.wg-check input { width: auto; margin: 0; }
+.wg-range { display: flex; align-items: center; gap: 8px; }
+.wg-range input[type="range"] { flex: 1; margin: 0; }
+.wg-range select { flex: 1; }
+.wg-range .icon-btn { width: auto; margin: 0; }
+.wg-range b { min-width: 34px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.wg-style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
+.wg-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.wg-checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.wg-checks input { width: auto; margin: 0; }
+
+/* «Создать свой виджет» и редактор строк */
+[data-theme] .wg-types .wg-create { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; margin: 0 0 6px; padding: 10px 12px;
+  text-align: left; border-radius: 10px; border: 1px solid transparent; background: linear-gradient(135deg, #7c3aed, #db2777); color: #fff; box-shadow: none; }
+.wg-create b { font-size: 14px; }
+.wg-create small { font-size: 11px; opacity: .9; line-height: 1.35; font-weight: 400; }
+.wg-create:disabled { opacity: .5; cursor: not-allowed; }
+.wg-lines { display: flex; flex-direction: column; gap: 8px; }
+.wg-line-row { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-alt); }
+.wg-line-text { width: 100%; box-sizing: border-box; margin: 0; font-family: Consolas, Menlo, monospace; }
+.wg-line-opts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.wg-line-opts input[type="range"] { flex: 1; min-width: 90px; margin: 0; }
+.wg-line-opts b { min-width: 38px; font-variant-numeric: tabular-nums; }
+.wg-line-opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.wg-line-opts input[type="checkbox"] { width: auto; margin: 0; }
+.wg-line-opts input[type="color"] { width: 34px; height: 24px; padding: 0; margin: 0; }
+.wg-line-opts .icon-btn { width: auto; margin: 0; padding: 3px 7px; }
+.wg-lines > .icon-btn { align-self: flex-start; width: auto; margin: 0; }
+.wg-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.wg-chips .tm-chip { font-family: Consolas, Menlo, monospace; font-size: 12px; }
+.wg-chips .wg-ex { font-family: inherit; font-weight: 600; }
+.wg-pub { width: auto; }
+
+/* в маленьких превью строки не переносятся — превью уменьшает виджет целиком (как он выглядит в OBS) */
+.wg-preview .pww-line, .wg-modal-preview .pww-line, .wg-preview .pww-text, .wg-modal-preview .pww-text { white-space: nowrap; }

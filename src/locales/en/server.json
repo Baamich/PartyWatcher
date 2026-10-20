@@ -146,7 +146,8 @@
     "alreadyAdded": "You have already added this preset",
     "maxCommands": "You already have {n} commands: delete some",
     "cmdExists": "You already have the command !{name}",
-    "rewardStarter": "Every channel already has this reward — publish your own"
+    "rewardStarter": "Every channel already has this reward — publish your own",
+    "widgetBad": "The widget text contains forbidden words"
   },
   "streamers": {
     "badName": "Invalid name",
@@ -245,7 +246,16 @@
     "sampleArg": "test",
     "offline": "offline",
     "uptimeHM": "{h}h {m}m",
-    "uptimeM": "{m}m"
+    "uptimeM": "{m}m",
+    "spanYD": "{y} y {d} d",
+    "spanDH": "{d} d {h} h",
+    "spanHM": "{h} h {m} min",
+    "spanM": "{m} min",
+    "countdownDone": "already here",
+    "noCategory": "no category",
+    "followageOwner": "it’s your channel 🙂",
+    "notFollowing": "not following yet",
+    "nobody": "nobody"
   },
   "sys": {
     "videoChanged": "The host changed the video"
@@ -440,7 +450,12 @@
     "replyLen": "The bot reply can be up to {n} characters",
     "replyBad": "The bot reply contains forbidden words",
     "descBad": "The description contains forbidden words",
-    "pointsDefault": "stream points"
+    "pointsDefault": "stream points",
+    "badAction": "Invalid widget action",
+    "onlyLive": "This reward can only be bought while the stream is live",
+    "cooldown": "The reward is on cooldown — try again in {time}",
+    "streamLimit": "The limit for this stream is used up ({n})",
+    "userLimit": "You have already bought this reward {n} time(s) this stream — that’s the maximum"
   },
   "modcmd": {
     "unknown": "There is no {cmd} command. Type “/” to see the list",
@@ -488,5 +503,20 @@
     "required": "Please accept the Terms of Service first",
     "mustAccept": "You need to accept the Terms of Service"
   },
-  "ownerOnly": "Site owner only"
+  "ownerOnly": "Site owner only",
+  "widgets": {
+    "badType": "No such widget",
+    "limit": "A channel can have at most {n} widgets",
+    "notFound": "Widget not found",
+    "badSlug": "Command name: Latin letters, digits, - and _, up to 20 characters",
+    "slugTaken": "The name “{slug}” is already used by another widget",
+    "badAction": "This widget can’t do that",
+    "badValue": "Couldn’t read the number or time",
+    "goalAuto": "This goal is counted automatically — it can’t be changed by hand",
+    "tooMany": "Too often, please wait a bit",
+    "cmd": {
+      "none": "Create a widget for {cmd} first: studio → ⏱️ Widgets",
+      "done": "Done: {name}"
+    }
+  }
 }

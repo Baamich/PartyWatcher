@@ -125,3 +125,12 @@
 .pst-report-name { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .pst-report-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; }
 .pst-report-modal select, .pst-report-modal textarea { margin: 0 0 8px; }
+
+/* превью виджета OBS в карточке пре-сета: «шахматка», как прозрачный фон в OBS */
+.pst-wg { position: relative; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 10px;
+  background-color: #1b1b22; background-image: linear-gradient(45deg, #24242c 25%, transparent 25%), linear-gradient(-45deg, #24242c 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #24242c 75%), linear-gradient(-45deg, transparent 75%, #24242c 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+.pst-wg > .pww { transform-origin: center; flex-shrink: 0; }
+.pst-wg > .pww.pww-wide { width: calc(100% - 16px); }
+.pst-wg .pww-line, .pst-wg .pww-text { white-space: nowrap; }

@@ -43,6 +43,16 @@
   <tr><td><code>{choice:да|нет|может}</code></td><td>Случайный вариант из списка (через <code>|</code>)</td></tr>
   <tr><td><code>{calc:2+2*3}</code></td><td>Калькулятор: <code>+ - * / %</code> и скобки</td></tr>
   <tr><td><code>{time}</code>, <code>{date}</code></td><td>Время и дата по Москве. Другой часовой пояс — сдвиг от UTC (от −14 до +14): <code>{time:+1}</code> — Германия зимой, <code>{time:+2}</code> — летом, <code>{time:+3}</code> — Москва</td></tr>
+  <tr><td><code>{followers}</code>, <code>{category}</code></td><td>Подписчики канала и категория (игра) эфира</td></tr>
+  <tr><td><code>{followage}</code></td><td>Сколько написавший подписан на канал: «41 дн. 3 ч»</td></tr>
+  <tr><td><code>{points}</code>, <code>{points_name}</code></td><td>Баланс стрим-поинтов написавшего и название поинтов канала</td></tr>
+  <tr><td><code>{account_age}</code>, <code>{messages}</code></td><td>Возраст аккаунта написавшего и сколько сообщений он оставил в чате канала за 3 дня</td></tr>
+  <tr><td><code>{random_user}</code></td><td>Случайный зритель, который сейчас на странице канала (для розыгрышей)</td></tr>
+  <tr><td><code>{last_follower}</code></td><td>Последний подписчик канала</td></tr>
+  <tr><td><code>{weekday}</code></td><td>День недели по Москве (или со сдвигом: <code>{weekday:+2}</code>)</td></tr>
+  <tr><td><code>{countdown:2026-12-31 20:00}</code></td><td>Сколько осталось до даты (по Москве): «72 дн. 10 ч»</td></tr>
+  <tr><td><code>{upper:…}</code>, <code>{lower:…}</code></td><td>Текст ЗАГЛАВНЫМИ или строчными: <code>{upper:{user}}</code></td></tr>
+  <tr><td><code>{widget:имя}</code></td><td>Число или текст виджета OBS по его имени для команд: <code>{widget:deaths}</code> — сколько раз умер стример</td></tr>
 </table>
 </div>
 <p>Переменные можно вкладывать друг в друга: <code>{random:{число}}</code>, <code>{calc:{args}}</code>.</p>

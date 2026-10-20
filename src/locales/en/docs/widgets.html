@@ -1,0 +1,107 @@
+<h1>OBS widgets and the mini panel</h1>
+<p class="docs-lead">Stream uptime, a countdown, a death counter, a follower goal, a ticker, end credits — each is a separate OBS widget. You create and set them up in the studio, the <b>⏱️ Widgets</b> section, with no code. There is also the <b>📌 mini panel</b>: a small window above all apps with the chat and buttons.</p>
+
+<h2>How to add it to OBS</h2>
+<ol>
+  <li>Open the studio → <b>⏱️ Widgets</b>. On the right, pick a widget to add — its card appears.</li>
+  <li>On the card, click <b>📋 Link for OBS</b>. The link is copied.</li>
+  <li>In OBS: <b>Sources → ＋ → Browser</b>. Paste the link into “URL”. Pick a size that fits the widget, e.g. <code>600</code> × <code>200</code> for a timer or <code>1920</code> × <code>80</code> for a ticker. For the sound at the end of a countdown, tick <b>“Control audio via OBS”</b>.</li>
+</ol>
+<p>Each widget is a separate source. Everything you change in the studio (text, colors, buttons) shows up in OBS at once — no need to refresh the source.</p>
+<div class="docs-note"><p>The link contains your events key, the same as for alerts. Don't show it on stream. If it leaks, change the key in <b>🔔 Events → 🔄 New key</b> and copy the widget links again.</p></div>
+
+<h2>Widget types</h2>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Widget</th><th>What it shows</th><th>How to control it</th></tr>
+  <tr><td>📡 Stream uptime</td><td>How long the stream has been running. Offline — your text, 0:00:00 or nothing</td><td>Automatic</td></tr>
+  <tr><td>⏳ Countdown</td><td>“Starting in 5:00”, a break, a challenge. Can show a time-left bar and play a sound at the end</td><td>Buttons, <code>/timer</code></td></tr>
+  <tr><td>⏱ Stopwatch</td><td>Time since start</td><td>Buttons, <code>/sw</code></td></tr>
+  <tr><td>🕒 Clock</td><td>Time (and date) in any time zone</td><td>Automatic</td></tr>
+  <tr><td>💬 Text</td><td>Your text, e.g. “Now: boss fight”</td><td>Field on the card, <code>/text</code></td></tr>
+  <tr><td>📜 Ticker</td><td>Announcements in a loop; each line is a separate one</td><td>Field on the card, <code>/ticker</code></td></tr>
+  <tr><td>🔢 Counter</td><td>Deaths, wins — anything. A template like <code>Deaths: {n}</code></td><td>+ and −, <code>/count</code></td></tr>
+  <tr><td>🎯 Goal</td><td>A progress bar: total followers, new this stream, viewers now or your own number</td><td>Automatic or + and −, <code>/goal</code></td></tr>
+  <tr><td>📊 Number / info</td><td>Viewers, followers, follows this stream, stream title or category</td><td>Automatic</td></tr>
+  <tr><td>🔔 Latest events</td><td>Latest follower, reward, raid, clip, first message or command — the last 1 to 10</td><td>Automatic</td></tr>
+  <tr><td>🎬 End credits</td><td>At the end of a stream: new followers, raids, reward buyers, most active chatters and moderators</td><td>Button, <code>/credits</code></td></tr>
+</table>
+</div>
+<p>Up to 20 widgets per channel. You can have several of one type — for example, two counters.</p>
+
+<h2>Settings and look</h2>
+<p><b>⚙ Settings</b> on a card opens a window with a live preview on top. Everything is saved automatically.</p>
+<ul>
+  <li><b>Name</b> is only for you — so two widgets of one type don't get mixed up.</li>
+  <li><b>Name for chat commands</b> — needed when you have several widgets of one type: <code>/count deaths</code> and <code>/count wins</code>.</li>
+  <li><b>Text templates</b>: <code>{n}</code> is the number; “Latest events” has <code>{name}</code>, <code>{reward}</code>, <code>{streamer}</code> and more (hint under the field). An empty field means the default text in the language of the link.</li>
+  <li><b>Look</b>: font, size, weight, text and accent (bar) color, background and its opacity, padding, rounding, outline, shadow, UPPERCASE, alignment.</li>
+</ul>
+<p>The preview on a card has a checkerboard behind it: that's how a transparent background looks in OBS.</p>
+
+<h2>Chat commands</h2>
+<p>You can control widgets right from the channel chat — on the channel page, in the studio or in the mini panel. Commands don't go to the chat; only you see the reply.</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>/timer 5</code></td><td>Start a 5-minute countdown. <code>90s</code>, <code>1h30m</code>, <code>10:00</code> also work. Without a time — continue where it stopped</td></tr>
+  <tr><td><code>/timer pause</code>, <code>/timer reset</code></td><td>Pause / back to the start</td></tr>
+  <tr><td><code>/timer +1m</code>, <code>/timer -30s</code></td><td>Add or remove time</td></tr>
+  <tr><td><code>/sw</code>, <code>/sw reset</code></td><td>Stopwatch: start or pause / reset</td></tr>
+  <tr><td><code>/count</code>, <code>/count -</code>, <code>/count +5</code>, <code>/count =10</code>, <code>/count reset</code></td><td>Counter: +1, −1, +5, set to 10, reset. The same for a goal with your own number — <code>/goal</code></td></tr>
+  <tr><td><code>/text Now: boss</code></td><td>Change the text; <code>/text</code> with no text clears it</td></tr>
+  <tr><td><code>/ticker Follow the channel!</code></td><td>Change the ticker</td></tr>
+  <tr><td><code>/credits</code>, <code>/credits stop</code></td><td>Roll the credits / stop them</td></tr>
+</table>
+</div>
+<p>With several widgets of one type, put the widget's name after the command: <code>/timer brb 10</code>. Without a name the command controls the first widget of that type. Each card shows the right command.</p>
+<p>You can allow these commands for senior moderators: <b>🛡️ Channel activity → Moderator permissions → “Control OBS widgets”</b>. Off by default. What moderators did is in the action log.</p>
+
+<h2>📌 Always-on-top mini panel</h2>
+<p>The <b>📌 Always on top</b> button is in “Widgets” and on the main studio page. It opens a small window that stays above all apps, even when the browser is minimized — handy while gaming.</p>
+<ul>
+  <li>On top — stream uptime, viewers and followers.</li>
+  <li><b>Chat</b> — read and write, <code>/commands</code> work too.</li>
+  <li><b>Widgets</b> — buttons for timers, counters, text and credits.</li>
+  <li><b>Events</b> — follows, raids, rewards while the window is open.</li>
+</ul>
+<p>You can resize the window — the size is remembered.</p>
+<div class="docs-note"><p>An always-on-top window works in <b>Chrome, Edge, Opera and Yandex Browser on a computer</b>. Firefox and Safari open a regular small window instead. Over a game the window is visible when the game runs windowed or “borderless windowed”. In exclusive fullscreen the game covers it — every such window behaves this way.</p></div>
+<p><b>OBS dock.</b> The same mini panel can live inside OBS: click <b>🧩 OBS dock link</b>, in OBS open <b>Docks → Custom Browser Docks</b>, type any name and paste the link. Log in to your account inside the dock the first time.</p>
+
+<h2>✨ Custom widget</h2>
+<p>At the top right — <b>✨ Create your own widget</b>. It's a widget made of lines with variables and functions: click a hint to insert it into the line under the cursor. To start, pick a template: info panel, latest events, wheel of fortune, until New Year, follower goal, “Now…”, world clock.</p>
+<ul>
+  <li><b>Lines</b> — up to 6, each with its own size, boldness and color.</li>
+  <li><b>All at once</b> or <b>one by one</b> (switching every N seconds), stacked or in one row, an animation when the text changes.</li>
+  <li><b>When to show</b>: always, only while live or only offline. A line whose variable has no value yet (e.g. “latest follower” on a new channel) hides itself.</li>
+  <li><b>Progress bar</b>: value and maximum — numbers or variables, e.g. <code>{followers_stream}</code> of <code>10</code>.</li>
+</ul>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Variable</th><th>What it shows</th></tr>
+  <tr><td><code>{n}</code>, <code>{text}</code></td><td>The widget's own number and text — changed with the card buttons, in the mini panel, with <code>/w name</code> and by rewards</td></tr>
+  <tr><td><code>{uptime}</code>, <code>{uptime_hm}</code>, <code>{live}</code></td><td>Stream uptime and “Live / Offline”</td></tr>
+  <tr><td><code>{viewers}</code>, <code>{followers}</code>, <code>{followers_stream}</code></td><td>Viewers now, followers, new followers this stream</td></tr>
+  <tr><td><code>{title}</code>, <code>{category}</code>, <code>{streamer}</code></td><td>Stream title, category, channel name</td></tr>
+  <tr><td><code>{time}</code>, <code>{date}</code>, <code>{weekday}</code></td><td>Time, date, weekday; time zone — <code>{time:Europe/Berlin}</code> or an offset <code>{time:+3}</code></td></tr>
+  <tr><td><code>{last_follower}</code>, <code>{last_reward}</code>, <code>{last_reward_user}</code>, <code>{last_raider}</code>, <code>{last_raid_viewers}</code>, <code>{last_chatter}</code>, <code>{last_clip}</code>, <code>{last_command}</code> …</td><td>The channel's latest events</td></tr>
+  <tr><td><code>{random:1-100}</code>, <code>{choice:a|b|c}</code>, <code>{dice}</code>, <code>{coin}</code></td><td>Random — stays the same until you press 🎲 “Reroll” (or <code>/w name roll</code>, or a reward)</td></tr>
+  <tr><td><code>{calc:{followers}+10}</code>, <code>{percent:{followers_stream}:10}</code></td><td>Calculate and percent</td></tr>
+  <tr><td><code>{countdown:2026-12-31 23:59}</code>, <code>{countdown:20:00}</code></td><td>Time left until a date or the next such time (by the OBS computer clock)</td></tr>
+  <tr><td><code>{upper:…}</code>, <code>{lower:…}</code></td><td>UPPERCASE or lowercase</td></tr>
+</table>
+</div>
+<p>Chat command: <code>/w name +1</code>, <code>/w name =10</code>, <code>/w name reset</code>, <code>/w name roll</code>, <code>/w name text Now: boss</code>, <code>/w name clear</code>.</p>
+
+<h2>Widget presets</h2>
+<p>Share a good widget with others: the <b>📤</b> button on the card or <b>🎨 Presets → Publish → OBS widget</b>. The type, look and settings go out (for a text widget — its text), but not your link or key. Other people's widgets are in <b>🎨 Presets</b>, filter “Widgets”: <b>Add</b> creates a copy in your “⏱️ Widgets”, then copy its link for OBS. Removing a preset from your list also deletes the widget it created.</p>
+<p>A preset widget can be linked to a reward: e.g. “Wheel of challenges” and the reward “Spin the wheel” (the “reroll” action). More in <a href="#rewards">Rewards</a>.</p>
+
+<h2>Not working?</h2>
+<ul>
+  <li>OBS shows “The key doesn't match” — the events key was changed. Copy the widget link again.</li>
+  <li>“This widget no longer exists” — it was deleted in the studio. Create a new one and paste the new link.</li>
+  <li>The widget is invisible — check it has something to show: empty text, an empty ticker and “Latest events” with no events are invisible in OBS. In the studio you see grey hint text in their place.</li>
+  <li>No sound at the end of a countdown — turn on “Control audio via OBS” in the source and check the sound and volume in the widget settings.</li>
+</ul>

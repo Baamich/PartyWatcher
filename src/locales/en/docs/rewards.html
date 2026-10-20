@@ -48,9 +48,38 @@
   <tr><td><code>{message}</code></td><td>The viewer's text (if “Viewer writes a text” is on)</td></tr>
   <tr><td><code>{points}</code></td><td>The channel's stream points name</td></tr>
   <tr><td><code>{balance}</code></td><td>How many points the viewer has left after the purchase</td></tr>
+  <tr><td><code>{target}</code></td><td>The first word of the viewer's text without <code>@</code> — handy for “hug someone”</td></tr>
+  <tr><td><code>{streamer}</code>, <code>{title}</code>, <code>{viewers}</code>, <code>{uptime}</code>, <code>{followers}</code></td><td>Channel, stream title, viewers now, stream uptime, followers</td></tr>
+  <tr><td><code>{count}</code>, <code>{count_user}</code></td><td>How many times the reward was bought in total and how many times this viewer bought it</td></tr>
+  <tr><td><code>{followage}</code></td><td>How long the viewer has followed the channel</td></tr>
+  <tr><td><code>{random:1-20}</code>, <code>{choice:a|b|c}</code>, <code>{dice}</code>, <code>{coin}</code>, <code>{calc:{cost}*2}</code>, <code>{time}</code>, <code>{upper:…}</code></td><td>Functions, as in chat commands: random number, option, dice, coin, calculator, time</td></tr>
+  <tr><td><code>{widget:name}</code></td><td>Number or text of an OBS widget — e.g. how much a counter already has</td></tr>
 </table>
 </div>
 <p>For example: <code>🎵 {user} requests: {message}</code> → “🎵 viewer123 requests: Nirvana — Lithium”. The channel's word filter applies to the bot reply too.</p>
+
+<h2>Limits</h2>
+<p>In the reward editor, open <b>“⏳ Limits”</b>:</p>
+<ul>
+  <li><b>Cooldown</b> — after a purchase the reward can't be bought again for N seconds/minutes (by anyone). The viewer sees how long to wait.</li>
+  <li><b>Total per stream</b> and <b>per viewer per stream</b> — how many times the reward can be bought since the current stream started.</li>
+  <li><b>Only while live</b> — the reward can't be bought when you're offline.</li>
+</ul>
+<p>Viewers see the limits in the reward window. Your own tests (buying from the channel account) ignore them.</p>
+
+<h2>OBS widget action</h2>
+<p>A reward can change an <a href="#widgets">OBS widget</a> by itself: open <b>“🎛 OBS widget action”</b>, pick a widget and what to do.</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Widget</th><th>What the reward can do</th><th>Example</th></tr>
+  <tr><td>⏳ Countdown</td><td>Add time, set time, start</td><td>“+1 minute to the timer”: add <code>60</code></td></tr>
+  <tr><td>🔢 Counter, 🎯 Goal (own number)</td><td>Add, set value</td><td>“One more death”: add <code>1</code></td></tr>
+  <tr><td>💬 Text, 📜 Ticker</td><td>Show text</td><td>“Message on screen”: <code>{user}: {message}</code></td></tr>
+  <tr><td>✨ Custom widget</td><td>Add, set, show text, reroll random</td><td>“Spin the wheel”: reroll</td></tr>
+  <tr><td>⏱ Stopwatch, 🎬 Credits</td><td>Start</td><td>—</td></tr>
+</table>
+</div>
+<p>The value supports the same variables as the bot reply. Viewer text goes on screen with the channel word filter applied. If the widget was deleted or renamed, the editor marks it with ⚠ — pick another one.</p>
 
 <h2>Cards and checkboxes</h2>
 <ul>

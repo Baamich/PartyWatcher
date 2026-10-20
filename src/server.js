@@ -35,6 +35,7 @@ const clipsRoutes = require('./routes/streams/clips.routes');
 const channelRoutes = require('./routes/streams/channel.routes');
 const emotesRoutes = require('./routes/streams/emotes.routes');
 const alertsRoutes = require('./routes/streams/alerts.routes');
+const widgetsRoutes = require('./routes/streams/widgets.routes');
 const { pointsRouter, rewardsRouter } = require('./routes/streams/rewards.routes');
 const registerAlertsSocket = require('./sockets/alertsSocket');
 const registerChatSocket = require('./sockets/chatSocket');
@@ -281,6 +282,7 @@ async function start() {
   app.use('/api/channel', channelRoutes);
   app.use('/api/emotes', emotesRoutes);
   app.use('/api/alerts', alertsRoutes);
+  app.use('/api/widgets', widgetsRoutes);
   app.use('/api/points', pointsRouter);
   app.use('/api/rewards', rewardsRouter);
 

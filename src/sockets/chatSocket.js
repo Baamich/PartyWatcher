@@ -17,8 +17,11 @@ const chatRules = require('../services/chatRules');
 const emotes = require('../services/emotes');
 const alerts = require('../services/alerts');
 const points = require('../services/points');
+const widgets = require('../services/widgets');
+const WC = require('../public/widgets/catalog');
 const ChatCommand = require('../models/ChatCommand');
-const { parseCommandLine, buildReply } = require('../services/chatCommands');
+const { parseCommandLine, buildReply, neededVars, humanSpan } = require('../services/chatCommands');
+const categories = require('../services/categories');
 const i18n = require('../services/i18n');
 const safeHandlers = require('./safeHandlers');
 const chatColor = require('../services/chatColor');
@@ -216,13 +219,62 @@ module.exports = function registerChatSocket(io) {
       // все ушли — ноль (оверлеям и студии), не заводя пустую запись присутствия
       const payload = presence.has(nameLower) ? buildViewersPayload(nameLower) : { count: 0, viewers: [] };
       nsp.to(roomName(nameLower)).emit('chat:viewers', payload);
+      widgets.viewersChanged(nameLower); // виджеты OBS «Зрители»
     }, VIEWERS_EMIT_MS));
   }
 
   const COMMAND_COOLDOWN_MS = 3000;
   const commandLastUsed = new Map(); // `${канал}:${команда}` → время последнего ответа
 
-  async function runChatCommand(nameLower, text, username, lang) {
+  // данные для переменных, которых нет «бесплатно» (запросы к базе) — только те, что встречаются в ответе команды
+  async function commandExtras(cmd, nameLower, streamer, userId, lang) {
+    const need = neededVars(cmd.response);
+    if (!need.size) return {};
+    const out = {};
+    const sid = streamer?._id;
+    const jobs = [];
+    if (need.has('followers')) out.followers = streamer?.followersCount || 0;
+    if (need.has('points_name')) out.points_name = streamer?.pointsName || i18n.t(lang, 'server.rewards.pointsDefault');
+    if (need.has('category')) {
+      jobs.push(categories.viewByTid(streamer?.streamCategoryId).then((c) => { out.category = c ? (lang === 'ru' && c.ru) || c.name : i18n.t(lang, 'server.cmd.noCategory'); }).catch(() => {}));
+    }
+    if (need.has('followage') && sid && userId) {
+      jobs.push(Follow.findOne({ followerId: userId, streamerId: sid }).select('createdAt').lean().then((f) => {
+        out.followage = String(sid) === String(userId) ? i18n.t(lang, 'server.cmd.followageOwner')
+          : f ? humanSpan(Date.now() - new Date(f.createdAt).getTime(), lang) : i18n.t(lang, 'server.cmd.notFollowing');
+      }));
+    }
+    if (need.has('points') && sid && userId) {
+      jobs.push(String(sid) === String(userId) ? Promise.resolve().then(() => { out.points = '∞'; })
+        : points.account(sid, userId).then((a) => { out.points = a.balance; }));
+    }
+    if (need.has('account_age') && userId) {
+      jobs.push(User.findById(userId).select('createdAt').lean().then((u) => { out.account_age = u?.createdAt ? humanSpan(Date.now() - new Date(u.createdAt).getTime(), lang) : '?'; }));
+    }
+    if (need.has('messages') && userId) {
+      jobs.push(StreamChatMessage.countDocuments({ streamerNameLower: nameLower, senderId: userId, deleted: { $ne: true } }).then((n) => { out.messages = n; }));
+    }
+    if (need.has('last_follower') && sid) {
+      jobs.push(Follow.findOne({ streamerId: sid }).sort({ createdAt: -1 }).select('followerId').lean()
+        .then((f) => (f ? User.findById(f.followerId).select('username').lean() : null))
+        .then((u) => { out.last_follower = u?.username || i18n.t(lang, 'server.cmd.nobody'); }));
+    }
+    if (need.has('random_user')) {
+      // кто сейчас на странице канала (аккаунты, без повторов)
+      const names = [...new Set([...(presence.get(nameLower) || new Map()).values()].map((x) => x.username).filter(Boolean))];
+      out.random_user = names.length ? names[Math.floor(Math.random() * names.length)] : i18n.t(lang, 'server.cmd.nobody');
+    }
+    if (need.has('widget')) {
+      const slugs = [...String(cmd.response).matchAll(/\{widget:([a-z0-9_-]{1,20})\}/gi)].map((m) => m[1].toLowerCase()).slice(0, 5);
+      const map = {};
+      for (const s of slugs) map[s] = await widgets.valueOf(nameLower, s).catch(() => null);
+      out.__widgets = map;
+    }
+    await Promise.all(jobs.map((p) => p.catch(() => {})));
+    return out;
+  }
+
+  async function runChatCommand(nameLower, text, username, lang, userId) {
     const parsed = parseCommandLine(text);
     if (!parsed) return;
 
@@ -240,17 +292,19 @@ module.exports = function registerChatSocket(io) {
     alerts.fire(nameLower, 'command', { name: username, command: '!' + parsed.name }).catch(() => {});
 
     const streamer = await User.findOne({ streamerNameLower: nameLower })
-      .select('streamerName streamTitle isLive liveStartedAt')
+      .select('streamerName streamTitle isLive liveStartedAt followersCount streamCategoryId pointsName')
       .lean();
 
     const reply = buildReply(cmd, parsed.argv, {
       user: username,
       streamer: streamer?.streamerName || nameLower,
       title: streamer?.streamTitle || '',
-      viewers: buildViewersPayload(nameLower).count,
+      // люди на странице канала без стримера (гости — каждый, а не одной строкой «Гости (N)»)
+      viewers: chatBus.viewerCount(nameLower, streamer?._id),
       uptime: formatUptime(streamer?.liveStartedAt, streamer?.isLive, lang),
       count: (cmd.uses || 0) + 1,
       lang,
+      extra: await commandExtras(cmd, nameLower, streamer, userId, lang),
     });
     if (!reply.usage) {
       ChatCommand.updateOne({ _id: cmd._id }, { $inc: { uses: 1 } }).catch(() => {});
@@ -430,6 +484,9 @@ module.exports = function registerChatSocket(io) {
     raid: 'raid', unraid: 'raid', title: 'editTitle',
     'sp+': 'points', 'sp-': 'points', // только владелец канала (channelMods.OWNER_PERMS)
   };
+  // виджеты OBS (студия → ⏱️ Виджеты): /timer, /sw, /count, /goal, /text, /ticker, /credits — право widgets
+  const WIDGET_CMD = Object.fromEntries(WC.TYPES.filter((x) => x.cmd).map((x) => [x.cmd, x.id]));
+  for (const c of Object.keys(WIDGET_CMD)) SLASH_PERM[c] = 'widgets';
   // ключ подсказки в словаре (common.slash.<ключ>): «+» и «-» в ключах словаря не держим
   const SLASH_KEY = { 'sp+': 'spAdd', 'sp-': 'spSub' };
   const POINTS_CMD_MAX = 1000000; // за одну команду
@@ -447,6 +504,81 @@ module.exports = function registerChatSocket(io) {
     return User.findOne({ usernameLower: n }).select('_id username').lean();
   }
 
+  // время для /timer: «5» — минуты, «90s», «1h30m», «10:00»
+  const spanArg = (s) => (/^\d{1,4}$/.test(s) ? Number(s) * 60 : WC.parseSpan(s));
+  const WIDGET_WORDS = {
+    start: 'start', go: 'start', 'старт': 'start', pause: 'pause', stop: 'pause', 'пауза': 'pause', 'стоп': 'pause', reset: 'reset', 'сброс': 'reset',
+  };
+
+  // команда виджета: первым словом можно указать имя виджета (его «имя для команд»), иначе — первый виджет этого типа
+  async function widgetCommand(socket, room, cmd, type, args, rest, say, usage) {
+    const found = await widgets.findForCommand(room, type, args[0]);
+    if (!found) return say(false, 'server.widgets.cmd.none', { cmd: '/' + cmd });
+    const { widget } = found;
+    const a = found.bySlug ? args.slice(1) : args;
+    const text = found.bySlug ? rest.replace(/^\S+\s*/, '') : rest;
+    const sub = (a[0] || '').toLowerCase();
+    let action = null;
+    let arg;
+    switch (type) {
+      case 'countdown':
+        if (!sub) action = 'start';
+        else if (WIDGET_WORDS[sub]) action = WIDGET_WORDS[sub];
+        else if (/^[+-]/.test(sub)) {
+          const s = spanArg(sub.slice(1));
+          if (!s) return usage();
+          action = 'add';
+          arg = sub[0] === '-' ? -s : s;
+        } else {
+          arg = spanArg(sub);
+          if (!arg) return usage();
+          action = 'start';
+        }
+        break;
+      case 'stopwatch':
+        action = sub ? WIDGET_WORDS[sub] : 'toggle';
+        break;
+      case 'counter':
+      case 'goal': {
+        const step = widget.opts.step || 1;
+        if (!sub || sub === '+') { action = 'add'; arg = step; }
+        else if (sub === '-') { action = 'add'; arg = -step; }
+        else if (WIDGET_WORDS[sub] === 'reset') action = 'reset';
+        else if (/^[+-]\d{1,9}$/.test(sub)) { action = 'add'; arg = Number(sub); }
+        else if (/^=?\d{1,9}$/.test(sub)) { action = 'set'; arg = Number(sub.replace('=', '')); }
+        break;
+      }
+      case 'text':
+      case 'ticker':
+        action = 'set';
+        arg = text.trim();
+        break;
+      case 'credits':
+        action = WIDGET_WORDS[sub] === 'pause' ? 'stop' : 'run';
+        break;
+      // свой виджет: /w имя [+|-|+5|=10|reset|roll|text …|clear]
+      case 'custom':
+        if (!sub || sub === '+') { action = 'add'; arg = 1; }
+        else if (sub === '-') { action = 'add'; arg = -1; }
+        else if (WIDGET_WORDS[sub] === 'reset') action = 'reset';
+        else if (sub === 'roll' || sub === 'reroll' || sub === 'крутить') action = 'roll';
+        else if (sub === 'text' || sub === 'текст') { action = 'text'; arg = text.replace(/^\S+\s*/, '').trim(); }
+        else if (sub === 'clear') { action = 'text'; arg = ''; }
+        else if (/^[+-]\d{1,9}$/.test(sub)) { action = 'add'; arg = Number(sub); }
+        else if (/^=?-?\d{1,9}$/.test(sub)) { action = 'set'; arg = Number(sub.replace('=', '')); }
+        break;
+    }
+    if (!action) return usage();
+    try {
+      await widgets.act(room, widget.id, action, arg);
+    } catch (e) {
+      return say(false, e.i18nKey || 'server.widgets.badAction', e.vars);
+    }
+    // журнал — что делали модераторы (свои действия стримеру не нужны)
+    if (socket.data.role !== 'owner') logAction(nsp, room, actorName(socket), 'widget', null, ('/' + cmd + ' ' + rest).trim().slice(0, 80));
+    return say(true, 'server.widgets.cmd.done', { name: widget.name || widget.slug });
+  }
+
   async function slashCommand(socket, room, text) {
     const lang = socket.data.lang;
     const say = (ok, key, vars) => socket.emit('chat:cmd-result', { ok, text: i18n.t(lang, key, vars) });
@@ -458,6 +590,8 @@ module.exports = function registerChatSocket(io) {
     if (!perm) return say(false, 'server.modcmd.unknown', { cmd: '/' + cmd.slice(0, 20) });
     if (!hasPerm(socket, perm)) return say(false, 'server.modcmd.forbidden');
     const usage = () => say(false, 'server.modcmd.usage', { usage: i18n.t(lang, 'common.slash.' + (SLASH_KEY[cmd] || cmd) + '.use') });
+
+    if (WIDGET_CMD[cmd]) return widgetCommand(socket, room, cmd, WIDGET_CMD[cmd], args, rest, say, usage);
 
     // /SP+ @ник 100 и /SP- @ник 100 (порядок «число, ник» тоже понимаем)
     if (cmd === 'sp+' || cmd === 'sp-') {
@@ -546,6 +680,7 @@ module.exports = function registerChatSocket(io) {
         if (title.length > 140) return say(false, 'server.wb.titleLong');
         await User.updateOne({ streamerNameLower: room }, { $set: { streamTitle: title } });
         logAction(nsp, room, actorName(socket), 'edit_title', null, title);
+        widgets.streamInfo(room).catch(() => {});
         return say(true, 'server.modcmd.done.title');
       }
       default:
@@ -794,7 +929,7 @@ module.exports = function registerChatSocket(io) {
       alerts.chatMessage(currentStreamerNameLower, String(authUser.id), authUser.username, trimmed).catch(() => {});
       alerts.chatHype(currentStreamerNameLower).catch(() => {});
       alerts.emotes(currentStreamerNameLower, authUser.id, usedEmotes).catch(() => {});
-      runChatCommand(currentStreamerNameLower, trimmed, authUser.username, socket.data.lang).catch((e) =>
+      runChatCommand(currentStreamerNameLower, trimmed, authUser.username, socket.data.lang, String(authUser.id)).catch((e) =>
         console.warn('[chat command]', e.message)
       );
     });

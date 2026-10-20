@@ -3,7 +3,26 @@ const i18n = require('./i18n');
 const RESERVED = new Set([
   'user', 'streamer', 'title', 'viewers', 'uptime', 'count', 'args', 'target',
   'random', 'dice', 'coin', 'choice', 'calc', 'time', 'date',
+  // добавлены позже: данные канала и зрителя (считаются, только если есть в ответе — EXTRA_VARS)
+  'followers', 'category', 'followage', 'points', 'points_name', 'random_user', 'last_follower', 'channel',
+  'weekday', 'countdown', 'upper', 'lower', 'widget', 'account_age', 'messages',
 ]);
+// переменные, которые требуют запроса к базе или памяти сокета: chatSocket считает только встреченные в ответе
+const EXTRA_VARS = ['followers', 'category', 'followage', 'points', 'points_name', 'random_user', 'last_follower', 'account_age', 'messages', 'widget'];
+// какие из них есть в шаблоне ({widget:…} — тоже)
+function neededVars(template) {
+  const s = String(template || '');
+  return new Set(EXTRA_VARS.filter((k) => new RegExp('\\{' + k + '(?::|\\})').test(s)));
+}
+// «3 дн 4 ч», «5 ч 12 мин», «7 мин» — на языке ответа
+function humanSpan(ms, lang) {
+  const m = Math.max(0, Math.floor(ms / 60000));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+  if (d >= 365) return i18n.t(lang, 'server.cmd.spanYD', { y: Math.floor(d / 365), d: d % 365 });
+  if (d) return i18n.t(lang, 'server.cmd.spanDH', { d, h });
+  if (h) return i18n.t(lang, 'server.cmd.spanHM', { h, m: mm });
+  return i18n.t(lang, 'server.cmd.spanM', { m: mm });
+}
 const ARG_NAME_RE = /^[a-zA-Z0-9_а-яА-ЯёЁ]{1,15}$/;
 const MAX_ARGS = 5;
 
@@ -138,6 +157,27 @@ function evalToken(body, vars, lang) {
       const [y, mo, da] = d.toISOString().slice(0, 10).split('-');
       return `${da}.${mo}.${y}`;
     }
+    case 'weekday': {
+      const d = shifted(param);
+      return d ? new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-GB', { weekday: 'long', timeZone: 'UTC' }).format(d) : '?';
+    }
+    // {countdown:2026-12-31 23:59} — сколько осталось (время — московское, как у {time})
+    case 'countdown': {
+      const m = /^\s*(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?\s*$/.exec(param || '');
+      if (!m) return '?';
+      const target = Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0) - 3, +(m[5] || 0));
+      if (!Number.isFinite(target)) return '?';
+      const left = target - Date.now();
+      return left <= 0 ? i18n.t(lang, 'server.cmd.countdownDone') : humanSpan(left, lang);
+    }
+    case 'upper': return param === null ? null : String(param).toLocaleUpperCase(lang === 'ru' ? 'ru-RU' : 'en-GB');
+    case 'lower': return param === null ? null : String(param).toLocaleLowerCase(lang === 'ru' ? 'ru-RU' : 'en-GB');
+    // {widget:имя} — число или текст виджета OBS (chatSocket подкладывает значения в vars.__widgets)
+    case 'widget': {
+      if (param === null) return null;
+      const v = vars.__widgets?.[String(param).trim().toLowerCase()];
+      return v === undefined || v === null ? '?' : clean(v);
+    }
     default: return null;
   }
 }
@@ -176,9 +216,24 @@ function buildReply(cmd, argv, ctx) {
     target: (argv[0] || clean(ctx.user)).replace(/^@/, ''),
   };
   for (let i = 0; i < 9; i++) vars['arg' + (i + 1)] = argv[i] ?? '';
+  // данные канала и зрителя, посчитанные заранее (только те, что есть в ответе): { followers, followage, … }
+  for (const [k, v] of Object.entries(ctx.extra || {})) {
+    if (k === '__widgets') vars.__widgets = v;
+    else if (v !== undefined && v !== null) vars[k] = clean(v);
+  }
+  vars.channel = vars.streamer;
   declared.forEach((a, i) => { vars[a.name] = argv[i] ?? ''; });
 
   return { text: renderTemplate(cmd.response, vars, ctx.lang), usage: false };
 }
 
-module.exports = { parseArgsInput, parseCommandLine, buildReply, usageOf, MAX_ARGS };
+// примеры для превью (конструктор, пре-сеты): то, что на эфире считается запросом
+function sampleExtras(lang, over = {}) {
+  return {
+    followers: 128, category: 'Minecraft', followage: humanSpan(41 * 86400000, lang), points: 1250,
+    points_name: i18n.t(lang, 'server.rewards.pointsDefault'), random_user: 'Neyrite', last_follower: 'NewFollower',
+    account_age: humanSpan(400 * 86400000, lang), messages: 57, __widgets: new Proxy({}, { get: () => '7' }), ...over,
+  };
+}
+
+module.exports = { sampleExtras, parseArgsInput, parseCommandLine, buildReply, usageOf, renderTemplate, neededVars, humanSpan, clean, MAX_ARGS, EXTRA_VARS };

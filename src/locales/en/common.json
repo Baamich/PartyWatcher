@@ -216,6 +216,38 @@
     "spSub": {
       "use": "/SP- <name> <amount>",
       "desc": "Take channel points from a viewer, not below zero (streamer only)"
+    },
+    "timer": {
+      "use": "/timer [name] [time|pause|reset|+1m]",
+      "desc": "Countdown: /timer 5 — five minutes, also 90s, 1h30m, 10:00; pause, reset, +1m, -30s"
+    },
+    "sw": {
+      "use": "/sw [name] [start|pause|reset]",
+      "desc": "Stopwatch: no word — start/pause"
+    },
+    "count": {
+      "use": "/count [name] [+|-|+5|=10|reset]",
+      "desc": "Counter: no word — +1"
+    },
+    "goal": {
+      "use": "/goal [name] [+|-|+5|=10|reset]",
+      "desc": "Goal with your own number: no word — +1"
+    },
+    "text": {
+      "use": "/text [name] <text>",
+      "desc": "Change the text widget (no text — clear it)"
+    },
+    "ticker": {
+      "use": "/ticker [name] <text>",
+      "desc": "Change the ticker (no text — clear it)"
+    },
+    "credits": {
+      "use": "/credits [name] [stop]",
+      "desc": "Roll the end credits (stop — stop them)"
+    },
+    "w": {
+      "use": "/w <name> [+|-|+5|=10|reset|roll|text …]",
+      "desc": "Custom widget: number, reroll random, change the text"
     }
   },
   "points": {
@@ -231,7 +263,13 @@
     "testFor": "Test — free",
     "testHint": "You own the channel: no points are spent, the reward runs for real",
     "tested": "“{title}” — test started",
-    "studioBtn": "Test rewards (free)"
+    "studioBtn": "Test rewards (free)",
+    "limOnlyLive": "live only",
+    "limCooldown": "at most once per {time}",
+    "limSec": "{n} s",
+    "limMin": "{n} min",
+    "limPerStream": "{n} per stream",
+    "limPerUser": "{n} per stream for you"
   },
   "terms": {
     "needTitle": "Terms of Service",
@@ -421,5 +459,12 @@
         }
       }
     }
+  },
+  "float": {
+    "open": "📌 Always on top",
+    "hint": "Mini panel: stream uptime, chat, events and widget buttons in a window above all apps (Chrome, Edge, Opera, Yandex on a computer)",
+    "title": "Party Watcher — Mini panel",
+    "blocked": "The browser blocked the window — allow pop-ups for this site",
+    "noPip": "This browser can’t keep a window above all apps — a regular window was opened. Always on top works in Chrome, Edge, Opera or Yandex Browser on a computer"
   }
 }

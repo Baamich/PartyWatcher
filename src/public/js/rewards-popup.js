@@ -43,7 +43,9 @@
       .lp-buy { width: 100%; margin: 0; }
       .lp-buy:disabled { opacity: .45; filter: grayscale(.5); cursor: not-allowed; box-shadow: none; }
       .lp-short { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); text-align: center; }
-      .lp-short:empty { display: none; }`;
+      .lp-short:empty { display: none; }
+      .lp-limits { margin: -4px 0 10px; font-size: 12px; color: var(--text-muted); }
+      .lp-limits:empty { display: none; }`;
     document.head.appendChild(st);
   }
 
@@ -82,6 +84,7 @@
       box.innerHTML = `<div class="lp-head"><button type="button" class="lp-back">← <span></span></button><b class="lp-bal"></b></div>
         <div class="lp-detail">${tileHtml(r)}<div class="lp-d-main"><div class="lp-d-title"></div><div class="lp-cost"></div></div></div>
         <p class="lp-desc"></p>
+        <p class="lp-limits"></p>
         ${r.needInput ? '<textarea class="lp-input" rows="2" maxlength="200"></textarea>' : ''}
         <button type="button" class="lp-buy"></button>
         <p class="lp-short"></p>`;
@@ -92,6 +95,13 @@
       const desc = box.querySelector('.lp-desc');
       desc.textContent = r.description || tr('noDesc');
       desc.classList.toggle('muted', !r.description);
+      // ограничения награды: «только в эфире · раз в 5 мин · 3 за эфир на зрителя»
+      const lim = [];
+      if (r.onlyLive) lim.push(tr('limOnlyLive'));
+      if (r.cooldownSec) lim.push(tr('limCooldown', { time: r.cooldownSec < 60 ? tr('limSec', { n: r.cooldownSec }) : tr('limMin', { n: Math.round(r.cooldownSec / 60) }) }));
+      if (r.perStream) lim.push(tr('limPerStream', { n: r.perStream }));
+      if (r.perUserStream) lim.push(tr('limPerUser', { n: r.perUserStream }));
+      box.querySelector('.lp-limits').textContent = lim.length ? '⏳ ' + lim.join(' · ') : '';
       const input = box.querySelector('.lp-input');
       if (input) input.placeholder = tr('inputPh');
       const buy = box.querySelector('.lp-buy');

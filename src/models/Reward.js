@@ -15,6 +15,13 @@ const rewardSchema = new mongoose.Schema(
     needInput: { type: Boolean, default: false }, // зритель пишет текст при покупке
     reply: { type: String, default: '' }, // ответ бота в чат после покупки, с {переменными} (rewards.routes REPLY_VARS)
     enabled: { type: Boolean, default: true },
+    // ограничения: перезарядка награды (с), сколько раз за эфир всего и одному зрителю (0 — без ограничения), только в эфире
+    cooldownSec: { type: Number, default: 0 },
+    perStream: { type: Number, default: 0 },
+    perUserStream: { type: Number, default: 0 },
+    onlyLive: { type: Boolean, default: false },
+    // действие с виджетом OBS после покупки: { widget: имя для команд, op: add|set|start|text|roll|run, value: число или шаблон }
+    action: { type: mongoose.Schema.Types.Mixed, default: null },
     createdAt: { type: Date, default: Date.now },
   },
   { versionKey: false }

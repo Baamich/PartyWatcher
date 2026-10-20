@@ -18,6 +18,9 @@ const StreamChatMessage = require('../../models/StreamChatMessage');
 const User = require('../../models/User');
 const ChannelBan = require('../../models/ChannelBan');
 const ChannelTimeout = require('../../models/ChannelTimeout');
+const Follow = require('../../models/Follow');
+const widgets = require('../../services/widgets');
+const { renderTemplate, humanSpan, clean: cleanVar } = require('../../services/chatCommands');
 
 const pointsRouter = express.Router();
 const rewardsRouter = express.Router();
@@ -27,16 +30,49 @@ const MAX_REWARDS = 30;
 const RENAME_MS = 30 * 24 * 3600 * 1000;
 const COST_MIN = 1, COST_MAX = 1000000;
 const REPLY_MAX = 200;
-// переменные ответа бота: {user} купивший, {reward} награда, {cost} цена, {message} текст зрителя, {points} название поинтов, {balance} остаток
-const REPLY_VARS = ['user', 'reward', 'cost', 'message', 'points', 'balance'];
-const fillReply = (tpl, vars) => String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (REPLY_VARS.includes(k) && vars[k] !== undefined ? String(vars[k]) : m));
+// переменные ответа бота: {user} купивший, {reward} награда, {cost} цена, {message} текст зрителя, {points} название поинтов,
+// {balance} остаток, {target} первое слово текста (ник без @), {streamer}, {viewers}, {uptime}, {title}, {followers},
+// {count} сколько раз купили эту награду, {count_user} — сколько раз её купил этот зритель, {followage} сколько подписан.
+// Плюс функции команд чата: {random:1-100}, {choice:a|b}, {dice}, {coin}, {calc:…}, {time}, {date}, {upper:…}, {widget:имя}
+const REPLY_VARS = ['user', 'reward', 'cost', 'message', 'points', 'balance', 'target', 'streamer', 'viewers', 'uptime', 'title', 'followers', 'count', 'count_user', 'followage'];
+const needVar = (tpl, k) => new RegExp('\\{' + k + '\\}').test(String(tpl || ''));
+// текст зрителя и прочие значения — без фигурных скобок (иначе {calc:…} из сообщения посчитался бы)
+function fillReply(tpl, vars, lang = 'ru') {
+  const v = {};
+  for (const [k, x] of Object.entries(vars || {})) v[k] = k === '__widgets' ? x : cleanVar(x);
+  return renderTemplate(String(tpl || ''), v, lang);
+}
+
+// ограничения и действие награды (студия и пре-сеты). partial — только присланные поля. Ошибка — i18n.err
+const ACTION_OPS = ['add', 'set', 'start', 'text', 'roll', 'run'];
+function cleanExtras(b, partial) {
+  const out = {};
+  const n = (v, max) => Math.min(max, Math.max(0, Math.round(Number(v) || 0)));
+  if (!partial || b.cooldownSec !== undefined) out.cooldownSec = n(b.cooldownSec, 86400);
+  if (!partial || b.perStream !== undefined) out.perStream = n(b.perStream, 10000);
+  if (!partial || b.perUserStream !== undefined) out.perUserStream = n(b.perUserStream, 1000);
+  if (!partial || b.onlyLive !== undefined) out.onlyLive = !!b.onlyLive;
+  if (!partial || b.action !== undefined) {
+    const a = b.action;
+    if (!a || typeof a !== 'object' || !a.widget) out.action = null;
+    else {
+      const widget = String(a.widget || '').trim().toLowerCase();
+      if (!/^[a-z0-9_-]{1,20}$/.test(widget) || !ACTION_OPS.includes(a.op)) throw i18n.err('server.rewards.badAction');
+      const value = String(a.value ?? '').trim().replace(/\s+/g, ' ').slice(0, REPLY_MAX);
+      if (hasProfanity(value.replace(/\{\w+\}/g, ' '))) throw i18n.err('server.rewards.replyBad');
+      out.action = { widget, op: a.op, value };
+    }
+  }
+  return out;
+}
 
 const iconUrl = (ref) => (/^media:[a-f0-9]{24}$/i.test(ref || '') ? '/api/alerts/media/' + ref.slice(6) : null);
 const viewerReward = (r) => ({
   id: String(r._id), title: r.title, description: r.description, cost: r.cost, color: r.color,
   image: iconUrl(r.image), needInput: !!r.needInput,
+  cooldownSec: r.cooldownSec || 0, perStream: r.perStream || 0, perUserStream: r.perUserStream || 0, onlyLive: !!r.onlyLive,
 });
-const studioReward = (r) => ({ ...viewerReward(r), slug: r.slug, kind: r.kind, enabled: !!r.enabled, imageRef: r.image || null, reply: r.reply || '' });
+const studioReward = (r) => ({ ...viewerReward(r), slug: r.slug, kind: r.kind, enabled: !!r.enabled, imageRef: r.image || null, reply: r.reply || '', action: r.action || null });
 
 const limiter = (limit, windowMs) => rateLimit({
   windowMs, limit, keyGenerator: (req) => String(req.user.id), standardHeaders: true, legacyHeaders: false,
@@ -46,7 +82,7 @@ const limiter = (limit, windowMs) => rateLimit({
 async function channelOf(req, res) {
   const nameLower = String(req.params.name || req.params.channel || '').trim().toLowerCase();
   const s = nameLower && await User.findOne({ streamerNameLower: nameLower })
-    .select('_id streamerName streamerNameLower isLive liveStartedAt pointsName pointsIcon chatFilter').lean();
+    .select('_id streamerName streamerNameLower isLive liveStartedAt pointsName pointsIcon chatFilter streamTitle followersCount').lean();
   if (!s) { res.status(404).json({ error: req.t('server.streamers.notFound') }); return null; }
   return s;
 }
@@ -117,6 +153,27 @@ pointsRouter.post('/:name/redeem', auth, limiter(20, 60 * 1000), async (req, res
   if (reward.needInput && !message) return res.status(400).json({ error: req.t('server.rewards.needText') });
   const own = String(s._id) === String(req.user.id);
 
+  // ограничения награды (владелец проверяет награду — его не держат)
+  if (!own) {
+    if (reward.onlyLive && !s.isLive) return res.status(400).json({ error: req.t('server.rewards.onlyLive') });
+    const base = { streamerId: s._id, rewardSlug: reward.slug, test: { $ne: true } };
+    if (reward.cooldownSec) {
+      const lastRed = await Redemption.findOne(base).sort({ createdAt: -1 }).select('createdAt').lean();
+      const left = lastRed ? Math.ceil((new Date(lastRed.createdAt).getTime() + reward.cooldownSec * 1000 - Date.now()) / 1000) : 0;
+      if (left > 0) return res.status(400).json({ error: req.t('server.rewards.cooldown', { time: humanSpan(left * 1000 + 59000, req.lang) }), retryIn: left });
+    }
+    // «за эфир» — с начала текущего эфира; без эфира лимиты не считаем (а «только в эфире» отсечёт выше)
+    if ((reward.perStream || reward.perUserStream) && s.isLive && s.liveStartedAt) {
+      const since = { ...base, createdAt: { $gte: new Date(s.liveStartedAt) } };
+      if (reward.perStream && (await Redemption.countDocuments(since)) >= reward.perStream) {
+        return res.status(400).json({ error: req.t('server.rewards.streamLimit', { n: reward.perStream }) });
+      }
+      if (reward.perUserStream && (await Redemption.countDocuments({ ...since, userId: req.user.id })) >= reward.perUserStream) {
+        return res.status(400).json({ error: req.t('server.rewards.userLimit', { n: reward.perUserStream }) });
+      }
+    }
+  }
+
   let acc = null;
   if (!own) {
     // забаненный или в таймауте ничего не покупает (иначе «Выделить сообщение» — обход бана)
@@ -147,12 +204,16 @@ pointsRouter.post('/:name/redeem', auth, limiter(20, 60 * 1000), async (req, res
     const side = i18n.t(req.lang, Math.random() < 0.5 ? 'server.rewards.heads' : 'server.rewards.tails');
     await chatPost(s, { senderId: null, senderUsername: 'Бот', text: i18n.t(req.lang, 'server.rewards.coinflipResult', { name: req.user.username, side }), external: true, source: 'bot' });
   }
-  // свой ответ бота в чат (маску фильтра слов накладывает chatPost)
-  const reply = fillReply(reward.reply, {
-    user: req.user.username, reward: reward.title, cost: reward.cost, message,
-    points: s.pointsName || i18n.t(req.lang, 'server.rewards.pointsDefault'), balance: acc ? acc.balance : '∞',
-  }).trim().slice(0, 500);
+  // свой ответ бота в чат (маску фильтра слов накладывает chatPost) и действие с виджетом OBS
+  const vars = await rewardVars(s, reward, req, message, acc, own);
+  const reply = fillReply(reward.reply, vars, req.lang).trim().slice(0, 500);
   if (reply) await chatPost(s, { senderId: null, senderUsername: 'Бот', text: reply, external: true, source: 'bot' });
+  if (reward.action?.widget) {
+    const a = reward.action;
+    const value = fillReply(a.value, vars, req.lang).trim();
+    widgets.actBySlug(s.streamerNameLower, a.widget, a.op, a.op === 'text' ? chatFilter.mask(value, s.chatFilter || 0) || value : value)
+      .catch((e) => { if (!e.i18nKey) console.warn('[reward action]', e.message); });
+  }
   // в OBS и ботам: текст зрителя на экран — с маской фильтра слов канала
   alerts.fire(s.streamerNameLower, 'reward', {
     name: req.user.username, reward: reward.title, cost: reward.cost, message: chatFilter.mask(message, s.chatFilter || 0) || message,
@@ -160,6 +221,36 @@ pointsRouter.post('/:name/redeem', auth, limiter(20, 60 * 1000), async (req, res
   }).catch(() => {});
   res.json({ balance: acc ? acc.balance : null, redemptionId: String(red._id), test: own });
 });
+
+// переменные ответа бота и действия (дорогие — только если встречаются в шаблонах награды)
+async function rewardVars(s, reward, req, message, acc, own) {
+  const tpl = String(reward.reply || '') + ' ' + String(reward.action?.value || '');
+  const lang = req.lang;
+  const vars = {
+    user: req.user.username, reward: reward.title, cost: reward.cost, message,
+    points: s.pointsName || i18n.t(lang, 'server.rewards.pointsDefault'), balance: acc ? acc.balance : '∞',
+    target: (String(message || '').split(/\s+/)[0] || req.user.username).replace(/^@/, '').slice(0, 32),
+    streamer: s.streamerName, title: s.streamTitle || '', followers: s.followersCount || 0,
+    viewers: chatBus.viewerCount(s.streamerNameLower, s._id),
+    uptime: s.isLive && s.liveStartedAt ? humanSpan(Date.now() - new Date(s.liveStartedAt).getTime(), lang) : i18n.t(lang, 'server.cmd.offline'),
+  };
+  const jobs = [];
+  if (needVar(tpl, 'count')) jobs.push(Redemption.countDocuments({ streamerId: s._id, rewardSlug: reward.slug }).then((n) => { vars.count = n; }));
+  if (needVar(tpl, 'count_user')) jobs.push(Redemption.countDocuments({ streamerId: s._id, rewardSlug: reward.slug, userId: req.user.id }).then((n) => { vars.count_user = n; }));
+  if (needVar(tpl, 'followage')) {
+    jobs.push(own ? Promise.resolve().then(() => { vars.followage = i18n.t(lang, 'server.cmd.followageOwner'); })
+      : Follow.findOne({ followerId: req.user.id, streamerId: s._id }).select('createdAt').lean().then((f) => {
+        vars.followage = f ? humanSpan(Date.now() - new Date(f.createdAt).getTime(), lang) : i18n.t(lang, 'server.cmd.notFollowing');
+      }));
+  }
+  const slugs = [...tpl.matchAll(/\{widget:([a-z0-9_-]{1,20})\}/gi)].map((m) => m[1].toLowerCase()).slice(0, 5);
+  if (slugs.length) {
+    vars.__widgets = {};
+    for (const sl of slugs) vars.__widgets[sl] = await widgets.valueOf(s.streamerNameLower, sl).catch(() => null);
+  }
+  await Promise.all(jobs.map((p) => p.catch(() => {})));
+  return vars;
+}
 
 // ================= студия: награды канала =================
 
@@ -211,6 +302,7 @@ async function cleanRewardBody(req, partial) {
     out.reply = reply;
   }
   if (b.enabled !== undefined) out.enabled = !!b.enabled;
+  Object.assign(out, cleanExtras(b, partial));
   if (b.image !== undefined) {
     if (!b.image) out.image = null;
     else if (/^media:[a-f0-9]{24}$/i.test(b.image) && await AlertMedia.exists({ _id: b.image.slice(6), userId: req.me._id, kind: 'image' })) out.image = b.image;
@@ -373,4 +465,4 @@ rewardsRouter.post('/:channel/:slug/:id/:action', botAuth, async (req, res) => {
   res.json({ id: String(red._id), status: red.status });
 });
 
-module.exports = { pointsRouter, rewardsRouter, COST_MIN, COST_MAX, COLOR_RE, MAX_REWARDS, REPLY_MAX, REPLY_VARS, fillReply, uniqueSlug };
+module.exports = { pointsRouter, rewardsRouter, COST_MIN, COST_MAX, COLOR_RE, MAX_REWARDS, REPLY_MAX, REPLY_VARS, fillReply, cleanExtras, uniqueSlug };

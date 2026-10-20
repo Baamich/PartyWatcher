@@ -5,6 +5,7 @@ const User = require('./models/User');
 const Preset = require('./models/Preset');
 const PWStyle = require('./public/js/pwstyle.js');
 const { parseArgsInput } = require('./services/chatCommands');
+const WC = require('./public/widgets/catalog');
 
 const STYLES = [
   {
@@ -83,6 +84,56 @@ const COMMANDS = [
     data: { name: 'инфо', args: [],
       response: '📡 «{title}» идёт уже {uptime}. В чате {viewers}. Приятного просмотра, {user}!' },
   },
+  {
+    name: 'Сколько я подписан', description: 'Зритель узнаёт, как давно он подписан на канал: !подписка.',
+    data: { name: 'подписка', args: [],
+      response: '❤ {user}, ты с нами уже {followage}! Спасибо, что ты здесь.' },
+  },
+  {
+    name: 'Мои поинты', description: 'Баланс стрим-поинтов зрителя на этом канале: !поинты.',
+    data: { name: 'поинты', args: [],
+      response: '💰 {user}, у тебя {points} {points_name}. Награды — по кнопке под чатом.' },
+  },
+  {
+    name: 'Случайный победитель', description: 'Розыгрыш среди тех, кто сейчас на странице канала: !победитель.',
+    data: { name: 'победитель', args: [],
+      response: '🎉 Барабанная дробь… Победитель: {random_user}! Поздравляем!' },
+  },
+];
+
+// виджеты OBS (тип и настройки — widgets/catalog.js): добавляются стримеру в «⏱️ Виджеты»
+const WIDGETS = [
+  {
+    name: 'Счётчик смертей', description: 'Крупный счётчик «💀 Смерти: N» с обводкой. +1 — кнопкой или /count deaths.',
+    data: { type: 'counter', name: 'Смерти', slug: 'deaths', opts: { template: '💀 Смерти: {n}' },
+      style: { font: 'impact', size: 56, color: '#ffffff', stroke: 3, strokeColor: '#7f1d1d', shadow: true } },
+  },
+  {
+    name: 'Перерыв 5 минут', description: 'Плашка «☕ Перерыв» с обратным отсчётом, полосой времени и звонком в конце.',
+    data: { type: 'countdown', name: 'Перерыв', slug: 'brb', opts: { sec: 300, prefix: '☕ Перерыв:', endText: 'Уже иду!', bar: true, sound: 'bell', volume: 70 },
+      style: { size: 44, color: '#f8fafc', accent: '#38bdf8', bg: '#0f172a', bgAlpha: 70, pad: 18, radius: 14 } },
+  },
+  {
+    name: 'Цель на эфир: подписчики', description: 'Полоса прогресса новых подписчиков за эфир, цель — 10. Считается сама.',
+    data: { type: 'goal', name: 'Подписчики за эфир', slug: 'subgoal', opts: { source: 'followersStream', target: 10, title: '❤ Новые подписчики за эфир', endText: '🎉 Цель достигнута!', barH: 28 },
+      style: { size: 26, color: '#ffffff', accent: '#f472b6', bg: '#1e1b2e', bgAlpha: 65, pad: 16, radius: 14 } },
+  },
+  {
+    name: 'Инфо-панель', description: 'По очереди: игра, зрители, последний подписчик и время эфира. Свой виджет из строк.',
+    data: { type: 'custom', name: 'Инфо-панель', slug: 'info',
+      opts: { mode: 'rotate', rotateSec: 6, anim: 'slide', lines: [
+        { text: '🎮 Играем: {category}' }, { text: '👀 Сейчас смотрят: {viewers}' },
+        { text: '❤ Последний подписчик: {last_follower}' }, { text: '⏱ В эфире уже {uptime}' }] },
+      style: { size: 30, color: '#e5e7eb', bg: '#111827', bgAlpha: 75, pad: 14, radius: 12 } },
+  },
+  {
+    name: 'Колесо испытаний', description: 'Случайное испытание для стримера. Крутить — кнопкой 🎲, /w wheel roll или наградой.',
+    data: { type: 'custom', name: 'Колесо испытаний', slug: 'wheel',
+      opts: { mode: 'all', anim: 'pop', lines: [
+        { text: '🎡 Колесо испытаний', size: 60, bold: true },
+        { text: '{choice:10 отжиманий|Без звука 5 минут|Говорю с акцентом|Выбор чата|Пей воду!|Комплимент чату|Играю одной рукой}', size: 110, bold: true }] },
+      style: { font: 'trebuchet', size: 40, color: '#fde68a', accent: '#f59e0b', bg: '#1c1917', bgAlpha: 70, pad: 18, radius: 18 } },
+  },
 ];
 
 // награды за стрим-поинты: {user} купивший, {reward} награда, {cost} цена, {message} текст зрителя, {points} название поинтов, {balance} остаток
@@ -111,6 +162,35 @@ const REWARDS = [
     name: 'Выбор следующей игры', description: 'Зритель предлагает, во что стример сыграет дальше.',
     data: { title: 'Выбери следующую игру', description: 'Напиши игру — стример сыграет в неё следующей', cost: 5000, color: '#16a34a', needInput: true,
       reply: '🎮 {user} выбирает следующую игру: {message}. Осталось {balance} {points}.' },
+  },
+  // новые: ограничения (перезарядка, лимиты за эфир) и действия с виджетами из пре-сетов выше
+  {
+    name: '+1 минута к таймеру', description: 'Добавляет минуту к виджету «Обратный отсчёт» (имя для команд — timer). Раз в 30 секунд.',
+    data: { title: '+1 минута к таймеру', description: 'Продли таймер на экране на минуту', cost: 500, color: '#0ea5e9', needInput: false,
+      reply: '⏳ {user} добавил минуту к таймеру!', cooldownSec: 30, perStream: 0, perUserStream: 0, onlyLive: true,
+      action: { widget: 'timer', op: 'add', value: '60' } },
+  },
+  {
+    name: 'Сообщение на экран', description: 'Текст зрителя появляется в виджете «Надпись» (имя для команд — text). Раз в минуту.',
+    data: { title: 'Сообщение на экран', description: 'Напиши, что показать на стриме', cost: 800, color: '#a855f7', needInput: true,
+      reply: '📺 {user} выводит на экран: {message}', cooldownSec: 60, perStream: 0, perUserStream: 0, onlyLive: true,
+      action: { widget: 'text', op: 'text', value: '{user}: {message}' } },
+  },
+  {
+    name: 'Крутить колесо испытаний', description: 'Крутит виджет «Колесо испытаний» из пре-сетов. Не чаще раза в 2 минуты.',
+    data: { title: 'Крутить колесо', description: 'Стример выполнит то, что выпадет', cost: 1500, color: '#f59e0b', needInput: false,
+      reply: '🎡 {user} крутит колесо испытаний — смотри на экран!', cooldownSec: 120, perStream: 0, perUserStream: 0, onlyLive: true,
+      action: { widget: 'wheel', op: 'roll', value: '' } },
+  },
+  {
+    name: 'Обнимашка', description: 'Обнять другого зрителя: бот пишет в чат и считает объятия. Не больше 3 за эфир с человека.',
+    data: { title: 'Обнять зрителя', description: 'Напиши ник того, кого обнять', cost: 100, color: '#ec4899', needInput: true,
+      reply: '🤗 {user} крепко обнимает {target}! Это уже {count}-е объятие на канале.', cooldownSec: 0, perStream: 0, perUserStream: 3, onlyLive: false, action: null },
+  },
+  {
+    name: 'Бросок d20', description: 'Кубик на 20 граней, как в настольных играх. Раз в 10 секунд.',
+    data: { title: 'Бросок d20', description: 'Испытай удачу', cost: 200, color: '#16a34a', needInput: false,
+      reply: '🎲 {user} бросает d20 — выпало {random:1-20}! ({count_user}-й бросок за всё время)', cooldownSec: 10, perStream: 0, perUserStream: 0, onlyLive: false, action: null },
   },
 ];
 
@@ -149,6 +229,14 @@ const REWARDS = [
   }
 
   for (const r of REWARDS) await put('reward', r, r.data);
+
+  for (const w of WIDGETS) {
+    const c = WC.cleanWidget(w.data);
+    if (!c) { console.warn('ошибка в виджете', w.name); continue; }
+    delete c.id;
+    c.state = WC.cleanState(c.type, {}); // состояние не переносим
+    await put('widget', w, c);
+  }
 
   console.log('Готово, добавлено:', made);
   await mongoose.disconnect();

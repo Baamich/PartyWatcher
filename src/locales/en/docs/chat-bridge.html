@@ -1,0 +1,111 @@
+<h1>Connect your own bot or Twitch / VK chat</h1>
+<p class="docs-lead">Already have a bot that reads your Twitch or VK chat? No need to rewrite it: just let it forward messages to our site with one HTTP request. Your channel chat and OBS will then show messages from all platforms at once, labelled with where they came from.</p>
+
+<h2>How it works</h2>
+<ul>
+  <li><b>Their chat → ours.</b> The bot gets a message on Twitch or VK and sends <code>POST https://partywatcher.de/api/chat/send</code> with your chat key. The message appears here with a source label (<code>twitch</code>, <code>vk</code>…) and nickname color.</li>
+  <li><b>Our chat → theirs</b> (optional). The bot connects to our chat over Socket.IO with the same key and forwards new messages to Twitch or VK from its own account.</li>
+  <li>The chat key is in the studio: “Stream management” → “Chat API” (details in <a href="#chat-obs">Chat in OBS</a>, steps 1–2). It is <b>not</b> the stream key and not the events key.</li>
+</ul>
+
+<h2>If your bot has an “HTTP request” or “Webhook” step</h2>
+<p>Many ready-made bots and apps can send a request without code. Set it up like this:</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Method</td><td><code>POST</code></td></tr>
+  <tr><td>URL</td><td><code>https://partywatcher.de/api/chat/send</code></td></tr>
+  <tr><td>Header</td><td><code>Authorization: Bearer pwc_…</code> (your chat key)</td></tr>
+  <tr><td>Header</td><td><code>Content-Type: application/json</code></td></tr>
+  <tr><td>Body</td><td><code>{"text": "<i>message text</i>", "username": "<i>nickname</i>", "source": "twitch", "color": "#9146ff"}</code></td></tr>
+</table>
+</div>
+<p>Put your bot's variables instead of the text and nickname (usually something like <code>%message%</code> and <code>%user%</code>). <code>source</code> is up to 16 Latin characters: <code>twitch</code>, <code>vk</code>, <code>youtube</code>, <code>kick</code> — anything. <code>color</code> is optional.</p>
+
+<h2>Example: Twitch → our chat in Node.js</h2>
+<p>The shortest bridge: reads the Twitch chat without logging in (anonymously) and forwards every message to us. You need Node.js 18+ and one library:</p>
+<pre><code>npm install tmi.js</code></pre>
+<pre><code>// twitch-bridge.js — run: PW_KEY=pwc_... TWITCH_CHANNEL=name node twitch-bridge.js
+const tmi = require('tmi.js');
+
+const KEY = process.env.PW_KEY;            // PartyWatcher chat key — don't hard-code it
+const client = new tmi.Client({ channels: [process.env.TWITCH_CHANNEL] });
+
+client.on('message', async (channel, tags, message) =&gt; {
+  try {
+    const res = await fetch('https://partywatcher.de/api/chat/send', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: message,
+        username: tags['display-name'] || tags.username,
+        source: 'twitch',
+        color: tags.color || '#9146ff',
+      }),
+    });
+    if (res.status === 429) console.warn('Too often, the site asks to wait', res.headers.get('retry-after'), 's');
+  } catch (e) {
+    console.warn('Not sent:', e.message);
+  }
+});
+
+client.connect();</code></pre>
+
+<h2>Example: any Python bot</h2>
+<p>If your bot is already written in Python (for VK, Twitch or anything else), add one function and call it for every new message:</p>
+<pre><code>import os, requests
+
+PW_KEY = os.environ["PW_KEY"]  # PartyWatcher chat key
+
+def to_partywatcher(user, text, source="vk", color=None):
+    body = {"text": text[:500], "username": user[:32], "source": source}
+    if color:
+        body["color"] = color
+    try:
+        r = requests.post("https://partywatcher.de/api/chat/send",
+                          json=body, headers={"Authorization": "Bearer " + PW_KEY}, timeout=5)
+        if r.status_code == 429:
+            print("Too often, wait", r.headers.get("Retry-After"), "s")
+    except requests.RequestException as e:
+        print("Not sent:", e)
+
+# in your bot's new-message handler:
+# to_partywatcher(author_name, message_text, source="vk", color="#0077ff")</code></pre>
+
+<h2>The other way: our chat → Twitch or VK</h2>
+<p>Connect to our chat with the same key and forward new messages. <b>Important:</b> skip messages with <code>external: true</code> — those are what your own bot brought from Twitch or VK. Otherwise messages will loop.</p>
+<pre><code>npm install socket.io-client</code></pre>
+<pre><code>const { io } = require('socket.io-client');
+
+const pw = io('https://partywatcher.de/chat', { transports: ['websocket', 'polling'] });
+pw.on('connect', () =&gt; pw.emit('chat:join', { chatKey: process.env.PW_KEY }));
+pw.on('chat:overlay-error', (e) =&gt; console.error('Key rejected:', e.error));
+
+pw.on('chat:message', (m) =&gt; {
+  if (m.external) return;                  // came from Twitch/VK or a bot — don't send it back
+  const text = m.masked || m.text;         // with the channel word filter applied
+  sendToTwitch(`[PW] ${m.senderUsername}: ${text}`); // your function that posts to the platform
+});</code></pre>
+<p>To write in a Twitch chat, the bot needs its own Twitch account and token — that is set up on Twitch, not here. For VK — the same, through VK's own API.</p>
+
+<h2>Commands, rewards and events for bots</h2>
+<ul>
+  <li><b>Commands</b> <code>!command</code> from the “Builder” only answer messages written in our chat. On Twitch and VK let your own bot handle commands. Our bot's replies come with <code>source: "bot"</code> — you can forward them to Twitch if you like.</li>
+  <li><b>Channel events</b> (follow, raid, reward purchase) — with the events key, see <a href="#events-api">Events API</a>. For example, your bot can say “Thanks for following on PartyWatcher!” on Twitch.</li>
+  <li><b>Reward purchases</b> and marking them “done / refund points” — <a href="#rewards-api">Rewards API</a>.</li>
+  <li><b>OBS widgets</b> can be controlled with the <code>/timer</code>, <code>/count</code> etc. chat commands only from the streamer's or a moderator's account — moderation commands don't run through the chat key API.</li>
+</ul>
+
+<h2>Limits and security</h2>
+<ul>
+  <li>At most <b>20 messages per 10 seconds</b> and <b>100 per minute</b> per channel. Above that — a <code>429</code> reply with a <code>Retry-After</code> header. In a very busy chat, don't forward everything (e.g. skip emote-only messages).</li>
+  <li>Text — up to 500 characters, nickname — up to 32. Messages through the API are marked <code>external</code>, and OBS shows their source label.</li>
+  <li>Keep the key in an environment variable or a config file, not in code and not on stream. If it leaks, create a new one in “Chat API” — the old one stops working at once. More in <a href="#chat-security">Security and limits</a>.</li>
+</ul>
+
+<h2>Not working?</h2>
+<ul>
+  <li><code>401</code> — the key is wrong or old. Check that the header is <code>Bearer pwc_…</code> with a space after <code>Bearer</code>.</li>
+  <li><code>400</code> — empty <code>text</code>: the bot sent the wrong field.</li>
+  <li>Messages arrive twice — the bot runs twice or forwards its own messages back (check <code>external</code>).</li>
+</ul>

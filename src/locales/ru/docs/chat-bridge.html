@@ -1,0 +1,111 @@
+<h1>Подключить свой бот или чат Twitch / VK</h1>
+<p class="docs-lead">У тебя уже есть бот, который читает чат Twitch или VK? Его не нужно переписывать: достаточно, чтобы он пересылал сообщения на наш сайт одним HTTP-запросом. Тогда в чате канала и в OBS будут сообщения со всех площадок сразу, с меткой, откуда они пришли.</p>
+
+<h2>Как это устроено</h2>
+<ul>
+  <li><b>Чужой чат → наш.</b> Бот получает сообщение на Twitch или VK и делает <code>POST https://partywatcher.de/api/chat/send</code> с ключом чата. Сообщение появляется у нас с меткой источника (<code>twitch</code>, <code>vk</code>…) и цветом ника.</li>
+  <li><b>Наш чат → чужой</b> (по желанию). Бот подключается к нашему чату по Socket.IO с тем же ключом и пересылает новые сообщения на Twitch или VK от имени своего аккаунта.</li>
+  <li>Ключ чата — в студии: «Управление трансляцией» → «API чата» (подробно — <a href="#chat-obs">Чат в OBS</a>, шаги 1–2). Это <b>не</b> ключ трансляции и не ключ событий.</li>
+</ul>
+
+<h2>Если в боте есть шаг «HTTP-запрос» или «Webhook»</h2>
+<p>Многие готовые боты и программы умеют отправлять запрос без кода. Настрой его так:</p>
+<div class="docs-table-wrap">
+<table>
+  <tr><th>Поле</th><th>Значение</th></tr>
+  <tr><td>Метод</td><td><code>POST</code></td></tr>
+  <tr><td>Адрес (URL)</td><td><code>https://partywatcher.de/api/chat/send</code></td></tr>
+  <tr><td>Заголовок</td><td><code>Authorization: Bearer pwc_…</code> (твой ключ чата)</td></tr>
+  <tr><td>Заголовок</td><td><code>Content-Type: application/json</code></td></tr>
+  <tr><td>Тело</td><td><code>{"text": "<i>текст сообщения</i>", "username": "<i>ник</i>", "source": "twitch", "color": "#9146ff"}</code></td></tr>
+</table>
+</div>
+<p>Вместо текста и ника подставь переменные своего бота (обычно что-то вроде <code>%message%</code> и <code>%user%</code>). <code>source</code> — латиница до 16 символов: <code>twitch</code>, <code>vk</code>, <code>youtube</code>, <code>kick</code> — что угодно. <code>color</code> необязателен.</p>
+
+<h2>Пример: Twitch → наш чат на Node.js</h2>
+<p>Самый короткий мост: читает чат Twitch без входа в аккаунт (анонимно) и пересылает каждое сообщение к нам. Нужен Node.js 18+ и одна библиотека:</p>
+<pre><code>npm install tmi.js</code></pre>
+<pre><code>// twitch-bridge.js — запуск: PW_KEY=pwc_... TWITCH_CHANNEL=имя node twitch-bridge.js
+const tmi = require('tmi.js');
+
+const KEY = process.env.PW_KEY;            // ключ чата PartyWatcher — не пиши его прямо в код
+const client = new tmi.Client({ channels: [process.env.TWITCH_CHANNEL] });
+
+client.on('message', async (channel, tags, message) =&gt; {
+  try {
+    const res = await fetch('https://partywatcher.de/api/chat/send', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: message,
+        username: tags['display-name'] || tags.username,
+        source: 'twitch',
+        color: tags.color || '#9146ff',
+      }),
+    });
+    if (res.status === 429) console.warn('Слишком часто, сайт просит подождать', res.headers.get('retry-after'), 'с');
+  } catch (e) {
+    console.warn('Не отправилось:', e.message);
+  }
+});
+
+client.connect();</code></pre>
+
+<h2>Пример: любой бот на Python</h2>
+<p>Если бот уже написан на Python (для VK, Twitch или чего-то ещё), добавь в него одну функцию и вызывай её на каждое новое сообщение:</p>
+<pre><code>import os, requests
+
+PW_KEY = os.environ["PW_KEY"]  # ключ чата PartyWatcher
+
+def to_partywatcher(user, text, source="vk", color=None):
+    body = {"text": text[:500], "username": user[:32], "source": source}
+    if color:
+        body["color"] = color
+    try:
+        r = requests.post("https://partywatcher.de/api/chat/send",
+                          json=body, headers={"Authorization": "Bearer " + PW_KEY}, timeout=5)
+        if r.status_code == 429:
+            print("Слишком часто, подождать", r.headers.get("Retry-After"), "с")
+    except requests.RequestException as e:
+        print("Не отправилось:", e)
+
+# в обработчике новых сообщений своего бота:
+# to_partywatcher(author_name, message_text, source="vk", color="#0077ff")</code></pre>
+
+<h2>Обратно: наш чат → Twitch или VK</h2>
+<p>Подключись к нашему чату с тем же ключом и пересылай новые сообщения. <b>Важно:</b> пропускай сообщения с <code>external: true</code> — это то, что твой же бот прислал с Twitch или VK. Иначе сообщения будут ходить по кругу.</p>
+<pre><code>npm install socket.io-client</code></pre>
+<pre><code>const { io } = require('socket.io-client');
+
+const pw = io('https://partywatcher.de/chat', { transports: ['websocket', 'polling'] });
+pw.on('connect', () =&gt; pw.emit('chat:join', { chatKey: process.env.PW_KEY }));
+pw.on('chat:overlay-error', (e) =&gt; console.error('Ключ не подошёл:', e.error));
+
+pw.on('chat:message', (m) =&gt; {
+  if (m.external) return;                  // пришло с Twitch/VK или от бота — не отправляем обратно
+  const text = m.masked || m.text;         // с маской фильтра слов канала
+  sendToTwitch(`[PW] ${m.senderUsername}: ${text}`); // твоя функция отправки на площадку
+});</code></pre>
+<p>Чтобы писать в чат Twitch, боту нужен свой аккаунт Twitch и токен — это настраивается на стороне Twitch, не у нас. Для VK — так же, через API самого VK.</p>
+
+<h2>Команды, награды и события для бота</h2>
+<ul>
+  <li><b>Команды</b> <code>!команда</code> из «Конструктора» отвечают только на сообщения, написанные в нашем чате. На Twitch и VK команды пусть обрабатывает твой бот. Ответы нашего бота приходят с <code>source: "bot"</code> — их можно переслать на Twitch, если хочешь.</li>
+  <li><b>События канала</b> (подписка, рейд, покупка награды) — по ключу событий, см. <a href="#events-api">API событий</a>. Например, бот может написать на Twitch «Спасибо за подписку на PartyWatcher!».</li>
+  <li><b>Покупки наград</b> и отметка «выполнено / вернуть поинты» — <a href="#rewards-api">API наград</a>.</li>
+  <li><b>Виджеты OBS</b> бот может двигать командами чата <code>/timer</code>, <code>/count</code> и т. д. только от аккаунта стримера или модератора — через API ключа чата команды модерации не выполняются.</li>
+</ul>
+
+<h2>Лимиты и безопасность</h2>
+<ul>
+  <li>Не больше <b>20 сообщений за 10 секунд</b> и <b>100 в минуту</b> на канал. Сверх лимита — ответ <code>429</code> и заголовок <code>Retry-After</code>. В очень активном чате пересылай не всё (например, без сообщений из одних смайлов).</li>
+  <li>Текст — до 500 символов, ник — до 32. Сообщения через API помечаются <code>external</code>, и в OBS у них видна метка источника.</li>
+  <li>Ключ храни в переменной окружения или файле настроек, не в коде и не на стриме. Утёк — создай новый в «API чата», старый сразу перестанет работать. Подробнее — <a href="#chat-security">Безопасность и лимиты</a>.</li>
+</ul>
+
+<h2>Не работает?</h2>
+<ul>
+  <li><code>401</code> — ключ неверный или старый. Проверь, что в заголовке <code>Bearer pwc_…</code> с пробелом после <code>Bearer</code>.</li>
+  <li><code>400</code> — пустой <code>text</code>: бот передал не то поле.</li>
+  <li>Сообщения приходят дважды — бот запущен два раза или пересылает обратно свои же сообщения (смотри <code>external</code>).</li>
+</ul>

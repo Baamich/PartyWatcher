@@ -40,7 +40,10 @@ async function enabled(nameLower, id) {
 async function fire(nameLower, id, vars = {}, opts = {}) {
   if (!nsp || !nameLower || !C.eventById(id)) return;
   const at = new Date().toISOString();
-  if (!opts.test) nsp.to(room(nameLower)).emit('event', { type: id, vars, at });
+  if (!opts.test) {
+    nsp.to(room(nameLower)).emit('event', { type: id, vars, at });
+    require('./widgets').onEvent(nameLower, id, vars).catch(() => {}); // виджет «Последнее событие»
+  }
   const doc = await settings(nameLower).catch(() => null);
   const cfg = eventCfg(doc, id);
   if (!cfg || (!cfg.on && !opts.test)) return;

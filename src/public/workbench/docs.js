@@ -8,9 +8,10 @@ const DOCS_HOME = 'intro';
 const DOCS_CHAPTERS = [
   ['stream', ['stream-obs']],
   ['events', ['events', 'events-api']],
+  ['widgets', ['widgets']],
   ['rewards', ['rewards', 'rewards-api']],
   ['activity', ['channel-activity']],
-  ['chat', ['chat-obs', 'chat-code', 'chat-style', 'chat-reference', 'chat-security']],
+  ['chat', ['chat-obs', 'chat-code', 'chat-bridge', 'chat-style', 'chat-reference', 'chat-security']],
   ['constructor', ['constructor-chat', 'constructor-commands']],
   ['editor', ['editor-standard', 'editor-pro']],
   ['presets', ['presets-styles', 'presets-commands', 'presets-rewards']],

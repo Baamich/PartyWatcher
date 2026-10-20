@@ -111,11 +111,26 @@ const VARS = [
   { v: '{calc:2+2*3}', d: t('constructor.var.calc') },
   { v: '{time}', d: t('constructor.var.time') },
   { v: '{date}', d: t('constructor.var.date') },
+  // данные канала и зрителя (считаются только если есть в ответе)
+  { v: '{followers}', d: t('constructor.var.followers') },
+  { v: '{category}', d: t('constructor.var.category') },
+  { v: '{followage}', d: t('constructor.var.followage') },
+  { v: '{points}', d: t('constructor.var.points') },
+  { v: '{points_name}', d: t('constructor.var.pointsName') },
+  { v: '{random_user}', d: t('constructor.var.randomUser') },
+  { v: '{last_follower}', d: t('constructor.var.lastFollower') },
+  { v: '{account_age}', d: t('constructor.var.accountAge') },
+  { v: '{messages}', d: t('constructor.var.messages') },
+  { v: '{weekday}', d: t('constructor.var.weekday') },
+  { v: '{countdown:2026-12-31 23:59}', d: t('constructor.var.countdown') },
+  { v: '{upper:{user}}', d: t('constructor.var.upper') },
+  { v: '{widget:deaths}', d: t('constructor.var.widget') },
 ];
 
 // заготовки команд: название, имя команды, аргумент и ответ — из словаря (constructor.ex.<id>.*)
 const EXAMPLES = [
   ['random', true], ['dice'], ['coin'], ['choice'], ['calc', true], ['hug', true], ['time'], ['live'],
+  ['followage'], ['points'], ['winner'], ['deaths'], ['countdown'], ['stats'], ['me'],
 ].map(([id, hasArg]) => ({
   label: t(`constructor.ex.${id}.label`),
   name: t(`constructor.ex.${id}.name`),

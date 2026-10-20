@@ -70,6 +70,7 @@ router.patch('/:name/settings', auth, async (req, res) => {
   if (set.streamTitle !== undefined && set.streamTitle !== (prev.streamTitle || '')) chatBus.logAction(nameLower, req.user.username, 'edit_title', null, set.streamTitle);
   if (set.streamDescription !== undefined && set.streamDescription !== (prev.streamDescription || '')) chatBus.logAction(nameLower, req.user.username, 'edit_desc');
   if (set.streamCategoryId !== undefined && set.streamCategoryId !== (prev.streamCategoryId || null)) chatBus.logAction(nameLower, req.user.username, 'edit_category', null, cat ? cat.name : '');
+  require('../../services/widgets').streamInfo(nameLower).catch(() => {}); // виджеты OBS: название и категория
   console.log(`[channel] ${req.user.username} изменил настройки эфира ${nameLower}:`, Object.keys(set).join(','));
   res.json({ status: 'ok', category: cat ? categories.publicView(cat) : undefined });
 });

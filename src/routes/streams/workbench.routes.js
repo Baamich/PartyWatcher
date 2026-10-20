@@ -151,6 +151,7 @@ router.patch('/settings', auth, requireStreamer, async (req, res) => {
     cat = await Category.findOne({ tid: req.streamerUser.streamCategoryId }).select('-cover').lean();
   }
   await req.streamerUser.save();
+  if (streamTitle !== undefined || streamCategoryId !== undefined) require('../../services/widgets').streamInfo(req.streamerUser.streamerNameLower).catch(() => {});
   if (rulesNew !== null) chatBus.rulesChanged(req.streamerUser.streamerNameLower, rulesNew); // зрители в чате примут новые правила
   res.json({
     streamTitle: req.streamerUser.streamTitle,
@@ -484,7 +485,7 @@ router.post('/chat-key/reveal', auth, requireStreamer, async (req, res) => {
 });
 
 const ChatCommand = require('../../models/ChatCommand');
-const { parseArgsInput, parseCommandLine, buildReply } = require('../../services/chatCommands');
+const { parseArgsInput, parseCommandLine, buildReply, sampleExtras } = require('../../services/chatCommands');
 const COMMAND_NAME_RE = /^[a-zA-Z0-9_а-яА-ЯёЁ]{1,20}$/;
 const MAX_COMMANDS = 50;
 const cleanCommandName = (v) => String(v ?? '').trim().replace(/^!+/, '').toLowerCase();
@@ -512,6 +513,8 @@ router.post('/commands/preview', auth, requireStreamer, (req, res) => {
     uptime: req.t('server.cmd.uptimeHM', { h: 1, m: '05' }),
     count: 7,
     lang: req.lang,
+    // примеры для переменных, которые на эфире считаются запросом (chatSocket → commandExtras)
+    extra: sampleExtras(req.lang, { followers: req.streamerUser.followersCount || 128, ...(req.streamerUser.pointsName && { points_name: req.streamerUser.pointsName }) }),
   });
   res.json(out);
 });

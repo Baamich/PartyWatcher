@@ -184,6 +184,7 @@ function actionLogLabel(entry) {
     case 'edit_category': return details ? t('workbench.log.edit_category', { details }) : t('workbench.log.clear_category');
     case 'points_add': return t('workbench.log.points_add', { name, details });
     case 'points_sub': return t('workbench.log.points_sub', { name, details });
+    case 'widget': return t('workbench.log.widget', { details });
     default: return entry.action;
   }
 }
