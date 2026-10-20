@@ -10,9 +10,28 @@ function getReturnTo() {
 // а вход и регистрация — окном (#authModal)
 async function checkAuth() {
   const root = document.documentElement;
+  let me;
   try {
-    const me = await api('/auth/me');
+    me = await api('/auth/me');
+  } catch (err) {
+    console.warn('[checkAuth] не авторизован:', err?.message || err);
+    window.__pwAuthed = false;
+    try { localStorage.removeItem('pw_authed'); } catch {}
+    root.classList.remove('pw-authed'); // подсказка ошиблась (вышел на другой вкладке и т.п.)
+    stopAutoRefresh();
+    document.getElementById('roomList').innerHTML = '';
+    document.getElementById('publicRoomList').innerHTML = '';
+    document.getElementById('publicPagination')?.classList.add('hidden');
+    lastRender.mine = lastRender.public = '';
+    // пришёл по ссылке «Войти»/«Регистрация» с другой страницы — сразу окно
+    const mode = new URLSearchParams(location.search).get('mode');
+    if (mode === 'register') openAuth('register');
+    else if (getReturnTo()) openAuth('login');
+    return;
+  }
 
+  // дальше человек точно вошёл: сбой списка или сокета не должен показать ему экран гостя
+  try {
     const returnTo = getReturnTo();
     if (returnTo) {
       location.href = returnTo;
@@ -42,19 +61,7 @@ async function checkAuth() {
     await Promise.all([loadMyRooms(), loadPublicRooms()]);
     startAutoRefresh();
   } catch (err) {
-    console.warn('[checkAuth] не авторизован:', err?.message || err);
-    window.__pwAuthed = false;
-    try { localStorage.removeItem('pw_authed'); } catch {}
-    root.classList.remove('pw-authed'); // подсказка ошиблась (вышел на другой вкладке и т.п.)
-    stopAutoRefresh();
-    document.getElementById('roomList').innerHTML = '';
-    document.getElementById('publicRoomList').innerHTML = '';
-    document.getElementById('publicPagination')?.classList.add('hidden');
-    lastRender.mine = lastRender.public = '';
-    // пришёл по ссылке «Войти»/«Регистрация» с другой страницы — сразу окно
-    const mode = new URLSearchParams(location.search).get('mode');
-    if (mode === 'register') openAuth('register');
-    else if (getReturnTo()) openAuth('login');
+    console.error('[checkAuth] после входа', err);
   }
 }
 
@@ -79,12 +86,14 @@ document.getElementById('authModal')?.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeAuth();
 });
-// Enter в полях входа — как кнопка «Войти»
-['loginInput', 'passwordInput'].forEach((id) => {
-  document.getElementById(id)?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); login(); }
-  });
-});
+// вход, сброс пароля и регистрация — отдельные <form>: Enter отправляет, а менеджер паролей вписывает логин
+// в поле входа, а не в первое попавшееся поле страницы (раньше почта попадала в «Ключ комнаты»)
+function submitAuth(e, which) {
+  e.preventDefault();
+  if (which === 'login') login();
+  else if (which === 'forgot') sendForgot();
+  else if (which === 'register') register();
+}
 
 // действие, для которого нужен аккаунт: гостю — подсказка и окно входа
 function requireAuth() {

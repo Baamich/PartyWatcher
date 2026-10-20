@@ -152,7 +152,7 @@
     <div class="auth-card" role="dialog" aria-modal="true">
       <button type="button" class="modal-close" data-click="closeAuth" aria-label="Закрыть" data-i18n-aria-label="common.close">×</button>
       <!-- ВХОД -->
-      <div id="loginPanel">
+      <form id="loginPanel" data-submit="submitAuth" data-arg="login" data-event>
         <h2 class="auth-title" data-i18n="index.login.title">Вход</h2>
         <div id="loginError" class="auth-error hidden"></div>
         <!-- аккаунт не подтверждён: письмо ещё раз или другая почта (ошибся при регистрации) -->
@@ -177,7 +177,7 @@
           <button type="button" class="password-toggle" data-click="togglePasswordVisibility" data-arg="passwordInput" aria-label="Показать пароль" data-i18n-aria-label="index.password.show">👁</button>
         </div>
 
-        <button class="auth-submit" data-click="login" data-i18n="index.login.submit">Войти</button>
+        <button type="submit" class="auth-submit" data-i18n="index.login.submit">Войти</button>
 
         <p class="auth-switch">
           <button type="button" class="auth-link" data-click="showForgotPanel" data-i18n="index.login.forgot">Забыли пароль?</button>
@@ -186,10 +186,10 @@
           <span data-i18n="index.login.noAccount">Нет аккаунта?</span>
           <button type="button" class="auth-link" data-click="showRegisterPanel" data-i18n="index.login.toRegister">Зарегистрироваться</button>
         </p>
-      </div>
+      </form>
 
       <!-- СБРОС ПАРОЛЯ -->
-      <div id="forgotPanel" class="hidden">
+      <form id="forgotPanel" class="hidden" data-submit="submitAuth" data-arg="forgot" data-event>
         <h2 class="auth-title" data-i18n="index.forgot.title">Сброс пароля</h2>
         <div id="forgotError" class="auth-error hidden"></div>
         <div id="forgotOk" class="support-ok hidden"></div>
@@ -198,15 +198,15 @@
         <label class="auth-label" for="forgotEmail" data-i18n="index.forgot.email">Почта аккаунта</label>
         <input id="forgotEmail" type="email" autocomplete="email" placeholder="email@example.com" />
 
-        <button id="forgotBtn" class="auth-submit" data-click="sendForgot" data-i18n="index.forgot.submit">Прислать ссылку</button>
+        <button type="submit" id="forgotBtn" class="auth-submit" data-i18n="index.forgot.submit">Прислать ссылку</button>
 
         <p class="auth-switch">
           <button type="button" class="auth-link" data-click="showLoginPanel" data-i18n="index.forgot.back">Вернуться ко входу</button>
         </p>
-      </div>
+      </form>
 
       <!-- РЕГИСТРАЦИЯ -->
-        <div id="registerPanel" class="hidden">
+      <form id="registerPanel" class="hidden" data-submit="submitAuth" data-arg="register" data-event>
         <h2 class="auth-title" data-i18n="index.register.title">Регистрация</h2>
         <div id="registerError" class="auth-error hidden"></div>
 
@@ -245,13 +245,13 @@
           <span><span data-i18n="index.register.termsAgree">Я прочитал(а) и принимаю</span> <a href="/terms" target="_blank" rel="noopener" data-i18n="index.register.termsLink">условия пользования</a></span>
         </label>
 
-        <button id="registerBtn" class="auth-submit" data-click="register" disabled data-i18n="index.register.submit">Зарегистрироваться</button>
+        <button type="submit" id="registerBtn" class="auth-submit" disabled data-i18n="index.register.submit">Зарегистрироваться</button>
 
         <p class="auth-switch">
           <span data-i18n="index.register.haveAccount">Уже есть аккаунт?</span>
           <button type="button" class="auth-link" data-click="showLoginPanel" data-i18n="index.login.submit">Войти</button>
         </p>
-      </div>
+      </form>
     </div><!-- /auth-card -->
   </div>
 

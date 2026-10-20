@@ -724,7 +724,7 @@ html:not(.pw-authed) .authed-only { display: none !important; }
 
 /* «Что такое Party Watcher» внизу главной (только гостю) */
 .about {
-  max-width: 760px;
+  max-width: 1100px; /* как у .public-section: под заголовком «Публичные комнаты» */
   margin: 0 auto 48px;
   padding: 0 16px;
   box-sizing: border-box;
@@ -741,6 +741,7 @@ html:not(.pw-authed) .authed-only { display: none !important; }
   margin: 18px 0 6px;
 }
 .about p {
+  max-width: 760px;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text-muted);
@@ -765,7 +766,7 @@ html:not(.pw-authed) .authed-only { display: none !important; }
   color: var(--accent-contrast);
 }
 .guest-hero {
-  max-width: 1290px;
+  max-width: 1100px; /* как у .page-header: текст ровно под логотипом */
   margin: 0 auto;
   padding: 12px 16px 4px;
   box-sizing: border-box;
