@@ -1,5 +1,10 @@
 // rtmpServer.js
 
+// несколько качеств от стримера (OBS «Multitrack Video»): каждая дорожка копируется в своё качество без перекодирования.
+// Нужен ffmpeg 8+ (LIVE_FFMPEG_PATH); выключатель — LIVE_MULTITRACK=0. Пока не готово — лишние дорожки отбрасываются
+let multitrackReady = false;
+const MULTITRACK_PATCHED = require('./nmsMultitrack').install({ keepExtraTracks: () => multitrackReady });
+
 const NodeMediaServer = require('node-media-server');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -19,8 +24,8 @@ const MEDIA_ROOT = path.join(process.cwd(), 'media');
 // ключ стрима — ровно 40 символов 0-9a-f (crypto.randomBytes(20).toString('hex') в workbench.routes.js)
 const STREAM_KEY_RE = /^[a-f0-9]{40}$/;
 const VOD_ROOT = path.join(MEDIA_ROOT, 'vod');
-const FFMPEG_PATH = '/usr/bin/ffmpeg';
-const FFPROBE_PATH = '/usr/bin/ffprobe';
+const FFMPEG_PATH = process.env.LIVE_FFMPEG_PATH || '/usr/bin/ffmpeg';
+const FFPROBE_PATH = process.env.LIVE_FFPROBE_PATH || '/usr/bin/ffprobe';
 const GRACE_AT_MS = [5_000, 7_000, 12_000, 20_000];
 const VOD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const MERGE_WINDOW_MS = 60_000; // вернулся за минуту → та же запись
@@ -44,6 +49,33 @@ const LITE_CPU_PCT = Math.min(100, Math.max(0, parseInt(process.env.LIVE_LITE_CP
 // каждый эфир с лесенкой — это два кодирования x264. Больше стольких эфиров одновременно — дальше только «источник»,
 // чтобы несколько стримеров разом не положили сервер
 const MAX_LADDER_STREAMS = Math.max(0, parseInt(process.env.LIVE_MAX_TRANSCODES, 10) || 2);
+// режим «качества от стримера»: если за столько после старта ffmpeg не появились плейлисты всех качеств
+// или ffmpeg упал — перезапуск обычной лесенкой (в этом эфире больше не пробуем)
+const MULTITRACK_WATCH_MS = 15_000;
+const MULTITRACK_MAX = 4; // больше качеств зрителю не нужно
+const multitrackFailed = new Set(); // ключи, у которых копирование дорожек в этой сессии эфира не пошло
+const publishing = new Set(); // ключи, по которым сейчас подключён стример
+
+// ffmpeg читает несколько видеодорожек из RTMP с 8.0; сборки из git (версия «N-…») — тоже новые
+function checkMultitrack() {
+  if (process.env.LIVE_MULTITRACK === '0') {
+    console.log('[rtmp] качества от стримера выключены (LIVE_MULTITRACK=0)');
+    return;
+  }
+  if (!MULTITRACK_PATCHED) return;
+  let out = '';
+  const proc = spawn(FFMPEG_PATH, ['-hide_banner', '-version'], { stdio: ['ignore', 'pipe', 'ignore'] });
+  proc.stdout.on('data', (c) => { if (out.length < 2000) out += c; });
+  proc.on('error', () => console.warn('[rtmp] качества от стримера выключены: не запустился', FFMPEG_PATH));
+  proc.on('exit', () => {
+    const ver = (out.match(/ffmpeg version (\S+)/) || [])[1] || '';
+    const major = Number((ver.match(/^n?(\d+)\./) || [])[1]) || 0;
+    multitrackReady = major >= 8 || /^N-/.test(ver);
+    if (multitrackReady) console.log(`[rtmp] качества от стримера включены (ffmpeg ${ver})`);
+    else if (ver) console.log(`[rtmp] качества от стримера выключены: ffmpeg ${ver}, нужен 8+ (LIVE_FFMPEG_PATH)`);
+  });
+}
+checkMultitrack();
 
 fs.mkdirSync(path.join(MEDIA_ROOT, 'live'), { recursive: true });
 fs.mkdirSync(VOD_ROOT, { recursive: true });
@@ -225,6 +257,7 @@ function probeDurationSec(absPath) {
 }
 
 // высота и частота кадров входящего эфира — чтобы не кодировать качества выше источника и не гнать 60 к/с в 720/360.
+// tracks — все видеодорожки (несколько — у OBS «Multitrack Video»), track = номер для -map 0:v:N.
 // null — не узнали (тогда полная лесенка, масштаб всё равно не выше источника)
 function probeSource(key) {
   return new Promise((resolve) => {
@@ -233,8 +266,8 @@ function probeSource(key) {
       [
         '-v', 'error',
         '-probesize', '2000000', '-analyzeduration', '2000000',
-        '-select_streams', 'v:0',
-        '-show_entries', 'stream=height,avg_frame_rate,r_frame_rate',
+        '-select_streams', 'v',
+        '-show_entries', 'stream=codec_name,height,avg_frame_rate,r_frame_rate',
         '-of', 'json',
         `rtmp://127.0.0.1:1935/live/${key}`,
       ],
@@ -247,9 +280,11 @@ function probeSource(key) {
     proc.on('exit', () => {
       clearTimeout(timer);
       try {
-        const st = JSON.parse(out).streams?.[0];
+        const streams = JSON.parse(out).streams || [];
+        const st = streams[0];
         const rate = (v) => { const [a, b] = String(v || '').split('/').map(Number); return a > 0 && b > 0 ? a / b : 0; };
-        resolve(st && st.height ? { height: Number(st.height), fps: rate(st.avg_frame_rate) || rate(st.r_frame_rate) } : null);
+        const tracks = streams.map((s, track) => ({ track, codec: s.codec_name || '', height: Number(s.height) || 0 }));
+        resolve(st && st.height ? { height: Number(st.height), fps: rate(st.avg_frame_rate) || rate(st.r_frame_rate), tracks } : null);
       } catch (_) {
         resolve(null);
       }
@@ -328,6 +363,27 @@ function renditionsFor(key, src) {
   return [source(!lite), ...levels.filter((r) => !h || r.height < h - 20).map((r) => ({ ...r, fps }))];
 }
 
+// стример прислал несколько видеодорожек H.264 → каждая — своё качество копией, сервер ничего не кодирует.
+// Самая высокая — «источник» (не выше 1080p), остальные по высоте (близкие к 720/480/360 — под их привычными именами).
+// null — режим не подходит, обычная лесенка
+const STD_NAMES = [720, 480, 360];
+function multitrackRenditions(key, src) {
+  if (!multitrackReady || multitrackFailed.has(key)) return null;
+  const tracks = (src?.tracks || []).filter((t) => t.codec === 'h264' && t.height > 0).sort((a, b) => b.height - a.height);
+  if (tracks.length < 2) return null;
+  if (tracks[0].height > SOURCE_MAX_H + 20) {
+    console.log(`[rtmp] ${key.slice(0, 8)}…: дорожка ${tracks[0].height}p выше ${SOURCE_MAX_H}p → обычная лесенка`);
+    return null;
+  }
+  const out = [];
+  for (const t of tracks) {
+    if (out.length >= MULTITRACK_MAX || out.some((r) => Math.abs(r.height - t.height) < 40)) continue;
+    const std = STD_NAMES.find((n) => Math.abs(n - t.height) <= 40);
+    out.push({ name: out.length ? String(std || t.height) : 'source', copy: true, track: t.track, height: t.height });
+  }
+  return out.length >= 2 ? out : null;
+}
+
 // ---------- раз в 30 с для каждого эфира: кадр для карточки и замер зрителей ----------
 // Кадр берём из последнего готового сегмента самого лёгкого качества (декодируется один кадр — почти без нагрузки)
 // и кладём рядом с плейлистами: /media/live/<playbackId>/thumb.jpg. После эфира папка удаляется вместе с ним
@@ -340,7 +396,10 @@ async function grabThumb(key) {
   thumbBusy.add(key);
   try {
     const dir = mediaDir(key);
-    const sub = ['360', '480', '720', 'source'].find((n) => fs.existsSync(path.join(dir, n, 'index.m3u8')));
+    // качества от стримера бывают любой высоты — сначала самое низкое из них
+    const own = (activeTranscodes.get(key)?.renditions || [])
+      .filter((r) => r.track != null && r.name !== 'source').sort((a, b) => a.height - b.height).map((r) => r.name);
+    const sub = [...own, '360', '480', '720', 'source'].find((n) => fs.existsSync(path.join(dir, n, 'index.m3u8')));
     if (!sub) return;
     const list = fs.readFileSync(path.join(dir, sub, 'index.m3u8'), 'utf8').split(/\r?\n/).filter((l) => /^seg_\d+\.ts$/.test(l.trim()));
     if (!list.length) return;
@@ -536,6 +595,7 @@ async function finalizeStop(key) {
   }
 
   sessionMeta.delete(key);
+  multitrackFailed.delete(key);
   wipeLiveMedia(key);
   await setLiveState(key, { isLive: false, touchStartedAt: false });
 
@@ -626,20 +686,24 @@ async function createVodDoc(key) {
 function buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions) {
   const inputUrl = `rtmp://127.0.0.1:1935/live/${key}`;
   const transcodeRenditions = renditions.filter((r) => !r.copy);
+  // всегда первая видео- и звуковая дорожка: при нескольких дорожках «0:v» взял бы все, и ffmpeg бы упал
+  const multitrack = renditions.some((r) => r.track != null);
+  const vodTrack = renditions[0]?.track || 0;
 
   const args = [
     '-hide_banner',
     '-loglevel', 'error',
     '-fflags', '+genpts+discardcorrupt+nobuffer',
     '-flags', 'low_delay',
-    '-probesize', '32',
-    '-analyzeduration', '0',
+    // дорожки 1..N появляются не в первом пакете: с probesize 32 ffmpeg их бы не увидел
+    '-probesize', multitrack ? '2000000' : '32',
+    '-analyzeduration', multitrack ? '2000000' : '0',
     '-i', inputUrl,
   ];
 
   if (transcodeRenditions.length) {
     const splitOutputs = transcodeRenditions.map((_, i) => `[t${i}]`).join('');
-    const filterParts = [`[0:v]split=${transcodeRenditions.length}${splitOutputs}`];
+    const filterParts = [`[0:v:0]split=${transcodeRenditions.length}${splitOutputs}`];
     transcodeRenditions.forEach((r, i) => {
       // не выше источника; bilinear заметно быстрее bicubic, на 720/360 разницы не видно
       const fps = r.fps ? `fps=${r.fps},` : '';
@@ -654,8 +718,8 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions) {
 
   renditions.forEach((r) => {
     if (r.copy) {
-      args.push('-map', '0:v', `-c:v:${vIdx}`, 'copy');
-      args.push('-map', '0:a', `-c:a:${aIdx}`, 'copy');
+      args.push('-map', `0:v:${r.track || 0}`, `-c:v:${vIdx}`, 'copy');
+      args.push('-map', '0:a:0', `-c:a:${aIdx}`, 'copy');
     } else {
       const si = transcodeRenditions.indexOf(r);
       args.push(
@@ -669,7 +733,7 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions) {
         `-force_key_frames:v:${vIdx}`, 'expr:gte(t,n_forced*1)'
       );
       // звук как в «источнике», без перекодирования: AAC из OBS и так лёгкий, а кодировать его на каждое качество — зря
-      args.push('-map', '0:a', `-c:a:${aIdx}`, 'copy');
+      args.push('-map', '0:a:0', `-c:a:${aIdx}`, 'copy');
     }
     varStreamMapParts.push(`v:${vIdx},a:${aIdx},name:${r.name}`);
     vIdx += 1;
@@ -694,8 +758,8 @@ function buildFfmpegArgs(key, hlsRootDir, vodAbs, renditions) {
 
   if (vodAbs) {
     args.push(
-      '-map', '0:v',
-      '-map', '0:a',
+      '-map', `0:v:${vodTrack}`,
+      '-map', '0:a:0',
       '-c:v', 'copy',
       '-c:a', 'copy',
       '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
@@ -719,12 +783,22 @@ function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditions) {
   // приоритет ниже сайта: при перегрузе первым притормозит перекодирование, а не чат, сокеты и страницы.
   // nice заменяет себя ffmpeg (тот же pid), так что сигналы остановки доходят до ffmpeg напрямую
   const proc = spawn('nice', ['-n', '5', FFMPEG_PATH, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
-  activeTranscodes.set(key, {
-    proc, gen, vodId: vodId || null,
+  const multitrack = renditions.some((r) => r.track != null);
+  const entry = {
+    proc, gen, vodId: vodId || null, renditions, multitrack, startedAt: Date.now(),
     ladder: renditions.some((r) => !r.copy), // хоть одно перекодирование
     // тяжёлый эфир: 720/360 или «источник» 1440p/4K → 1080p — следующему достанется только облегчённая лесенка
-    full: renditions.some((r) => LADDER.some((l) => l.name === r.name) || (r.name === 'source' && !r.copy)),
-  });
+    full: renditions.some((r) => !r.copy && (LADDER.some((l) => l.name === r.name) || r.name === 'source')),
+  };
+  activeTranscodes.set(key, entry);
+
+  if (multitrack) {
+    setTimeout(() => {
+      if (activeTranscodes.get(key) !== entry) return;
+      const missing = renditions.filter((r) => !fs.existsSync(path.join(hlsRootDir, r.name, 'index.m3u8'))).map((r) => r.name);
+      if (missing.length) fallbackToLadder(key, entry, `за ${MULTITRACK_WATCH_MS / 1000} с нет плейлистов: ${missing.join(',')}`);
+    }, MULTITRACK_WATCH_MS).unref();
+  }
 
   proc.stderr.on('data', (c) => {
     const line = c.toString().trim();
@@ -734,6 +808,11 @@ function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditions) {
   proc.on('exit', (code, signal) => {
     console.log(`[rtmp] ffmpeg exit ${key.slice(0, 8)}… code=${code} signal=${signal} gen=${gen}`);
     const cur = activeTranscodes.get(key);
+    // качества от стримера упали сразу, а стример ещё в эфире — пробуем обычной лесенкой
+    if (cur === entry && multitrack && Date.now() - entry.startedAt < MULTITRACK_WATCH_MS && publishing.has(key) && !pendingStopTimers.has(key)) {
+      fallbackToLadder(key, entry, `ffmpeg вышел (code=${code})`);
+      return;
+    }
     if (cur && cur.gen === gen) {
       activeTranscodes.delete(key);
       if (!pendingStopTimers.has(key)) {
@@ -741,6 +820,33 @@ function spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditions) {
       }
     }
   });
+}
+
+// следующий кусок записи (переподключение, смена режима) — склеятся при остановке
+function nextVodPart(meta) {
+  const part = meta.abs.replace(/\.mp4$/, `.part${meta.parts.length + 1}.mp4`);
+  meta.parts.push(part);
+  return part;
+}
+
+// качества от стримера не пошли: тот же эфир заново обычной лесенкой, запись — новым куском
+function fallbackToLadder(key, entry, why) {
+  console.warn(`[rtmp] ${key.slice(0, 8)}…: качества от стримера не пошли (${why}) → обычная лесенка`);
+  multitrackFailed.add(key);
+  activeTranscodes.delete(key);
+  killProc(entry.proc, 'SIGTERM');
+  setTimeout(() => killProc(entry.proc, 'SIGKILL'), 2000);
+  const dir = mediaDir(key);
+  entry.renditions.forEach((r) => { try { fs.rmSync(path.join(dir, r.name), { recursive: true, force: true }); } catch (_) {} });
+  const meta = sessionMeta.get(key);
+  const vodAbs = meta && entry.vodId ? nextVodPart(meta) : null;
+  setTimeout(async () => {
+    const stale = () => currentGen(key) !== entry.gen || pendingStopTimers.has(key) || activeTranscodes.has(key);
+    if (stale()) return;
+    const src = await probeSource(key);
+    if (stale()) return;
+    spawnFfmpeg(key, entry.gen, dir, vodAbs, entry.vodId, renditionsFor(key, src));
+  }, 1000);
 }
 
 async function startTranscode(key) {
@@ -802,8 +908,7 @@ async function startTranscode(key) {
     vodAbs = meta?.abs || null;
   } else if (meta) {
     // переподключение: пишем в новый кусок, склеим при остановке
-    vodAbs = meta.abs.replace(/\.mp4$/, `.part${meta.parts.length + 1}.mp4`);
-    meta.parts.push(vodAbs);
+    vodAbs = nextVodPart(meta);
   }
   const vodId = meta?.vodId || null;
 
@@ -815,10 +920,12 @@ async function startTranscode(key) {
     const src = await probeSource(key);
     // пока смотрели источник, эфир мог переподключиться или закончиться
     if (currentGen(key) !== gen || pendingStopTimers.has(key) || activeTranscodes.has(key)) return;
-    if (src) console.log(`[rtmp] источник ${key.slice(0, 8)}…: ${src.height}p, ${Math.round(src.fps)} к/с`);
+    if (src) console.log(`[rtmp] источник ${key.slice(0, 8)}…: ${src.height}p, ${Math.round(src.fps)} к/с` + (src.tracks.length > 1 ? `, дорожки: ${src.tracks.map((t) => `${t.codec}/${t.height}p`).join(' ')}` : ''));
     else console.warn('[rtmp] не удалось узнать параметры источника — полная лесенка', key.slice(0, 8) + '…');
 
-    spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, renditionsFor(key, src));
+    const own = multitrackRenditions(key, src);
+    if (own) console.log(`[rtmp] ${key.slice(0, 8)}…: качества от стримера, без перекодирования`);
+    spawnFfmpeg(key, gen, hlsRootDir, vodAbs, vodId, own || renditionsFor(key, src));
 
     await setLiveState(key, {
       isLive: true,
@@ -852,12 +959,14 @@ nms.on('postPublish', (session) => {
     rejectSession(session);
     return;
   }
+  publishing.add(key);
   startTranscode(key);
 });
 
 nms.on('donePublish', (session) => {
   const key = keyFromStreamPath(session?.streamPath || '');
   console.log('[rtmp] donePublish', session?.streamPath);
+  if (key) publishing.delete(key);
   if (key) scheduleStop(key);
 });
 

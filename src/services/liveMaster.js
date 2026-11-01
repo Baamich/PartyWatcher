@@ -26,23 +26,36 @@ function measureBandwidth(levelDir) {
   return dur > 0 ? Math.round(((bytes * 8) / dur) * 1.1) : 0;
 }
 
+// у копии ffmpeg пишет почти один звук (~140 кбит/с): ниже этого уровень точно не перекодирован
+const COPY_BW_MAX = 300_000;
+
 function fixMaster(text, liveDir) {
   const lines = text.split('\n');
   const bw = (i) => Number((lines[i].match(/BANDWIDTH=(\d+)/) || [])[1]) || 0;
-  let srcInf = -1, maxOther = 0;
+  const setBw = (i, value) => {
+    lines[i] = lines[i]
+      .replace(/(^|[:,])BANDWIDTH=\d+/, `$1BANDWIDTH=${value}`)
+      .replace(/,AVERAGE-BANDWIDTH=\d+/, '');
+  };
+  let srcInf = -1, maxOther = 0, changed = false;
   for (let i = 0; i + 1 < lines.length; i++) {
     if (!lines[i].startsWith('#EXT-X-STREAM-INF')) continue;
-    if (lines[i + 1].trim().startsWith('source/')) srcInf = i;
-    else maxOther = Math.max(maxOther, bw(i));
+    const uri = lines[i + 1].trim();
+    if (uri.startsWith('source/')) { srcInf = i; continue; }
+    // качества от стримера (OBS «Multitrack Video») — тоже копии: считаем по сегментам
+    const dir = uri.split('/')[0];
+    if (bw(i) < COPY_BW_MAX && /^\d+$/.test(dir)) {
+      const real = measureBandwidth(path.join(liveDir, dir));
+      if (real) { setBw(i, real); changed = true; }
+    }
+    maxOther = Math.max(maxOther, bw(i));
   }
-  if (srcInf < 0) return text;
-  // по сегментам; если их ещё нет — хотя бы выше всех перекодированных уровней
+  if (srcInf < 0) return changed ? lines.join('\n') : text;
+  // по сегментам; если их ещё нет — хотя бы выше всех остальных уровней
   const real = measureBandwidth(path.join(liveDir, 'source'));
   const value = real || (maxOther ? Math.round(maxOther * 1.5) : 0);
-  if (!value || (real === 0 && value <= bw(srcInf))) return text;
-  lines[srcInf] = lines[srcInf]
-    .replace(/(^|[:,])BANDWIDTH=\d+/, `$1BANDWIDTH=${value}`)
-    .replace(/,AVERAGE-BANDWIDTH=\d+/, '');
+  if (!value || (real === 0 && value <= bw(srcInf))) return changed ? lines.join('\n') : text;
+  setBw(srcInf, value);
   return lines.join('\n');
 }
 
