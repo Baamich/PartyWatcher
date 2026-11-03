@@ -163,7 +163,7 @@ router.get('/public', auth.optional, async (req, res) => {
 
   const [total, rooms] = await Promise.all([
     Room.countDocuments(filter),
-    Room.find(filter).select('-bannedUsers -video.directUrl').sort(sortOption).skip((page - 1) * limit).limit(limit).lean(),
+    Room.find(filter).select(req.user ? '-bannedUsers -video.directUrl' : '-bannedUsers -video.directUrl -owner').sort(sortOption).skip((page - 1) * limit).limit(limit).lean(),
   ]);
 
   // подстраховка: если вдруг кэш устарел — берём актуальный из сокетов

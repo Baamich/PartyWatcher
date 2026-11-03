@@ -98,7 +98,7 @@
     "kodikSearch": "🔎 You have Kodik catalog search: start typing the title of an anime, drama or series and pick a voice-over."
   },
   "privacy": {
-    "public": "🔓 Public — the room will appear in \"Public rooms\" for all users.",
+    "public": "🔓 Public — the room will appear under \"Public rooms\" for all site visitors, including those without an account.",
     "private": "🔒 Private — the room is not listed anywhere, it can only be joined with its key."
   },
   "join": {

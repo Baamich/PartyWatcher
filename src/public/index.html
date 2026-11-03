@@ -17,7 +17,7 @@
   <meta property="og:description" data-i18n-content="index.meta.ogDescription" content="Создай комнату, отправь ссылку друзьям и смотри видео синхронно с чатом и голосом." />
 </head>
 <body>
-  <div id="appBox">
+  <div id="appBox" data-nosnippet>
     <div class="page-header">
       <div class="brand-row">
       <div class="brand">
@@ -57,8 +57,7 @@
         <input id="roomName" placeholder="Название комнаты" data-i18n-placeholder="index.create.name" autocomplete="off" />
         <div class="type-row">
           <select id="videoType" data-change="onVideoTypeChange">
-            <option value="kodik" data-i18n="index.type.kodik" selected>Kodik (аниме, дорамы, азиатские и турецкие сериалы)</option>
-            <option value="youtube_twitch" data-i18n="index.type.youtube_twitch">YouTube / Twitch / VK Видео</option>
+            <option value="youtube_twitch" data-i18n="index.type.youtube_twitch" selected>YouTube / Twitch / VK Видео</option>
             <option value="drive" data-i18n="index.type.drive">Google Диск</option>
             <option value="player_capture" class="hidden" hidden data-i18n="index.type.player_capture">Просмотр фильма / сериала</option>
             <option value="direct" data-i18n="index.type.direct">Прямая ссылка на видео</option>

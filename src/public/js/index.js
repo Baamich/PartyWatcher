@@ -28,8 +28,7 @@ async function checkAuth() {
       adminLink.classList.toggle('hidden', me.role !== 'admin' && me.role !== 'owner');
     }
 
-    // Kodik выбран по умолчанию: есть ли поиск по каталогу — спрашиваем сервер
-    if (isKodikType()) updateKodikMode();
+    addKodikOption();
     initLobbySocket(); // сокет и оба списка — параллельно: каждый запрос к серверу — полсекунды дороги
     await Promise.all([loadMyRooms(), loadPublicRooms()]);
     startAutoRefresh();
@@ -97,6 +96,18 @@ let kodikPick = null; // { item, tr } — выбранный фильм и оз�
 let kodikTimer = null;
 let kodikSeq = 0;
 let kodikInit = null; // один запрос /kodik/config и одна загрузка виджета, даже если режим включили дважды подряд
+
+// пункт Kodik — только вошедшим, вторым (в HTML его нет: страницу читают гости и поисковики).
+// Есть ли поиск по каталогу, updateKodikMode спросит у сервера, когда пункт выберут
+function addKodikOption() {
+  const select = document.getElementById('videoType');
+  if (select.querySelector('option[value="kodik"]')) return;
+  const opt = document.createElement('option');
+  opt.value = 'kodik';
+  opt.setAttribute('data-i18n', 'index.type.kodik');
+  opt.textContent = t('index.type.kodik');
+  select.querySelector('option[value="youtube_twitch"]').after(opt);
+}
 
 function isKodikType() {
   return document.getElementById('videoType').value === 'kodik';
@@ -215,11 +226,6 @@ function refreshKodikBox() {
 // подписи карточек (год · сериал · озвучки) собраны из t() — при смене языка перерисовываем
 window.addEventListener('pw:langchange', () => {
   if (isKodikType() && kodikResults?.hasItems()) kodikResults.render();
-});
-// браузер мог восстановить выбранный тип при возврате на страницу
-document.addEventListener('DOMContentLoaded', () => {
-  // гостю /kodik/config недоступен (401) — не спрашиваем; после входа checkAuth вызовет сам
-  if (isKodikType() && window.__pwAuthed !== false) updateKodikMode();
 });
 
 // гость → страница входа, после неё — на returnTo
