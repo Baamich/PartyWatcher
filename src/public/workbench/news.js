@@ -180,13 +180,14 @@ async function loadNews() {
   const from = $('newsFrom').value;
   const to = $('newsTo').value;
 
-  const qs = new URLSearchParams();
+  // язык страницы, а не cookie: на /news?lang=ru у поисковика cookie нет, и перевод пришёл бы не на том языке
+  const qs = new URLSearchParams({ lang: I18N.lang });
   if (from) qs.set('from', new Date(from + 'T00:00:00').toISOString());
   if (to) qs.set('to', new Date(to + 'T23:59:59.999').toISOString());
   if (onlyImportant) qs.set('important', '1');
 
   try {
-    const data = await api('/news' + (qs.toString() ? '?' + qs.toString() : ''));
+    const data = await api('/news?' + qs.toString());
     canManage = !!data.canManage;
     $('newsCreateBtn').classList.toggle('hidden', !canManage);
 

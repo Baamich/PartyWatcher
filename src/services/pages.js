@@ -205,7 +205,8 @@ async function bootJson(req) {
 
 // ---------- отдача ----------
 // opts.vars — подстановки {{ключ}} в готовую страницу (экранируются), opts.raw — уже готовый HTML (без экранирования),
-// opts.seo — заголовок/описание/noindex/разметка для поисковиков (services/seo.js; без него — по адресу файла)
+// opts.seo — заголовок/описание/noindex/разметка для поисковиков (services/seo.js; без него — по адресу файла),
+// opts.slots — готовый HTML вместо <!--slot:имя--> (без него метка просто остаётся комментарием)
 async function send(req, res, rel, opts = {}) {
   const abs = typeof rel === 'string' && path.isAbsolute(rel) ? rel : path.join(PUBLIC, rel);
   let st;
@@ -223,6 +224,7 @@ async function send(req, res, rel, opts = {}) {
       return all;
     });
   }
+  for (const [name, value] of Object.entries(opts.slots || {})) html = html.replace(`<!--slot:${name}-->`, () => value);
   html = seo.decorate(html, req, res, lang, path.relative(PUBLIC, abs).split(path.sep).join('/'), opts.seo);
 
   const etag = 'W/"' + crypto.createHash('sha1').update(html).digest('base64').slice(0, 22) + '"';

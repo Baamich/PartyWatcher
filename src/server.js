@@ -107,6 +107,10 @@ async function start() {
     },
   });
   
+  // www → основной адрес: один сайт для поисковиков, а сокеты и CORS разрешены только с основного
+  const wwwHost = siteOrigin ? 'www.' + new URL(siteOrigin).hostname : null;
+  app.use((req, res, next) => (req.hostname === wwwHost ? res.redirect(301, siteOrigin + req.originalUrl) : next()));
+
   app.use(perf.serverTiming); // Server-Timing: сколько запрос считался на сервере
   app.use(securityHeaders()); // CSP и остальные заголовки безопасности (режим — CSP_MODE в .env)
   app.use(compression({ threshold: 1024, filter: compressFilter }));
@@ -298,8 +302,13 @@ async function start() {
 process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
 
   // новости как раздел сайта: та же страница, что в студии, но короткий адрес и меню сайта (переключает news.js)
-  app.get(['/news', '/news/'], (req, res, next) => {
-    pages.send(req, res, 'workbench/news.html').catch(next);
+  app.get(['/news', '/news/'], async (req, res, next) => {
+    // текст новостей сразу в HTML (для поисковиков); база недоступна — страница всё равно откроется и попробует сама
+    const news = await NEWS_ROUTES.listHtml(req.lang).catch((e) => {
+      console.warn('[news] список в HTML', e.message);
+      return '';
+    });
+    pages.send(req, res, 'workbench/news.html', { slots: { news } }).catch(next);
   });
 
   // условия пользования (текст — src/locales/<язык>/terms.json, версия — services/terms.js)

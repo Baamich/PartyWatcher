@@ -259,4 +259,37 @@ router.post('/spellcheck', adminGuard, async (req, res) => {
   }
 });
 
+// ---- новости сразу в HTML страницы /news: робот и медленный браузер видят текст без скрипта ----
+// Разметка как у buildNewsRow в public/workbench/news.js: браузер потом заменит её своей (кнопки админа, перевод).
+// В памяти на минуту на каждый язык: кнопка «Опубликовать» всё равно сразу видна через GET /news
+const HTML_MAX = 50;
+const HTML_TTL = 60 * 1000;
+const LOCALES = { ru: 'ru-RU', en: 'en-GB' };
+const htmlCache = new Map(); // язык → { at, html }
+const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function cardHtml(item, lang) {
+  const date = (d) => new Date(d).toLocaleDateString(LOCALES[lang] || 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const src = item.translation || item;
+  const dateText = date(item.publishedAt) + (item.editedAt ? ' · ' + i18n.t(lang, 'news.edited', { date: date(item.editedAt) }) : '');
+  return `<div class="news-row" id="n-${esc(item.id)}"><article class="news-card${item.important ? ' news-card--important' : ''}">`
+    + (item.important ? `<span class="news-important-badge">${esc(i18n.t(lang, 'news.important.badge'))}</span>` : '')
+    + (item.imageUrl ? `<img class="news-card-img" src="${esc(item.imageUrl)}" alt="" loading="lazy" />` : '')
+    + `<div class="news-card-body"><div class="news-card-date">${esc(dateText)}</div>`
+    + `<h2 class="news-card-title" data-no-i18n>${esc(src.title)}</h2>`
+    + (src.body ? `<div class="news-card-text" data-no-i18n>${esc(src.body)}</div>` : '')
+    + (item.translation ? `<div class="news-tr-note"><span>${esc(i18n.t(lang, 'news.tr.auto'))}</span></div>` : '')
+    + '</div></article></div>';
+}
+
+async function listHtml(lang) {
+  const hit = htmlCache.get(lang);
+  if (hit && Date.now() - hit.at < HTML_TTL) return hit.html;
+  const items = await News.find({}).sort({ publishedAt: -1 }).limit(HTML_MAX).lean();
+  const html = items.map((n) => cardHtml(serialize(n, lang), lang)).join('');
+  htmlCache.set(lang, { at: Date.now(), html }); // ключей столько же, сколько языков (req.lang)
+  return html;
+}
+
 module.exports = router;
+module.exports.listHtml = listHtml;
